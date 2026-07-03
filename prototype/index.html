@@ -1,0 +1,2407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=10000px">
+<title>ClipVault — UI Prototype v3.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ===== Design Tokens (Dark Theme — Default) ===== */
+:root {
+  --bg-base: #0f1117;
+  --bg-surface: #181a22;
+  --bg-elevated: #1e2130;
+  --bg-hover: #262a3a;
+  --bg-active: #2c3148;
+  --bg-input: #14161e;
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.1);
+  --border-focus: #6366f1;
+  --text-primary: #e2e4ed;
+  --text-secondary: #8b8fa6;
+  --text-tertiary: #5c6078;
+  --text-inverse: #0f1117;
+  --accent: #6366f1;
+  --accent-hover: #7577f5;
+  --accent-soft: rgba(99,102,241,0.12);
+  --accent-softer: rgba(99,102,241,0.06);
+  --success: #34d399;
+  --success-soft: rgba(52,211,153,0.12);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251,191,36,0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248,113,113,0.12);
+  --code-bg: #12141c;
+  --sensitive: #fb923c;
+  --sensitive-soft: rgba(251,146,60,0.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.6);
+  --shadow-glow: 0 0 20px rgba(99,102,241,0.15);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --font-sans: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+  --transition-fast: 100ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-normal: 180ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition-smooth: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Theme toggle specific */
+  --theme-toggle-track-d: #2c3148;
+  --theme-toggle-track-l: #e2e4ed;
+  --theme-toggle-knob-d: #e2e4ed;
+  --theme-toggle-knob-l: #0f1117;
+  --desktop-bg-gradient-d: linear-gradient(135deg, #0a0b10 0%, #12141f 50%, #0e1018 100%);
+  --desktop-bg-gradient-l: linear-gradient(135deg, #f0f2f8 0%, #e8eaf0 50%, #f5f6fa 100%);
+}
+
+/* ===== Light Theme Override ===== */
+body.light-theme {
+  --bg-base: #eef0f5;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8f9fc;
+  --bg-hover: #eef1f8;
+  --bg-active: #e4e7f4;
+  --bg-input: #f0f2f8;
+  --border-subtle: rgba(0,0,0,0.05);
+  --border-default: rgba(0,0,0,0.1);
+  --border-focus: #6366f1;
+  --text-primary: #1a1c2e;
+  --text-secondary: #5c6078;
+  --text-tertiary: #9498ae;
+  --text-inverse: #ffffff;
+  --accent: #5b52e8;
+  --accent-hover: #4743d4;
+  --accent-soft: rgba(91,82,232,0.1);
+  --accent-softer: rgba(91,82,232,0.05);
+  --success: #16a34a;
+  --success-soft: rgba(22,163,74,0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217,119,6,0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220,38,38,0.1);
+  --code-bg: #f0f2f8;
+  --sensitive: #ea580c;
+  --sensitive-soft: rgba(234,88,12,0.1);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.1);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.12);
+  --shadow-glow: 0 0 20px rgba(91,82,232,0.1);
+  --theme-toggle-track-d: #e2e4ed;
+  --theme-toggle-track-l: #6366f1;
+  --theme-toggle-knob-d: #0f1117;
+  --theme-toggle-knob-l: #ffffff;
+  --desktop-bg-gradient-d: linear-gradient(135deg, #0a0b10 0%, #12141f 50%, #0e1018 100%);
+  --desktop-bg-gradient-l: linear-gradient(135deg, #eef0f5 0%, #e8eaf0 50%, #f5f6fa 100%);
+}
+
+/* Light theme desktop background */
+body.light-theme .desktop-bg {
+  background: var(--desktop-bg-gradient-l);
+}
+body.light-theme .desktop-bg::before,
+body.light-theme .desktop-bg::after { display: none; }
+body.light-theme .status-bar {
+  background: rgba(255,255,255,0.9);
+  border-top-color: rgba(0,0,0,0.08);
+}
+body.light-theme .screen-label { color: #9498ae; }
+body.light-theme .chart-section { border-color: rgba(0,0,0,0.06); }
+body.light-theme .stat-card { border-color: rgba(0,0,0,0.06); }
+body.light-theme .storage-breakdown .donut-inner { background: #f8f9fc; }
+
+/* Deep Black OLED theme */
+body.oled-theme {
+  --bg-base: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-hover: #1a1a1a;
+  --bg-active: #222222;
+  --bg-input: #080808;
+  --border-subtle: rgba(255,255,255,0.04);
+  --border-default: rgba(255,255,255,0.07);
+  --border-focus: #6366f1;
+  --text-primary: #e8e8f0;
+  --text-secondary: #7878a0;
+  --text-tertiary: #4a4a68;
+  --text-inverse: #000000;
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.8);
+  --shadow-lg: 0 12px 48px rgba(0,0,0,0.9);
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  overflow-x: auto;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  transition: background var(--transition-smooth), color var(--transition-smooth);
+}
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input { font-family: inherit; border: none; background: none; color: inherit; outline: none; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-tertiary); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+/* ===== Showcase Layout ===== */
+.showcase {
+  display: flex;
+  gap: 36px;
+  align-items: flex-start;
+  padding: 32px 40px;
+  max-width: 100vw;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+.screen-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.screen-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  padding-left: 4px;
+  white-space: nowrap;
+  transition: color var(--transition-smooth);
+}
+
+/* ===== Panel Base ===== */
+.panel {
+  width: 520px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth), box-shadow var(--transition-smooth);
+}
+.panel-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  transition: border-color var(--transition-smooth);
+}
+.search-row { display: flex; align-items: center; gap: 8px; position: relative; }
+.search-box {
+  flex: 1;
+  height: 36px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 12px 0 34px;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast), background var(--transition-smooth);
+}
+.search-box:focus { border-color: var(--border-focus); }
+.search-icon {
+  position: absolute; left: 26px; top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-tertiary);
+  font-size: 14px; pointer-events: none; z-index: 1;
+}
+.header-actions { display: flex; gap: 2px; }
+.icon-btn {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.icon-btn.active { background: var(--accent-soft); color: var(--accent); }
+
+/* Filter Tabs */
+.filter-row { display: flex; gap: 2px; margin-top: 10px; padding: 0 2px; }
+.filter-tab {
+  height: 26px; padding: 0 10px; border-radius: 5px;
+  font-size: 11.5px; font-weight: 500; color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  display: flex; align-items: center; gap: 5px;
+}
+.filter-tab:hover { background: var(--bg-hover); color: var(--text-primary); }
+.filter-tab.active { background: var(--accent-soft); color: var(--accent); }
+.filter-tab .count {
+  font-size: 10px; background: var(--bg-active);
+  padding: 1px 5px; border-radius: 4px; color: var(--text-tertiary);
+}
+.filter-tab.active .count { background: var(--accent-soft); color: var(--accent); }
+
+/* Panel Body */
+.panel-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+.record-list {
+  width: 210px; border-right: 1px solid var(--border-subtle);
+  overflow-y: auto; flex-shrink: 0;
+  transition: border-color var(--transition-smooth);
+}
+.list-section-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-tertiary);
+  padding: 10px 12px 4px;
+}
+.record-item {
+  padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--transition-fast), border-color var(--transition-smooth);
+  position: relative;
+}
+.record-item:hover { background: var(--bg-hover); }
+.record-item.selected { background: var(--accent-soft); }
+.record-item.selected::before {
+  content: ''; position: absolute;
+  left: 0; top: 8px; bottom: 8px; width: 2px;
+  background: var(--accent);
+  border-radius: 0 2px 2px 0;
+}
+.record-summary {
+  font-size: 12.5px; line-height: 1.4; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px;
+}
+.record-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+.record-source { font-size: 10px; color: var(--text-tertiary); }
+.record-time { font-size: 10px; color: var(--text-tertiary); }
+.record-type-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+.badge-text { background: var(--bg-active); color: var(--text-secondary); }
+.badge-code { background: var(--success-soft); color: var(--success); }
+.badge-link { background: var(--accent-soft); color: var(--accent); }
+.badge-image { background: var(--warning-soft); color: var(--warning); }
+.badge-sensitive { background: var(--sensitive-soft); color: var(--sensitive); }
+.record-fav { position: absolute; right: 8px; top: 8px; font-size: 10px; color: var(--warning); }
+
+/* Preview Pane */
+.preview-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.preview-content {
+  flex: 1; padding: 16px; overflow-y: auto;
+  font-size: 13px; line-height: 1.65;
+}
+.preview-content pre {
+  background: var(--code-bg); padding: 12px; border-radius: var(--radius-sm);
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.6;
+  overflow-x: auto; border: 1px solid var(--border-subtle);
+}
+.sensitive-warning {
+  background: var(--sensitive-soft);
+  border: 1px solid rgba(251,146,60,0.2);
+  border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--sensitive);
+}
+.sensitive-warning .auto-expire { margin-left: auto; font-size: 10px; opacity: 0.8; }
+.tag-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 500;
+}
+.tag-badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* Action Bar */
+.action-bar {
+  padding: 10px 14px; border-top: 1px solid var(--border-subtle);
+  display: flex; gap: 6px; flex-shrink: 0; background: var(--bg-surface);
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.action-btn {
+  height: 30px; padding: 0 12px; border-radius: var(--radius-sm);
+  font-size: 11.5px; font-weight: 500;
+  transition: all var(--transition-fast);
+  display: flex; align-items: center; gap: 5px;
+}
+.action-btn.primary { background: var(--accent); color: white; }
+.action-btn.primary:hover { background: var(--accent-hover); }
+.action-btn.secondary {
+  background: var(--bg-elevated); color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+.action-btn.secondary:hover {
+  background: var(--bg-hover); color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.action-btn.danger { background: var(--danger-soft); color: var(--danger); border: 1px solid rgba(248,113,113,0.2); }
+.action-btn.danger:hover { background: rgba(248,113,113,0.2); }
+
+/* ===== Settings Window ===== */
+.settings-window {
+  width: 640px; height: 520px;
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl); box-shadow: var(--shadow-lg);
+  display: flex; overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.settings-nav {
+  width: 180px; background: var(--bg-elevated);
+  border-right: 1px solid var(--border-subtle);
+  padding: 16px 0; display: flex; flex-direction: column;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.settings-nav-title {
+  font-size: 13px; font-weight: 600; padding: 0 16px 14px;
+  color: var(--text-primary); display: flex; align-items: center; gap: 8px;
+}
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; font-size: 12.5px; color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  cursor: pointer; border-left: 2px solid transparent;
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); }
+.nav-icon { font-size: 14px; width: 18px; text-align: center; }
+.settings-body { flex: 1; padding: 20px 24px; overflow-y: auto; }
+.settings-section { margin-bottom: 24px; }
+.settings-section-title { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary); }
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0; border-bottom: 1px solid var(--border-subtle);
+  transition: border-color var(--transition-smooth);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-label { font-size: 12.5px; color: var(--text-primary); }
+.setting-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* Toggle Switch */
+.toggle {
+  width: 36px; height: 20px;
+  background: var(--bg-active); border-radius: 10px;
+  position: relative; cursor: pointer;
+  transition: background var(--transition-fast); flex-shrink: 0;
+}
+.toggle.on { background: var(--accent); }
+.toggle::after {
+  content: ''; position: absolute;
+  width: 16px; height: 16px; background: white;
+  border-radius: 50%; top: 2px; left: 2px;
+  transition: transform var(--transition-fast);
+}
+.toggle.on::after { transform: translateX(16px); }
+
+.shortcut-input {
+  background: var(--bg-input); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 5px 10px;
+  font-size: 11.5px; font-family: var(--font-mono); color: var(--text-secondary);
+  min-width: 120px; text-align: center;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.kbd {
+  background: var(--bg-active); padding: 2px 6px; border-radius: 3px;
+  font-size: 10.5px; font-family: var(--font-mono);
+  border: 1px solid var(--border-default);
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.select-wrap select {
+  background: var(--bg-input); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 5px 10px;
+  font-size: 11.5px; color: var(--text-primary); appearance: none; cursor: pointer;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.slider-row { display: flex; align-items: center; gap: 10px; }
+.slider-value {
+  font-size: 12px; font-family: var(--font-mono); color: var(--accent);
+  min-width: 40px; text-align: right;
+}
+input[type="range"] {
+  -webkit-appearance: none; width: 140px; height: 4px;
+  background: var(--bg-active); border-radius: 2px; outline: none;
+  transition: background var(--transition-smooth);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px;
+  background: var(--accent); border-radius: 50%; cursor: pointer;
+}
+
+/* ===== Tray Context Menu ===== */
+.tray-menu {
+  width: 220px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); padding: 6px;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.tray-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px; font-size: 12px; border-radius: var(--radius-sm);
+  color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast);
+}
+.tray-menu-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.tray-menu-item .menu-icon { width: 16px; text-align: center; font-size: 13px; }
+.tray-menu-item .menu-shortcut { margin-left: auto; font-size: 10px; font-family: var(--font-mono); color: var(--text-tertiary); }
+.tray-separator { height: 1px; background: var(--border-subtle); margin: 4px 6px; transition: background var(--transition-smooth); }
+.tray-recent-label {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-tertiary); padding: 6px 10px 3px;
+}
+.tray-recent-item {
+  display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+  font-size: 11.5px; border-radius: var(--radius-sm); color: var(--text-secondary);
+  cursor: pointer; transition: all var(--transition-fast);
+}
+.tray-recent-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.tray-recent-item .recent-text {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;
+}
+
+/* ===== Tags Panel ===== */
+.tags-panel {
+  width: 520px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.tags-header {
+  padding: 14px 16px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: border-color var(--transition-smooth);
+}
+.tags-header h3 { font-size: 14px; font-weight: 600; }
+.tags-list { padding: 8px; max-height: 320px; overflow-y: auto; }
+.tag-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  transition: background var(--transition-fast); cursor: pointer;
+}
+.tag-row:hover { background: var(--bg-hover); }
+.tag-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.tag-name { font-size: 12.5px; flex: 1; }
+.tag-count { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); }
+.tag-auto-badge {
+  font-size: 9px; padding: 1px 6px; border-radius: 3px;
+  background: var(--accent-soft); color: var(--accent); font-weight: 500;
+}
+
+/* ===== Context Menu ===== */
+.context-menu {
+  width: 200px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); padding: 6px; position: relative; z-index: 100;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.ctx-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font-size: 12px; border-radius: var(--radius-sm);
+  color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast);
+}
+.ctx-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.ctx-item .ctx-icon { width: 14px; text-align: center; font-size: 12px; }
+.ctx-item .ctx-shortcut { margin-left: auto; font-size: 10px; font-family: var(--font-mono); color: var(--text-tertiary); }
+.ctx-item.danger { color: var(--danger); }
+.ctx-item.danger:hover { background: var(--danger-soft); }
+.ctx-sep { height: 1px; background: var(--border-subtle); margin: 3px 6px; transition: background var(--transition-smooth); }
+
+/* ===== Toast Notification ===== */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--bg-elevated); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); padding: 10px 16px;
+  box-shadow: var(--shadow-md); font-size: 12px;
+  display: flex; align-items: center; gap: 8px; z-index: 200;
+  animation: slideUp 0.3s var(--transition-smooth);
+}
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ===== Desktop Background ===== */
+.desktop-bg {
+  position: fixed; inset: 0;
+  background: var(--desktop-bg-gradient-d);
+  z-index: -1;
+  transition: background var(--transition-smooth);
+}
+.desktop-bg::before {
+  content: ''; position: absolute; top: 20%; right: 10%;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(99,102,241,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+.desktop-bg::after {
+  content: ''; position: absolute; bottom: 10%; left: 20%;
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(52,211,153,0.03) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ===== Status Bar ===== */
+.status-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 28px;
+  background: rgba(15,17,23,0.9); border-top: 1px solid var(--border-subtle);
+  display: flex; align-items: center; padding: 0 16px;
+  font-size: 10.5px; color: var(--text-tertiary); gap: 16px; z-index: 50;
+  backdrop-filter: blur(10px);
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.status-item { display: flex; align-items: center; gap: 4px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+
+/* ============================================================
+   ENHANCED COMPONENTS
+   ============================================================ */
+
+/* ---- Search States ---- */
+.search-loading {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 12px; font-size: 11px; color: var(--text-tertiary);
+}
+.search-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid var(--border-default); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.search-no-results {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 40px 20px; gap: 10px; color: var(--text-tertiary);
+}
+.search-no-results .no-results-icon { font-size: 36px; opacity: 0.4; }
+.search-no-results .no-results-text { font-size: 13px; }
+.search-no-results .no-results-hint { font-size: 11.5px; opacity: 0.7; }
+.clear-search-btn {
+  margin-top: 8px; padding: 6px 16px; background: var(--accent-soft); color: var(--accent);
+  border-radius: var(--radius-sm); font-size: 11.5px; font-weight: 500;
+  cursor: pointer; transition: all var(--transition-fast);
+}
+.clear-search-btn:hover { background: var(--accent); color: white; }
+.hl { background: rgba(99,102,241,0.3); color: var(--text-primary); border-radius: 2px; padding: 0 1px; }
+
+/* ---- Batch Mode ---- */
+.batch-bar {
+  padding: 8px 14px; background: var(--accent-soft);
+  border-bottom: 1px solid rgba(99,102,241,0.15);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.batch-info { font-size: 11.5px; color: var(--accent); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.batch-actions { display: flex; gap: 6px; }
+.batch-btn {
+  height: 26px; padding: 0 10px; border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px;
+  background: var(--bg-surface); color: var(--text-secondary); border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+}
+.batch-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.batch-btn.danger-btn { background: var(--danger-soft); color: var(--danger); border-color: rgba(248,113,113,0.2); }
+.batch-btn.danger-btn:hover { background: rgba(248,113,113,0.2); }
+.record-checkbox {
+  position: absolute; left: 8px; top: 11px;
+  width: 14px; height: 14px; border: 1.5px solid var(--text-tertiary);
+  border-radius: 3px; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: transparent; transition: all var(--transition-fast);
+}
+.record-checkbox.checked { background: var(--accent); border-color: var(--accent); color: white; }
+.record-item.batch-mode { padding-left: 30px; }
+
+/* ---- Statistics Dashboard ---- */
+.stats-dashboard {
+  width: 600px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.stats-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: border-color var(--transition-smooth);
+}
+.stats-header h3 { font-size: 15px; font-weight: 600; }
+.stats-date-range {
+  font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono);
+  background: var(--bg-input); padding: 4px 10px; border-radius: var(--radius-sm);
+  transition: background var(--transition-smooth);
+}
+.stats-body { padding: 20px; overflow-y: auto; }
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+.stat-card {
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: 16px;
+  display: flex; flex-direction: column; gap: 6px;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.stat-card-icon { font-size: 20px; }
+.stat-card-value { font-size: 26px; font-weight: 700; font-family: var(--font-mono); line-height: 1.1; }
+.stat-card-value.accent-color { color: var(--accent); }
+.stat-card-value.success-color { color: var(--success); }
+.stat-card-value.warning-color { color: var(--warning); }
+.stat-card-label { font-size: 11px; color: var(--text-tertiary); }
+.stat-card-change { font-size: 10.5px; font-weight: 500; display: flex; align-items: center; gap: 3px; margin-top: 2px; }
+.stat-card-change.up { color: var(--success); }
+.stat-card-change.down { color: var(--danger); }
+.chart-section {
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.chart-title { font-size: 12.5px; font-weight: 600; margin-bottom: 14px; color: var(--text-primary); }
+.bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding-top: 8px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.bar {
+  width: 100%; max-width: 36px; border-radius: 4px 4px 2px 2px;
+  background: linear-gradient(to top, var(--accent), rgba(99,102,241,0.5));
+  transition: height 0.5s var(--transition-smooth); min-height: 4px;
+}
+.bar.today-bar { background: linear-gradient(to top, var(--success), rgba(52,211,153,0.5)); }
+.bar-label { font-size: 9px; color: var(--text-tertiary); text-align: center; white-space: nowrap; }
+.bar-value { font-size: 9px; font-family: var(--font-mono); color: var(--text-secondary); }
+.storage-breakdown { display: flex; align-items: center; gap: 20px; }
+.donut-chart {
+  width: 100px; height: 100px; border-radius: 50%;
+  position: relative; display: flex; align-items: center; justify-content: center;
+}
+.donut-inner {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--bg-elevated);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; font-family: var(--font-mono);
+  transition: background var(--transition-smooth);
+}
+.donut-inner span { font-size: 9px; color: var(--text-tertiary); font-weight: 400; }
+.storage-legend { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.legend-label { color: var(--text-secondary); flex: 1; transition: color var(--transition-smooth); }
+.legend-value { font-family: var(--font-mono); font-size: 11px; color: var(--text-primary); }
+
+/* ---- Image Preview ---- */
+.image-preview-full {
+  width: 520px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.image-preview-toolbar {
+  padding: 10px 14px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(0,0,0,0.2); transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.image-preview-meta { font-size: 11px; color: var(--text-tertiary); display: flex; align-items: center; gap: 12px; }
+.image-preview-actions { display: flex; gap: 4px; }
+.image-preview-canvas {
+  display: flex; align-items: center; justify-content: center;
+  background: repeating-conic-gradient(var(--bg-elevated) 0% 25%, var(--bg-hover) 0% 50%) 50%/16px 16px;
+  min-height: 340px; position: relative;
+  transition: background var(--transition-smooth);
+}
+.image-preview-footer {
+  padding: 10px 14px; border-top: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text-tertiary);
+  transition: border-color var(--transition-smooth);
+}
+.image-preview-footer .file-name { font-family: var(--font-mono); color: var(--text-secondary); }
+
+/* ---- Welcome Wizard ---- */
+.wizard-overlay {
+  position: fixed; inset: 0; background: rgba(10,11,16,0.85);
+  backdrop-filter: blur(8px); z-index: 300;
+  display: flex; align-items: center; justify-content: center;
+}
+.wizard-card {
+  width: 520px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: 0 24px 80px rgba(0,0,0,0.6); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.wizard-header { padding: 28px 28px 0; text-align: center; }
+.wizard-logo {
+  width: 56px; height: 56px; background: linear-gradient(135deg, var(--accent), #8b5cf6);
+  border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  font-size: 26px; margin: 0 auto 14px; box-shadow: 0 4px 20px rgba(99,102,241,0.3);
+}
+.wizard-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+.wizard-subtitle { font-size: 13px; color: var(--text-tertiary); }
+.wizard-body { padding: 24px 28px; }
+.wizard-step { display: flex; flex-direction: column; gap: 16px; }
+.wizard-option {
+  padding: 14px 16px; background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  cursor: pointer; transition: all var(--transition-fast);
+  display: flex; align-items: center; gap: 12px;
+}
+.wizard-option:hover { border-color: var(--accent); background: var(--accent-softer); }
+.wizard-option.selected { border-color: var(--accent); background: var(--accent-soft); }
+.wizard-option-icon { font-size: 22px; width: 36px; text-align: center; }
+.wizard-option-text h4 { font-size: 13px; font-weight: 600; }
+.wizard-option-text p { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.wizard-option-check {
+  margin-left: auto; width: 20px; height: 20px; border: 2px solid var(--border-default);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: transparent; transition: all var(--transition-fast);
+}
+.wizard-option.selected .wizard-option-check { border-color: var(--accent); background: var(--accent); color: white; }
+.wizard-footer { padding: 16px 28px 24px; display: flex; align-items: center; justify-content: space-between; }
+.wizard-steps-dots { display: flex; gap: 6px; }
+.wizard-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg-active); transition: all var(--transition-fast); }
+.wizard-dot.active { background: var(--accent); width: 20px; border-radius: 4px; }
+.wizard-dot.done { background: var(--success); }
+.wizard-nav-btns { display: flex; gap: 8px; }
+.wizard-btn {
+  height: 34px; padding: 0 20px; border-radius: var(--radius-sm);
+  font-size: 12px; font-weight: 600; transition: all var(--transition-fast);
+}
+.wizard-btn.primary { background: var(--accent); color: white; }
+.wizard-btn.primary:hover { background: var(--accent-hover); }
+.wizard-btn.secondary { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+.wizard-btn.secondary:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ---- Toast Stack ---- */
+.toast-stack {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; flex-direction: column; gap: 8px; z-index: 200; width: 300px;
+}
+.toast-card {
+  background: var(--bg-elevated); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); padding: 12px 16px; box-shadow: var(--shadow-md);
+  display: flex; align-items: flex-start; gap: 10px; font-size: 12px;
+  animation: slideInRight 0.3s var(--transition-smooth);
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+@keyframes slideInRight {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.toast-card .toast-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.toast-card .toast-body { flex: 1; }
+.toast-card .toast-title { font-weight: 600; font-size: 12px; }
+.toast-card .toast-msg { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.toast-card .toast-close { color: var(--text-tertiary); font-size: 14px; cursor: pointer; flex-shrink: 0; padding: 2px; }
+.toast-card.toast-success { border-left: 3px solid var(--success); }
+.toast-card.toast-error { border-left: 3px solid var(--danger); }
+.toast-card.toast-warning { border-left: 3px solid var(--warning); }
+.toast-card.toast-info { border-left: 3px solid var(--accent); }
+
+/* ---- Data Panel (Export/Import) ---- */
+.data-panel {
+  width: 580px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.data-tabs { display: flex; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); gap: 2px; transition: border-color var(--transition-smooth); }
+.data-tab {
+  padding: 10px 16px; font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; transition: all var(--transition-fast); cursor: pointer;
+}
+.data-tab:hover { color: var(--text-primary); }
+.data-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.data-body { padding: 20px; }
+.data-format-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+.format-card {
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: 16px; text-align: center;
+  cursor: pointer; transition: all var(--transition-fast);
+}
+.format-card:hover { border-color: var(--accent); }
+.format-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.format-card.selected .format-icon { transform: scale(1.1); }
+.format-icon { font-size: 24px; margin-bottom: 6px; transition: transform var(--transition-fast); }
+.format-name { font-size: 12px; font-weight: 600; }
+.format-desc { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+.data-options { display: flex; flex-direction: column; gap: 12px; }
+.data-opt-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--border-subtle);
+  transition: border-color var(--transition-smooth);
+}
+.data-opt-label { font-size: 12px; }
+.data-opt-desc { font-size: 10.5px; color: var(--text-tertiary); margin-top: 1px; }
+.data-action-btn {
+  height: 36px; padding: 0 24px; border-radius: var(--radius-sm);
+  font-size: 12.5px; font-weight: 600; background: var(--accent); color: white;
+  margin-top: 8px; display: inline-flex; align-items: center; gap: 6px;
+  cursor: pointer; transition: all var(--transition-fast);
+}
+.data-action-btn:hover { background: var(--accent-hover); }
+.data-action-btn.secondary {
+  background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-subtle);
+  margin-left: 8px;
+}
+.data-action-btn.secondary:hover { background: var(--bg-hover); color: var(--text-primary); }
+.import-progress { margin-top: 16px; }
+.progress-header { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; }
+.progress-track { height: 6px; background: var(--bg-active); border-radius: 3px; overflow: hidden; transition: background var(--transition-smooth); }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #8b5cf6); border-radius: 3px; transition: width 0.3s; }
+.progress-details { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-tertiary); margin-top: 4px; }
+
+/* Import Step Wizard */
+.import-wizard-steps { display: flex; flex-direction: column; gap: 14px; }
+.import-step {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px; background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); transition: all var(--transition-fast);
+}
+.import-step.active { border-color: var(--accent); background: var(--accent-soft); }
+.import-step.done { border-color: var(--success); background: var(--success-soft); }
+.step-number {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--bg-active); display: flex; align-items: center;
+  justify-content: center; font-size: 12px; font-weight: 700;
+  color: var(--text-tertiary); flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+.import-step.active .step-number { background: var(--accent); color: white; }
+.import-step.done .step-number { background: var(--success); color: white; }
+.step-body { flex: 1; }
+.step-title { font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+.step-desc { font-size: 11px; color: var(--text-secondary); }
+.step-status { font-size: 10px; font-weight: 500; margin-top: 4px; }
+.step-status.done { color: var(--success); }
+.step-status.running { color: var(--accent); }
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed var(--border-default); border-radius: var(--radius-md);
+  padding: 32px 20px; text-align: center;
+  transition: all var(--transition-fast); cursor: pointer;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: var(--accent); background: var(--accent-soft);
+}
+.drop-zone-icon { font-size: 36px; opacity: 0.5; margin-bottom: 8px; }
+.drop-zone-text { font-size: 13px; color: var(--text-secondary); }
+.drop-zone-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+
+/* ---- Pin Management ---- */
+.pin-view {
+  width: 480px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.pin-header {
+  padding: 14px 16px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: border-color var(--transition-smooth);
+}
+.pin-header h3 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.pin-count-badge {
+  font-size: 10px; background: var(--warning-soft); color: var(--warning);
+  padding: 2px 8px; border-radius: 10px; font-weight: 600;
+}
+.pin-list { padding: 8px; max-height: 380px; overflow-y: auto; }
+.pin-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-md);
+  transition: background var(--transition-fast); cursor: pointer;
+  border: 1px solid transparent;
+}
+.pin-item:hover { background: var(--bg-hover); }
+.pin-item.dragging { border-color: var(--accent); background: var(--accent-softer); opacity: 0.7; }
+.pin-handle { color: var(--text-tertiary); font-size: 14px; cursor: grab; padding-top: 2px; line-height: 1; }
+.pin-rank {
+  width: 20px; height: 20px; background: var(--bg-active); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 700; color: var(--text-tertiary); flex-shrink: 0;
+  font-family: var(--font-mono); transition: background var(--transition-smooth);
+}
+.pin-content { flex: 1; min-width: 0; }
+.pin-text { font-size: 12.5px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pin-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 10px; color: var(--text-tertiary); }
+.pin-actions { display: flex; gap: 2px; opacity: 0; transition: opacity var(--transition-fast); }
+.pin-item:hover .pin-actions { opacity: 1; }
+.pin-action-btn {
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--text-tertiary); transition: all var(--transition-fast);
+}
+.pin-action-btn:hover { background: var(--bg-hover); color: var(--danger); }
+
+/* ---- Ignore Apps ---- */
+.ignore-panel {
+  width: 480px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.ignore-header {
+  padding: 14px 16px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: border-color var(--transition-smooth);
+}
+.ignore-header h3 { font-size: 14px; font-weight: 600; }
+.ignore-add-row { padding: 10px 14px; display: flex; gap: 8px; border-bottom: 1px solid var(--border-subtle); transition: border-color var(--transition-smooth); }
+.ignore-input {
+  flex: 1; height: 32px; background: var(--bg-input); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm); padding: 0 10px; font-size: 12px; color: var(--text-primary);
+  transition: border-color var(--transition-fast), background var(--transition-smooth);
+}
+.ignore-input:focus { border-color: var(--border-focus); }
+.ignore-add-btn { height: 32px; padding: 0 14px; background: var(--accent); color: white; border-radius: var(--radius-sm); font-size: 11.5px; font-weight: 500; }
+.ignore-list { padding: 8px; max-height: 300px; overflow-y: auto; }
+.ignore-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+.ignore-item:hover { background: var(--bg-hover); }
+.ignore-app-icon { width: 24px; height: 24px; background: var(--bg-elevated); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; transition: background var(--transition-smooth); }
+.ignore-app-name { font-size: 12px; flex: 1; }
+.ignore-app-path { font-size: 10px; color: var(--text-tertiary); font-family: var(--font-mono); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ignore-remove-btn { width: 24px; height: 24px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--text-tertiary); transition: all var(--transition-fast); }
+.ignore-remove-btn:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* ---- Shortcuts Modal ---- */
+.shortcuts-overlay {
+  position: fixed; inset: 0; background: rgba(10,11,16,0.8);
+  backdrop-filter: blur(6px); z-index: 250;
+  display: flex; align-items: center; justify-content: center;
+}
+.shortcuts-modal {
+  width: 560px; background: var(--bg-surface);
+  border: 1px solid var(--border-default); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.shortcuts-header {
+  padding: 18px 24px; border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; justify-content: space-between;
+  transition: border-color var(--transition-smooth);
+}
+.shortcuts-header h3 { font-size: 15px; font-weight: 600; }
+.shortcuts-close { width: 28px; height: 28px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--text-tertiary); transition: all var(--transition-fast); }
+.shortcuts-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+.shortcuts-body { padding: 20px 24px; }
+.shortcut-group { margin-bottom: 20px; }
+.shortcut-group:last-child { margin-bottom: 0; }
+.shortcut-group-title {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 10px;
+}
+.shortcut-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; }
+.shortcut-action { font-size: 12.5px; color: var(--text-secondary); }
+.shortcut-keys { display: flex; gap: 3px; }
+.shortcut-keys .kbd { font-size: 10px; }
+
+/* ---- Update Banner ---- */
+.update-banner {
+  background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.08));
+  border: 1px solid rgba(99,102,241,0.2); border-radius: var(--radius-md);
+  padding: 14px 18px; display: flex; align-items: center; gap: 14px; margin-bottom: 16px;
+}
+.update-banner-icon { font-size: 28px; flex-shrink: 0; }
+.update-banner-text h4 { font-size: 13px; font-weight: 600; }
+.update-banner-text p { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+.update-banner-actions { display: flex; gap: 8px; margin-left: auto; flex-shrink: 0; }
+.update-btn { height: 30px; padding: 0 14px; border-radius: var(--radius-sm); font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.update-btn.primary { background: var(--accent); color: white; }
+.update-btn.primary:hover { background: var(--accent-hover); }
+.update-btn.secondary { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border-subtle); }
+.update-btn.secondary:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* ---- Privacy Rules ---- */
+.privacy-rule {
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 10px;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.privacy-rule-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.privacy-rule-title { font-size: 12.5px; font-weight: 600; }
+.privacy-rule-pattern {
+  font-size: 10.5px; font-family: var(--font-mono); color: var(--accent);
+  background: var(--accent-soft); padding: 2px 8px; border-radius: 3px;
+  transition: background var(--transition-smooth);
+}
+.privacy-rule-examples { font-size: 11px; color: var(--text-tertiary); line-height: 1.6; }
+
+/* ============================================================
+   NEW v3.0: THEME TOGGLE COMPONENTS
+   ============================================================ */
+
+/* Theme Switcher — Interactive Component */
+.theme-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.theme-switcher-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+.theme-switcher-label strong { color: var(--text-primary); font-weight: 600; }
+
+/* Animated Toggle Pill */
+.theme-pill {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--bg-active);
+  border-radius: 20px;
+  padding: 3px;
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.theme-pill-btn {
+  width: 56px;
+  height: 28px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  gap: 4px;
+  color: var(--text-tertiary);
+  transition: all var(--transition-smooth);
+  font-size: 11px;
+  font-weight: 500;
+}
+.theme-pill-btn.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+.theme-pill-btn:hover:not(.active) {
+  color: var(--text-secondary);
+}
+
+/* Mini panel pair (for side-by-side dark/light) */
+.panel-pair {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.panel-pair .panel {
+  height: 400px;
+  width: 260px;
+}
+.panel-pair .panel-header {
+  padding: 10px 12px 8px;
+}
+.panel-pair .panel-body {
+  flex-direction: column;
+}
+.panel-pair .record-list {
+  width: 100%;
+  border-right: none;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.panel-pair .action-bar {
+  padding: 8px 12px;
+}
+.panel-pair .filter-row {
+  margin-top: 6px;
+}
+
+/* Export/Import Enhanced — Drag & Drop Zone */
+.drop-zone-area {
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  text-align: center;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  position: relative;
+}
+.drop-zone-area:hover, .drop-zone-area.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.drop-zone-area .dz-icon { font-size: 40px; opacity: 0.4; margin-bottom: 8px; }
+.drop-zone-area .dz-text { font-size: 13px; color: var(--text-secondary); }
+.drop-zone-area .dz-text strong { color: var(--accent); }
+.drop-zone-area .dz-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+.drop-zone-area .dz-browse-btn {
+  margin-top: 10px;
+  padding: 6px 18px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-block;
+}
+.drop-zone-area .dz-browse-btn:hover { background: var(--accent); color: white; }
+
+/* Selected File Card */
+.selected-file-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.selected-file-card .file-icon { font-size: 24px; flex-shrink: 0; }
+.selected-file-card .file-info { flex: 1; min-width: 0; }
+.selected-file-card .file-name { font-size: 12px; font-weight: 600; font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.selected-file-card .file-meta { font-size: 10.5px; color: var(--text-tertiary); margin-top: 2px; }
+.selected-file-card .file-remove {
+  color: var(--text-tertiary); font-size: 14px;
+  cursor: pointer; padding: 4px; border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+.selected-file-card .file-remove:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* Conflict Resolution */
+.conflict-card {
+  background: var(--warning-soft);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-top: 12px;
+  transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+.conflict-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--warning);
+  margin-bottom: 8px;
+}
+.conflict-options {
+  display: flex; gap: 8px;
+}
+.conflict-btn {
+  flex: 1; padding: 6px 8px; border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 500; text-align: center;
+  border: 1px solid var(--border-default); background: var(--bg-surface);
+  color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast);
+}
+.conflict-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.conflict-btn.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.conflict-btn span { display: block; font-size: 9.5px; opacity: 0.7; margin-top: 1px; }
+</style>
+</head>
+<body>
+
+<div class="desktop-bg"></div>
+
+<div class="showcase">
+
+  <!-- ============================================================ -->
+  <!-- ① 主面板 — 暗色模式（默认）                                -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">① 悬浮面板 · 暗色（默认）</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="search-row" style="position:relative">
+          <span class="search-icon">🔍</span>
+          <input class="search-box" type="text" placeholder="搜索剪贴板历史…" style="position:relative;z-index:2">
+          <div class="header-actions">
+            <button class="icon-btn" title="批量操作">☐</button>
+            <button class="icon-btn active" title="收藏区">★</button>
+            <button class="icon-btn" title="设置">⚙</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <button class="filter-tab active">全部 <span class="count">24</span></button>
+          <button class="filter-tab">文本 <span class="count">16</span></button>
+          <button class="filter-tab">代码 <span class="count">3</span></button>
+          <button class="filter-tab">链接 <span class="count">4</span></button>
+          <button class="filter-tab">图片 <span class="count">1</span></button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="record-list">
+          <div class="list-section-label">📌 置顶</div>
+          <div class="record-item selected">
+            <div class="record-fav">★</div>
+            <div class="record-summary">部署脚本：npm run build && npm run deploy</div>
+            <div class="record-meta">
+              <span class="record-type-badge badge-code">代码</span>
+              <span class="record-source">VS Code</span><span class="record-time">置顶</span>
+            </div>
+          </div>
+          <div class="record-item">
+            <div class="record-fav">★</div>
+            <div class="record-summary">会议室 A306，3楼电梯左转第二个门</div>
+            <div class="record-meta">
+              <span class="record-type-badge badge-text">文本</span>
+              <span class="record-source">微信</span><span class="record-time">置顶</span>
+            </div>
+          </div>
+          <div class="list-section-label">今天</div>
+          <div class="record-item"><div class="record-summary">https://github.com/tauri-apps/tauri</div><div class="record-meta"><span class="record-type-badge badge-link">链接</span><span class="record-source">Chrome</span><span class="record-time">14:32</span></div></div>
+          <div class="record-item"><div class="record-summary">2026年Q2产品路线图讨论纪要</div><div class="record-meta"><span class="record-type-badge badge-text">文本</span><span class="record-source">飞书</span><span class="record-time">14:18</span></div></div>
+          <div class="record-item"><div class="record-summary">const result = await fetch('/api/clipboard')</div><div class="record-meta"><span class="record-type-badge badge-code">代码</span><span class="record-source">VS Code</span><span class="record-time">13:45</span></div></div>
+          <div class="record-item">
+            <span class="record-type-badge badge-sensitive" style="position:absolute;right:8px;top:8px">敏感</span>
+            <div class="record-summary">验证码 839204，10分钟内有效</div>
+            <div class="record-meta"><span class="record-type-badge badge-text">文本</span><span class="record-source">短信</span><span class="record-time">13:20</span></div>
+          </div>
+          <div class="record-item"><div class="record-summary">rgba(99, 102, 241, 0.12)</div><div class="record-meta"><span class="record-type-badge badge-text">颜色</span><span class="record-source">Figma</span><span class="record-time">12:55</span></div></div>
+        </div>
+        <div class="preview-pane">
+          <div class="preview-content">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+              <span class="record-type-badge badge-code" style="font-size:10px">Bash</span>
+              <span style="font-size:11px;color:var(--text-tertiary)">VS Code · 置顶</span>
+              <span style="margin-left:auto;font-size:10px;color:var(--text-tertiary);font-family:var(--font-mono)">复制 3 次</span>
+            </div>
+            <pre>npm run build &amp;&amp; npm run deploy</pre>
+            <div style="margin-top:12px;display:flex;gap:4px;flex-wrap:wrap">
+              <span class="tag-badge" style="background:var(--success-soft);color:var(--success)"><span class="tag-badge-dot" style="background:var(--success)"></span>部署</span>
+              <span class="tag-badge" style="background:var(--accent-soft);color:var(--accent)"><span class="tag-badge-dot" style="background:var(--accent)"></span>前端</span>
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="action-btn primary">⏎ 粘贴</button>
+            <button class="action-btn secondary">Aa 纯文本</button>
+            <button class="action-btn secondary">M↓ Markdown</button>
+            <button class="action-btn secondary">★ 取消收藏</button>
+            <button class="action-btn secondary">⋮</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ② 主题切换交互组件（独立展示）                              -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">② 主题切换 · 交互组件</div>
+    <div style="display:flex;flex-direction:column;gap:16px;width:380px">
+      <!-- Pill Toggle (recommended placement in settings) -->
+      <div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:18px 20px;box-shadow:var(--shadow-lg);transition:background var(--transition-smooth),border-color var(--transition-smooth)">
+        <div style="font-size:12px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">外观设置</div>
+        <div class="theme-switcher" style="margin-bottom:12px">
+          <span class="theme-switcher-label">当前主题</span>
+          <div class="theme-pill">
+            <div class="theme-pill-btn active" id="pill-dark" onclick="setTheme('dark')">🌙 暗色</div>
+            <div class="theme-pill-btn" id="pill-light" onclick="setTheme('light')">☀️ 亮色</div>
+            <div class="theme-pill-btn" id="pill-oled" onclick="setTheme('oled')">✦ 深黑</div>
+          </div>
+        </div>
+        <div class="theme-switcher">
+          <span class="theme-switcher-label">跟随系统</span>
+          <div class="toggle" id="toggle-system" onclick="toggleSwitch(this)"></div>
+        </div>
+      </div>
+
+      <!-- Side-by-side dark/light preview cards -->
+      <div class="panel-pair">
+        <div class="panel" id="preview-dark">
+          <div class="panel-header">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">🌙 暗色</span>
+              <span style="font-size:10px;background:var(--accent-soft);color:var(--accent);padding:2px 7px;border-radius:10px;font-weight:500">当前</span>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="record-list" style="width:100%;border-right:none">
+              <div class="record-item selected" style="padding:6px 12px">
+                <div class="record-summary" style="max-width:none;font-size:12px">npm run build && npm run deploy</div>
+                <div class="record-meta">
+                  <span class="record-type-badge badge-code">代码</span>
+                  <span class="record-source">VS Code</span>
+                </div>
+              </div>
+              <div class="record-item" style="padding:6px 12px">
+                <div class="record-summary" style="max-width:none;font-size:12px">会议室 A306，3楼电梯左转</div>
+                <div class="record-meta">
+                  <span class="record-type-badge badge-text">文本</span>
+                  <span class="record-source">微信</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="action-bar" style="padding:6px 12px">
+            <button class="action-btn primary" style="height:26px;font-size:10.5px;padding:0 10px">⏎ 粘贴</button>
+            <button class="action-btn secondary" style="height:26px;font-size:10.5px;padding:0 8px">Aa</button>
+          </div>
+        </div>
+        <div class="panel" id="preview-light">
+          <div class="panel-header">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">☀️ 亮色</span>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="record-list" style="width:100%;border-right:none">
+              <div class="record-item selected" style="padding:6px 12px">
+                <div class="record-summary" style="max-width:none;font-size:12px">npm run build && npm run deploy</div>
+                <div class="record-meta">
+                  <span class="record-type-badge badge-code">代码</span>
+                  <span class="record-source">VS Code</span>
+                </div>
+              </div>
+              <div class="record-item" style="padding:6px 12px">
+                <div class="record-summary" style="max-width:none;font-size:12px">会议室 A306，3楼电梯左转</div>
+                <div class="record-meta">
+                  <span class="record-type-badge badge-text">文本</span>
+                  <span class="record-source">微信</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="action-bar" style="padding:6px 12px">
+            <button class="action-btn primary" style="height:26px;font-size:10.5px;padding:0 10px">⏎ 粘贴</button>
+            <button class="action-btn secondary" style="height:26px;font-size:10.5px;padding:0 8px">Aa</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Theme transition animation hint -->
+      <div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:12px 16px;box-shadow:var(--shadow-sm);transition:background var(--transition-smooth),border-color var(--transition-smooth)">
+        <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px">✨ 主题切换动画</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;gap:3px">
+            <span style="font-size:9px;background:var(--bg-active);padding:2px 6px;border-radius:3px;color:var(--text-tertiary);font-family:var(--font-mono)">200ms</span>
+            <span style="font-size:9px;background:var(--accent-soft);padding:2px 6px;border-radius:3px;color:var(--accent);font-family:var(--font-mono)">ease</span>
+          </div>
+          <span style="font-size:11px;color:var(--text-secondary)">所有颜色、背景、边框平滑过渡</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ③ 搜索状态（输入中 + 高亮）                                 -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">③ 搜索 · 关键词高亮</div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="search-row" style="position:relative">
+          <span class="search-icon">🔍</span>
+          <input class="search-box" type="text" value="fetch" style="position:relative;z-index:2;border-color:var(--border-focus)">
+          <div class="header-actions">
+            <button class="icon-btn">☐</button>
+            <button class="icon-btn">★</button>
+            <button class="icon-btn">⚙</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <button class="filter-tab active">全部 <span class="count">2</span></button>
+          <button class="filter-tab">代码 <span class="count">2</span></button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="record-list">
+          <div class="search-loading">
+            <span class="search-spinner"></span>
+            搜索 "fetch" — 找到 2 条结果
+          </div>
+          <div class="record-item selected">
+            <div class="record-summary"><span class="hl">fetch</span> API 调用示例</div>
+            <div class="record-meta">
+              <span class="record-type-badge badge-code">代码</span>
+              <span class="record-source">VS Code</span><span class="record-time">13:45</span>
+            </div>
+          </div>
+          <div class="record-item">
+            <div class="record-summary">const data = await <span class="hl">fetch</span>(url).then(r => r.json())</div>
+            <div class="record-meta">
+              <span class="record-type-badge badge-code">代码</span>
+              <span class="record-source">VS Code</span><span class="record-time">昨天</span>
+            </div>
+          </div>
+          <div style="padding:12px;text-align:center;font-size:11px;color:var(--text-tertiary)">
+            按 <span class="kbd">Esc</span> 清除搜索
+          </div>
+        </div>
+        <div class="preview-pane">
+          <div class="preview-content">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+              <span class="record-type-badge badge-code" style="font-size:10px">TypeScript</span>
+              <span style="font-size:11px;color:var(--text-tertiary)">VS Code · 13:45</span>
+            </div>
+            <pre style="color:var(--text-primary)"><span style="color:#c586c0">const</span> <span style="color:#9cdcfe">result</span> = <span style="color:#c586c0">await</span> <span style="color:#dcdcaa">fetch</span>(<span style="color:#ce9178">'/api/clipboard'</span>, {
+  <span style="color:#9cdcfe">method</span>: <span style="color:#ce9178">'GET'</span>,
+  <span style="color:#9cdcfe">headers</span>: {
+    <span style="color:#ce9178">'Content-Type'</span>: <span style="color:#ce9178">'application/json'</span>,
+  },
+})</pre>
+            <div style="margin-top:10px;padding:8px;background:var(--bg-elevated);border-radius:var(--radius-sm);font-size:11px;color:var(--text-secondary)">
+              💡 搜索匹配了 <strong style="color:var(--accent)">1</strong> 条记录中的关键词
+            </div>
+          </div>
+          <div class="action-bar">
+            <button class="action-btn primary">⏎ 粘贴</button>
+            <button class="action-btn secondary">Aa 纯文本</button>
+            <button class="action-btn secondary">☆ 收藏</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ④ 无结果 + 批量选择                                         -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">④ 无结果 + 批量选择</div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <!-- Empty Search -->
+      <div class="panel" style="height:280px">
+        <div class="panel-header">
+          <div class="search-row" style="position:relative">
+            <span class="search-icon">🔍</span>
+            <input class="search-box" type="text" value="zzz_not_found" style="position:relative;z-index:2;border-color:var(--border-focus)">
+          </div>
+        </div>
+        <div class="panel-body" style="justify-content:center">
+          <div class="search-no-results">
+            <div class="no-results-icon">🔍</div>
+            <div class="no-results-text">没有找到匹配的结果</div>
+            <div class="no-results-hint">尝试使用不同的关键词或检查拼写</div>
+            <button class="clear-search-btn">✕ 清除搜索</button>
+          </div>
+        </div>
+      </div>
+      <!-- Batch Mode -->
+      <div class="panel" style="height:310px">
+        <div class="batch-bar">
+          <div class="batch-info"><span>☑</span> 已选择 <strong>3</strong> 项</div>
+          <div class="batch-actions">
+            <button class="batch-btn">📋 复制</button>
+            <button class="batch-btn">★ 收藏</button>
+            <button class="batch-btn danger-btn">🗑 删除</button>
+            <button class="batch-btn">✕</button>
+          </div>
+        </div>
+        <div class="panel-header" style="padding-top:10px">
+          <div class="search-row" style="position:relative">
+            <span class="search-icon">🔍</span>
+            <input class="search-box" type="text" placeholder="搜索…" style="position:relative;z-index:2">
+          </div>
+        </div>
+        <div class="panel-body" style="flex-direction:column">
+          <div class="record-list" style="width:100%;border-right:none;border-bottom:1px solid var(--border-subtle)">
+            <div class="record-item batch-mode selected" style="opacity:0.8">
+              <div class="record-checkbox checked">✓</div>
+              <div class="record-summary">部署脚本：npm run build && npm run deploy</div>
+              <div class="record-meta"><span class="record-type-badge badge-code">代码</span><span class="record-source">VS Code</span></div>
+            </div>
+            <div class="record-item batch-mode" style="opacity:0.5">
+              <div class="record-checkbox"></div>
+              <div class="record-summary">会议室 A306，3楼电梯左转</div>
+              <div class="record-meta"><span class="record-type-badge badge-text">文本</span><span class="record-source">微信</span></div>
+            </div>
+            <div class="record-item batch-mode selected" style="opacity:0.8">
+              <div class="record-checkbox checked">✓</div>
+              <div class="record-summary">https://github.com/tauri-apps/tauri</div>
+              <div class="record-meta"><span class="record-type-badge badge-link">链接</span><span class="record-source">Chrome</span></div>
+            </div>
+            <div class="record-item batch-mode selected" style="opacity:0.8">
+              <div class="record-checkbox checked">✓</div>
+              <div class="record-summary">const result = await fetch('/api/clipboard')</div>
+              <div class="record-meta"><span class="record-type-badge badge-code">代码</span><span class="record-source">VS Code</span></div>
+            </div>
+          </div>
+          <div class="action-bar" style="padding:8px 12px">
+            <button class="action-btn danger" style="height:26px;font-size:10.5px;padding:0 10px">🗑 删除 (3)</button>
+            <button class="action-btn secondary" style="height:26px;font-size:10.5px;padding:0 10px">📋 复制</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑤ 统计面板                                                  -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑤ 统计面板</div>
+    <div class="stats-dashboard">
+      <div class="stats-header">
+        <h3>📊 使用统计</h3>
+        <span class="stats-date-range">2026-05-01 ~ 2026-05-12</span>
+      </div>
+      <div class="stats-body">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-card-icon">📋</div>
+            <div class="stat-card-value accent-color">1,247</div>
+            <div class="stat-card-label">总复制次数</div>
+            <div class="stat-card-change up">↑ 12.3% vs 上周</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-icon">⭐</div>
+            <div class="stat-card-value warning-color">23</div>
+            <div class="stat-card-label">收藏条目</div>
+            <div class="stat-card-change up">↑ 4 本周新增</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-icon">💾</div>
+            <div class="stat-card-value success-color">2.4 MB</div>
+            <div class="stat-card-label">存储占用</div>
+            <div class="stat-card-change down">↓ 0.3 MB 已清理</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-icon">🔤</div>
+            <div class="stat-card-value">78%</div>
+            <div class="stat-card-label">文本占比</div>
+            <div class="stat-card-change up">↑ 3% vs 上周</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-icon">💻</div>
+            <div class="stat-card-value">156</div>
+            <div class="stat-card-label">代码片段</div>
+            <div class="stat-card-change up">↑ 18 本周新增</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-card-icon">🔗</div>
+            <div class="stat-card-value">89</div>
+            <div class="stat-card-label">链接记录</div>
+            <div class="stat-card-change down">↓ 5 vs 上周</div>
+          </div>
+        </div>
+        <div class="chart-section">
+          <div class="chart-title">每日复制趋势（近 7 天）</div>
+          <div class="bar-chart">
+            <div class="bar-col"><div class="bar" style="height:35%"></div><span class="bar-value">68</span><span class="bar-label">周一</span></div>
+            <div class="bar-col"><div class="bar" style="height:55%"></div><span class="bar-value">112</span><span class="bar-label">周二</span></div>
+            <div class="bar-col"><div class="bar" style="height:42%"></div><span class="bar-value">86</span><span class="bar-label">周三</span></div>
+            <div class="bar-col"><div class="bar" style="height:78%"></div><span class="bar-value">158</span><span class="bar-label">周四</span></div>
+            <div class="bar-col"><div class="bar" style="height:62%"></div><span class="bar-value">127</span><span class="bar-label">周五</span></div>
+            <div class="bar-col"><div class="bar" style="height:28%"></div><span class="bar-value">54</span><span class="bar-label">周六</span></div>
+            <div class="bar-col"><div class="bar today-bar" style="height:90%"></div><span class="bar-value">184</span><span class="bar-label">今天</span></div>
+          </div>
+        </div>
+        <div class="chart-section">
+          <div class="chart-title">存储分布</div>
+          <div class="storage-breakdown">
+            <div class="donut-chart" style="background:conic-gradient(var(--accent) 0% 45%, var(--success) 45% 65%, var(--warning) 65% 78%, var(--text-tertiary) 78% 100%)">
+              <div class="donut-inner">2.4<span>MB</span></div>
+            </div>
+            <div class="storage-legend">
+              <div class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span><span class="legend-label">文本内容</span><span class="legend-value">1.08 MB (45%)</span></div>
+              <div class="legend-item"><span class="legend-dot" style="background:var(--success)"></span><span class="legend-label">代码片段</span><span class="legend-value">0.48 MB (20%)</span></div>
+              <div class="legend-item"><span class="legend-dot" style="background:var(--warning)"></span><span class="legend-label">图片数据</span><span class="legend-value">0.31 MB (13%)</span></div>
+              <div class="legend-item"><span class="legend-dot" style="background:var(--text-tertiary)"></span><span class="legend-label">其他</span><span class="legend-value">0.53 MB (22%)</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑥ 导出界面 v3 — 拖放 + 文件选择                             -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑥ 导出记录（增强）</div>
+    <div class="data-panel">
+      <div class="data-tabs">
+        <div class="data-tab active" id="tab-export" onclick="switchDataTab('export')">📤 导出</div>
+        <div class="data-tab" id="tab-import" onclick="switchDataTab('import')">📥 导入</div>
+      </div>
+      <div class="data-body" id="body-export">
+        <!-- Format Selection -->
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--text-primary)">选择格式</div>
+        <div class="data-format-grid">
+          <div class="format-card selected" onclick="selectFormat(this)">
+            <div class="format-icon">📄</div>
+            <div class="format-name">JSON</div>
+            <div class="format-desc">完整数据，含元信息</div>
+          </div>
+          <div class="format-card" onclick="selectFormat(this)">
+            <div class="format-icon">📊</div>
+            <div class="format-name">CSV</div>
+            <div class="format-desc">纯文本表格格式</div>
+          </div>
+          <div class="format-card" onclick="selectFormat(this)">
+            <div class="format-icon">📝</div>
+            <div class="format-name">Markdown</div>
+            <div class="format-desc">可读性最佳</div>
+          </div>
+          <div class="format-card" onclick="selectFormat(this)">
+            <div class="format-icon">🗄️</div>
+            <div class="format-name">SQLite</div>
+            <div class="format-desc">原始数据库文件</div>
+          </div>
+          <div class="format-card" onclick="selectFormat(this)">
+            <div class="format-icon">📦</div>
+            <div class="format-name">ZIP 包</div>
+            <div class="format-desc">含图片附件的压缩包</div>
+          </div>
+          <div class="format-card" onclick="selectFormat(this)">
+            <div class="format-icon">🔒</div>
+            <div class="format-name">加密备份</div>
+            <div class="format-desc">AES-256 加密</div>
+          </div>
+        </div>
+
+        <!-- Drop zone -->
+        <div class="drop-zone-area" id="export-drop-zone" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleDropExport(event)">
+          <div class="dz-icon">📁</div>
+          <div class="dz-text"><strong>拖放文件夹</strong> 到这里，或选择保存位置</div>
+          <div class="dz-hint">导出的文件将保存到所选位置</div>
+          <div class="dz-browse-btn" onclick="simulateExport()">📂 选择保存位置…</div>
+        </div>
+
+        <!-- Export Options -->
+        <div class="data-options" style="margin-top:14px">
+          <div class="data-opt-row">
+            <div>
+              <div class="data-opt-label">包含时间范围</div>
+              <div class="data-opt-desc">仅导出指定时间段的数据</div>
+            </div>
+            <select class="select-wrap select"><option>全部时间</option><option>近 30 天</option><option>近 7 天</option></select>
+          </div>
+          <div class="data-opt-row">
+            <div>
+              <div class="data-opt-label">包含图片附件</div>
+              <div class="data-opt-desc">将复制的图片一并导出</div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"></div>
+          </div>
+          <div class="data-opt-row">
+            <div>
+              <div class="data-opt-label">排除敏感内容</div>
+              <div class="data-opt-desc">不导出密码、验证码等</div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"></div>
+          </div>
+        </div>
+
+        <!-- Export Progress (hidden initially) -->
+        <div class="import-progress" id="export-progress" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border-subtle)">
+          <div style="font-size:12px;font-weight:600;margin-bottom:8px">📤 正在导出…</div>
+          <div class="progress-header">
+            <span id="export-file-name">clipvault-export.json</span>
+            <span id="export-pct" style="color:var(--accent);font-family:var(--font-mono)">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="export-fill" style="width:0%"></div></div>
+          <div class="progress-details">
+            <span id="export-count">已处理 0 / 1,247 条</span>
+            <span>预计剩余 ~8 秒</span>
+          </div>
+        </div>
+
+        <div style="margin-top:14px">
+          <button class="data-action-btn primary" id="export-btn" onclick="startExport()">📤 开始导出</button>
+          <button class="data-action-btn secondary">📊 预览数据量 →</button>
+        </div>
+
+        <!-- Success state -->
+        <div id="export-success" style="display:none;margin-top:14px;padding:12px 16px;background:var(--success-soft);border:1px solid rgba(52,211,153,0.2);border-radius:var(--radius-md)">
+          <div style="font-size:12px;color:var(--success);font-weight:600;margin-bottom:4px">✅ 导出完成！</div>
+          <div style="font-size:11px;color:var(--text-secondary)">clipvault-export.json · 1.247 条记录 · 2.1 MB</div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="data-action-btn secondary" style="margin-top:0;height:28px;padding:0 12px;font-size:11px;background:var(--bg-surface);color:var(--text-secondary)">📂 打开文件夹</button>
+            <button class="data-action-btn secondary" style="margin-top:0;height:28px;padding:0 12px;font-size:11px" onclick="resetExport()">↻ 继续导出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑦ 导入界面 v3 — 步骤向导 + 冲突解决                          -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑦ 导入记录（增强）</div>
+    <div class="data-panel">
+      <div class="data-tabs">
+        <div class="data-tab" id="tab-export2" onclick="switchDataTab('export')">📤 导出</div>
+        <div class="data-tab active" id="tab-import2" onclick="switchDataTab('import')">📥 导入</div>
+      </div>
+      <div class="data-body" id="body-import">
+        <!-- Drop Zone -->
+        <div class="drop-zone-area" id="import-drop-zone" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleDropImport(event)">
+          <div class="dz-icon">📥</div>
+          <div class="dz-text">将备份文件<strong>拖放到这里</strong></div>
+          <div class="dz-hint">支持 JSON / CSV / SQLite / ZIP 格式</div>
+          <div class="dz-browse-btn" onclick="simulateFilePick()">📂 浏览文件…</div>
+        </div>
+
+        <!-- Selected File Card -->
+        <div class="selected-file-card" id="selected-file-card" style="display:none">
+          <div class="file-icon">📄</div>
+          <div class="file-info">
+            <div class="file-name" id="import-file-name">clipvault-backup-20260510.json</div>
+            <div class="file-meta" id="import-file-meta">JSON · 842 条记录 · 1.8 MB</div>
+          </div>
+          <div class="file-remove" onclick="removeImportFile()">✕</div>
+        </div>
+
+        <!-- Import Wizard Steps -->
+        <div class="import-wizard-steps" id="import-wizard" style="display:none;margin-top:16px">
+          <div class="import-step done">
+            <div class="step-number">✓</div>
+            <div class="step-body">
+              <div class="step-title">检测到文件格式</div>
+              <div class="step-desc">JSON 格式，1.8 MB，包含 842 条记录</div>
+              <div class="step-status done">✅ 格式识别完成</div>
+            </div>
+          </div>
+          <div class="import-step active" id="import-step-conflict">
+            <div class="step-number">2</div>
+            <div class="step-body">
+              <div class="step-title">数据冲突处理</div>
+              <div class="step-desc">发现 47 条与现有记录重复</div>
+              <div class="step-status running">⏳ 请选择处理方式</div>
+              <!-- Conflict Resolution -->
+              <div class="conflict-card" style="margin-top:10px">
+                <div class="conflict-header">⚠️ 检测到重复记录，如何处理？</div>
+                <div class="conflict-options">
+                  <div class="conflict-btn selected" onclick="selectConflict(this)">跳过<span>保留现有记录</span></div>
+                  <div class="conflict-btn" onclick="selectConflict(this)">覆盖<span>用新数据替换</span></div>
+                  <div class="conflict-btn" onclick="selectConflict(this)">保留两者<span>全部导入</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="import-step" id="import-step-importing" style="display:none">
+            <div class="step-number">3</div>
+            <div class="step-body">
+              <div class="step-title">正在导入数据…</div>
+              <div class="step-desc">正在处理记录，请稍候</div>
+              <div class="import-progress" style="margin-top:10px">
+                <div class="progress-header">
+                  <span>clipvault-backup-20260510.json</span>
+                  <span id="import-pct" style="color:var(--accent);font-family:var(--font-mono)">0%</span>
+                </div>
+                <div class="progress-track"><div class="progress-fill" id="import-fill" style="width:0%"></div></div>
+                <div class="progress-details">
+                  <span id="import-count">已导入 0 / 842 条</span>
+                  <span>预计剩余 ~15 秒</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="import-step" id="import-step-done" style="display:none">
+            <div class="step-number">✓</div>
+            <div class="step-body">
+              <div class="step-title">导入完成！</div>
+              <div class="step-desc">成功导入 842 条记录，跳过 47 条重复项</div>
+              <div class="step-status done">✅ 数据已合并到剪贴板历史</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Import Options (before conflict) -->
+        <div class="data-options" id="import-options" style="display:none;margin-top:16px">
+          <div class="data-opt-row">
+            <div>
+              <div class="data-opt-label">导入范围</div>
+              <div class="data-opt-desc">导入全部或部分记录</div>
+            </div>
+            <select class="select-wrap select"><option>全部记录</option><option>仅文本</option><option>仅代码</option><option>自定义筛选…</option></select>
+          </div>
+          <div class="data-opt-row">
+            <div>
+              <div class="data-opt-label">保留导入时间戳</div>
+              <div class="data-opt-desc">使用原始复制时间，而非导入时间</div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"></div>
+          </div>
+          <div class="data-opt-row">
+            <div>
+              <div class="data-opt-label">导入后自动去重</div>
+              <div class="data-opt-desc">基于内容哈希自动清理重复记录</div>
+            </div>
+            <div class="toggle" onclick="toggleSwitch(this)"></div>
+          </div>
+        </div>
+
+        <div id="import-actions" style="display:none;margin-top:14px">
+          <button class="data-action-btn primary" onclick="startImport()">📥 开始导入</button>
+          <button class="data-action-btn secondary">🔍 预览数据 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑧ 图片预览 + 快捷键帮助                                     -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑧ 图片预览 + 快捷键</div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <!-- Image Preview -->
+      <div class="image-preview-full">
+        <div class="image-preview-toolbar">
+          <div class="image-preview-meta">
+            <span>📷 截图_20260512.png</span>
+            <span>·</span><span>1920×1080</span><span>·</span><span>2.1 MB</span><span>·</span><span>PNG</span>
+          </div>
+          <div class="image-preview-actions">
+            <button class="icon-btn" title="放大" style="width:26px;height:26px;font-size:11px">🔍+</button>
+            <button class="icon-btn" title="缩小" style="width:26px;height:26px;font-size:11px">🔍-</button>
+            <button class="icon-btn" title="实际大小" style="width:26px;height:26px;font-size:11px">1:1</button>
+            <button class="icon-btn" title="适应窗口" style="width:26px;height:26px;font-size:11px">⊡</button>
+          </div>
+        </div>
+        <div class="image-preview-canvas">
+          <div style="width:80%;max-width:380px;background:var(--bg-elevated);border:1px solid var(--border-default);border-radius:var(--radius-md);overflow:hidden;box-shadow:var(--shadow-md)">
+            <div style="height:28px;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;padding:0 10px;gap:6px">
+              <span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.3)"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.3)"></span>
+              <span style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.3)"></span>
+            </div>
+            <div style="background:repeating-conic-gradient(var(--bg-hover) 0% 25%, var(--bg-active) 0% 50%) 50%/12px 12px;min-height:160px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px">
+              <span style="font-size:32px">🖼️</span>
+              <span style="font-size:11px;color:var(--text-tertiary)">图片预览区域</span>
+            </div>
+          </div>
+        </div>
+        <div class="image-preview-footer">
+          <span class="file-name">截图_20260512.png</span>
+          <span>来源：截图工具 · 11:40</span>
+        </div>
+        <div class="action-bar">
+          <button class="action-btn primary">⏎ 粘贴图片</button>
+          <button class="action-btn secondary">📂 打开</button>
+          <button class="action-btn secondary">☆ 收藏</button>
+        </div>
+      </div>
+
+      <!-- Shortcuts Modal Preview -->
+      <div class="shortcuts-modal">
+        <div class="shortcuts-header">
+          <h3>⌨ 快捷键一览</h3>
+          <button class="shortcuts-close">✕</button>
+        </div>
+        <div class="shortcuts-body">
+          <div class="shortcut-group">
+            <div class="shortcut-group-title">面板操作</div>
+            <div class="shortcut-row"><span class="shortcut-action">唤起/隐藏面板</span><div class="shortcut-keys"><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">V</span></div></div>
+            <div class="shortcut-row"><span class="shortcut-action">搜索框聚焦</span><div class="shortcut-keys"><span class="kbd">/</span> 或 <span class="kbd">Ctrl</span>+<span class="kbd">K</span></div></div>
+            <div class="shortcut-row"><span class="shortcut-action">确认粘贴</span><div class="shortcut-keys"><span class="kbd">Enter</span></div></div>
+            <div class="shortcut-row"><span class="shortcut-action">关闭面板</span><div class="shortcut-keys"><span class="kbd">Esc</span></div></div>
+          </div>
+          <div class="shortcut-group">
+            <div class="shortcut-group-title">条目操作</div>
+            <div class="shortcut-row"><span class="shortcut-action">粘贴为纯文本</span><div class="shortcut-keys"><span class="kbd">Alt</span>+<span class="kbd">V</span></div></div>
+            <div class="shortcut-row"><span class="shortcut-action">收藏/取消收藏</span><div class="shortcut-keys"><span class="kbd">Ctrl</span>+<span class="kbd">D</span></div></div>
+            <div class="shortcut-row"><span class="shortcut-action">置顶</span><div class="shortcut-keys"><span class="kbd">Ctrl</span>+<span class="kbd">T</span></div></div>
+            <div class="shortcut-row"><span class="shortcut-action">删除</span><div class="shortcut-keys"><span class="kbd">Del</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑨ 设置 · 外观主题（增强）                                    -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑨ 设置 · 外观主题</div>
+    <div class="settings-window">
+      <nav class="settings-nav">
+        <div class="settings-nav-title">⚙ ClipVault</div>
+        <div class="nav-item"><span class="nav-icon">⌨</span>快捷键</div>
+        <div class="nav-item"><span class="nav-icon">📋</span>剪贴板</div>
+        <div class="nav-item"><span class="nav-icon">📁</span>存储</div>
+        <div class="nav-item active"><span class="nav-icon">🎨</span>外观</div>
+        <div class="nav-item"><span class="nav-icon">🛡</span>隐私</div>
+        <div class="nav-item"><span class="nav-icon">🔌</span>忽略应用</div>
+        <div class="nav-item"><span class="nav-icon">📦</span>数据</div>
+        <div class="nav-item"><span class="nav-icon">ℹ</span>关于</div>
+      </nav>
+      <div class="settings-body">
+        <div class="settings-section">
+          <div class="settings-section-title">主题模式</div>
+          <!-- Theme Pill Toggle (full version) -->
+          <div style="display:flex;gap:10px;margin-bottom:16px">
+            <div style="flex:1;background:var(--bg-elevated);border:2px solid var(--accent);border-radius:var(--radius-md);padding:14px;cursor:pointer;text-align:center;transition:all var(--transition-fast)" onclick="setTheme('dark')">
+              <div style="width:100%;height:40px;background:linear-gradient(135deg,#181a22,#1e2130);border-radius:6px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.06)"></div>
+              <div style="font-size:11.5px;font-weight:600">🌙 暗色</div>
+              <div style="font-size:10px;color:var(--accent);margin-top:2px">✦ 当前</div>
+            </div>
+            <div style="flex:1;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px;cursor:pointer;text-align:center;transition:all var(--transition-fast)" onclick="setTheme('light')">
+              <div style="width:100%;height:40px;background:linear-gradient(135deg,#ffffff,#f0f2f8);border-radius:6px;margin-bottom:8px;border:1px solid rgba(0,0,0,0.06)"></div>
+              <div style="font-size:11.5px;font-weight:600">☀️ 亮色</div>
+              <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">跟随系统</div>
+            </div>
+            <div style="flex:1;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px;cursor:pointer;text-align:center;transition:all var(--transition-fast)" onclick="setTheme('oled')">
+              <div style="width:100%;height:40px;background:#000000;border-radius:6px;margin-bottom:8px"></div>
+              <div style="font-size:11.5px;font-weight:600">✦ 深黑</div>
+              <div style="font-size:10px;color:var(--text-tertiary);margin-top:2px">OLED 省电</div>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">跟随系统主题</div>
+              <div class="setting-desc">自动切换暗/亮色</div>
+            </div>
+            <div class="toggle" id="toggle-follow-system" onclick="toggleSwitch(this)"></div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">面板外观</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">透明度</div>
+              <div class="setting-desc">悬浮面板背景透明程度</div>
+            </div>
+            <div class="slider-row">
+              <input type="range" min="60" max="100" value="94">
+              <span class="slider-value">94%</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">圆角大小</div>
+            </div>
+            <div class="slider-row">
+              <input type="range" min="0" max="24" value="20">
+              <span class="slider-value">20px</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">毛玻璃效果</div>
+              <div class="setting-desc">启用 backdrop-blur 背景</div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"></div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">动画效果</div>
+              <div class="setting-desc">面板出现/消失动画</div>
+            </div>
+            <div class="toggle on" onclick="toggleSwitch(this)"></div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">字体与显示</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">界面字体大小</div>
+            </div>
+            <div class="slider-row">
+              <input type="range" min="11" max="18" value="13">
+              <span class="slider-value">13px</span>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">代码字体</div>
+            </div>
+            <div class="select-wrap"><select><option>JetBrains Mono</option><option>Fira Code</option><option>Cascadia Code</option></select></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑩ 通知 + 更新 + 隐私                                       -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑩ 通知 + 隐私规则</div>
+    <div style="display:flex;flex-direction:column;gap:16px;width:560px">
+      <!-- Update Banner -->
+      <div class="update-banner">
+        <div class="update-banner-icon">✨</div>
+        <div class="update-banner-text">
+          <h4>发现新版本 v1.2.0</h4>
+          <p>新增：亮/暗模式、导入向导、冲突解决 · 修复若干已知问题</p>
+        </div>
+        <div class="update-banner-actions">
+          <button class="update-btn primary">立即更新 ↓</button>
+          <button class="update-btn secondary">稍后提醒</button>
+        </div>
+      </div>
+      <!-- Toast Stack -->
+      <div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:16px 20px;box-shadow:var(--shadow-lg);transition:background var(--transition-smooth),border-color var(--transition-smooth)">
+        <div style="font-size:12px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">🔔 通知提示样式</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="toast-card toast-success" style="position:relative;animation:none">
+            <span class="toast-icon">✅</span>
+            <div class="toast-body"><div class="toast-title">已粘贴</div><div class="toast-msg">内容已复制到剪贴板</div></div>
+            <span class="toast-close">✕</span>
+          </div>
+          <div class="toast-card toast-info" style="position:relative;animation:none">
+            <span class="toast-icon">ℹ️</span>
+            <div class="toast-body"><div class="toast-title">已收藏</div><div class="toast-msg">添加到「前端」标签组</div></div>
+            <span class="toast-close">✕</span>
+          </div>
+          <div class="toast-card toast-warning" style="position:relative;animation:none">
+            <span class="toast-icon">⚠️</span>
+            <div class="toast-body"><div class="toast-title">敏感内容检测</div><div class="toast-msg">验证码将在 8 分钟后自动删除</div></div>
+            <span class="toast-close">✕</span>
+          </div>
+          <div class="toast-card toast-error" style="position:relative;animation:none">
+            <span class="toast-icon">❌</span>
+            <div class="toast-body"><div class="toast-title">导出失败</div><div class="toast-msg">磁盘空间不足，请清理后重试</div></div>
+            <span class="toast-close">✕</span>
+          </div>
+        </div>
+      </div>
+      <!-- Privacy Rules -->
+      <div style="background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);box-shadow:var(--shadow-lg);overflow:hidden;transition:background var(--transition-smooth),border-color var(--transition-smooth)">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:space-between;transition:border-color var(--transition-smooth)">
+          <h3 style="font-size:14px;font-weight:600">🛡 隐私保护规则</h3>
+          <span style="font-size:10px;background:var(--success-soft);color:var(--success);padding:2px 8px;border-radius:10px;font-weight:600">已启用</span>
+        </div>
+        <div style="padding:16px 20px">
+          <div class="privacy-rule">
+            <div class="privacy-rule-header">
+              <span class="privacy-rule-title">🔑 密码自动检测</span>
+              <span class="privacy-rule-pattern">password|passwd</span>
+            </div>
+            <div class="privacy-rule-examples">匹配示例：<code style="background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:10.5px">password=abc123</code></div>
+          </div>
+          <div class="privacy-rule">
+            <div class="privacy-rule-header">
+              <span class="privacy-rule-title">🔢 验证码识别</span>
+              <span class="privacy-rule-pattern">\d{4,8}验证码</span>
+            </div>
+            <div class="privacy-rule-examples">匹配示例：<code style="background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:10.5px">验证码 839204</code></div>
+          </div>
+          <div class="privacy-rule">
+            <div class="privacy-rule-header">
+              <span class="privacy-rule-title">🔑 API Key</span>
+              <span class="privacy-rule-pattern">sk-[a-zA-Z0-9]{20,}</span>
+            </div>
+            <div class="privacy-rule-examples">匹配示例：<code style="background:var(--code-bg);padding:1px 5px;border-radius:3px;font-size:10.5px">sk-proj-abc123xyz...</code></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑪ 标签 + 置顶管理                                           -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑪ 标签 + 置顶管理</div>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <!-- Tags -->
+      <div class="tags-panel">
+        <div class="tags-header">
+          <h3>🏷 标签管理</h3>
+          <button class="icon-btn" style="color:var(--accent)" title="新建标签">＋</button>
+        </div>
+        <div class="tags-list">
+          <div class="tag-row"><span class="tag-dot" style="background:var(--success)"></span><span class="tag-name">部署</span><span class="tag-count">5</span><span class="tag-auto-badge">自动</span></div>
+          <div class="tag-row"><span class="tag-dot" style="background:var(--accent)"></span><span class="tag-name">前端</span><span class="tag-count">12</span></div>
+          <div class="tag-row"><span class="tag-dot" style="background:var(--warning)"></span><span class="tag-name">链接</span><span class="tag-count">8</span><span class="tag-auto-badge">自动</span></div>
+          <div class="tag-row"><span class="tag-dot" style="background:var(--danger)"></span><span class="tag-name">重要</span><span class="tag-count">3</span></div>
+          <div class="tag-row"><span class="tag-dot" style="background:#a78bfa"></span><span class="tag-name">设计</span><span class="tag-count">7</span></div>
+          <div class="tag-row"><span class="tag-dot" style="background:#67e8f9"></span><span class="tag-name">API</span><span class="tag-count">4</span><span class="tag-auto-badge">自动</span></div>
+        </div>
+      </div>
+      <!-- Pin Management -->
+      <div class="pin-view">
+        <div class="pin-header">
+          <h3>📌 置顶管理 <span class="pin-count-badge">5</span></h3>
+          <button class="icon-btn" style="color:var(--accent);font-size:12px">＋ 置顶当前</button>
+        </div>
+        <div class="pin-list">
+          <div class="pin-item dragging">
+            <span class="pin-handle">⠿</span><span class="pin-rank">1</span>
+            <div class="pin-content">
+              <div class="pin-text">部署脚本：npm run build && npm run deploy</div>
+              <div class="pin-meta"><span class="record-type-badge badge-code">代码</span><span class="record-source">VS Code</span></div>
+            </div>
+            <div class="pin-actions"><button class="pin-action-btn">✕</button></div>
+          </div>
+          <div class="pin-item">
+            <span class="pin-handle">⠿</span><span class="pin-rank">2</span>
+            <div class="pin-content">
+              <div class="pin-text">会议室 A306，3楼电梯左转第二个门</div>
+              <div class="pin-meta"><span class="record-type-badge badge-text">文本</span><span class="record-source">微信</span></div>
+            </div>
+            <div class="pin-actions"><button class="pin-action-btn">✕</button></div>
+          </div>
+          <div class="pin-item">
+            <span class="pin-handle">⠿</span><span class="pin-rank">3</span>
+            <div class="pin-content">
+              <div class="pin-text">API Key: sk-live-xxxxxxxxxxxx</div>
+              <div class="pin-meta"><span class="record-type-badge badge-sensitive">敏感</span><span class="record-source">Chrome</span></div>
+            </div>
+            <div class="pin-actions"><button class="pin-action-btn">✕</button></div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;border-top:1px solid var(--border-subtle);font-size:11px;color:var(--text-tertiary);display:flex;justify-content:space-between;transition:border-color var(--transition-smooth)">
+          <span>💡 拖拽调整置顶顺序</span><span>最多置顶 10 条</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑫ 忽略应用 + 托盘菜单                                       -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑫ 忽略应用 + 托盘菜单</div>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="ignore-panel">
+        <div class="ignore-header">
+          <h3>🔌 忽略应用</h3>
+          <span style="font-size:11px;color:var(--text-tertiary)">来自这些应用的复制不会被记录</span>
+        </div>
+        <div class="ignore-add-row">
+          <input class="ignore-input" type="text" placeholder="输入应用名称或进程名…">
+          <button class="ignore-add-btn">＋ 添加</button>
+        </div>
+        <div class="ignore-list">
+          <div class="ignore-item">
+            <div class="ignore-app-icon">🔑</div>
+            <div style="flex:1;min-width:0"><div class="ignore-app-name">1Password</div><div class="ignore-app-path">1Password.exe</div></div>
+            <button class="ignore-remove-btn">✕</button>
+          </div>
+          <div class="ignore-item">
+            <div class="ignore-app-icon">🏦</div>
+            <div style="flex:1;min-width:0"><div class="ignore-app-name">网银客户端</div><div class="ignore-app-path">ICBCNetBank.exe</div></div>
+            <button class="ignore-remove-btn">✕</button>
+          </div>
+          <div class="ignore-item">
+            <div class="ignore-app-icon">📧</div>
+            <div style="flex:1;min-width:0"><div class="ignore-app-name">企业邮箱控件</div><div class="ignore-app-path">MailSecureHelper.exe</div></div>
+            <button class="ignore-remove-btn">✕</button>
+          </div>
+          <div class="ignore-item">
+            <div class="ignore-app-icon">🖥️</div>
+            <div style="flex:1;min-width:0"><div class="ignore-app-name">远程桌面</div><div class="ignore-app-path">mstsc.exe</div></div>
+            <button class="ignore-remove-btn">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="tray-menu">
+        <div class="tray-menu-item"><span class="menu-icon">📋</span>打开面板<span class="menu-shortcut">Ctrl⇧V</span></div>
+        <div class="tray-menu-item"><span class="menu-icon">🌙</span>切换主题<span class="menu-shortcut">Ctrl⇧T</span></div>
+        <div class="tray-menu-item"><span class="menu-icon">⏸</span>暂停捕获</div>
+        <div class="tray-separator"></div>
+        <div class="tray-recent-label">最近复制</div>
+        <div class="tray-recent-item"><span style="font-size:10px;opacity:0.5">📎</span><span class="recent-text">部署脚本：npm run build…</span></div>
+        <div class="tray-recent-item"><span style="font-size:10px;opacity:0.5">🔗</span><span class="recent-text">https://github.com/tauri…</span></div>
+        <div class="tray-recent-item"><span style="font-size:10px;opacity:0.5">📝</span><span class="recent-text">验证码 839204…</span></div>
+        <div class="tray-separator"></div>
+        <div class="tray-menu-item"><span class="menu-icon">⚙</span>设置</div>
+        <div class="tray-menu-item"><span class="menu-icon">❌</span>退出</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- ⑬ 首次启动向导                                              -->
+  <!-- ============================================================ -->
+  <div class="screen-group">
+    <div class="screen-label">⑬ 首次启动向导</div>
+    <div class="wizard-card">
+      <div class="wizard-header">
+        <div class="wizard-logo">📋</div>
+        <div class="wizard-title">欢迎使用 ClipVault</div>
+        <div class="wizard-subtitle">快速完成初始设置，只需几步</div>
+      </div>
+      <div class="wizard-body">
+        <div class="wizard-step">
+          <div class="wizard-option selected">
+            <div class="wizard-option-icon">⌨️</div>
+            <div class="wizard-option-text"><h4>全局快捷键</h4><p>Ctrl+Shift+V 唤起悬浮面板</p></div>
+            <div class="wizard-option-check">✓</div>
+          </div>
+          <div class="wizard-option selected">
+            <div class="wizard-option-icon">🚀</div>
+            <div class="wizard-option-text"><h4>开机自启动</h4><p>随 Windows 自动启动并最小化到托盘</p></div>
+            <div class="wizard-option-check">✓</div>
+          </div>
+          <div class="wizard-option">
+            <div class="wizard-option-icon">🌙</div>
+            <div class="wizard-option-text"><h4>暗色主题</h4><p>深色界面，更护眼</p></div>
+            <div class="wizard-option-check"></div>
+          </div>
+          <div class="wizard-option">
+            <div class="wizard-option-icon">🛡️</div>
+            <div class="wizard-option-text"><h4>敏感信息保护</h4><p>自动检测密码、验证码等敏感内容</p></div>
+            <div class="wizard-option-check"></div>
+          </div>
+        </div>
+      </div>
+      <div class="wizard-footer">
+        <div class="wizard-steps-dots">
+          <div class="wizard-dot done"></div>
+          <div class="wizard-dot active"></div>
+          <div class="wizard-dot"></div>
+        </div>
+        <div class="wizard-nav-btns">
+          <button class="wizard-btn secondary">← 返回</button>
+          <button class="wizard-btn primary">下一步 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Status Bar -->
+<div class="status-bar">
+  <div class="status-item"><span class="status-dot"></span> ClipVault 运行中</div>
+  <div class="status-item">📋 今日复制 24 次</div>
+  <div class="status-item">💾 数据库 2.4 MB</div>
+  <div class="status-item" style="margin-left:auto">原型 v3.0 · 共 13 个页面</div>
+</div>
+
+<script>
+/* ================================================================
+   THEME SWITCHING
+   ================================================================ */
+function setTheme(theme) {
+  document.body.classList.remove('dark-theme', 'light-theme', 'oled-theme');
+  document.body.classList.add(theme + '-theme');
+
+  // Update pill buttons
+  document.querySelectorAll('.theme-pill-btn').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  var pill = document.getElementById('pill-' + theme);
+  if (pill) pill.classList.add('active');
+
+  // Update theme card selections in settings
+  var cards = document.querySelectorAll('[onclick*="setTheme"]');
+  cards.forEach(function(card) {
+    card.style.borderColor = 'var(--border-subtle)';
+    card.style.borderWidth = '1px';
+  });
+  if (theme === 'dark') {
+    var darkCard = document.querySelector('[onclick="setTheme(\'dark\')"]:nth-child(1)');
+    if (darkCard) { darkCard.style.borderColor = 'var(--accent)'; darkCard.style.borderWidth = '2px'; }
+  }
+}
+
+/* ================================================================
+   TOGGLE SWITCHES
+   ================================================================ */
+function toggleSwitch(el) {
+  el.classList.toggle('on');
+}
+
+/* ================================================================
+   FORMAT SELECTION (Export)
+   ================================================================ */
+function selectFormat(el) {
+  document.querySelectorAll('.format-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+/* ================================================================
+   EXPORT/IMPORT TAB SWITCHING
+   ================================================================ */
+function switchDataTab(tab) {
+  var exportTab = document.getElementById('tab-export') || document.getElementById('tab-export2');
+  var importTab = document.getElementById('tab-import') || document.getElementById('tab-import2');
+  var exportBody = document.getElementById('body-export');
+  var importBody = document.getElementById('body-import');
+
+  if (exportTab) exportTab.classList.toggle('active', tab === 'export');
+  if (importTab) importTab.classList.toggle('active', tab === 'import');
+  if (exportBody) exportBody.style.display = tab === 'export' ? '' : 'none';
+  if (importBody) importBody.style.display = tab === 'import' ? '' : 'none';
+}
+
+/* ================================================================
+   EXPORT SIMULATION
+   ================================================================ */
+function simulateExport() {
+  // Show progress bar
+  document.getElementById('export-progress').style.display = 'block';
+  document.getElementById('export-success').style.display = 'none';
+  document.getElementById('export-btn').style.display = 'none';
+  document.getElementById('export-drop-zone').style.display = 'none';
+
+  var pct = 0;
+  var interval = setInterval(function() {
+    pct += Math.random() * 15 + 5;
+    if (pct >= 100) {
+      pct = 100;
+      clearInterval(interval);
+      document.getElementById('export-progress').style.display = 'none';
+      document.getElementById('export-success').style.display = 'block';
+      file-name').textContent = 'clipvault-export.json';
+      document.getElementById('export-count').textContent = '已处理 1,247 / 1,247 条';
+    }
+  }, 50);
+}
+
+function resetExport() {
+  document.getElementById('export-progress').style.display = 'none';
+  document.getElementById('export-success').style.display = 'none';
+  document.getElementById('export-btn').style.display = '';
+  document.getElementById('export-drop-zone').style.display = '';
+  document.getElementById('export-pct').textContent = '0%';
+  document.getElementById('export-fill').style.width = '0%';
+}
+
+function startExport() {
+  simulateExport();
+}
+
+/* ================================================================
+   IMPORT SIMULATION
+   ================================================================ */
+function handleDropImport(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  // Simulate file selection
+  document.getElementById('selected-file-card').style.display = 'flex';
+  document.getElementById('import-wizard').style.display = 'flex';
+  document.getElementById('import-options').style.display = 'flex';
+  document.getElementById('import-actions').style.display = 'flex';
+}
+
+function handleDropExport(e) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  simulateExport();
+}
+
+function simulateFilePick() {
+  document.getElementById('selected-file-card').style.display = 'flex';
+  document.getElementById('import-wizard').style.display = 'flex';
+  document.getElementById('import-options').style.display = 'flex';
+  document.getElementById('import-actions').style.display = 'flex';
+}
+
+function removeImportFile() {
+  document.getElementById('selected-file-card').style.display = 'none';
+  document.getElementById('import-wizard').style.display = 'none';
+  document.getElementById('import-options').style.display = 'none';
+  document.getElementById('import-actions').style.display = 'none';
+}
+
+function selectConflict(el) {
+  document.querySelectorAll('.conflict-btn').forEach(function(b) { b.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function startImport() {
+  // Show importing step
+  document.getElementById('import-step-conflict').style.display = 'none';
+  document.getElementById('import-step-importing').style.display = 'flex';
+  document.getElementById('import-actions').style.display = 'none';
+  document.getElementById('import-options').style.display = 'none';
+
+  var pct = 0;
+  var interval = setInterval(function() {
+    pct += Math.random() * 12 + 3;
+    if (pct >= 100) {
+      pct = 100;
+      clearInterval(interval);
+      document.getElementById('import-pct').textContent = '100%';
+      document.getElementById('import-fill').style.width = '100%';
+      document.getElementById('import-count').textContent = '已导入 842 / 842 条';
+      // Show done step
+      setTimeout(function() {
+        document.getElementById('import-step-importing').style.display = 'none';
+        document.getElementById('import-step-done').style.display = 'flex';
+        document.getElementById('import-step-done').classList.remove('active');
+        document.getElementById('import-step-done').classList.add('done');
+      }, 500);
+    } else {
+      document.getElementById('import-pct').textContent = Math.floor(pct) + '%';
+      document.getElementById('import-fill').style.width = pct + '%';
+      var count = Math.floor(pct * 8.42);
+      document.getElementById('import-count').textContent = '已导入 ' + count + ' / 842 条';
+    }
+  }, 80);
+}
+</script>
+
+</body>
+</html>

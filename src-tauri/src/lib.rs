@@ -10,6 +10,8 @@ use regex::Regex;
 use tauri::{Emitter, Manager, State};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri_plugin_autostart::MacosLauncher;
+use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tracing::{info, error, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -247,9 +249,24 @@ async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
 }
 
 #[tauri::command]
-async fn save_settings(state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
+async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
     state.db.cleanup_retention(settings.retention_days).map_err(|e| e.to_string())?;
-    state.db.save_settings(&settings).map_err(|e| e.to_string())
+    state.db.save_settings(&settings).map_err(|e| e.to_string())?;
+    apply_autostart(&app, settings.auto_start);
+    Ok(())
+}
+
+fn apply_autostart(app: &tauri::AppHandle, enabled: bool) {
+    let manager = app.autolaunch();
+    let result = if enabled {
+        manager.enable()
+    } else {
+        manager.disable()
+    };
+    match result {
+        Ok(()) => info!("Autostart {}", if enabled { "enabled" } else { "disabled" }),
+        Err(e) => warn!("Failed to {} autostart: {}", if enabled { "enable" } else { "disable" }, e),
+    }
 }
 
 #[tauri::command]
@@ -393,6 +410,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None::<Vec<&'static str>>))
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             get_records,
@@ -428,6 +446,10 @@ pub fn run() {
             let monitor = monitor_for_setup.clone();
             let capture_paused_menu = capture_paused_for_setup.clone();
             let capture_paused_thread = capture_paused_for_setup.clone();
+
+            // Sync OS autostart with persisted setting (previously only stored in DB)
+            let startup_settings = db.get_settings().unwrap_or_default();
+            apply_autostart(&app_handle, startup_settings.auto_start);
 
             if let Err(e) = app.global_shortcut().on_shortcut("Ctrl+Shift+V", |app, _shortcut, event| {
                 if event.state() == ShortcutState::Pressed {

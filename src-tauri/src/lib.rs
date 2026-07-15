@@ -12,6 +12,7 @@ use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent}
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tracing::{info, error, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -271,6 +272,15 @@ async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settin
 
 fn apply_autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let manager = app.autolaunch();
+
+    // No-op when OS state already matches — disable() errors with
+    // ERROR_FILE_NOT_FOUND if the Run key value was never created.
+    match manager.is_enabled() {
+        Ok(currently) if currently == enabled => return Ok(()),
+        Ok(_) => {}
+        Err(e) => warn!("Could not read autostart state: {}", e),
+    }
+
     let result = if enabled {
         manager.enable()
     } else {
@@ -279,6 +289,10 @@ fn apply_autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> 
     match result {
         Ok(()) => {
             info!("Autostart {}", if enabled { "enabled" } else { "disabled" });
+            Ok(())
+        }
+        Err(e) if !enabled && is_autostart_already_cleared(&e) => {
+            // Registry value already absent — treat as disabled.
             Ok(())
         }
         Err(e) => {
@@ -291,6 +305,13 @@ fn apply_autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> 
             Err(msg)
         }
     }
+}
+
+fn is_autostart_already_cleared(err: &impl std::fmt::Display) -> bool {
+    let s = err.to_string();
+    s.contains("os error 2")
+        || s.contains("找不到指定的文件")
+        || s.to_ascii_lowercase().contains("not found")
 }
 
 #[tauri::command]
@@ -429,6 +450,15 @@ pub fn run() {
     let capture_paused_for_setup = capture_paused.clone();
 
     tauri::Builder::default()
+        // Must be registered first so a second process exits before grabbing OS resources
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            info!("Second instance detected; focusing existing window");
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+                let _ = app.emit("toggle-panel", true);
+            }
+        }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -483,7 +513,16 @@ pub fn run() {
                 }
             }
 
-            if let Err(e) = app.global_shortcut().on_shortcut("Ctrl+Shift+V", |app, _shortcut, event| {
+            const TOGGLE_SHORTCUT: &str = "Ctrl+Shift+V";
+            // Clear a leftover registration from a previous setup in this process
+            // (e.g. hot-reload). If another ClipVault instance owns the hotkey,
+            // Windows will still reject the register below.
+            if app.global_shortcut().is_registered(TOGGLE_SHORTCUT) {
+                if let Err(e) = app.global_shortcut().unregister(TOGGLE_SHORTCUT) {
+                    warn!("Failed to unregister existing shortcut: {}", e);
+                }
+            }
+            if let Err(e) = app.global_shortcut().on_shortcut(TOGGLE_SHORTCUT, |app, _shortcut, event| {
                 if event.state() == ShortcutState::Pressed {
                     if let Some(window) = app.get_webview_window("main") {
                         if window.is_visible().unwrap_or(false) {
@@ -497,7 +536,19 @@ pub fn run() {
                     }
                 }
             }) {
-                warn!("Failed to register global shortcut: {}", e);
+                warn!(
+                    "Failed to register global shortcut {}: {}",
+                    TOGGLE_SHORTCUT, e
+                );
+                app.dialog()
+                    .message(format!(
+                        "全局快捷键 {TOGGLE_SHORTCUT} 已被其他程序占用，无法注册。\n\n\
+                         请关闭占用该快捷键的应用后重新启动 ClipVault。\
+                         若本机已有另一个 ClipVault 在运行，请先退出那个实例。"
+                    ))
+                    .title("ClipVault")
+                    .kind(MessageDialogKind::Warning)
+                    .show(|_| {});
             }
 
             // Setup system tray

@@ -19,7 +19,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Stack
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia (state management)
-- **Backend:** Rust (Tauri v2 with plugins for clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
+- **Backend:** Rust (Tauri v2 with plugins for single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
 - **Database:** SQLite via rusqlite (WAL mode), stored at `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - **Clipboard polling:** arboard crate polls clipboard text every 500ms on a background thread
 - **Autostart:** `tauri-plugin-autostart` (=2.2.0) registers Windows startup via the OS (Run key / equivalent). Controlled only from Rust (`save_settings` / app setup); no frontend JS plugin binding.
@@ -61,4 +61,5 @@ App.vue                          # Root: listens for Tauri events, manages show/
 - **Search**: SQL `LIKE` on content and source_app. Debounced 150ms frontend side.
 - **Deduplication**: by SHA-256 content hash. Same hash = increment copy count + update timestamp, no new record.
 - **Window hide-on-close**: `CloseRequested` event calls `api.prevent_close()` and hides window to minimize to tray.
-- **Autostart**: `settings.auto_start` (default `false`) is not UI-only — `save_settings` applies OS registration before persisting, and app `setup` re-syncs from loaded settings (skips sync if settings fail to load). OS failures surface as `save_settings` errors; DB save failure after a successful OS change reverts the startup entry.
+- **Single instance**: `tauri-plugin-single-instance` (registered first) ensures only one process runs. A second launch focuses the existing window instead of competing for `Ctrl+Shift+V` / clipboard monitor.
+- **Autostart**: `settings.auto_start` (default `false`) is not UI-only — `save_settings` applies OS registration before persisting, and app `setup` re-syncs from loaded settings (skips sync if settings fail to load). Sync is idempotent: already-on/off is a no-op (Windows `disable` errors if the Run value is missing). OS failures surface as `save_settings` errors; DB save failure after a successful OS change reverts the startup entry.

@@ -22,7 +22,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 - **Backend:** Rust (Tauri v2 with plugins for clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
 - **Database:** SQLite via rusqlite (WAL mode), stored at `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - **Clipboard polling:** arboard crate polls clipboard text every 500ms on a background thread
-- **Autostart:** `tauri-plugin-autostart` (=2.2.0) registers Windows startup via the OS (Run key / equivalent)
+- **Autostart:** `tauri-plugin-autostart` (=2.2.0) registers Windows startup via the OS (Run key / equivalent). Controlled only from Rust (`save_settings` / app setup); no frontend JS plugin binding.
 
 ### Data Flow
 1. Rust `ClipboardMonitor` polls the OS clipboard every 500ms
@@ -51,7 +51,7 @@ App.vue                          # Root: listens for Tauri events, manages show/
 
 ### State Management (Pinia Stores)
 - `clipboardStore` — records array, selection, search, filters (all/text/code/link/image/file/favorites), batch mode, pause capture, stats
-- `settingsStore` — all app settings with auto-save on change (debounced via `watch`), theme application. Changing `auto_start` persists via `save_settings`, which also enables/disables OS autostart on the Rust side.
+- `settingsStore` — all app settings with auto-save on change (debounced 200ms via `watch`), theme application. Changing `auto_start` persists via `save_settings`, which enables/disables OS autostart on the Rust side first; on failure the UI reloads settings so the toggle stays consistent.
 
 ### Key Design Decisions
 - **Floating mode** (default): borderless always-on-top window that auto-hides on focus loss. Window mode: standard decorated window.
@@ -61,4 +61,4 @@ App.vue                          # Root: listens for Tauri events, manages show/
 - **Search**: SQL `LIKE` on content and source_app. Debounced 150ms frontend side.
 - **Deduplication**: by SHA-256 content hash. Same hash = increment copy count + update timestamp, no new record.
 - **Window hide-on-close**: `CloseRequested` event calls `api.prevent_close()` and hides window to minimize to tray.
-- **Autostart**: `settings.auto_start` is not UI-only — `save_settings` and app `setup` call `tauri-plugin-autostart` so the boolean stays in sync with the Windows startup entry. Capabilities include `autostart:allow-enable|disable|is-enabled`.
+- **Autostart**: `settings.auto_start` (default `false`) is not UI-only — `save_settings` applies OS registration before persisting, and app `setup` re-syncs from loaded settings (skips sync if settings fail to load). OS failures surface as `save_settings` errors; DB save failure after a successful OS change reverts the startup entry.

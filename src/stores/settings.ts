@@ -19,14 +19,18 @@ const DEFAULT_SETTINGS: Settings = {
   enable_sensitive_detection: true,
   sensitive_auto_expire_seconds: 600,
   data_path: "",
-  auto_start: true,
+  auto_start: false,
   minimize_to_tray: true,
   ignored_apps: ["1Password.exe", "ICBCNetBank.exe"],
 };
 
+const SAVE_DEBOUNCE_MS = 200;
+
 export const useSettingsStore = defineStore("settings", () => {
   const settings = ref<Settings>({ ...DEFAULT_SETTINGS });
   const isLoaded = ref(false);
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let saveGeneration = 0;
 
   async function loadSettings() {
     try {
@@ -42,11 +46,35 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   async function saveSettings() {
+    const generation = ++saveGeneration;
+    const snapshot = { ...settings.value };
     try {
-      await invoke("save_settings", { settings: settings.value });
+      await invoke("save_settings", { settings: snapshot });
     } catch (e) {
       console.error("Failed to save settings:", e);
+      if (generation !== saveGeneration) return;
+      // Reload so UI matches DB after failed OS sync / save (suppress auto-save while restoring)
+      isLoaded.value = false;
+      try {
+        const saved = await invoke<Settings>("get_settings");
+        settings.value = { ...DEFAULT_SETTINGS, ...saved };
+        applyTheme(settings.value.theme);
+        applyAppearance();
+      } catch (reloadErr) {
+        console.error("Failed to reload settings after save error:", reloadErr);
+      } finally {
+        isLoaded.value = true;
+      }
     }
+  }
+
+  function scheduleSave() {
+    if (!isLoaded.value) return;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      void saveSettings();
+    }, SAVE_DEBOUNCE_MS);
   }
 
   function applyTheme(theme: Settings["theme"]) {
@@ -103,9 +131,7 @@ export const useSettingsStore = defineStore("settings", () => {
   watch(
     settings,
     () => {
-      if (isLoaded.value) {
-        saveSettings();
-      }
+      scheduleSave();
     },
     { deep: true }
   );

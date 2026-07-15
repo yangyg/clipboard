@@ -112,7 +112,7 @@ impl Default for Settings {
             enable_sensitive_detection: true,
             sensitive_auto_expire_seconds: 600,
             data_path: "".to_string(),
-            auto_start: true,
+            auto_start: false,
             minimize_to_tray: true,
             ignored_apps: vec![
                 "1Password.exe".to_string(),
@@ -250,13 +250,26 @@ async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
 
 #[tauri::command]
 async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
+    let previous = state.db.get_settings().map_err(|e| e.to_string())?;
+    let autostart_changed = settings.auto_start != previous.auto_start;
+
+    if autostart_changed {
+        apply_autostart(&app, settings.auto_start)?;
+    }
+
     state.db.cleanup_retention(settings.retention_days).map_err(|e| e.to_string())?;
-    state.db.save_settings(&settings).map_err(|e| e.to_string())?;
-    apply_autostart(&app, settings.auto_start);
+    if let Err(e) = state.db.save_settings(&settings) {
+        if autostart_changed {
+            if let Err(revert_err) = apply_autostart(&app, previous.auto_start) {
+                warn!("Failed to revert autostart after settings save error: {}", revert_err);
+            }
+        }
+        return Err(e.to_string());
+    }
     Ok(())
 }
 
-fn apply_autostart(app: &tauri::AppHandle, enabled: bool) {
+fn apply_autostart(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let manager = app.autolaunch();
     let result = if enabled {
         manager.enable()
@@ -264,8 +277,19 @@ fn apply_autostart(app: &tauri::AppHandle, enabled: bool) {
         manager.disable()
     };
     match result {
-        Ok(()) => info!("Autostart {}", if enabled { "enabled" } else { "disabled" }),
-        Err(e) => warn!("Failed to {} autostart: {}", if enabled { "enable" } else { "disable" }, e),
+        Ok(()) => {
+            info!("Autostart {}", if enabled { "enabled" } else { "disabled" });
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!(
+                "Failed to {} autostart: {}",
+                if enabled { "enable" } else { "disable" },
+                e
+            );
+            warn!("{}", msg);
+            Err(msg)
+        }
     }
 }
 
@@ -447,9 +471,17 @@ pub fn run() {
             let capture_paused_menu = capture_paused_for_setup.clone();
             let capture_paused_thread = capture_paused_for_setup.clone();
 
-            // Sync OS autostart with persisted setting (previously only stored in DB)
-            let startup_settings = db.get_settings().unwrap_or_default();
-            apply_autostart(&app_handle, startup_settings.auto_start);
+            // Sync OS autostart with persisted setting; skip if settings cannot be loaded
+            match db.get_settings() {
+                Ok(startup_settings) => {
+                    if let Err(e) = apply_autostart(&app_handle, startup_settings.auto_start) {
+                        warn!("Startup autostart sync failed: {}", e);
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to load settings for autostart sync: {}", e);
+                }
+            }
 
             if let Err(e) = app.global_shortcut().on_shortcut("Ctrl+Shift+V", |app, _shortcut, event| {
                 if event.state() == ShortcutState::Pressed {

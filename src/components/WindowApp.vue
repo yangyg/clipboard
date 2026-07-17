@@ -146,7 +146,17 @@ function onCategoryChange(key: string) {
 }
 
 function onTagChange(tagName: string | null) {
-  clipboardStore.filterByTag(tagName);
+  if (tagName) {
+    activeCategory.value = "all";
+    const comingFromTrash = clipboardStore.trashFilter;
+    clipboardStore.setTrashFilter(false);
+    clipboardStore.filterByTag(tagName);
+    if (comingFromTrash) {
+      clipboardStore.search("");
+    }
+  } else {
+    clipboardStore.filterByTag(null);
+  }
 }
 
 function onAddTag() {

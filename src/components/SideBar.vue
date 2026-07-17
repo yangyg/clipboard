@@ -108,8 +108,9 @@ function selectCategory(key: string) {
 }
 
 function selectTag(name: string) {
+  // Only emit tag; parent updates category UI without calling setFilter
+  // (setFilter clears activeTag).
   emit("update:activeTag", name);
-  emit("update:activeCategory", "all");
 }
 </script>
 
@@ -205,7 +206,7 @@ function selectTag(name: string) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 7px 8px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.75rem;

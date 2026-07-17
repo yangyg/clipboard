@@ -15,19 +15,25 @@
           :class="{ active: clipboardStore.batchMode }"
           title="批量操作"
           @click="clipboardStore.toggleBatchMode()"
-        >☐</button>
+        ><AppIcon name="batch" :size="15" /></button>
         <button
           class="icon-btn"
           :class="{ active: clipboardStore.activeFilter === 'favorites' }"
           title="收藏"
           @click="clipboardStore.setFilter(clipboardStore.activeFilter === 'favorites' ? 'all' : 'favorites')"
-        >★</button>
-        <button class="icon-btn" title="设置" @click="emit('openSettings')">⚙</button>
+        ><AppIcon name="star" :size="15" :fill="clipboardStore.activeFilter === 'favorites' ? 'currentColor' : 'none'" /></button>
+        <button
+          class="icon-btn"
+          :class="{ active: clipboardStore.trashFilter }"
+          title="回收站"
+          @click="toggleTrash"
+        ><AppIcon name="trash" :size="15" /></button>
+        <button class="icon-btn" title="设置" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
       </div>
     </div>
 
-    <!-- Filter Tabs -->
-    <div class="filter-row">
+    <!-- Filter Tabs (hidden in trash) -->
+    <div v-if="!clipboardStore.trashFilter" class="filter-row">
       <button
         v-for="tab in FILTER_TABS"
         :key="tab.key"
@@ -39,56 +45,47 @@
         <span class="filter-count">{{ clipboardStore.filterCounts[tab.key] }}</span>
       </button>
     </div>
-
-    <div class="stats-row" v-if="clipboardStore.stats">
-      <div class="stat-pill">
-        <span class="stat-value">{{ clipboardStore.stats.total_records }}</span>
-        <span class="stat-label">条记录</span>
-      </div>
-      <div class="stat-pill">
-        <span class="stat-value">{{ clipboardStore.stats.total_copies }}</span>
-        <span class="stat-label">次复制</span>
-      </div>
-      <div class="stat-pill warning">
-        <span class="stat-value">{{ clipboardStore.stats.favorites_count }}</span>
-        <span class="stat-label">收藏</span>
-      </div>
-      <div class="stat-pill sensitive">
-        <span class="stat-value">{{ clipboardStore.stats.sensitive_count }}</span>
-        <span class="stat-label">敏感</span>
-      </div>
+    <div v-else class="trash-banner">
+      <span>回收站 · {{ clipboardStore.trashCount }} 项</span>
+      <button
+        v-if="clipboardStore.trashCount > 0"
+        class="empty-trash-link"
+        @click="onEmptyTrash"
+      >清空</button>
     </div>
 
     <!-- Body -->
     <div class="panel-body">
-      <!-- Batch bar -->
       <Transition name="fade">
         <div v-if="clipboardStore.batchMode" class="batch-bar">
           <div class="batch-info">
-            <span>☑</span> 已选择 <strong>{{ clipboardStore.selectedIds.size }}</strong> 项
+            <AppIcon name="batch" :size="13" /> 已选择 <strong>{{ clipboardStore.selectedIds.size }}</strong> 项
           </div>
           <div class="batch-actions">
-            <button class="batch-btn" @click="batchCopy">📋 复制</button>
-            <button class="batch-btn" @click="batchFavorite">★ 收藏</button>
-            <button class="batch-btn danger-btn" @click="batchDelete">🗑 删除</button>
-            <button class="batch-btn" @click="clipboardStore.toggleBatchMode()">✕</button>
+            <button class="batch-btn" @click="batchCopy"><AppIcon name="copy" :size="13" /> 复制</button>
+            <button class="batch-btn" @click="batchFavorite"><AppIcon name="star" :size="13" /> 收藏</button>
+            <button class="batch-btn danger-btn" @click="batchDelete"><AppIcon name="trash" :size="13" /> 删除</button>
+            <button class="batch-btn" @click="clipboardStore.toggleBatchMode()"><AppIcon name="close" :size="13" /></button>
           </div>
         </div>
       </Transition>
 
-      <!-- Record List + Preview -->
       <RecordList />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted } from "vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import CaptureStatus from "./CaptureStatus.vue";
+import AppIcon from "./icons/AppIcon.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import type { FilterTab } from "../stores/clipboard";
+import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
+import { useConfirm } from "../composables/useConfirm";
+import { useToast } from "../composables/useToast";
 
 const emit = defineEmits<{
   openSettings: [];
@@ -96,6 +93,13 @@ const emit = defineEmits<{
 }>();
 
 const clipboardStore = useClipboardStore();
+const { confirm } = useConfirm();
+const { toast } = useToast();
+
+useClipboardHotkeys({
+  onClose: () => emit("close"),
+  allowCloseOnEscape: true,
+});
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "全部" },
@@ -106,38 +110,26 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "file", label: "文件" },
 ];
 
-// Keyboard navigation
-function onKeyDown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    if (clipboardStore.batchMode) {
-      clipboardStore.toggleBatchMode();
-      return;
-    }
-    if (clipboardStore.selectedId !== null) {
-      clipboardStore.selectRecord(clipboardStore.selectedId);
-      return;
-    }
-    // Close panel on Escape
-    emit("close");
-    return;
+async function toggleTrash() {
+  const next = !clipboardStore.trashFilter;
+  clipboardStore.setTrashFilter(next);
+  if (next) {
+    await clipboardStore.loadRecords();
+  } else {
+    await clipboardStore.search("");
   }
+}
 
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-    e.preventDefault();
-    const list = clipboardStore.filteredRecords;
-    if (!list.length) return;
-    const currentIdx = list.findIndex((r) => r.id === clipboardStore.selectedId);
-    let nextIdx = e.key === "ArrowDown"
-      ? Math.min(currentIdx + 1, list.length - 1)
-      : Math.max(currentIdx - 1, 0);
-    if (currentIdx === -1) nextIdx = 0;
-    clipboardStore.selectRecord(list[nextIdx].id);
-  }
-
-  if (e.key === "Enter") {
-    if (clipboardStore.selectedId !== null) {
-      clipboardStore.pasteRecord(clipboardStore.selectedId);
-    }
+async function onEmptyTrash() {
+  const ok = await confirm({
+    title: "清空回收站",
+    message: "确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。",
+    confirmText: "清空",
+    danger: true,
+  });
+  if (ok) {
+    await clipboardStore.emptyTrash();
+    toast("回收站已清空", "success");
   }
 }
 
@@ -147,26 +139,33 @@ async function batchCopy() {
   const selected = clipboardStore.records.filter((record) => ids.includes(record.id));
   if (selected.length) {
     await navigator.clipboard.writeText(selected.map((record) => record.content).join("\n\n"));
+    toast(`已复制 ${selected.length} 项到剪贴板`, "success");
   }
 }
 
 async function batchFavorite() {
-  for (const id of clipboardStore.selectedIds) {
-    await clipboardStore.toggleFavorite(id);
-  }
+  const ids = Array.from(clipboardStore.selectedIds);
+  await clipboardStore.batchFavorite(ids);
+  toast("已收藏所选未收藏项", "success");
 }
 
 async function batchDelete() {
   const ids = Array.from(clipboardStore.selectedIds);
-  await clipboardStore.deleteBatch(ids);
+  if (!ids.length) return;
+  const ok = await confirm({
+    title: "批量删除",
+    message: `确定将 ${ids.length} 项移到回收站吗？`,
+    confirmText: "删除",
+    danger: true,
+  });
+  if (ok) {
+    await clipboardStore.deleteBatch(ids);
+    toast("已移到回收站", "success");
+  }
 }
 
 onMounted(() => {
-  window.addEventListener("keydown", onKeyDown);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("keydown", onKeyDown);
+  clipboardStore.loadTags();
 });
 </script>
 
@@ -196,23 +195,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-right: 100px;
+  padding-right: 130px;
 }
 
 .panel-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0;
-}
-
-.panel-subtitle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  font-size: 10.5px;
-  color: var(--text-tertiary);
 }
 
 .header-actions {
@@ -226,8 +215,7 @@ onUnmounted(() => {
 .filter-row {
   display: flex;
   gap: 2px;
-  padding: 0 14px;
-  padding-bottom: 8px;
+  padding: 0 14px 8px;
   flex-shrink: 0;
   overflow-x: auto;
 }
@@ -236,7 +224,7 @@ onUnmounted(() => {
   height: 26px;
   padding: 0 10px;
   border-radius: 5px;
-  font-size: 11.5px;
+  font-size: 0.72rem;
   font-weight: 500;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
@@ -257,7 +245,7 @@ onUnmounted(() => {
 }
 
 .filter-count {
-  font-size: 10px;
+  font-size: 0.625rem;
   background: var(--bg-active);
   padding: 1px 5px;
   border-radius: 4px;
@@ -269,6 +257,28 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
+.trash-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px 10px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.empty-trash-link {
+  color: var(--danger);
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.empty-trash-link:hover {
+  background: var(--danger-soft);
+}
+
 .panel-body {
   flex: 1;
   display: flex;
@@ -278,51 +288,10 @@ onUnmounted(() => {
   position: relative;
 }
 
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  padding: 0 14px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-
-.stat-pill {
-  min-width: 0;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
-  border-radius: var(--radius-sm);
-  padding: 7px 8px;
-}
-
-.stat-value {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.stat-label {
-  display: block;
-  margin-top: 1px;
-  font-size: 10px;
-  color: var(--text-tertiary);
-}
-
-.stat-pill.warning .stat-value {
-  color: var(--warning);
-}
-
-.stat-pill.sensitive .stat-value {
-  color: var(--sensitive);
-}
-
-/* Batch bar */
 .batch-bar {
   padding: 8px 14px;
   background: var(--accent-soft);
-  border-bottom: 1px solid rgba(99, 102, 241, 0.15);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -330,7 +299,7 @@ onUnmounted(() => {
 }
 
 .batch-info {
-  font-size: 11.5px;
+  font-size: 0.72rem;
   color: var(--accent);
   font-weight: 500;
   display: flex;
@@ -347,7 +316,7 @@ onUnmounted(() => {
   height: 26px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 0.69rem;
   font-weight: 500;
   display: flex;
   align-items: center;
@@ -367,10 +336,10 @@ onUnmounted(() => {
 .batch-btn.danger-btn {
   background: var(--danger-soft);
   color: var(--danger);
-  border-color: rgba(248, 113, 113, 0.2);
+  border-color: color-mix(in srgb, var(--danger) 20%, transparent);
 }
 
 .batch-btn.danger-btn:hover {
-  background: rgba(248, 113, 113, 0.2);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
 }
 </style>

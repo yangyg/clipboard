@@ -4,12 +4,10 @@
     <div class="titlebar" data-tauri-drag-region>
       <div class="titlebar-left">
         <div class="titlebar-logo">
-          <div class="logo-icon">
-            <span class="logo-glyph">📋</span>
-          </div>
-          <span>ClipBoard</span>
+          <BrandMark :size="22" />
+          <span>ClipVault</span>
         </div>
-        <span class="titlebar-version">v1.0.0</span>
+        <span class="titlebar-version">v0.1.0</span>
       </div>
 
       <div class="titlebar-center" data-tauri-drag-region>
@@ -17,15 +15,18 @@
       </div>
 
       <div class="titlebar-actions">
+        <button
+          class="titlebar-btn"
+          :class="{ active: clipboardStore.batchMode }"
+          title="批量操作"
+          @click="clipboardStore.toggleBatchMode()"
+        ><AppIcon name="batch" :size="15" /></button>
         <CaptureStatus />
       </div>
     </div>
 
-    
-
     <!-- Three-Column Layout -->
     <div class="window-body">
-      <!-- Left Sidebar -->
       <SideBar
         :activeCategory="activeCategory"
         :activeTag="clipboardStore.activeTag"
@@ -35,9 +36,7 @@
         @addTag="onAddTag"
       />
 
-      <!-- Center: Record List -->
       <div class="center-column">
-        <!-- List Header -->
         <div class="list-header">
           <span class="list-title">{{ categoryTitle }}</span>
           <div class="list-header-right">
@@ -46,18 +45,28 @@
               class="empty-trash-btn"
               @click="onEmptyTrash"
             >清空回收站</button>
-            <div class="list-sort">
-              最新在前 <span class="sort-arrow">▼</span>
-            </div>
+            <div class="list-sort" title="当前按最近更新排序">最新在前</div>
           </div>
         </div>
 
-        <!-- Record List -->
+        <Transition name="fade">
+          <div v-if="clipboardStore.batchMode" class="batch-bar">
+            <div class="batch-info">
+              已选择 <strong>{{ clipboardStore.selectedIds.size }}</strong> 项
+            </div>
+            <div class="batch-actions">
+              <button class="batch-btn" @click="batchCopy"><AppIcon name="copy" :size="13" /> 复制</button>
+              <button class="batch-btn" @click="batchFavorite"><AppIcon name="star" :size="13" /> 收藏</button>
+              <button class="batch-btn danger" @click="batchDelete"><AppIcon name="trash" :size="13" /> 删除</button>
+              <button class="batch-btn" @click="clipboardStore.toggleBatchMode()"><AppIcon name="close" :size="13" /></button>
+            </div>
+          </div>
+        </Transition>
+
         <RecordList />
       </div>
     </div>
 
-    <!-- Tag Dialog -->
     <TagDialog
       :visible="tagDialogVisible"
       :mode="tagDialogMode"
@@ -74,13 +83,22 @@ import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import TagDialog from "./TagDialog.vue";
 import CaptureStatus from "./CaptureStatus.vue";
+import AppIcon from "./icons/AppIcon.vue";
+import BrandMark from "./icons/BrandMark.vue";
 import { useClipboardStore } from "../stores/clipboard";
+import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
+import { useConfirm } from "../composables/useConfirm";
+import { useToast } from "../composables/useToast";
 
 const clipboardStore = useClipboardStore();
+const { confirm } = useConfirm();
+const { toast } = useToast();
 
 defineEmits<{
   (e: "openSettings"): void;
 }>();
+
+useClipboardHotkeys({ allowCloseOnEscape: false });
 
 const activeCategory = ref("all");
 const tagDialogVisible = ref(false);
@@ -107,7 +125,6 @@ function onCategoryChange(key: string) {
   activeCategory.value = key;
   if (key === "trash") {
     clipboardStore.setTrashFilter(true);
-    // search("") clears searchQuery and calls loadRecords internally
     clipboardStore.search("");
     return;
   }
@@ -138,8 +155,45 @@ function onAddTag() {
 }
 
 async function onEmptyTrash() {
-  if (confirm("确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。")) {
+  const ok = await confirm({
+    title: "清空回收站",
+    message: "确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。",
+    confirmText: "清空",
+    danger: true,
+  });
+  if (ok) {
     await clipboardStore.emptyTrash();
+    toast("回收站已清空", "success");
+  }
+}
+
+async function batchCopy() {
+  const ids = Array.from(clipboardStore.selectedIds);
+  if (!ids.length) return;
+  const selected = clipboardStore.records.filter((r) => ids.includes(r.id));
+  if (selected.length) {
+    await navigator.clipboard.writeText(selected.map((r) => r.content).join("\n\n"));
+    toast(`已复制 ${selected.length} 项到剪贴板`, "success");
+  }
+}
+
+async function batchFavorite() {
+  await clipboardStore.batchFavorite(Array.from(clipboardStore.selectedIds));
+  toast("已收藏所选未收藏项", "success");
+}
+
+async function batchDelete() {
+  const ids = Array.from(clipboardStore.selectedIds);
+  if (!ids.length) return;
+  const ok = await confirm({
+    title: "批量删除",
+    message: `确定将 ${ids.length} 项移到回收站吗？`,
+    confirmText: "删除",
+    danger: true,
+  });
+  if (ok) {
+    await clipboardStore.deleteBatch(ids);
+    toast("已移到回收站", "success");
   }
 }
 
@@ -159,7 +213,6 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-/* Title Bar */
 .titlebar {
   height: 38px;
   min-height: 38px;
@@ -185,28 +238,13 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-weight: 700;
-  font-size: 13.5px;
+  font-size: 0.85rem;
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
 
-.logo-icon {
-  width: 22px;
-  height: 22px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-light, #6b85fa));
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.logo-glyph {
-  font-size: 11px;
-  color: #fff;
-}
-
 .titlebar-version {
-  font-size: 10.5px;
+  font-size: 0.66rem;
   font-weight: 500;
   color: var(--text-tertiary);
   padding: 2px 7px;
@@ -226,6 +264,7 @@ onMounted(() => {
   gap: 4px;
   -webkit-app-region: no-drag;
   flex-shrink: 0;
+  align-items: center;
 }
 
 .titlebar-btn {
@@ -234,7 +273,7 @@ onMounted(() => {
   border-radius: 6px;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.81rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,17 +281,12 @@ onMounted(() => {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.titlebar-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+.titlebar-btn:hover,
+.titlebar-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.titlebar-btn.close:hover {
-  background: var(--danger);
-  color: #fff;
-}
-
-/* Three-Column Body */
 .window-body {
   flex: 1;
   display: flex;
@@ -260,7 +294,6 @@ onMounted(() => {
   min-height: 0;
 }
 
-/* Center Column */
 .center-column {
   flex: 1;
   min-width: 0;
@@ -269,18 +302,17 @@ onMounted(() => {
   overflow: hidden;
 }
 
-/* List Header */
 .list-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px 6px;
-  border-bottom: 1px solid var(--border-light, var(--border-subtle));
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
 .list-title {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -295,37 +327,66 @@ onMounted(() => {
   height: 26px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 0.69rem;
   font-weight: 500;
   background: var(--danger-soft);
   color: var(--danger);
-  border: 1px solid rgba(248, 113, 113, 0.2);
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
   cursor: pointer;
   transition: all var(--transition-fast);
   font-family: inherit;
 }
 
 .empty-trash-btn:hover {
-  background: rgba(248, 113, 113, 0.2);
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
 }
 
 .list-sort {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  padding: 4px 8px;
+}
+
+.batch-bar {
+  padding: 8px 16px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px 8px;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.batch-info {
+  font-size: 0.72rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.batch-btn {
+  height: 26px;
+  padding: 0 10px;
   border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
+  font-size: 0.69rem;
+  font-weight: 500;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
 }
 
-.list-sort:hover {
+.batch-btn:hover {
   background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.sort-arrow {
-  font-size: 11px;
+.batch-btn.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 </style>

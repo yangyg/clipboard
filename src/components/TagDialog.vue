@@ -6,7 +6,7 @@
           <!-- Header -->
           <div class="dialog-header">
             <span class="dialog-title">{{ mode === 'create' ? '新建标签' : '添加标签' }}</span>
-            <button class="dialog-close" @click="$emit('close')">✕</button>
+            <button class="dialog-close" @click="$emit('close')"><AppIcon name="close" :size="14" /></button>
           </div>
 
           <!-- Create Mode -->
@@ -50,7 +50,8 @@
           <template v-else>
             <div class="dialog-body assign-body">
               <div v-if="availableTags.length === 0" class="assign-empty">
-                暂无可用标签，请先创建
+                <p>暂无可用标签</p>
+                <button class="btn-create-inline" @click="$emit('switchToCreate')">新建标签</button>
               </div>
               <label
                 v-for="tag in availableTags"
@@ -85,6 +86,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import AppIcon from "./icons/AppIcon.vue";
 
 const props = defineProps<{
   visible: boolean;
@@ -149,6 +151,8 @@ async function confirmCreate() {
   if (!name) return;
   await clipboardStore.createTag(name, selectedColor.value);
   emit("created");
+  // Assign flow (has recordId): stay open so parent can return to assign mode
+  if (props.recordId != null) return;
   emit("close");
 }
 
@@ -351,6 +355,25 @@ async function confirmAssign() {
   text-align: center;
   font-size: 13px;
   color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-create-inline {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.btn-create-inline:hover {
+  background: var(--accent-hover);
 }
 
 .assign-or {

@@ -1,6 +1,5 @@
 <template>
   <aside class="sidebar">
-    
     <!-- Navigation: Categories -->
     <nav class="sidebar-section">
       <div class="sidebar-label">分类</div>
@@ -11,7 +10,7 @@
         :class="{ active: props.activeCategory === item.key }"
         @click="selectCategory(item.key)"
       >
-        <span class="nav-icon">{{ item.icon }}</span>
+        <span class="nav-icon"><AppIcon :name="item.icon" :size="15" /></span>
         <span class="nav-label">{{ item.label }}</span>
         <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
       </div>
@@ -27,7 +26,13 @@
         :class="{ active: props.activeCategory === item.key }"
         @click="selectCategory(item.key)"
       >
-        <span class="nav-icon">{{ item.icon }}</span>
+        <span class="nav-icon">
+          <AppIcon
+            :name="item.icon"
+            :size="15"
+            :fill="props.activeCategory === item.key && item.icon === 'star' ? 'currentColor' : 'none'"
+          />
+        </span>
         <span class="nav-label">{{ item.label }}</span>
         <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
       </div>
@@ -50,14 +55,14 @@
         </div>
       </div>
       <div class="tag-add" @click="$emit('addTag')">
-        <span>＋</span> 新建标签
+        <AppIcon name="plus" :size="13" /> 新建标签
       </div>
     </div>
 
     <!-- Bottom Actions -->
     <div class="sidebar-bottom">
       <div class="nav-item" @click="$emit('openSettings')">
-        <span class="nav-icon">⚙</span>
+        <span class="nav-icon"><AppIcon name="settings" :size="15" /></span>
         <span class="nav-label">设置</span>
       </div>
     </div>
@@ -67,6 +72,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 
 const clipboardStore = useClipboardStore();
 
@@ -83,17 +89,17 @@ const emit = defineEmits<{
 }>();
 
 const categoryItems = computed(() => [
-  { key: "all", icon: "📋", label: "全部剪贴板", count: clipboardStore.filterCounts.all },
-  { key: "text", icon: "📝", label: "文本", count: clipboardStore.filterCounts.text },
-  { key: "image", icon: "🖼", label: "图片", count: clipboardStore.filterCounts.image },
-  { key: "file", icon: "📄", label: "文件", count: clipboardStore.filterCounts.file },
-  { key: "link", icon: "🔗", label: "链接", count: clipboardStore.filterCounts.link },
-  { key: "code", icon: "</>", label: "代码", count: clipboardStore.filterCounts.code },
+  { key: "all", icon: "clipboard" as AppIconName, label: "全部剪贴板", count: clipboardStore.filterCounts.all },
+  { key: "text", icon: "type" as AppIconName, label: "文本", count: clipboardStore.filterCounts.text },
+  { key: "image", icon: "image" as AppIconName, label: "图片", count: clipboardStore.filterCounts.image },
+  { key: "file", icon: "file" as AppIconName, label: "文件", count: clipboardStore.filterCounts.file },
+  { key: "link", icon: "link" as AppIconName, label: "链接", count: clipboardStore.filterCounts.link },
+  { key: "code", icon: "code" as AppIconName, label: "代码", count: clipboardStore.filterCounts.code },
 ]);
 
 const specialItems = computed(() => [
-  { key: "favorites", icon: "⭐", label: "收藏夹", count: clipboardStore.filterCounts.favorites },
-  { key: "trash", icon: "🗑", label: "回收站", count: clipboardStore.trashCount },
+  { key: "favorites", icon: "star" as AppIconName, label: "收藏夹", count: clipboardStore.filterCounts.favorites },
+  { key: "trash", icon: "trash" as AppIconName, label: "回收站", count: clipboardStore.trashCount },
 ]);
 
 function selectCategory(key: string) {
@@ -103,91 +109,54 @@ function selectCategory(key: string) {
 
 function selectTag(name: string) {
   emit("update:activeTag", name);
+  emit("update:activeCategory", "all");
 }
 </script>
 
 <style scoped>
 .sidebar {
   width: 200px;
-  min-width: 160px;
-  max-width: 260px;
-  flex-shrink: 0;
-  height: 100%;
+  min-width: 200px;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  user-select: none;
-}
-
-.sidebar-header {
-  height: 42px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-}
-
-.logo-icon {
-  width: 22px;
-  height: 22px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-light, #6b85fa));
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.logo-glyph {
-  font-size: 11px;
-  color: #fff;
-}
-
-.logo-text {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.3px;
-}
-
-.logo-version {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  padding: 1px 6px;
-  background: var(--bg-surface);
-  border-radius: 10px;
-  margin-left: auto;
 }
 
 .sidebar-section {
-  padding: 6px 0;
+  padding: 12px 10px 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-tags-section {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .sidebar-label {
-  font-size: 10.5px;
+  font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted, var(--text-tertiary));
-  padding: 6px 16px 4px;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  padding: 0 8px 6px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 16px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
   color: var(--text-secondary);
-  font-size: 12.5px;
-  font-weight: 500;
-  position: relative;
+  font-size: 0.78rem;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .nav-item:hover {
@@ -200,80 +169,52 @@ function selectTag(name: string) {
   color: var(--accent);
 }
 
-.nav-item.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  background: var(--accent);
-  border-radius: 0 3px 3px 0;
-}
-
 .nav-icon {
-  width: 20px;
-  height: 20px;
   display: flex;
+  width: 18px;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  flex-shrink: 0;
+  color: inherit;
 }
 
 .nav-label {
   flex: 1;
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nav-count {
-  margin-left: auto;
-  font-size: 11.5px;
-  font-weight: 600;
-  background: var(--bg-surface);
-  padding: 1px 7px;
-  border-radius: 10px;
+  font-size: 0.625rem;
   color: var(--text-tertiary);
-  min-width: 24px;
-  text-align: center;
-  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .nav-item.active .nav-count {
-  background: rgba(79, 110, 247, 0.15);
   color: var(--accent);
 }
 
-/* Tags */
-.sidebar-tags-section {
+.tags-list {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
-  padding-bottom: 2px;
-}
-
-.tags-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
 }
 
 .tag-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background var(--transition-fast);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
+  transition: background var(--transition-fast);
 }
 
 .tag-item:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 .tag-item.active {
@@ -282,43 +223,45 @@ function selectTag(name: string) {
 }
 
 .tag-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .tag-name {
   flex: 1;
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag-count {
-  font-size: 10px;
-  color: var(--text-muted, var(--text-tertiary));
-  flex-shrink: 0;
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
 }
 
 .tag-add {
-  padding: 6px 16px;
-  color: var(--text-tertiary);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: color var(--transition-fast);
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 8px;
+  margin-top: 4px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .tag-add:hover {
+  background: var(--bg-hover);
   color: var(--accent);
 }
 
-/* Bottom */
 .sidebar-bottom {
-  padding: 8px 0 12px;
+  padding: 8px 10px 12px;
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }

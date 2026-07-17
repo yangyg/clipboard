@@ -14,6 +14,8 @@
       @open-panel="showPanel"
       @open-settings="openSettings"
     />
+    <ToastHost />
+    <ConfirmDialog />
   </div>
 </template>
 
@@ -26,6 +28,8 @@ import FloatingPanel from "./components/FloatingPanel.vue";
 import WindowApp from "./components/WindowApp.vue";
 import SettingsWindow from "./components/SettingsWindow.vue";
 import TrayMenu from "./components/TrayMenu.vue";
+import ToastHost from "./components/ToastHost.vue";
+import ConfirmDialog from "./components/ConfirmDialog.vue";
 import { useClipboardStore } from "./stores/clipboard";
 import { useSettingsStore } from "./stores/settings";
 import { storeToRefs } from "pinia";

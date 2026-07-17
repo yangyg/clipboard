@@ -4,7 +4,7 @@
     <div class="preview-header">
       <div class="preview-type-row">
         <div class="preview-type-icon" :class="record.content_type">
-          {{ typeIcon(record.content_type) }}
+          <TypeIcon :type="record.content_type" :size="14" />
         </div>
         <div class="preview-name">{{ typeLabel }}</div>
         <button
@@ -12,21 +12,20 @@
           class="preview-action-btn preview-pin-btn active"
           @click="pin"
           title="取消置顶"
-        >📌</button>
+        ><AppIcon name="pin" :size="13" fill="currentColor" /></button>
         <button
           v-if="record.is_favorite"
           class="preview-action-btn active"
           @click="clipboardStore.toggleFavorite(record.id)"
           title="取消收藏"
-        >★</button>
-        <button class="preview-more" title="更多">⋮</button>
+        ><AppIcon name="star" :size="13" fill="currentColor" /></button>
       </div>
       <p class="preview-desc">{{ getDescription() }}</p>
     </div>
 
     <!-- Sensitive Warning -->
     <div v-if="record.is_sensitive" class="sensitive-warning">
-      <span>⚠️</span>
+      <AppIcon name="warning" :size="14" />
       <span>敏感内容</span>
       <span class="auto-expire" v-if="record.auto_expire_at">
         {{ formatExpireTime(record.auto_expire_at) }} 后自动删除
@@ -48,7 +47,7 @@
       <!-- Link -->
       <template v-else-if="record.content_type === 'link'">
         <div class="link-card">
-          <div class="link-icon">🔗</div>
+          <div class="link-icon"><AppIcon name="link" :size="22" /></div>
           <div class="link-title">网页链接</div>
           <a class="link-url" :href="record.content" target="_blank">{{ record.content }}</a>
         </div>
@@ -57,7 +56,7 @@
       <!-- File -->
       <template v-else-if="record.content_type === 'file'">
         <div class="file-card">
-          <div class="file-icon">📎</div>
+          <div class="file-icon"><AppIcon name="file" :size="22" /></div>
           <div class="file-path">{{ record.content }}</div>
         </div>
       </template>
@@ -65,8 +64,12 @@
       <!-- Image -->
       <template v-else-if="record.content_type === 'image'">
         <div class="image-card">
-          <div class="image-placeholder">🖼️ 图片预览</div>
-          <img v-if="record.content" :src="`data:image/png;base64,${record.content}`" :alt="'截图'" />
+          <img
+            v-if="record.content"
+            :src="`data:image/png;base64,${record.content}`"
+            alt="剪贴板图片"
+          />
+          <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> 暂无图片数据</div>
         </div>
       </template>
 
@@ -107,29 +110,30 @@
             class="tag-remove"
             @click.stop="removeTag(tag)"
             title="移除标签"
-          >✕</button>
+          ><AppIcon name="close" :size="10" /></button>
         </span>
-        <button class="tag-add-btn" @click="openTagAssign">＋ 添加标签</button>
+        <button class="tag-add-btn" @click="openTagAssign"><AppIcon name="plus" :size="12" /> 添加标签</button>
       </div>
     </div>
 
     <!-- Tag Dialog (for assigning tags to this record) -->
     <TagDialog
       :visible="tagDialogVisible"
-      mode="assign"
+      :mode="tagDialogMode"
       :recordId="record.id"
       @close="tagDialogVisible = false"
-      @switchToCreate="onSwitchToCreate"
+      @switchToCreate="tagDialogMode = 'create'"
+      @created="tagDialogMode = 'assign'"
     />
 
     <!-- Actions -->
     <div class="preview-actions" v-if="record && !record.is_trashed">
       <button class="action-btn" @click="paste">
-        <span class="action-icon">📋</span>
-        <span class="action-label">复制</span>
+        <span class="action-icon"><AppIcon name="paste" :size="15" /></span>
+        <span class="action-label">粘贴</span>
       </button>
       <button class="action-btn" @click="pastePlain">
-        <span class="action-icon">Aa</span>
+        <span class="action-icon"><AppIcon name="type" :size="15" /></span>
         <span class="action-label">纯文本</span>
       </button>
       <button
@@ -137,7 +141,7 @@
         :class="{ 'action-active': record.is_favorite }"
         @click="clipboardStore.toggleFavorite(record.id)"
       >
-        <span class="action-icon">⭐</span>
+        <span class="action-icon"><AppIcon name="star" :size="15" :fill="record.is_favorite ? 'currentColor' : 'none'" /></span>
         <span class="action-label">{{ record.is_favorite ? '已收藏' : '收藏' }}</span>
       </button>
       <button
@@ -145,21 +149,21 @@
         :class="{ 'action-active': record.is_pinned }"
         @click="pin"
       >
-        <span class="action-icon">📌</span>
+        <span class="action-icon"><AppIcon name="pin" :size="15" :fill="record.is_pinned ? 'currentColor' : 'none'" /></span>
         <span class="action-label">{{ record.is_pinned ? '已置顶' : '置顶' }}</span>
       </button>
       <button class="action-btn danger" @click="del">
-        <span class="action-icon">🗑</span>
+        <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
         <span class="action-label">删除</span>
       </button>
     </div>
     <div class="preview-actions trash-actions" v-if="record && record.is_trashed">
       <button class="action-btn" @click="restore">
-        <span class="action-icon">↩</span>
+        <span class="action-icon"><AppIcon name="restore" :size="15" /></span>
         <span class="action-label">恢复</span>
       </button>
       <button class="action-btn danger" @click="permanentDel">
-        <span class="action-icon">🗑</span>
+        <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
         <span class="action-label">永久删除</span>
       </button>
     </div>
@@ -170,10 +174,17 @@
 import { computed, ref } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import TagDialog from "./TagDialog.vue";
+import AppIcon from "./icons/AppIcon.vue";
+import TypeIcon from "./icons/TypeIcon.vue";
+import { useConfirm } from "../composables/useConfirm";
+import { useSettingsStore } from "../stores/settings";
 
 const clipboardStore = useClipboardStore();
+const settingsStore = useSettingsStore();
+const { confirm } = useConfirm();
 const record = computed(() => clipboardStore.selectedRecord);
 const tagDialogVisible = ref(false);
+const tagDialogMode = ref<"assign" | "create">("assign");
 
 const TYPE_LABELS: Record<string, string> = {
   text: "纯文本",
@@ -184,23 +195,11 @@ const TYPE_LABELS: Record<string, string> = {
   sensitive: "敏感内容",
 };
 
-const TYPE_ICONS: Record<string, string> = {
-  text: "Aa",
-  code: "</>",
-  link: "🔗",
-  image: "🖼",
-  file: "📄",
-};
-
 const typeLabel = computed(() => {
   if (!record.value) return "";
   if (record.value.is_sensitive) return "敏感内容";
   return TYPE_LABELS[record.value.content_type] ?? "文本片段";
 });
-
-function typeIcon(type: string): string {
-  return TYPE_ICONS[type] ?? "T";
-}
 
 function getDescription(): string {
   if (!record.value) return "";
@@ -235,12 +234,8 @@ function getTagColor(tagName: string): string {
 }
 
 function openTagAssign() {
+  tagDialogMode.value = "assign";
   tagDialogVisible.value = true;
-}
-
-function onSwitchToCreate() {
-  tagDialogVisible.value = false;
-  // WindowApp's dialog will handle creation
 }
 
 async function removeTag(tagName: string) {
@@ -271,7 +266,9 @@ function formatDateTime(iso: string): string {
 }
 
 function paste() {
-  if (record.value) clipboardStore.pasteRecord(record.value.id);
+  if (!record.value) return;
+  const mode = settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original";
+  clipboardStore.pasteRecord(record.value.id, mode);
 }
 
 function pastePlain() {
@@ -282,10 +279,15 @@ function pin() {
   if (record.value) clipboardStore.togglePin(record.value.id);
 }
 
-function del() {
-  if (record.value && confirm("确定要将这条记录移到回收站吗？")) {
-    clipboardStore.deleteRecord(record.value.id);
-  }
+async function del() {
+  if (!record.value) return;
+  const ok = await confirm({
+    title: "移到回收站",
+    message: "确定要将这条记录移到回收站吗？",
+    confirmText: "删除",
+    danger: true,
+  });
+  if (ok) await clipboardStore.deleteRecord(record.value.id);
 }
 
 function restore() {
@@ -294,8 +296,15 @@ function restore() {
   }
 }
 
-function permanentDel() {
-  if (record.value && confirm("确定要永久删除这条记录吗？此操作不可恢复。")) {
+async function permanentDel() {
+  if (!record.value) return;
+  const ok = await confirm({
+    title: "永久删除",
+    message: "确定要永久删除这条记录吗？此操作不可恢复。",
+    confirmText: "永久删除",
+    danger: true,
+  });
+  if (ok) {
     clipboardStore.permanentlyDeleteRecord(record.value.id);
   }
 }
@@ -456,10 +465,10 @@ function permanentDel() {
 
 .code-box {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   line-height: 1.6;
-  background: #1e2030;
-  color: #e4e6ef;
+  background: var(--code-bg);
+  color: var(--text-primary);
   border: none;
 }
 

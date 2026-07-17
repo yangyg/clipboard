@@ -33,13 +33,16 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Frontend Component Tree
 ```
-App.vue                          # Root: listens for Tauri events, manages show/hide
-├── FloatingPanel.vue            # Main panel: header, filter tabs, stats, batch bar
-│   ├── SearchBar.vue            # Debounced search (150ms), / or Ctrl+K to focus
-│   └── RecordList.vue           # Left sidebar list + right preview pane
-│       └── PreviewPane.vue      # Detail view per content type (text/code/link/image/file)
-│           └── ActionBar.vue    # Paste, plain-text paste, favorite, pin, delete
-├── SettingsWindow.vue           # Full settings UI with nav sidebar
+App.vue                          # Root: events, show/hide, ToastHost + ConfirmDialog
+├── FloatingPanel.vue            # Floating: search-first, filters, trash, batch; shared hotkeys
+├── WindowApp.vue                # Window: SideBar + list + batch; shared hotkeys
+│   ├── SearchBar.vue            # Debounced search (150ms), / or Ctrl+K (platform-aware)
+│   ├── RecordList.vue           # List + PreviewPane; scroll-into-view; context menu
+│   │   └── PreviewPane.vue      # Preview + paste/favorite/pin/delete + tags
+│   └── SideBar.vue              # Categories, tags, trash (window mode)
+├── SettingsWindow.vue           # Header + nav + body; shortcut recording; behavior toggles
+├── ToastHost.vue / ConfirmDialog.vue
+├── icons/AppIcon.vue · TypeIcon.vue · BrandMark.vue  # Lucide linear icons + brand mark
 └── TrayMenu.vue                 # Placeholder (native tray is Rust-rendered)
 ```
 

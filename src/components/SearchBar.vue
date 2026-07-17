@@ -1,6 +1,6 @@
 <template>
   <div class="search-row" :class="{ focused: isFocused, compact: compact }">
-    <span class="search-icon">🔍</span>
+    <span class="search-icon"><AppIcon name="search" :size="14" /></span>
     <input
       ref="inputRef"
       v-model="query"
@@ -10,17 +10,18 @@
       @focus="isFocused = true"
       @blur="isFocused = false"
       @input="onInput"
-      @keydown.escape="clearSearch"
+      @keydown.escape.stop.prevent="onEscapeInSearch"
     />
-    <span v-if="!query && !isFocused" class="search-kbd">{{ compact ? '⌘K' : '/' }}</span>
+    <span v-if="!query && !isFocused" class="search-kbd">{{ searchHint }}</span>
     <span v-if="clipboardStore.isSearching" class="search-spinner"></span>
-    <button v-if="query" class="clear-btn" @click="clearSearch">✕</button>
+    <button v-if="query" class="clear-btn" @click="clearSearch"><AppIcon name="close" :size="11" /></button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import AppIcon from "./icons/AppIcon.vue";
 
 defineProps<{
   compact?: boolean;
@@ -30,6 +31,9 @@ const clipboardStore = useClipboardStore();
 const inputRef = ref<HTMLInputElement | null>(null);
 const query = ref("");
 const isFocused = ref(false);
+
+const isMac = computed(() => /Mac|iPhone|iPad/.test(navigator.platform));
+const searchHint = computed(() => (isMac.value ? "⌘K" : "Ctrl+K"));
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -50,23 +54,31 @@ function clearSearch() {
   inputRef.value?.blur();
 }
 
-// Global shortcut: "/" or Ctrl+K to focus search
-function onGlobalKey(e: KeyboardEvent) {
-  if ((e.key === "/" || (e.ctrlKey && e.key === "k")) && !isFocused.value) {
-    e.preventDefault();
-    inputRef.value?.focus();
-  }
-  if (e.key === "Escape" && isFocused.value) {
+function onEscapeInSearch() {
+  if (query.value) {
     clearSearch();
+  } else {
+    inputRef.value?.blur();
   }
 }
 
-// Sync local query when store searchQuery is cleared externally (e.g. trash mode)
-watch(() => clipboardStore.searchQuery, (val) => {
-  if (!val && query.value) {
-    query.value = "";
+function onGlobalKey(e: KeyboardEvent) {
+  if ((e.key === "/" || ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K"))) && !isFocused.value) {
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    e.preventDefault();
+    inputRef.value?.focus();
   }
-});
+}
+
+watch(
+  () => clipboardStore.searchQuery,
+  (val) => {
+    if (!val && query.value) {
+      query.value = "";
+    }
+  }
+);
 
 onMounted(() => {
   window.addEventListener("keydown", onGlobalKey);
@@ -89,7 +101,6 @@ onUnmounted(() => {
   position: relative;
 }
 
-/* Compact mode for titlebar */
 .search-row.compact {
   width: 100%;
   max-width: 500px;
@@ -99,26 +110,26 @@ onUnmounted(() => {
 
 .search-row.compact .search-box {
   height: 28px;
-  font-size: 12.5px;
+  font-size: 0.78rem;
   background: var(--bg-surface);
-  border-color: var(--border-default, var(--border-subtle));
-  border-radius: var(--radius-md, 10px);
+  border-color: var(--border-default);
+  border-radius: var(--radius-md);
   padding: 0 12px 0 32px;
 }
 
 .search-row.compact .search-box:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(79, 110, 247, 0.1);
+  box-shadow: 0 0 0 3px var(--accent-softer);
 }
 
 .search-row.compact .search-icon {
   left: 14px;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .search-row.compact .search-kbd {
   right: 6px;
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 .search-icon {
@@ -126,7 +137,7 @@ onUnmounted(() => {
   left: 26px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 13px;
+  font-size: 0.81rem;
   color: var(--text-tertiary);
   pointer-events: none;
   z-index: 1;
@@ -144,7 +155,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 0 12px 0 34px;
-  font-size: 13px;
+  font-size: 0.81rem;
   color: var(--text-primary);
   transition: border-color var(--transition-fast), background var(--transition-smooth);
 }
@@ -174,7 +185,7 @@ onUnmounted(() => {
   top: 50%;
   transform: translateY(-50%);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 0.625rem;
   color: var(--text-tertiary);
   background: var(--bg-active);
   border: 1px solid var(--border-subtle);
@@ -193,7 +204,7 @@ onUnmounted(() => {
   border-radius: 50%;
   background: var(--bg-active);
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 0.625rem;
   display: flex;
   align-items: center;
   justify-content: center;

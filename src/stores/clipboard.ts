@@ -109,6 +109,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  function clearSelection() {
+    selectedId.value = null;
+  }
+
   function setFilter(filter: FilterTab) {
     activeFilter.value = filter;
     activeTag.value = null;
@@ -118,9 +122,19 @@ export const useClipboardStore = defineStore("clipboard", () => {
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
     try {
       await invoke("paste_record", { id, mode });
-      // Close panel after paste (handled by frontend)
     } catch (e) {
       console.error("Paste failed:", e);
+      throw e;
+    }
+  }
+
+  /** Set favorite on for all ids that are not already favorited. */
+  async function batchFavorite(ids: number[]) {
+    for (const id of ids) {
+      const record = records.value.find((r) => r.id === id);
+      if (record && !record.is_favorite) {
+        await toggleFavorite(id);
+      }
     }
   }
 
@@ -396,10 +410,12 @@ export const useClipboardStore = defineStore("clipboard", () => {
     loadRecords,
     search,
     selectRecord,
+    clearSelection,
     setFilter,
     pasteRecord,
     deleteRecord,
     toggleFavorite,
+    batchFavorite,
     togglePin,
     deleteBatch,
     restoreRecord,

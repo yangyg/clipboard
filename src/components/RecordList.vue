@@ -8,24 +8,26 @@
 
     <!-- Empty -->
     <div v-else-if="clipboardStore.filteredRecords.length === 0" class="empty-state">
-      <div class="empty-icon">{{ clipboardStore.searchQuery ? '🔍' : '📋' }}</div>
-      <div class="empty-text">
-        {{ clipboardStore.searchQuery ? '没有找到匹配的结果' : '暂无剪贴板记录' }}
-      </div>
-      <div v-if="clipboardStore.searchQuery" class="empty-hint">
-        试试其他关键词，或
-        <button class="clear-link" @click="clipboardStore.search('')">清除搜索</button>
+      <div class="empty-icon"><AppIcon :name="emptyState.icon" :size="36" :stroke-width="1.5" /></div>
+      <div class="empty-text">{{ emptyState.title }}</div>
+      <div v-if="emptyState.hint" class="empty-hint">
+        <template v-if="emptyState.clearSearch">
+          试试其他关键词，或
+          <button class="clear-link" @click="clipboardStore.search('')">清除搜索</button>
+        </template>
+        <template v-else>{{ emptyState.hint }}</template>
       </div>
     </div>
 
     <!-- Record List -->
     <div v-else class="record-list" ref="listRef">
       <template v-for="item in visibleItems" :key="item.type === 'label' ? 'pinned-label' : item.record!.id">
-        <div v-if="item.type === 'label'" class="section-label">📌 置顶</div>
+        <div v-if="item.type === 'label'" class="section-label"><AppIcon name="pin" :size="11" /> 置顶</div>
         <div
           v-else
           class="record-item"
           :class="{ selected: clipboardStore.selectedId === item.record!.id, 'batch-mode': clipboardStore.batchMode }"
+          :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
           @dblclick="onItemDoubleClick(item.record!.id)"
           @contextmenu.prevent="showContextMenu($event, item.record!)"
@@ -34,7 +36,7 @@
             <span v-if="clipboardStore.selectedIds.has(item.record!.id)">✓</span>
           </div>
           <div class="record-type-icon" :class="item.record!.content_type">
-            {{ typeIcon(item.record!.content_type) }}
+            <TypeIcon :type="item.record!.content_type" :size="13" />
           </div>
           <div class="record-body">
             <div class="record-title">{{ getPreview(item.record!) }}</div>
@@ -52,13 +54,13 @@
               :class="{ pinned: item.record!.is_pinned }"
               @click.stop="clipboardStore.togglePin(item.record!.id)"
               :title="item.record!.is_pinned ? '取消置顶' : '置顶'"
-            >📌</button>
+            ><AppIcon name="pin" :size="13" :fill="item.record!.is_pinned ? 'currentColor' : 'none'" /></button>
             <button
               class="record-star"
               :class="{ starred: item.record!.is_favorite }"
               @click.stop="clipboardStore.toggleFavorite(item.record!.id)"
               :title="item.record!.is_favorite ? '取消收藏' : '收藏'"
-            >★</button>
+            ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
           </div>
         </div>
       </template>
@@ -81,35 +83,35 @@
     >
       <template v-if="!clipboardStore.trashFilter">
         <div class="ctx-item" @click="ctxPaste">
-          <span class="ctx-icon">⏎</span>粘贴
+          <span class="ctx-icon"><AppIcon name="paste" :size="14" /></span>粘贴
           <span class="ctx-shortcut">Enter</span>
         </div>
         <div class="ctx-item" @click="ctxPastePlain">
-          <span class="ctx-icon">Aa</span>纯文本粘贴
+          <span class="ctx-icon"><AppIcon name="type" :size="14" /></span>纯文本粘贴
           <span class="ctx-shortcut">Alt+V</span>
         </div>
         <div class="ctx-sep"></div>
         <div class="ctx-item" @click="ctxFavorite">
-          <span class="ctx-icon">★</span>{{ contextMenu.record?.is_favorite ? '取消收藏' : '收藏' }}
+          <span class="ctx-icon"><AppIcon name="star" :size="14" /></span>{{ contextMenu.record?.is_favorite ? '取消收藏' : '收藏' }}
           <span class="ctx-shortcut">Ctrl+D</span>
         </div>
         <div class="ctx-item" @click="ctxPin">
-          <span class="ctx-icon">📌</span>{{ contextMenu.record?.is_pinned ? '取消置顶' : '置顶' }}
+          <span class="ctx-icon"><AppIcon name="pin" :size="14" /></span>{{ contextMenu.record?.is_pinned ? '取消置顶' : '置顶' }}
           <span class="ctx-shortcut">Ctrl+T</span>
         </div>
         <div class="ctx-sep"></div>
         <div class="ctx-item danger" @click="ctxDelete">
-          <span class="ctx-icon">🗑</span>删除
+          <span class="ctx-icon"><AppIcon name="trash" :size="14" /></span>删除
           <span class="ctx-shortcut">Del</span>
         </div>
       </template>
       <template v-else>
         <div class="ctx-item" @click="ctxRestore">
-          <span class="ctx-icon">↩</span>恢复
+          <span class="ctx-icon"><AppIcon name="restore" :size="14" /></span>恢复
         </div>
         <div class="ctx-sep"></div>
         <div class="ctx-item danger" @click="ctxPermanentDelete">
-          <span class="ctx-icon">🗑</span>永久删除
+          <span class="ctx-icon"><AppIcon name="trash" :size="14" /></span>永久删除
         </div>
       </template>
     </div>
@@ -117,12 +119,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, onMounted, onUnmounted } from "vue";
+import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import PreviewPane from "./PreviewPane.vue";
+import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
+import TypeIcon from "./icons/TypeIcon.vue";
 import type { ClipboardRecord, ContentType } from "../types";
+import { useConfirm } from "../composables/useConfirm";
 
 const clipboardStore = useClipboardStore();
+const { confirm } = useConfirm();
+const listRef = ref<HTMLElement | null>(null);
 
 const TYPE_LABELS: Record<ContentType, string> = {
   text: '文本',
@@ -132,18 +139,6 @@ const TYPE_LABELS: Record<ContentType, string> = {
   file: '文件',
   sensitive: '敏感',
 };
-
-const TYPE_ICONS: Record<string, string> = {
-  text: 'Aa',
-  code: '</>',
-  link: '🔗',
-  image: '🖼',
-  file: '📄',
-};
-
-function typeIcon(type: ContentType): string {
-  return TYPE_ICONS[type] ?? 'T';
-}
 
 function isTextLike(type: string): boolean {
   return type === 'text' || type === 'code';
@@ -166,6 +161,43 @@ const visibleItems = computed<VisibleItem[]>(() => {
   for (const r of regular) items.push({ type: "record", record: r });
   return items;
 });
+
+const emptyState = computed(() => {
+  if (clipboardStore.searchQuery) {
+    return { icon: "search" as AppIconName, title: "没有找到匹配的结果", hint: "", clearSearch: true };
+  }
+  if (clipboardStore.trashFilter) {
+    return { icon: "trash" as AppIconName, title: "回收站是空的", hint: "删除的记录会出现在这里", clearSearch: false };
+  }
+  if (clipboardStore.activeTag) {
+    return { icon: "tag" as AppIconName, title: "该标签下暂无记录", hint: "可在预览区为记录添加标签", clearSearch: false };
+  }
+  if (clipboardStore.activeFilter === "favorites") {
+    return { icon: "star" as AppIconName, title: "还没有收藏", hint: "按 Ctrl+D 或点击星标收藏记录", clearSearch: false };
+  }
+  if (clipboardStore.activeFilter !== "all") {
+    const typeIconMap: Record<string, AppIconName> = {
+      text: "type", code: "code", link: "link", image: "image", file: "file",
+    };
+    return {
+      icon: typeIconMap[clipboardStore.activeFilter] ?? ("clipboard" as AppIconName),
+      title: `暂无${TYPE_LABELS[clipboardStore.activeFilter] ?? ""}记录`,
+      hint: "复制对应类型的内容后会出现在这里",
+      clearSearch: false,
+    };
+  }
+  return { icon: "clipboard" as AppIconName, title: "暂无剪贴板记录", hint: "复制任意内容即可开始使用", clearSearch: false };
+});
+
+watch(
+  () => clipboardStore.selectedId,
+  async (id) => {
+    if (id == null) return;
+    await nextTick();
+    const el = listRef.value?.querySelector(`[data-record-id="${id}"]`) as HTMLElement | null;
+    el?.scrollIntoView({ block: "nearest" });
+  }
+);
 
 const contextMenu = reactive({
   visible: false,
@@ -240,21 +272,35 @@ function ctxPin() {
   contextMenu.visible = false;
 }
 
-function ctxDelete() {
-  if (contextMenu.record) clipboardStore.deleteRecord(contextMenu.record.id);
-  contextMenu.visible = false;
-}
-
 function ctxRestore() {
   if (contextMenu.record) clipboardStore.restoreRecord(contextMenu.record.id);
   contextMenu.visible = false;
 }
 
-function ctxPermanentDelete() {
-  if (contextMenu.record && confirm("确定要永久删除这条记录吗？此操作不可恢复。")) {
-    clipboardStore.permanentlyDeleteRecord(contextMenu.record.id);
-  }
+async function ctxDelete() {
+  const record = contextMenu.record;
   contextMenu.visible = false;
+  if (!record) return;
+  const ok = await confirm({
+    title: "移到回收站",
+    message: "确定要将这条记录移到回收站吗？",
+    confirmText: "删除",
+    danger: true,
+  });
+  if (ok) await clipboardStore.deleteRecord(record.id);
+}
+
+async function ctxPermanentDelete() {
+  const record = contextMenu.record;
+  contextMenu.visible = false;
+  if (!record) return;
+  const ok = await confirm({
+    title: "永久删除",
+    message: "确定要永久删除这条记录吗？此操作不可恢复。",
+    confirmText: "永久删除",
+    danger: true,
+  });
+  if (ok) await clipboardStore.permanentlyDeleteRecord(record.id);
 }
 
 function closeContextMenu() {
@@ -568,16 +614,17 @@ onUnmounted(() => {
 }
 
 .empty-icon {
-  width: 42px;
-  height: 42px;
+  width: 48px;
+  height: 48px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
-  font-size: 22px;
-  opacity: 0.4;
+  color: var(--text-tertiary);
+  opacity: 0.9;
+  margin-bottom: 4px;
 }
 
 .empty-text {

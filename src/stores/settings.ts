@@ -91,7 +91,8 @@ export const useSettingsStore = defineStore("settings", () => {
     const s = settings.value;
     const root = document.documentElement;
 
-    // Font size
+    // Font scale relative to 13px baseline (components use rem)
+    root.style.setProperty("--ui-font-scale", String(s.font_size / 13));
     root.style.fontSize = `${s.font_size}px`;
 
     // Panel radius (used as CSS variable)

@@ -405,7 +405,7 @@ async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), Stri
     let window = app.get_webview_window("main").ok_or("window not found")?;
     let is_window = mode == "window";
     let (w, h): (f64, f64) = if is_window { (920.0, 680.0) } else { (640.0, 620.0) };
-    window.set_decorations(is_window).map_err(|e| e.to_string())?;
+    window.set_decorations(false).map_err(|e| e.to_string())?;
     window.set_always_on_top(!is_window).map_err(|e| e.to_string())?;
     window.set_skip_taskbar(!is_window).map_err(|e| e.to_string())?;
     window.set_resizable(is_window).map_err(|e| e.to_string())?;

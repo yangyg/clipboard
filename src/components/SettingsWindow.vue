@@ -2,9 +2,12 @@
   <div class="settings-overlay" tabindex="-1" @keydown.esc="onOverlayEsc">
     <div class="settings-window">
       <!-- Header -->
-      <div class="settings-header">
+      <div class="settings-header" :class="{ 'with-chrome': isWindowMode }" data-tauri-drag-region>
         <span class="settings-title"><AppIcon name="settings" :size="15" /> 设置</span>
-        <button class="icon-btn" title="返回" @click="emit('close')"><AppIcon name="close" :size="15" /></button>
+        <div class="settings-header-right">
+          <button class="icon-btn" title="返回" @click="emit('close')"><AppIcon name="close" :size="15" /></button>
+          <WindowControls v-if="isWindowMode" />
+        </div>
       </div>
 
       <div class="settings-main">
@@ -405,12 +408,14 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { ClipboardRecord } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import BrandMark from "./icons/BrandMark.vue";
+import WindowControls from "./WindowControls.vue";
 
 const emit = defineEmits<{ close: [] }>();
 const settingsStore = useSettingsStore();
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const settings = settingsStore.settings;
+const isWindowMode = computed(() => settings.app_mode === "window");
 const stats = computed(() => clipboardStore.stats);
 
 const activeSection = ref("appearance");
@@ -672,6 +677,24 @@ onUnmounted(() => {
   padding: 12px 16px;
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.settings-header.with-chrome {
+  padding: 0 0 0 16px;
+  height: 38px;
+  min-height: 38px;
+}
+
+.settings-header-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.settings-header.with-chrome .settings-header-right {
+  margin-right: 0;
 }
 
 .settings-title {

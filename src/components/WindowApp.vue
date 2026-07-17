@@ -1,7 +1,7 @@
 <template>
   <div class="window-app">
     <!-- Title Bar -->
-    <div class="titlebar" data-tauri-drag-region>
+    <div class="titlebar" data-tauri-drag-region @dblclick="onTitlebarDblClick">
       <div class="titlebar-left">
         <div class="titlebar-logo">
           <BrandMark :size="22" />
@@ -15,13 +15,8 @@
       </div>
 
       <div class="titlebar-actions">
-        <button
-          class="titlebar-btn"
-          :class="{ active: clipboardStore.batchMode }"
-          title="批量操作"
-          @click="clipboardStore.toggleBatchMode()"
-        ><AppIcon name="batch" :size="15" /></button>
         <CaptureStatus />
+        <WindowControls />
       </div>
     </div>
 
@@ -45,8 +40,17 @@
               class="empty-trash-btn"
               @click="onEmptyTrash"
             >清空回收站</button>
-            <div class="list-sort" title="当前按最近更新排序">最新在前</div>
           </div>
+        </div>
+
+        <div class="list-toolbar">
+          <div class="list-sort" title="当前按最近更新排序">最新在前</div>
+          <button
+            class="list-header-btn"
+            :class="{ active: clipboardStore.batchMode }"
+            title="批量操作"
+            @click="clipboardStore.toggleBatchMode()"
+          ><AppIcon name="batch" :size="14" /></button>
         </div>
 
         <Transition name="fade">
@@ -85,14 +89,17 @@ import TagDialog from "./TagDialog.vue";
 import CaptureStatus from "./CaptureStatus.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import BrandMark from "./icons/BrandMark.vue";
+import WindowControls from "./WindowControls.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const appWindow = getCurrentWindow();
 
 defineEmits<{
   (e: "openSettings"): void;
@@ -103,6 +110,10 @@ useClipboardHotkeys({ allowCloseOnEscape: false });
 const activeCategory = ref("all");
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"create" | "assign">("create");
+
+async function onTitlebarDblClick() {
+  await appWindow.toggleMaximize();
+}
 
 const CATEGORY_TITLES: Record<string, string> = {
   all: "全部剪贴板",
@@ -274,27 +285,14 @@ onMounted(() => {
   gap: 4px;
   -webkit-app-region: no-drag;
   flex-shrink: 0;
-  align-items: center;
+  align-items: stretch;
+  height: 100%;
+  margin-right: -10px;
 }
 
-.titlebar-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 0.81rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.titlebar-btn:hover,
-.titlebar-btn.active {
-  background: var(--accent-soft);
-  color: var(--accent);
+.titlebar-actions :deep(.capture-status) {
+  align-self: center;
+  margin-right: 4px;
 }
 
 .window-body {
@@ -316,8 +314,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px 6px;
-  border-bottom: 1px solid var(--border-light);
+  padding: 10px 16px 2px;
   flex-shrink: 0;
 }
 
@@ -331,6 +328,15 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 12px 8px 16px;
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
 }
 
 .empty-trash-btn {
@@ -354,7 +360,27 @@ onMounted(() => {
 .list-sort {
   font-size: 0.75rem;
   color: var(--text-tertiary);
-  padding: 4px 8px;
+  padding: 4px 0;
+}
+
+.list-header-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.list-header-btn:hover,
+.list-header-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .batch-bar {

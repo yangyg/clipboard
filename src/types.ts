@@ -22,6 +22,14 @@ export interface ClipboardRecord {
   created_at: string;
   updated_at: string;
   tags: string[];
+  /** Relative path under app data dir (image records) */
+  media_path?: string | null;
+  thumb_path?: string | null;
+  width?: number | null;
+  height?: number | null;
+  /** Absolute filesystem paths for convertFileSrc */
+  media_abs?: string | null;
+  thumb_abs?: string | null;
   /** Preview-specific fields (not stored) */
   preview?: string; // truncated content for list
   display_time?: string; // relative time string

@@ -35,8 +35,17 @@
           <div v-if="clipboardStore.batchMode" class="record-checkbox" :class="{ checked: clipboardStore.selectedIds.has(item.record!.id) }">
             <span v-if="clipboardStore.selectedIds.has(item.record!.id)">✓</span>
           </div>
-          <div class="record-type-icon" :class="item.record!.content_type">
-            <TypeIcon :type="item.record!.content_type" :size="13" />
+          <div
+            class="record-type-icon"
+            :class="[item.record!.content_type, { 'has-thumb': !!thumbSrc(item.record!) }]"
+          >
+            <img
+              v-if="thumbSrc(item.record!)"
+              class="record-thumb"
+              :src="thumbSrc(item.record!)!"
+              alt=""
+            />
+            <TypeIcon v-else :type="item.record!.content_type" :size="13" />
           </div>
           <div class="record-body">
             <div class="record-title">{{ getPreview(item.record!) }}</div>
@@ -46,6 +55,9 @@
                 {{ TYPE_LABELS[item.record!.content_type] || '文本' }}
               </span>
               <span class="record-chars" v-if="isTextLike(item.record!.content_type)">· {{ item.record!.content.length }} 字符</span>
+              <span class="record-chars" v-else-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height">
+                · {{ item.record!.width }}×{{ item.record!.height }}
+              </span>
             </div>
           </div>
           <div class="record-actions">
@@ -126,6 +138,7 @@ import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import type { ClipboardRecord, ContentType } from "../types";
 import { useConfirm } from "../composables/useConfirm";
+import { recordThumbSrc } from "../utils/mediaUrl";
 
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
@@ -206,7 +219,18 @@ const contextMenu = reactive({
   record: null as ClipboardRecord | null,
 });
 
+function thumbSrc(record: ClipboardRecord): string | null {
+  if (record.content_type !== "image") return null;
+  return recordThumbSrc(record);
+}
+
 function getPreview(record: ClipboardRecord): string {
+  if (record.content_type === "image") {
+    if (record.width && record.height) {
+      return `图片 ${record.width}×${record.height}`;
+    }
+    return "图片";
+  }
   const maxLen = 80;
   if (record.content.length <= maxLen) return record.content;
   return record.content.slice(0, maxLen) + "…";
@@ -416,6 +440,19 @@ onUnmounted(() => {
   font-weight: 600;
   flex-shrink: 0;
   margin-top: 1px;
+  overflow: hidden;
+}
+
+.record-type-icon.has-thumb {
+  background: var(--bg-surface);
+  padding: 0;
+}
+
+.record-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .record-type-icon.text {

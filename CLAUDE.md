@@ -21,15 +21,16 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia (state management)
 - **Backend:** Rust (Tauri v2 with plugins for single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
 - **Database:** SQLite via rusqlite (WAL mode), stored at `%LOCALAPPDATA%/ClipVault/clipvault.db`
-- **Clipboard polling:** arboard crate polls clipboard text every 500ms on a background thread
+- **Media files:** Images stored as PNG under `%LOCALAPPDATA%/ClipVault/media/` (+ `thumbs/`); DB holds paths/size only
+- **Clipboard polling:** arboard crate polls clipboard text/images every 500ms on a background thread
 - **Autostart:** `tauri-plugin-autostart` (=2.2.0) registers Windows startup via the OS (Run key / equivalent). Controlled only from Rust (`save_settings` / app setup); no frontend JS plugin binding.
 
 ### Data Flow
 1. Rust `ClipboardMonitor` polls the OS clipboard every 500ms
-2. On change: hash content, detect type (text/code/link/file) and sensitivity, insert into SQLite
+2. On change: hash content; text → SQLite `content`; image → write `media/` + thumb, DB stores metadata only
 3. Emit `clipboard-changed` event to Vue frontend via Tauri events
 4. Vue `App.vue` listens and updates the Pinia store
-5. User can paste via simulated Ctrl+V (`keybd_event` on Windows), which replaces clipboard text with the stored record and sends the keystroke to the foreground window
+5. Paste branches by type: text → `set_text` + Ctrl+V; image → `set_image` from disk + Ctrl+V
 
 ### Frontend Component Tree
 ```
@@ -48,8 +49,9 @@ App.vue                          # Root: events, show/hide, ToastHost + ConfirmD
 
 ### Backend (Rust) Module Layout
 - `src-tauri/src/lib.rs` — App setup, Tauri commands, system tray, global shortcut, content detection, sensitive detection, autostart sync (`apply_autostart`)
-- `src-tauri/src/clipboard.rs` — `ClipboardMonitor` (polling loop), paste simulation via `keybd_event` (Windows)
-- `src-tauri/src/db.rs` — `ClipboardDb`: records CRUD, search, settings persistence, import/export, stats
+- `src-tauri/src/clipboard.rs` — `ClipboardMonitor` (polling loop), paste text/image via `keybd_event` (Windows)
+- `src-tauri/src/media.rs` — Image encode/store/load/delete under app data `media/`
+- `src-tauri/src/db.rs` — `ClipboardDb`: records CRUD, media lifecycle on hard-delete, settings, import/export, stats
 - `src-tauri/src/main.rs` — Entry point, calls `clipvault_lib::run()`
 
 ### State Management (Pinia Stores)
@@ -60,7 +62,8 @@ App.vue                          # Root: events, show/hide, ToastHost + ConfirmD
 - **Floating mode** (default): borderless always-on-top window that auto-hides on focus loss. Window mode: standard decorated window.
 - **Theming**: CSS custom properties on `:root` (dark default), class-based overrides (`.light-theme`, `.oled-theme`). Applied via `document.body.classList`.
 - **Sensitive content detection**: regex patterns for passwords, verification codes, API keys (`sk-...`), bank card numbers. Marked records auto-expire after configurable seconds.
-- **Clipboard paste**: sets clipboard content via arboard, then simulates Ctrl+V. No IPC to foreground app.
+- **Clipboard paste**: by `content_type` — text uses `set_text`, image loads PNG from disk and uses `set_image`, then simulates Ctrl+V. No IPC to foreground app.
+- **Image storage**: SQLite does not store image blobs; binary lives in `media/` with JPEG thumbs for the list.
 - **Search**: SQL `LIKE` on content and source_app. Debounced 150ms frontend side.
 - **Deduplication**: by SHA-256 content hash. Same hash = increment copy count + update timestamp, no new record.
 - **Window hide-on-close**: `CloseRequested` event calls `api.prevent_close()` and hides window to minimize to tray.

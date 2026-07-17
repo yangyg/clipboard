@@ -1,7 +1,8 @@
-use rusqlite::{Connection, Result as SqlResult, params};
+use rusqlite::{Connection, Result as SqlResult, params, Row};
 use parking_lot::Mutex;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::fmt;
+use crate::media;
 use crate::{ClipboardRecord, Settings, StatsData, TagInfo};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,13 +49,27 @@ impl ContentType {
     }
 }
 
+/// Optional image metadata when inserting an image record.
+#[derive(Debug, Clone)]
+pub struct ImageMeta {
+    pub media_path: String,
+    pub thumb_path: String,
+    pub width: i32,
+    pub height: i32,
+}
+
+const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
+               copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
+               created_at, updated_at, media_path, thumb_path, width, height";
+
 pub struct ClipboardDb {
     conn: Mutex<Connection>,
+    media_root: PathBuf,
 }
 
 impl ClipboardDb {
-    pub fn new(path: &Path) -> SqlResult<Self> {
-        let conn = Connection::open(path)?;
+    pub fn new(db_path: &Path, media_root: PathBuf) -> SqlResult<Self> {
+        let conn = Connection::open(db_path)?;
 
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
 
@@ -74,7 +89,11 @@ impl ClipboardDb {
                 is_trashed INTEGER NOT NULL DEFAULT 0,
                 auto_expire_at TEXT,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                media_path TEXT,
+                thumb_path TEXT,
+                width INTEGER,
+                height INTEGER
             );
 
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
@@ -83,10 +102,14 @@ impl ClipboardDb {
             CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);"#,
         )?;
 
-        // Migration: add is_trashed column for databases created before v0.2
+        // Migrations for databases created before these columns existed
         conn.execute_batch(
             "ALTER TABLE records ADD COLUMN is_trashed INTEGER NOT NULL DEFAULT 0;"
         ).ok();
+        conn.execute_batch("ALTER TABLE records ADD COLUMN media_path TEXT;").ok();
+        conn.execute_batch("ALTER TABLE records ADD COLUMN thumb_path TEXT;").ok();
+        conn.execute_batch("ALTER TABLE records ADD COLUMN width INTEGER;").ok();
+        conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
 
         conn.execute_batch(
             r#"
@@ -119,7 +142,88 @@ impl ClipboardDb {
             "#,
         )?;
 
-        Ok(Self { conn: Mutex::new(conn) })
+        media::ensure_dirs(&media_root).ok();
+
+        Ok(Self {
+            conn: Mutex::new(conn),
+            media_root,
+        })
+    }
+
+    pub fn media_root(&self) -> &Path {
+        &self.media_root
+    }
+
+    fn enrich_paths(&self, media_path: Option<String>, thumb_path: Option<String>) -> (Option<String>, Option<String>) {
+        let media_abs = media_path
+            .as_ref()
+            .map(|p| self.media_root.join(p).to_string_lossy().to_string());
+        let thumb_abs = thumb_path
+            .as_ref()
+            .map(|p| self.media_root.join(p).to_string_lossy().to_string());
+        (media_abs, thumb_abs)
+    }
+
+    fn map_record_row(&self, row: &Row<'_>) -> SqlResult<ClipboardRecord> {
+        let media_path: Option<String> = row.get(14)?;
+        let thumb_path: Option<String> = row.get(15)?;
+        let (media_abs, thumb_abs) = self.enrich_paths(media_path.clone(), thumb_path.clone());
+        Ok(ClipboardRecord {
+            id: row.get(0)?,
+            content: row.get(1)?,
+            content_type: row.get(2)?,
+            source_app: row.get(3)?,
+            source_window: row.get(4)?,
+            hash: row.get(5)?,
+            copy_count: row.get(6)?,
+            is_favorite: row.get(7)?,
+            is_pinned: row.get(8)?,
+            is_sensitive: row.get(9)?,
+            is_trashed: row.get(10)?,
+            auto_expire_at: row.get(11)?,
+            created_at: row.get(12)?,
+            updated_at: row.get(13)?,
+            tags: Vec::new(),
+            media_path,
+            thumb_path,
+            width: row.get(16)?,
+            height: row.get(17)?,
+            media_abs,
+            thumb_abs,
+        })
+    }
+
+    fn purge_media_pairs(&self, pairs: &[(Option<String>, Option<String>)]) {
+        for (media_path, thumb_path) in pairs {
+            media::delete_media_files(
+                &self.media_root,
+                media_path.as_deref(),
+                thumb_path.as_deref(),
+            );
+        }
+    }
+
+    fn fetch_media_paths_by_ids(
+        &self,
+        conn: &Connection,
+        ids: &[i64],
+    ) -> SqlResult<Vec<(Option<String>, Option<String>)>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        let sql = format!(
+            "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
+            placeholders.join(",")
+        );
+        let params: Vec<&dyn rusqlite::types::ToSql> =
+            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let pairs = stmt
+            .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(pairs)
     }
 
     /// Batch-load tags for multiple record IDs in one query.
@@ -156,41 +260,19 @@ impl ClipboardDb {
 
     pub fn get_records(&self, limit: i32, trashed: bool) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.conn.lock();
-        let columns = "id, content, content_type, source_app, source_window, hash,
-               copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
-               created_at, updated_at";
         let sql = if trashed {
-            format!("SELECT {} FROM records WHERE is_trashed = 1 ORDER BY updated_at DESC LIMIT ?", columns)
+            format!("SELECT {} FROM records WHERE is_trashed = 1 ORDER BY updated_at DESC LIMIT ?", RECORD_COLS)
         } else {
-            format!("SELECT {} FROM records WHERE is_trashed = 0 ORDER BY is_pinned DESC, updated_at DESC LIMIT ?", columns)
+            format!("SELECT {} FROM records WHERE is_trashed = 0 ORDER BY is_pinned DESC, updated_at DESC LIMIT ?", RECORD_COLS)
         };
 
         let mut stmt = conn.prepare(&sql)?;
 
         let mut records: Vec<ClipboardRecord> = stmt
-            .query_map([limit], |row| {
-                Ok(ClipboardRecord {
-                    id: row.get(0)?,
-                    content: row.get(1)?,
-                    content_type: row.get(2)?,
-                    source_app: row.get(3)?,
-                    source_window: row.get(4)?,
-                    hash: row.get(5)?,
-                    copy_count: row.get(6)?,
-                    is_favorite: row.get(7)?,
-                    is_pinned: row.get(8)?,
-                    is_sensitive: row.get(9)?,
-                    is_trashed: row.get(10)?,
-                    auto_expire_at: row.get(11)?,
-                    created_at: row.get(12)?,
-                    updated_at: row.get(13)?,
-                    tags: Vec::new(),
-                })
-            })?
+            .query_map([limit], |row| self.map_record_row(row))?
             .filter_map(|r| r.ok())
             .collect();
 
-        // Batch load tags
         let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
         let tags_map = self.load_tags_batch(&conn, &ids)?;
         for record in &mut records {
@@ -204,32 +286,14 @@ impl ClipboardDb {
 
     pub fn get_record(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare(
-            "SELECT id, content, content_type, source_app, source_window, hash,
-                    copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
-                    created_at, updated_at
-             FROM records WHERE id = ?",
-        )?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {} FROM records WHERE id = ?",
+            RECORD_COLS
+        ))?;
 
         let mut rows = stmt.query([id])?;
         if let Some(row) = rows.next()? {
-            let mut record = ClipboardRecord {
-                id: row.get(0)?,
-                content: row.get(1)?,
-                content_type: row.get(2)?,
-                source_app: row.get(3)?,
-                source_window: row.get(4)?,
-                hash: row.get(5)?,
-                copy_count: row.get(6)?,
-                is_favorite: row.get(7)?,
-                is_pinned: row.get(8)?,
-                is_sensitive: row.get(9)?,
-                is_trashed: row.get(10)?,
-                auto_expire_at: row.get(11)?,
-                created_at: row.get(12)?,
-                updated_at: row.get(13)?,
-                tags: Vec::new(),
-            };
+            let mut record = self.map_record_row(row)?;
             record.tags = self.get_record_tags_locked(&conn, record.id)?;
             Ok(Some(record))
         } else {
@@ -260,10 +324,10 @@ impl ClipboardDb {
         sensitive_auto_expire_seconds: i32,
         source_app: &str,
         source_window: &str,
+        image: Option<&ImageMeta>,
     ) -> SqlResult<i64> {
         let conn = self.conn.lock();
 
-        // Check for duplicate by hash
         let existing: Option<i64> = conn
             .query_row(
                 "SELECT id FROM records WHERE hash = ? ORDER BY updated_at DESC LIMIT 1",
@@ -281,22 +345,60 @@ impl ClipboardDb {
             return Ok(id);
         }
 
-        // Insert new record
         let now = chrono::Utc::now().to_rfc3339();
         let auto_expire_at = if is_sensitive && sensitive_auto_expire_seconds > 0 {
             Some((chrono::Utc::now() + chrono::Duration::seconds(sensitive_auto_expire_seconds as i64)).to_rfc3339())
         } else {
             None
         };
+
+        let (media_path, thumb_path, width, height) = match image {
+            Some(img) => (
+                Some(img.media_path.as_str()),
+                Some(img.thumb_path.as_str()),
+                Some(img.width),
+                Some(img.height),
+            ),
+            None => (None, None, None, None),
+        };
+
         conn.execute(
-            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            params![content, content_type.as_str(), source_app, source_window, hash, is_sensitive as i32, auto_expire_at, now, now],
+            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![
+                content,
+                content_type.as_str(),
+                source_app,
+                source_window,
+                hash,
+                is_sensitive as i32,
+                auto_expire_at,
+                now,
+                now,
+                media_path,
+                thumb_path,
+                width,
+                height
+            ],
         )?;
 
         let id = conn.last_insert_rowid();
 
-        // Enforce max records limit
+        // Collect media of records about to be evicted by max_records
+        let overflow_ids: Vec<i64> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
+                 ORDER BY updated_at ASC
+                 LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)",
+            )?;
+            let ids = stmt
+                .query_map([max_records.max(1)], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            ids
+        };
+        let overflow_media = self.fetch_media_paths_by_ids(&conn, &overflow_ids)?;
+
         conn.execute(
             "DELETE FROM records WHERE id IN (
                 SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
@@ -305,6 +407,8 @@ impl ClipboardDb {
             )",
             [max_records.max(1)],
         )?;
+        drop(conn);
+        self.purge_media_pairs(&overflow_media);
 
         Ok(id)
     }
@@ -312,40 +416,19 @@ impl ClipboardDb {
     pub fn search_records(&self, query: &str) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.conn.lock();
         let search = format!("%{}%", query);
-        let mut stmt = conn.prepare(
-            "SELECT id, content, content_type, source_app, source_window, hash,
-                    copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
-                    created_at, updated_at
-             FROM records
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {} FROM records
              WHERE is_trashed = 0 AND (content LIKE ? OR source_app LIKE ?)
              ORDER BY is_pinned DESC, updated_at DESC
              LIMIT 200",
-        )?;
+            RECORD_COLS
+        ))?;
 
         let mut records: Vec<ClipboardRecord> = stmt
-            .query_map([&search, &search], |row| {
-                Ok(ClipboardRecord {
-                    id: row.get(0)?,
-                    content: row.get(1)?,
-                    content_type: row.get(2)?,
-                    source_app: row.get(3)?,
-                    source_window: row.get(4)?,
-                    hash: row.get(5)?,
-                    copy_count: row.get(6)?,
-                    is_favorite: row.get(7)?,
-                    is_pinned: row.get(8)?,
-                    is_sensitive: row.get(9)?,
-                    is_trashed: row.get(10)?,
-                    auto_expire_at: row.get(11)?,
-                    created_at: row.get(12)?,
-                    updated_at: row.get(13)?,
-                    tags: Vec::new(),
-                })
-            })?
+            .query_map([&search, &search], |row| self.map_record_row(row))?
             .filter_map(|r| r.ok())
             .collect();
 
-        // Batch load tags
         let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
         let tags_map = self.load_tags_batch(&conn, &ids)?;
         for record in &mut records {
@@ -359,7 +442,10 @@ impl ClipboardDb {
 
     pub fn delete_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
+        let media = self.fetch_media_paths_by_ids(&conn, &[id])?;
         conn.execute("DELETE FROM records WHERE id = ?", [id])?;
+        drop(conn);
+        self.purge_media_pairs(&media);
         Ok(())
     }
 
@@ -368,6 +454,7 @@ impl ClipboardDb {
             return Ok(0);
         }
         let conn = self.conn.lock();
+        let media = self.fetch_media_paths_by_ids(&conn, ids)?;
         let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
         let sql = format!(
             "DELETE FROM records WHERE id IN ({})",
@@ -376,10 +463,12 @@ impl ClipboardDb {
         let params: Vec<&dyn rusqlite::types::ToSql> =
             ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
         let count = conn.execute(&sql, params.as_slice())?;
+        drop(conn);
+        self.purge_media_pairs(&media);
         Ok(count)
     }
 
-    // === Trash / Soft-delete ===
+    // === Trash / Soft-delete (keep media until permanent delete) ===
 
     pub fn trash_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
@@ -430,13 +519,29 @@ impl ClipboardDb {
 
     pub fn permanently_delete_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
-        conn.execute("DELETE FROM records WHERE id = ? AND is_trashed = 1", [id])?;
+        let media = self.fetch_media_paths_by_ids(&conn, &[id])?;
+        let n = conn.execute("DELETE FROM records WHERE id = ? AND is_trashed = 1", [id])?;
+        drop(conn);
+        if n > 0 {
+            self.purge_media_pairs(&media);
+        }
         Ok(())
     }
 
     pub fn empty_trash(&self) -> SqlResult<usize> {
         let conn = self.conn.lock();
+        let ids: Vec<i64> = {
+            let mut stmt = conn.prepare("SELECT id FROM records WHERE is_trashed = 1")?;
+            let ids = stmt
+                .query_map([], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            ids
+        };
+        let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         let count = conn.execute("DELETE FROM records WHERE is_trashed = 1", [])?;
+        drop(conn);
+        self.purge_media_pairs(&media);
         Ok(count)
     }
 
@@ -513,17 +618,43 @@ impl ClipboardDb {
 
     pub fn clear_non_favorite(&self) -> SqlResult<()> {
         let conn = self.conn.lock();
+        let ids: Vec<i64> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM records WHERE is_favorite = 0 AND is_trashed = 0",
+            )?;
+            let ids = stmt
+                .query_map([], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            ids
+        };
+        let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         conn.execute("DELETE FROM records WHERE is_favorite = 0 AND is_trashed = 0", [])?;
+        drop(conn);
+        self.purge_media_pairs(&media);
         Ok(())
     }
 
     pub fn cleanup_expired(&self) -> SqlResult<()> {
         let conn = self.conn.lock();
         let now = chrono::Utc::now().to_rfc3339();
+        let ids: Vec<i64> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?",
+            )?;
+            let ids = stmt
+                .query_map([&now], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            ids
+        };
+        let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         conn.execute(
             "DELETE FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?",
             [now],
         )?;
+        drop(conn);
+        self.purge_media_pairs(&media);
         Ok(())
     }
 
@@ -533,10 +664,23 @@ impl ClipboardDb {
         }
         let conn = self.conn.lock();
         let cutoff = (chrono::Utc::now() - chrono::Duration::days(retention_days as i64)).to_rfc3339();
+        let ids: Vec<i64> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 1 AND updated_at < ?",
+            )?;
+            let ids = stmt
+                .query_map([&cutoff], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            ids
+        };
+        let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         conn.execute(
             "DELETE FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 1 AND updated_at < ?",
             [cutoff],
         )?;
+        drop(conn);
+        self.purge_media_pairs(&media);
         Ok(())
     }
 
@@ -546,7 +690,9 @@ impl ClipboardDb {
         let mut imported = 0;
 
         for record in records {
-            if record.content.trim().is_empty() || record.hash.trim().is_empty() {
+            // Skip empty text records; image records may have empty content with media_path
+            let is_image = record.content_type == "image";
+            if (!is_image && record.content.trim().is_empty()) || record.hash.trim().is_empty() {
                 continue;
             }
 
@@ -563,8 +709,9 @@ impl ClipboardDb {
             tx.execute(
                 "INSERT INTO records (
                     content, content_type, source_app, source_window, hash, copy_count,
-                    is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at,
+                    media_path, thumb_path, width, height
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
                     record.content_type,
@@ -579,10 +726,46 @@ impl ClipboardDb {
                     record.auto_expire_at,
                     record.created_at,
                     record.updated_at,
+                    record.media_path,
+                    record.thumb_path,
+                    record.width,
+                    record.height,
                 ],
             )?;
             imported += 1;
         }
+
+        let overflow_ids: Vec<i64> = {
+            let mut stmt = tx.prepare(
+                "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
+                 ORDER BY updated_at ASC
+                 LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)",
+            )?;
+            let ids = stmt
+                .query_map([max_records.max(1)], |row| row.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            ids
+        };
+        let overflow_media: Vec<(Option<String>, Option<String>)> = {
+            if overflow_ids.is_empty() {
+                Vec::new()
+            } else {
+                let placeholders: Vec<String> = overflow_ids.iter().map(|_| "?".to_string()).collect();
+                let sql = format!(
+                    "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
+                    placeholders.join(",")
+                );
+                let params: Vec<&dyn rusqlite::types::ToSql> =
+                    overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+                let mut stmt = tx.prepare(&sql)?;
+                let pairs = stmt
+                    .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                pairs
+            }
+        };
 
         tx.execute(
             "DELETE FROM records WHERE id IN (
@@ -593,6 +776,8 @@ impl ClipboardDb {
             [max_records.max(1)],
         )?;
         tx.commit()?;
+        drop(conn);
+        self.purge_media_pairs(&overflow_media);
         Ok(imported)
     }
 
@@ -673,7 +858,12 @@ impl ClipboardDb {
         let favorites_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_favorite = 1 AND is_trashed = 0", [], |row| row.get(0))?;
         let pinned_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_pinned = 1 AND is_trashed = 0", [], |row| row.get(0))?;
         let sensitive_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_sensitive = 1 AND is_trashed = 0", [], |row| row.get(0))?;
-        let storage_bytes = conn.query_row("SELECT COALESCE(SUM(length(content)), 0) FROM records WHERE is_trashed = 0", [], |row| row.get(0))?;
+        // Prefer on-disk media size approximation via content length + count of media paths
+        let storage_bytes = conn.query_row(
+            "SELECT COALESCE(SUM(length(content)), 0) FROM records WHERE is_trashed = 0",
+            [],
+            |row| row.get(0),
+        )?;
 
         let mut type_distribution = std::collections::HashMap::new();
         let mut stmt = conn.prepare("SELECT content_type, COUNT(*) FROM records WHERE is_trashed = 0 GROUP BY content_type")?;

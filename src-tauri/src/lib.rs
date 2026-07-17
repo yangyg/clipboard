@@ -1,7 +1,8 @@
 mod db;
 mod clipboard;
+mod media;
 
-use db::{ClipboardDb, ContentType};
+use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{ClipboardMonitor, ClipboardEvent};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, LazyLock};
@@ -53,6 +54,18 @@ pub struct ClipboardRecord {
     #[serde(rename = "updated_at")]
     pub updated_at: String,
     pub tags: Vec<String>,
+    /// Relative path under app data dir, e.g. media/{hash}.png
+    #[serde(rename = "media_path")]
+    pub media_path: Option<String>,
+    #[serde(rename = "thumb_path")]
+    pub thumb_path: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    /// Absolute filesystem paths for frontend convertFileSrc
+    #[serde(rename = "media_abs")]
+    pub media_abs: Option<String>,
+    #[serde(rename = "thumb_abs")]
+    pub thumb_abs: Option<String>,
 }
 
 // === Settings (must match src/types.ts Settings) ===
@@ -189,11 +202,19 @@ async fn paste_record(
 ) -> Result<(), String> {
     let record = state.db.get_record(id).map_err(|e| e.to_string())?;
     if let Some(r) = record {
-        let text = r.content;
         let _ = state.db.increment_copy_count(id);
-        match mode.as_deref() {
-            Some("plain") => clipboard::paste_plain_text(&text),
-            _ => clipboard::paste_text(&text),
+        if r.content_type == "image" {
+            if let Some(media_path) = r.media_path.as_deref() {
+                let (rgba, w, h) = media::load_image_rgba(state.db.media_root(), media_path)?;
+                clipboard::paste_image(&rgba, w, h);
+            } else {
+                return Err("Image file missing for this record".into());
+            }
+        } else {
+            match mode.as_deref() {
+                Some("plain") => clipboard::paste_plain_text(&r.content),
+                _ => clipboard::paste_text(&r.content),
+            }
         }
     }
     Ok(())
@@ -426,7 +447,8 @@ pub fn run() {
     info!("ClipVault starting up...");
 
     let db_path = app_data_dir.join("clipvault.db");
-    let db = match ClipboardDb::new(&db_path) {
+    media::ensure_dirs(&app_data_dir).ok();
+    let db = match ClipboardDb::new(&db_path, app_data_dir.clone()) {
         Ok(db) => Arc::new(db),
         Err(e) => {
             error!("Failed to initialize database: {}", e);
@@ -615,6 +637,7 @@ pub fn run() {
 
             // Start clipboard monitoring
             let app_handle_clone = app_handle.clone();
+            let media_root = db.media_root().to_path_buf();
             std::thread::spawn(move || {
                 monitor.write().start(move |event| {
                     if *capture_paused_thread.read() {
@@ -643,6 +666,7 @@ pub fn run() {
                                 settings.sensitive_auto_expire_seconds,
                                 &source_app,
                                 &source_window,
+                                None,
                             ) {
                                 Ok(id) => {
                                     info!("New clipboard record: id={}, type={}", id, content_type);
@@ -657,32 +681,57 @@ pub fn run() {
                                 }
                             }
                         }
-                        ClipboardEvent::Image(base64) => {
+                        ClipboardEvent::Image(captured) => {
                             let settings = db.get_settings().unwrap_or_default();
-                            let hash = sha256_hash(&base64);
 
                             db.cleanup_expired().ok();
                             db.cleanup_retention(settings.retention_days).ok();
-                            match db.insert_record(
-                                &base64,
-                                &ContentType::Image,
-                                &hash,
-                                false,
-                                settings.max_records,
-                                settings.sensitive_auto_expire_seconds,
-                                &source_app,
-                                &source_window,
+
+                            match media::store_clipboard_image(
+                                &media_root,
+                                &captured.rgba,
+                                captured.width,
+                                captured.height,
+                                &captured.hash,
                             ) {
-                                Ok(id) => {
-                                    info!("New clipboard record: id={}, type=image", id);
-                                    if let Ok(record) = db.get_record(id) {
-                                        if let Some(r) = record {
-                                            app_handle_clone.emit("clipboard-changed", r).ok();
+                                Ok(stored) => {
+                                    let image_meta = ImageMeta {
+                                        media_path: stored.media_path,
+                                        thumb_path: stored.thumb_path,
+                                        width: stored.width as i32,
+                                        height: stored.height as i32,
+                                    };
+                                    // content holds a short label for search/list; binary lives on disk
+                                    let label = format!(
+                                        "[image {}x{}]",
+                                        stored.width, stored.height
+                                    );
+                                    match db.insert_record(
+                                        &label,
+                                        &ContentType::Image,
+                                        &captured.hash,
+                                        false,
+                                        settings.max_records,
+                                        settings.sensitive_auto_expire_seconds,
+                                        &source_app,
+                                        &source_window,
+                                        Some(&image_meta),
+                                    ) {
+                                        Ok(id) => {
+                                            info!("New clipboard record: id={}, type=image", id);
+                                            if let Ok(record) = db.get_record(id) {
+                                                if let Some(r) = record {
+                                                    app_handle_clone.emit("clipboard-changed", r).ok();
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            warn!("Failed to insert image record: {}", e);
                                         }
                                     }
                                 }
                                 Err(e) => {
-                                    warn!("Failed to insert image record: {}", e);
+                                    warn!("Failed to store clipboard image: {}", e);
                                 }
                             }
                         }

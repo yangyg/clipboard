@@ -20,7 +20,6 @@
           title="取消收藏"
         ><AppIcon name="star" :size="13" fill="currentColor" /></button>
       </div>
-      <p class="preview-desc">{{ getDescription() }}</p>
     </div>
 
     <!-- Sensitive Warning -->
@@ -65,8 +64,8 @@
       <template v-else-if="record.content_type === 'image'">
         <div class="image-card">
           <img
-            v-if="record.content"
-            :src="`data:image/png;base64,${record.content}`"
+            v-if="imageSrc"
+            :src="imageSrc"
             alt="剪贴板图片"
           />
           <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> 暂无图片数据</div>
@@ -79,7 +78,11 @@
           <div class="meta-label">类型</div>
           <div class="meta-value">{{ TYPE_LABELS[record.content_type] || '文本' }}</div>
         </div>
-        <div class="meta-item">
+        <div class="meta-item" v-if="record.content_type === 'image' && record.width && record.height">
+          <div class="meta-label">尺寸</div>
+          <div class="meta-value">{{ record.width }}×{{ record.height }}</div>
+        </div>
+        <div class="meta-item" v-else>
           <div class="meta-label">字符数</div>
           <div class="meta-value">{{ record.content.length }} 字符</div>
         </div>
@@ -178,11 +181,13 @@ import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import { useConfirm } from "../composables/useConfirm";
 import { useSettingsStore } from "../stores/settings";
+import { recordMediaSrc } from "../utils/mediaUrl";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const record = computed(() => clipboardStore.selectedRecord);
+const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"assign" | "create">("assign");
 
@@ -200,14 +205,6 @@ const typeLabel = computed(() => {
   if (record.value.is_sensitive) return "敏感内容";
   return TYPE_LABELS[record.value.content_type] ?? "文本片段";
 });
-
-function getDescription(): string {
-  if (!record.value) return "";
-  const content = record.value.content;
-  const maxLen = 120;
-  if (content.length <= maxLen) return content;
-  return content.slice(0, maxLen) + "…";
-}
 
 function getTagBg(tagName: string): string {
   const tag = clipboardStore.tags.find((t) => t.name === tagName);
@@ -411,16 +408,6 @@ async function permanentDel() {
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
-}
-
-.preview-desc {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  line-height: 1.55;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 /* Sensitive Warning */

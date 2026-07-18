@@ -146,6 +146,15 @@ pub struct SearchResult {
     pub query: String,
     #[serde(rename = "elapsed_ms")]
     pub elapsed_ms: u64,
+    #[serde(rename = "has_more")]
+    pub has_more: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RecordsPage {
+    pub records: Vec<ClipboardRecord>,
+    #[serde(rename = "has_more")]
+    pub has_more: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -180,21 +189,59 @@ pub struct StatsData {
 // ============================================================
 
 #[tauri::command]
-async fn get_records(state: State<'_, AppState>, limit: Option<i32>, trashed: Option<bool>) -> Result<Vec<ClipboardRecord>, String> {
+async fn get_records(
+    state: State<'_, AppState>,
+    limit: Option<i32>,
+    offset: Option<i32>,
+    trashed: Option<bool>,
+    content_type: Option<String>,
+    favorites_only: Option<bool>,
+    tag: Option<String>,
+) -> Result<RecordsPage, String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
     state.db.cleanup_expired().map_err(|e| e.to_string())?;
     state.db.cleanup_retention(settings.retention_days).map_err(|e| e.to_string())?;
-    let limit = limit.unwrap_or(500);
-    state.db.get_records(limit, trashed.unwrap_or(false)).map_err(|e| e.to_string())
+    let limit = limit.unwrap_or(60).max(1);
+    let offset = offset.unwrap_or(0).max(0);
+    let records = state
+        .db
+        .get_records(
+            limit,
+            offset,
+            trashed.unwrap_or(false),
+            content_type.as_deref(),
+            favorites_only.unwrap_or(false),
+            tag.as_deref(),
+        )
+        .map_err(|e| e.to_string())?;
+    let has_more = records.len() as i32 >= limit;
+    Ok(RecordsPage { records, has_more })
 }
 
 #[tauri::command]
-async fn search_records(state: State<'_, AppState>, query: String) -> Result<SearchResult, String> {
+async fn search_records(
+    state: State<'_, AppState>,
+    query: String,
+    limit: Option<i32>,
+    offset: Option<i32>,
+) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
-    let records = state.db.search_records(&query).map_err(|e| e.to_string())?;
+    let limit = limit.unwrap_or(60).max(1);
+    let offset = offset.unwrap_or(0).max(0);
+    let records = state
+        .db
+        .search_records(&query, limit, offset)
+        .map_err(|e| e.to_string())?;
+    let has_more = records.len() as i32 >= limit;
     let total = records.len();
     let elapsed_ms = start.elapsed().as_millis() as u64;
-    Ok(SearchResult { records, total, query, elapsed_ms })
+    Ok(SearchResult {
+        records,
+        total,
+        query,
+        elapsed_ms,
+        has_more,
+    })
 }
 
 #[tauri::command]
@@ -347,7 +394,10 @@ async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Result<
 
 #[tauri::command]
 async fn export_data(state: State<'_, AppState>) -> Result<String, String> {
-    let records = state.db.get_records(10000, false).map_err(|e| e.to_string())?;
+    let records = state
+        .db
+        .get_records(10000, 0, false, None, false, None)
+        .map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&records).map_err(|e| e.to_string())
 }
 

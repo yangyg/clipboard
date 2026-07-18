@@ -5,12 +5,12 @@
         <div class="dialog-card">
           <!-- Header -->
           <div class="dialog-header">
-            <span class="dialog-title">{{ mode === 'create' ? '新建标签' : '添加标签' }}</span>
+            <span class="dialog-title">{{ dialogTitle }}</span>
             <button class="dialog-close" @click="$emit('close')"><AppIcon name="close" :size="14" /></button>
           </div>
 
-          <!-- Create Mode -->
-          <template v-if="mode === 'create'">
+          <!-- Create / Edit Mode -->
+          <template v-if="mode === 'create' || mode === 'edit'">
             <div class="dialog-body">
               <label class="field-label">标签名称</label>
               <input
@@ -20,7 +20,7 @@
                 type="text"
                 placeholder="输入标签名称…"
                 maxlength="20"
-                @keydown.enter="confirmCreate"
+                @keydown.enter="confirmForm"
               />
               <label class="field-label">颜色</label>
               <div class="color-grid">
@@ -41,8 +41,8 @@
               <button
                 class="btn-confirm"
                 :disabled="!tagName.trim()"
-                @click="confirmCreate"
-              >创建</button>
+                @click="confirmForm"
+              >{{ mode === 'edit' ? '保存' : '创建' }}</button>
             </div>
           </template>
 
@@ -87,11 +87,13 @@
 import { ref, computed, watch, nextTick } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import AppIcon from "./icons/AppIcon.vue";
+import type { Tag } from "../types";
 
 const props = defineProps<{
   visible: boolean;
-  mode: "create" | "assign";
+  mode: "create" | "assign" | "edit";
   recordId?: number;
+  editTag?: Tag | null;
 }>();
 
 const emit = defineEmits<{
@@ -99,6 +101,7 @@ const emit = defineEmits<{
   (e: "switchToCreate"): void;
   (e: "created"): void;
   (e: "assigned"): void;
+  (e: "updated"): void;
 }>();
 
 const clipboardStore = useClipboardStore();
@@ -115,14 +118,24 @@ const assignedIds = ref<Set<number>>(new Set());
 const nameInput = ref<HTMLInputElement | null>(null);
 
 const availableTags = computed(() => clipboardStore.tags);
+const dialogTitle = computed(() => {
+  if (props.mode === "edit") return "编辑标签";
+  if (props.mode === "create") return "新建标签";
+  return "添加标签";
+});
 
 // Reset form when dialog opens
 watch(() => props.visible, async (v) => {
   if (v) {
-    tagName.value = "";
-    selectedColor.value = presetColors[0];
     assignedIds.value = new Set();
     await clipboardStore.loadTags();
+    if (props.mode === "edit" && props.editTag) {
+      tagName.value = props.editTag.name;
+      selectedColor.value = props.editTag.color;
+    } else {
+      tagName.value = "";
+      selectedColor.value = presetColors[0];
+    }
     // Pre-select tags already on record
     if (props.mode === "assign" && props.recordId) {
       const record = clipboardStore.records.find((r) => r.id === props.recordId);
@@ -146,9 +159,16 @@ function toggleTag(tagId: number) {
   }
 }
 
-async function confirmCreate() {
+async function confirmForm() {
   const name = tagName.value.trim();
   if (!name) return;
+  if (props.mode === "edit") {
+    if (!props.editTag) return;
+    await clipboardStore.updateTag(props.editTag.id, name, selectedColor.value);
+    emit("updated");
+    emit("close");
+    return;
+  }
   await clipboardStore.createTag(name, selectedColor.value);
   emit("created");
   // Assign flow (has recordId): stay open so parent can return to assign mode

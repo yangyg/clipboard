@@ -79,6 +79,12 @@ export interface SearchResult {
   total: number;
   query: string;
   elapsed_ms: number;
+  has_more: boolean;
+}
+
+export interface RecordsPage {
+  records: ClipboardRecord[];
+  has_more: boolean;
 }
 
 export interface ExportOptions {

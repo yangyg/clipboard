@@ -29,6 +29,8 @@
         @update:activeTag="onTagChange"
         @openSettings="$emit('openSettings')"
         @addTag="onAddTag"
+        @editTag="onEditTag"
+        @deleteTag="onDeleteTag"
       />
 
       <div class="center-column">
@@ -44,13 +46,16 @@
         </div>
 
         <div class="list-toolbar">
-          <div class="list-sort" title="当前按最近更新排序">最新在前</div>
-          <button
-            class="list-header-btn"
-            :class="{ active: clipboardStore.batchMode }"
-            title="批量操作"
-            @click="clipboardStore.toggleBatchMode()"
-          ><AppIcon name="batch" :size="14" /></button>
+          <div class="list-count">{{ listCountLabel }}</div>
+          <div class="list-toolbar-right">
+            <div class="list-sort" title="当前按最近更新排序">最新在前</div>
+            <button
+              class="list-header-btn"
+              :class="{ active: clipboardStore.batchMode }"
+              title="批量操作"
+              @click="clipboardStore.toggleBatchMode()"
+            ><AppIcon name="batch" :size="14" /></button>
+          </div>
         </div>
 
         <Transition name="fade">
@@ -74,8 +79,10 @@
     <TagDialog
       :visible="tagDialogVisible"
       :mode="tagDialogMode"
-      @close="tagDialogVisible = false"
+      :editTag="editingTag"
+      @close="onTagDialogClose"
       @switchToCreate="tagDialogMode = 'create'"
+      @updated="toast('标签已更新', 'success')"
     />
   </div>
 </template>
@@ -95,6 +102,7 @@ import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
@@ -109,7 +117,8 @@ useClipboardHotkeys({ allowCloseOnEscape: false });
 
 const activeCategory = ref("all");
 const tagDialogVisible = ref(false);
-const tagDialogMode = ref<"create" | "assign">("create");
+const tagDialogMode = ref<"create" | "assign" | "edit">("create");
+const editingTag = ref<Tag | null>(null);
 
 async function onTitlebarDblClick() {
   await appWindow.toggleMaximize();
@@ -132,14 +141,34 @@ const categoryTitle = computed(() => {
   return CATEGORY_TITLES[activeCategory.value] ?? "全部剪贴板";
 });
 
+const listCountLabel = computed(() => {
+  if (clipboardStore.searchQuery) {
+    const n = clipboardStore.filteredRecords.length;
+    return clipboardStore.hasMore ? `已找到 ${n}+ 项` : `共 ${n} 项`;
+  }
+  if (clipboardStore.trashFilter) {
+    return `共 ${clipboardStore.trashCount} 项`;
+  }
+  if (clipboardStore.activeTag) {
+    const tag = clipboardStore.tags.find((t) => t.name === clipboardStore.activeTag);
+    return `共 ${tag?.count ?? clipboardStore.filteredRecords.length} 项`;
+  }
+  if (clipboardStore.activeFilter === "favorites") {
+    return `共 ${clipboardStore.filterCounts.favorites} 项`;
+  }
+  if (clipboardStore.activeFilter !== "all") {
+    return `共 ${clipboardStore.filterCounts[clipboardStore.activeFilter]} 项`;
+  }
+  return `共 ${clipboardStore.filterCounts.all} 项`;
+});
+
 function onCategoryChange(key: string) {
   activeCategory.value = key;
   if (key === "trash") {
     clipboardStore.setTrashFilter(true);
-    clipboardStore.search("");
+    void clipboardStore.loadRecords();
     return;
   }
-  const comingFromTrash = clipboardStore.trashFilter;
   clipboardStore.setTrashFilter(false);
   const mapping: Record<string, "all" | "text" | "code" | "link" | "image" | "file" | "favorites"> = {
     all: "all",
@@ -150,29 +179,51 @@ function onCategoryChange(key: string) {
     code: "code",
     favorites: "favorites",
   };
+  // setFilter triggers loadRecords when not searching
   clipboardStore.setFilter(mapping[key] ?? "all");
-  if (comingFromTrash) {
-    clipboardStore.search("");
-  }
 }
 
 function onTagChange(tagName: string | null) {
   if (tagName) {
     activeCategory.value = "all";
-    const comingFromTrash = clipboardStore.trashFilter;
     clipboardStore.setTrashFilter(false);
     clipboardStore.filterByTag(tagName);
-    if (comingFromTrash) {
-      clipboardStore.search("");
-    }
   } else {
     clipboardStore.filterByTag(null);
   }
 }
 
 function onAddTag() {
+  editingTag.value = null;
   tagDialogMode.value = "create";
   tagDialogVisible.value = true;
+}
+
+function onEditTag(tag: Tag) {
+  editingTag.value = tag;
+  tagDialogMode.value = "edit";
+  tagDialogVisible.value = true;
+}
+
+function onTagDialogClose() {
+  tagDialogVisible.value = false;
+  editingTag.value = null;
+}
+
+async function onDeleteTag(tag: Tag) {
+  const ok = await confirm({
+    title: "删除标签",
+    message: `确定删除标签「${tag.name}」吗？已关联的记录将移除该标签，此操作不可恢复。`,
+    confirmText: "删除",
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await clipboardStore.deleteTag(tag.id);
+    toast("标签已删除", "success");
+  } catch {
+    toast("删除失败", "error");
+  }
 }
 
 async function onEmptyTrash() {
@@ -334,9 +385,24 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 2px 12px 8px 16px;
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
+}
+
+.list-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.list-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
 }
 
 .empty-trash-btn {

@@ -24,7 +24,11 @@ pub fn ensure_dirs(app_data_dir: &Path) -> std::io::Result<()> {
 }
 
 pub fn absolute(app_data_dir: &Path, relative: &str) -> PathBuf {
-    app_data_dir.join(relative)
+    // Join segment-by-segment so Windows paths don't keep mixed `/` from relative keys.
+    relative
+        .split(['/', '\\'])
+        .filter(|s| !s.is_empty())
+        .fold(app_data_dir.to_path_buf(), |acc, part| acc.join(part))
 }
 
 /// Encode RGBA clipboard image to PNG (+ JPEG thumb) under media/.
@@ -56,7 +60,15 @@ pub fn store_clipboard_image(
         });
     }
 
-    let mut img = image::RgbaImage::from_raw(width, height, rgba.to_vec())
+    // Clipboard RGBA may include stride padding or truncation from some apps
+    let expected = (width as usize).saturating_mul(height as usize).saturating_mul(4);
+    let mut pixels = rgba.to_vec();
+    if pixels.len() < expected {
+        pixels.resize(expected, 0);
+    } else if pixels.len() > expected {
+        pixels.truncate(expected);
+    }
+    let mut img = image::RgbaImage::from_raw(width, height, pixels)
         .ok_or_else(|| "Failed to create RGBA image".to_string())?;
 
     let (out_w, out_h) = if width > MAX_EDGE || height > MAX_EDGE {

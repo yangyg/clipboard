@@ -48,6 +48,7 @@
           class="tag-item"
           :class="{ active: props.activeTag === tag.name }"
           @click="selectTag(tag.name)"
+          @contextmenu.prevent.stop="showTagMenu($event, tag)"
         >
           <span class="tag-dot" :style="{ background: tag.color }"></span>
           <span class="tag-name">{{ tag.name }}</span>
@@ -66,13 +67,30 @@
         <span class="nav-label">设置</span>
       </div>
     </div>
+
+    <!-- Tag context menu -->
+    <div
+      v-if="tagMenu.visible"
+      class="context-menu"
+      :style="{ left: tagMenu.x + 'px', top: tagMenu.y + 'px' }"
+      @click.stop
+    >
+      <div class="ctx-item" @click="onEdit">
+        <span class="ctx-icon"><AppIcon name="edit" :size="14" /></span>编辑
+      </div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-item danger" @click="onDelete">
+        <span class="ctx-icon"><AppIcon name="trash" :size="14" /></span>删除
+      </div>
+    </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, reactive } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
+import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
 
@@ -86,7 +104,16 @@ const emit = defineEmits<{
   (e: "update:activeTag", value: string | null): void;
   (e: "openSettings"): void;
   (e: "addTag"): void;
+  (e: "editTag", tag: Tag): void;
+  (e: "deleteTag", tag: Tag): void;
 }>();
+
+const tagMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+  tag: null as Tag | null,
+});
 
 const categoryItems = computed(() => [
   { key: "all", icon: "clipboard" as AppIconName, label: "全部剪贴板", count: clipboardStore.filterCounts.all },
@@ -112,6 +139,42 @@ function selectTag(name: string) {
   // (setFilter clears activeTag).
   emit("update:activeTag", name);
 }
+
+function showTagMenu(e: MouseEvent, tag: Tag) {
+  const menuW = 140;
+  const menuH = 80;
+  tagMenu.x = Math.min(e.clientX, window.innerWidth - menuW - 8);
+  tagMenu.y = Math.min(e.clientY, window.innerHeight - menuH - 8);
+  tagMenu.tag = tag;
+  tagMenu.visible = true;
+}
+
+function closeTagMenu() {
+  tagMenu.visible = false;
+  tagMenu.tag = null;
+}
+
+function onEdit() {
+  if (tagMenu.tag) emit("editTag", tagMenu.tag);
+  closeTagMenu();
+}
+
+function onDelete() {
+  if (tagMenu.tag) emit("deleteTag", tagMenu.tag);
+  closeTagMenu();
+}
+
+function onGlobalClick() {
+  if (tagMenu.visible) closeTagMenu();
+}
+
+onMounted(() => {
+  window.addEventListener("click", onGlobalClick);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("click", onGlobalClick);
+});
 </script>
 
 <style scoped>
@@ -124,6 +187,7 @@ function selectTag(name: string) {
   flex-direction: column;
   overflow: hidden;
   flex-shrink: 0;
+  position: relative;
 }
 
 .sidebar-section {
@@ -265,5 +329,54 @@ function selectTag(name: string) {
   padding: 8px 10px 12px;
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
+}
+
+.context-menu {
+  position: fixed;
+  width: 140px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default, var(--border-subtle));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: 200;
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ctx-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.ctx-item.danger {
+  color: var(--danger);
+}
+
+.ctx-item.danger:hover {
+  background: var(--danger-soft);
+}
+
+.ctx-icon {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
 }
 </style>

@@ -157,12 +157,13 @@ impl ClipboardDb {
     }
 
     fn enrich_paths(&self, media_path: Option<String>, thumb_path: Option<String>) -> (Option<String>, Option<String>) {
-        let media_abs = media_path
-            .as_ref()
-            .map(|p| self.media_root.join(p).to_string_lossy().to_string());
-        let thumb_abs = thumb_path
-            .as_ref()
-            .map(|p| self.media_root.join(p).to_string_lossy().to_string());
+        let to_abs = |rel: &str| {
+            media::absolute(&self.media_root, rel)
+                .to_string_lossy()
+                .to_string()
+        };
+        let media_abs = media_path.as_deref().map(to_abs);
+        let thumb_abs = thumb_path.as_deref().map(to_abs);
         (media_abs, thumb_abs)
     }
 
@@ -261,18 +262,54 @@ impl ClipboardDb {
         Ok(map)
     }
 
-    pub fn get_records(&self, limit: i32, trashed: bool) -> SqlResult<Vec<ClipboardRecord>> {
+    pub fn get_records(
+        &self,
+        limit: i32,
+        offset: i32,
+        trashed: bool,
+        content_type: Option<&str>,
+        favorites_only: bool,
+        tag_name: Option<&str>,
+    ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.conn.lock();
-        let sql = if trashed {
-            format!("SELECT {} FROM records WHERE is_trashed = 1 ORDER BY updated_at DESC LIMIT ?", RECORD_COLS)
-        } else {
-            format!("SELECT {} FROM records WHERE is_trashed = 0 ORDER BY is_pinned DESC, updated_at DESC LIMIT ?", RECORD_COLS)
-        };
+        let mut sql = format!(
+            "SELECT {} FROM records WHERE is_trashed = ?",
+            RECORD_COLS
+        );
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(if trashed { 1i32 } else { 0i32 })];
 
+        if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
+            sql.push_str(" AND content_type = ?");
+            params.push(Box::new(ct.to_string()));
+        }
+        if favorites_only {
+            sql.push_str(" AND is_favorite = 1");
+        }
+        if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
+            sql.push_str(
+                " AND id IN (
+                    SELECT rt.record_id FROM record_tags rt
+                    INNER JOIN tags t ON t.id = rt.tag_id
+                    WHERE t.name = ?
+                )",
+            );
+            params.push(Box::new(tag.to_string()));
+        }
+
+        if trashed {
+            sql.push_str(" ORDER BY updated_at DESC LIMIT ? OFFSET ?");
+        } else {
+            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC LIMIT ? OFFSET ?");
+        }
+        params.push(Box::new(limit.max(1)));
+        params.push(Box::new(offset.max(0)));
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
         let mut stmt = conn.prepare(&sql)?;
 
         let mut records: Vec<ClipboardRecord> = stmt
-            .query_map([limit], |row| self.map_record_row(row))?
+            .query_map(param_refs.as_slice(), |row| self.map_record_row(row))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -418,19 +455,27 @@ impl ClipboardDb {
         Ok(id)
     }
 
-    pub fn search_records(&self, query: &str) -> SqlResult<Vec<ClipboardRecord>> {
+    pub fn search_records(
+        &self,
+        query: &str,
+        limit: i32,
+        offset: i32,
+    ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.conn.lock();
         let search = format!("%{}%", query);
         let mut stmt = conn.prepare(&format!(
             "SELECT {} FROM records
              WHERE is_trashed = 0 AND (content LIKE ? OR source_app LIKE ?)
              ORDER BY is_pinned DESC, updated_at DESC
-             LIMIT 200",
+             LIMIT ? OFFSET ?",
             RECORD_COLS
         ))?;
 
         let mut records: Vec<ClipboardRecord> = stmt
-            .query_map([&search, &search], |row| self.map_record_row(row))?
+            .query_map(
+                params![search, search, limit.max(1), offset.max(0)],
+                |row| self.map_record_row(row),
+            )?
             .filter_map(|r| r.ok())
             .collect();
 

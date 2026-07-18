@@ -78,43 +78,10 @@ impl ClipboardMonitor {
             while running.load(Ordering::SeqCst) {
                 match Clipboard::new() {
                     Ok(mut clipboard) => {
-                        // --- Text (+ optional HTML) check ---
-                        let text_changed = if let Some(captured) = read_clipboard_text(&mut clipboard)
-                        {
-                            let fp = captured.fingerprint();
-                            let should_notify = {
-                                let mut last = last_text_fp.lock();
-                                match &*last {
-                                    Some(prev) if prev == &fp => false,
-                                    _ => {
-                                        if !captured.text.trim().is_empty() {
-                                            *last = Some(fp);
-                                            true
-                                        } else {
-                                            *last = Some(fp);
-                                            false
-                                        }
-                                    }
-                                }
-                            };
-                            if should_notify {
-                                debug!(
-                                    "Clipboard changed (text): {} chars, html={}",
-                                    captured.text.len(),
-                                    captured.html.is_some()
-                                );
-                                on_change(ClipboardEvent::Text(captured));
-                                true
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        };
-
-                        // --- Image check (only if text didn't change) ---
-                        if !text_changed {
-                            if let Ok(img) = clipboard.get_image() {
+                        // Prefer image: Windows often puts CF_UNICODETEXT/HTML alongside
+                        // bitmaps (screenshots, Word, browsers). Text-first would skip images.
+                        let image_on_clipboard = match clipboard.get_image() {
+                            Ok(img) => {
                                 let raw = img.bytes.to_vec();
                                 let hash = {
                                     use sha2::{Digest, Sha256};
@@ -143,6 +110,42 @@ impl ClipboardMonitor {
                                         height: img.height as u32,
                                         hash,
                                     }));
+                                }
+                                // Sync text fingerprint so accompanying text formats
+                                // don't fire as a separate "new text" on the next poll.
+                                if let Some(captured) = read_clipboard_text(&mut clipboard) {
+                                    *last_text_fp.lock() = Some(captured.fingerprint());
+                                }
+                                true
+                            }
+                            Err(_) => false,
+                        };
+
+                        if !image_on_clipboard {
+                            if let Some(captured) = read_clipboard_text(&mut clipboard) {
+                                let fp = captured.fingerprint();
+                                let should_notify = {
+                                    let mut last = last_text_fp.lock();
+                                    match &*last {
+                                        Some(prev) if prev == &fp => false,
+                                        _ => {
+                                            if !captured.text.trim().is_empty() {
+                                                *last = Some(fp);
+                                                true
+                                            } else {
+                                                *last = Some(fp);
+                                                false
+                                            }
+                                        }
+                                    }
+                                };
+                                if should_notify {
+                                    debug!(
+                                        "Clipboard changed (text): {} chars, html={}",
+                                        captured.text.len(),
+                                        captured.html.is_some()
+                                    );
+                                    on_change(ClipboardEvent::Text(captured));
                                 }
                             }
                         }

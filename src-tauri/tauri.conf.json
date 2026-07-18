@@ -28,7 +28,9 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$LOCALAPPDATA/ClipVault/media/**"]
+        "scope": [
+          "$LOCALDATA/ClipVault/media/**/*"
+        ]
       }
     }
   },

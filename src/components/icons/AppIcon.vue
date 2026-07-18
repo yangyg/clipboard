@@ -37,6 +37,7 @@ import {
   PanelTop,
   AppWindow,
   Circle,
+  Pencil,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -75,6 +76,7 @@ const ICONS = {
   panel: PanelTop,
   window: AppWindow,
   circle: Circle,
+  edit: Pencil,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;

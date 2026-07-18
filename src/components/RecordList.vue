@@ -1,13 +1,13 @@
 <template>
   <div class="record-list-wrapper">
-    <!-- Loading -->
-    <div v-if="clipboardStore.isLoading" class="loading-state">
+    <!-- Loading (initial only) -->
+    <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state">
       <div class="loading-spinner"></div>
       <span>加载中…</span>
     </div>
 
     <!-- Empty -->
-    <div v-else-if="clipboardStore.filteredRecords.length === 0" class="empty-state">
+    <div v-else-if="clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading" class="empty-state">
       <div class="empty-icon"><AppIcon :name="emptyState.icon" :size="36" :stroke-width="1.5" /></div>
       <div class="empty-text">{{ emptyState.title }}</div>
       <div v-if="emptyState.hint" class="empty-hint">
@@ -20,7 +20,7 @@
     </div>
 
     <!-- Record List -->
-    <div v-else class="record-list" ref="listRef">
+    <div v-else class="record-list" ref="listRef" @scroll="onListScroll">
       <template v-for="item in visibleItems" :key="item.type === 'label' ? 'pinned-label' : item.record!.id">
         <div v-if="item.type === 'label'" class="section-label"><AppIcon name="pin" :size="11" /> 置顶</div>
         <div
@@ -77,9 +77,10 @@
         </div>
       </template>
 
-      <!-- Footer -->
-      <div class="list-footer">
-        {{ clipboardStore.filteredRecords.length }} 项内容
+      <!-- Footer: load-more status only -->
+      <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
+        <span v-if="clipboardStore.isLoadingMore">加载更多…</span>
+        <span v-else>继续滚动加载更多</span>
       </div>
     </div>
 
@@ -143,6 +144,31 @@ import { recordThumbSrc } from "../utils/mediaUrl";
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const listRef = ref<HTMLElement | null>(null);
+
+function onListScroll() {
+  const el = listRef.value;
+  if (!el) return;
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+    clipboardStore.loadMore();
+  }
+}
+
+/** If list shorter than viewport, keep fetching until filled or exhausted. */
+async function fillViewportIfNeeded() {
+  await nextTick();
+  const el = listRef.value;
+  if (!el || !clipboardStore.hasMore || clipboardStore.isLoadingMore) return;
+  if (el.scrollHeight <= el.clientHeight + 40) {
+    await clipboardStore.loadMore();
+  }
+}
+
+watch(
+  () => [clipboardStore.records.length, clipboardStore.hasMore, clipboardStore.isLoading] as const,
+  () => {
+    if (!clipboardStore.isLoading) void fillViewportIfNeeded();
+  }
+);
 
 const TYPE_LABELS: Record<ContentType, string> = {
   text: '文本',

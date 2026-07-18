@@ -1,15 +1,19 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import type { ClipboardRecord, SearchResult, StatsData, Tag } from "../types";
+import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from "../types";
 
 export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
+
+const PAGE_SIZE = 60;
 
 export const useClipboardStore = defineStore("clipboard", () => {
   // === State ===
   const records = ref<ClipboardRecord[]>([]);
   const selectedId = ref<number | null>(null);
   const isLoading = ref(false);
+  const isLoadingMore = ref(false);
+  const hasMore = ref(true);
   const isSearching = ref(false);
   const searchQuery = ref("");
   const activeFilter = ref<FilterTab>("all");
@@ -22,16 +26,17 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const stats = ref<StatsData | null>(null);
   const tags = ref<Tag[]>([]);
   let searchSeq = 0;
+  let loadSeq = 0;
 
   // === Getters ===
   const selectedRecord = computed(() =>
     records.value.find((r) => r.id === selectedId.value) ?? null
   );
 
+  /** Server already applies category/tag/trash filters; search may still need client filter. */
   const filteredRecords = computed(() => {
     let list = records.value;
-    // In trash mode, show all trashed records without additional filtering
-    if (trashFilter.value) return list;
+    if (trashFilter.value || !searchQuery.value) return list;
     if (activeTag.value) {
       list = list.filter((r) => r.tags.includes(activeTag.value!));
     } else if (activeFilter.value === "favorites") {
@@ -43,35 +48,93 @@ export const useClipboardStore = defineStore("clipboard", () => {
   });
 
   const filterCounts = computed(() => {
-    let text = 0, code = 0, link = 0, image = 0, file = 0, favorites = 0;
-    for (const r of records.value) {
-      switch (r.content_type) {
-        case "text": text++; break;
-        case "code": code++; break;
-        case "link": link++; break;
-        case "image": image++; break;
-        case "file": file++; break;
-      }
-      if (r.is_favorite) favorites++;
-    }
+    const dist = (stats.value?.type_distribution ?? {}) as Record<string, number>;
+    const n = (key: string) => Number(dist[key] ?? 0);
     return {
-      all: records.value.length,
-      text, code, link, image, file, favorites,
+      all: stats.value?.total_records ?? 0,
+      text: n("text"),
+      code: n("code"),
+      link: n("link"),
+      image: n("image"),
+      file: n("file"),
+      favorites: stats.value?.favorites_count ?? 0,
     };
   });
 
+  function listQueryArgs(offset: number) {
+    const favoritesOnly = !trashFilter.value && activeFilter.value === "favorites";
+    const contentType =
+      !trashFilter.value &&
+      !favoritesOnly &&
+      activeFilter.value !== "all" &&
+      !activeTag.value
+        ? activeFilter.value
+        : null;
+    return {
+      limit: PAGE_SIZE,
+      offset,
+      trashed: trashFilter.value,
+      contentType,
+      favoritesOnly,
+      tag: !trashFilter.value ? activeTag.value : null,
+    };
+  }
+
+  function appendRecords(batch: ClipboardRecord[]) {
+    const seen = new Set(records.value.map((r) => r.id));
+    for (const r of batch) {
+      if (!seen.has(r.id)) {
+        records.value.push(r);
+        seen.add(r.id);
+      }
+    }
+  }
+
   // === Actions ===
   async function loadRecords() {
+    const seq = ++loadSeq;
     isLoading.value = true;
+    isLoadingMore.value = false;
+    hasMore.value = true;
     try {
-      const result = await invoke<ClipboardRecord[]>("get_records", { limit: 500, trashed: trashFilter.value });
-      records.value = result;
+      const page = await invoke<RecordsPage>("get_records", listQueryArgs(0));
+      if (seq !== loadSeq) return;
+      records.value = page.records;
+      hasMore.value = page.has_more;
       await loadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Failed to load records:", e);
     } finally {
-      isLoading.value = false;
+      if (seq === loadSeq) isLoading.value = false;
+    }
+  }
+
+  async function loadMore() {
+    if (!hasMore.value || isLoading.value || isLoadingMore.value) return;
+    const seq = loadSeq;
+    isLoadingMore.value = true;
+    try {
+      const offset = records.value.length;
+      if (searchQuery.value.trim()) {
+        const result = await invoke<SearchResult>("search_records", {
+          query: searchQuery.value,
+          limit: PAGE_SIZE,
+          offset,
+        });
+        if (seq !== loadSeq || trashFilter.value) return;
+        appendRecords(result.records);
+        hasMore.value = result.has_more;
+      } else {
+        const page = await invoke<RecordsPage>("get_records", listQueryArgs(offset));
+        if (seq !== loadSeq) return;
+        appendRecords(page.records);
+        hasMore.value = page.has_more;
+      }
+    } catch (e) {
+      console.error("Failed to load more records:", e);
+    } finally {
+      if (seq === loadSeq) isLoadingMore.value = false;
     }
   }
 
@@ -83,22 +146,32 @@ export const useClipboardStore = defineStore("clipboard", () => {
       return;
     }
     const capturedSeq = ++searchSeq;
+    ++loadSeq;
+    const seq = loadSeq;
     isSearching.value = true;
+    isLoading.value = true;
     searchQuery.value = query;
+    hasMore.value = true;
     try {
-      const result = await invoke<SearchResult>("search_records", { query });
+      const result = await invoke<SearchResult>("search_records", {
+        query,
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
       // Stale guard: discard response if a newer search was dispatched,
       // or if user has navigated to trash while search was in-flight
-      if (capturedSeq !== searchSeq || trashFilter.value) {
-        searchQuery.value = "";
-        isSearching.value = false;
+      if (capturedSeq !== searchSeq || trashFilter.value || seq !== loadSeq) {
         return;
       }
       records.value = result.records;
+      hasMore.value = result.has_more;
     } catch (e) {
       console.error("Search failed:", e);
     } finally {
-      isSearching.value = false;
+      if (capturedSeq === searchSeq) {
+        isSearching.value = false;
+        isLoading.value = false;
+      }
     }
   }
 
@@ -117,6 +190,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
     activeFilter.value = filter;
     activeTag.value = null;
     selectedId.value = null;
+    if (!searchQuery.value) {
+      void loadRecords();
+    }
   }
 
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
@@ -290,6 +366,17 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   // Called by event listener when clipboard changes
   function onNewRecord(record: ClipboardRecord) {
+    loadStats().catch(() => {}); // fire-and-forget in hot path
+    if (trashFilter.value || searchQuery.value) return;
+    if (activeTag.value && !record.tags.includes(activeTag.value)) return;
+    if (activeFilter.value === "favorites" && !record.is_favorite) return;
+    if (
+      activeFilter.value !== "all" &&
+      activeFilter.value !== "favorites" &&
+      record.content_type !== activeFilter.value
+    ) {
+      return;
+    }
     // Remove existing record with same id (backend dedup returns same id on hash match)
     const existing = records.value.findIndex((r) => r.id === record.id);
     if (existing !== -1) {
@@ -298,7 +385,6 @@ export const useClipboardStore = defineStore("clipboard", () => {
     // Insert at top, after pinned items
     const pinCount = records.value.filter((r) => r.is_pinned).length;
     records.value.splice(pinCount, 0, record);
-    loadStats().catch(() => {}); // fire-and-forget in hot path
   }
 
   async function loadStats() {
@@ -336,19 +422,47 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   async function deleteTag(id: number) {
     try {
+      const existing = tags.value.find((t) => t.id === id);
       await invoke("delete_tag", { id });
+      if (existing) {
+        for (const record of records.value) {
+          if (record.tags.includes(existing.name)) {
+            record.tags = record.tags.filter((t) => t !== existing.name);
+          }
+        }
+        if (activeTag.value === existing.name) {
+          activeTag.value = null;
+        }
+      }
       await loadTags();
     } catch (e) {
       console.error("Failed to delete tag:", e);
+      throw e;
     }
   }
 
   async function updateTag(id: number, name: string, color: string) {
     try {
+      const existing = tags.value.find((t) => t.id === id);
+      const oldName = existing?.name;
       await invoke("update_tag", { id, name, color });
+      if (oldName && oldName !== name) {
+        for (const record of records.value) {
+          const idx = record.tags.indexOf(oldName);
+          if (idx !== -1) {
+            const next = [...record.tags];
+            next[idx] = name;
+            record.tags = next;
+          }
+        }
+        if (activeTag.value === oldName) {
+          activeTag.value = name;
+        }
+      }
       await loadTags();
     } catch (e) {
       console.error("Failed to update tag:", e);
+      throw e;
     }
   }
 
@@ -384,6 +498,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
       activeFilter.value = "all";
     }
     selectedId.value = null;
+    if (!searchQuery.value) {
+      void loadRecords();
+    }
   }
 
   return {
@@ -391,6 +508,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     records,
     selectedId,
     isLoading,
+    isLoadingMore,
+    hasMore,
     isSearching,
     searchQuery,
     activeFilter,
@@ -408,6 +527,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     filterCounts,
     // Actions
     loadRecords,
+    loadMore,
     search,
     selectRecord,
     clearSelection,

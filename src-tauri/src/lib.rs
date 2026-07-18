@@ -568,10 +568,10 @@ pub fn run() {
                 app.dialog()
                     .message(format!(
                         "全局快捷键 {TOGGLE_SHORTCUT} 已被其他程序占用，无法注册。\n\n\
-                         请关闭占用该快捷键的应用后重新启动 ClipVault。\
-                         若本机已有另一个 ClipVault 在运行，请先退出那个实例。"
+                         请关闭占用该快捷键的应用后重新启动剪贴板管理。\
+                         若本机已有另一个剪贴板管理在运行，请先退出那个实例。"
                     ))
-                    .title("ClipVault")
+                    .title("剪贴板管理")
                     .kind(MessageDialogKind::Warning)
                     .show(|_| {});
             }
@@ -593,6 +593,7 @@ pub fn run() {
 
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("剪贴板管理")
                 .menu(&menu)
                 .on_menu_event(move |app, event| {
                     match event.id().as_ref() {

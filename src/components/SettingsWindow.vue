@@ -13,7 +13,7 @@
       <div class="settings-main">
         <!-- Nav -->
         <nav class="settings-nav">
-          <div class="settings-nav-title"><BrandMark :size="18" /> ClipVault</div>
+          <div class="settings-nav-title"><BrandMark :size="18" /> 剪贴板管理</div>
           <div
             v-for="section in SECTIONS"
             :key="section.key"
@@ -385,7 +385,7 @@
             <div class="settings-section">
               <div class="about-content">
                 <div class="about-logo"><BrandMark :size="48" /></div>
-                <div class="about-name">ClipVault</div>
+                <div class="about-name">剪贴板管理</div>
                 <div class="about-version">版本 0.1.0</div>
                 <div class="about-desc">Windows 剪贴板管理工具 · Tauri + Vue 3 + Rust</div>
               </div>

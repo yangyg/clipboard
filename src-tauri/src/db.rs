@@ -60,7 +60,7 @@ pub struct ImageMeta {
 
 const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
-               created_at, updated_at, media_path, thumb_path, width, height";
+               created_at, updated_at, media_path, thumb_path, width, height, content_html";
 
 pub struct ClipboardDb {
     conn: Mutex<Connection>,
@@ -93,7 +93,8 @@ impl ClipboardDb {
                 media_path TEXT,
                 thumb_path TEXT,
                 width INTEGER,
-                height INTEGER
+                height INTEGER,
+                content_html TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
@@ -110,6 +111,7 @@ impl ClipboardDb {
         conn.execute_batch("ALTER TABLE records ADD COLUMN thumb_path TEXT;").ok();
         conn.execute_batch("ALTER TABLE records ADD COLUMN width INTEGER;").ok();
         conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
+        conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
 
         conn.execute_batch(
             r#"
@@ -188,6 +190,7 @@ impl ClipboardDb {
             thumb_path,
             width: row.get(16)?,
             height: row.get(17)?,
+            content_html: row.get(18)?,
             media_abs,
             thumb_abs,
         })
@@ -325,6 +328,7 @@ impl ClipboardDb {
         source_app: &str,
         source_window: &str,
         image: Option<&ImageMeta>,
+        content_html: Option<&str>,
     ) -> SqlResult<i64> {
         let conn = self.conn.lock();
 
@@ -363,8 +367,8 @@ impl ClipboardDb {
         };
 
         conn.execute(
-            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 content,
                 content_type.as_str(),
@@ -378,7 +382,8 @@ impl ClipboardDb {
                 media_path,
                 thumb_path,
                 width,
-                height
+                height,
+                content_html,
             ],
         )?;
 
@@ -710,8 +715,8 @@ impl ClipboardDb {
                 "INSERT INTO records (
                     content, content_type, source_app, source_window, hash, copy_count,
                     is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at,
-                    media_path, thumb_path, width, height
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    media_path, thumb_path, width, height, content_html
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
                     record.content_type,
@@ -730,6 +735,7 @@ impl ClipboardDb {
                     record.thumb_path,
                     record.width,
                     record.height,
+                    record.content_html,
                 ],
             )?;
             imported += 1;

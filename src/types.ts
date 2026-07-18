@@ -22,6 +22,8 @@ export interface ClipboardRecord {
   created_at: string;
   updated_at: string;
   tags: string[];
+  /** HTML fragment when rich format was captured */
+  content_html?: string | null;
   /** Relative path under app data dir (image records) */
   media_path?: string | null;
   thumb_path?: string | null;

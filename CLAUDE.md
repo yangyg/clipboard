@@ -62,7 +62,8 @@ App.vue                          # Root: events, show/hide, ToastHost + ConfirmD
 - **Floating mode** (default): borderless always-on-top window that auto-hides on focus loss. Window mode: standard decorated window.
 - **Theming**: CSS custom properties on `:root` (dark default), class-based overrides (`.light-theme`, `.oled-theme`). Applied via `document.body.classList`.
 - **Sensitive content detection**: regex patterns for passwords, verification codes, API keys (`sk-...`), bank card numbers. Marked records auto-expire after configurable seconds.
-- **Clipboard paste**: by `content_type` — text uses `set_text`, image loads PNG from disk and uses `set_image`, then simulates Ctrl+V. No IPC to foreground app.
+- **Clipboard paste**: by `content_type` — text uses `set_html`+plain alt when `content_html` exists (原格式) or `set_text` only (纯文本); image loads PNG from disk and uses `set_image`; then simulates Ctrl+V. No IPC to foreground app.
+- **Rich text**: capture reads CF_HTML via arboard `get().html()` into `content_html`; list/search still use plain `content`.
 - **Image storage**: SQLite does not store image blobs; binary lives in `media/` with JPEG thumbs for the list.
 - **Search**: SQL `LIKE` on content and source_app. Debounced 150ms frontend side.
 - **Deduplication**: by SHA-256 content hash. Same hash = increment copy count + update timestamp, no new record.

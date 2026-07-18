@@ -54,6 +54,9 @@ pub struct ClipboardRecord {
     #[serde(rename = "updated_at")]
     pub updated_at: String,
     pub tags: Vec<String>,
+    /// HTML clipboard fragment when format was captured (Word, browser, etc.)
+    #[serde(rename = "content_html")]
+    pub content_html: Option<String>,
     /// Relative path under app data dir, e.g. media/{hash}.png
     #[serde(rename = "media_path")]
     pub media_path: Option<String>,
@@ -213,7 +216,7 @@ async fn paste_record(
         } else {
             match mode.as_deref() {
                 Some("plain") => clipboard::paste_plain_text(&r.content),
-                _ => clipboard::paste_text(&r.content),
+                _ => clipboard::paste_text(&r.content, r.content_html.as_deref()),
             }
         }
     }
@@ -648,17 +651,19 @@ pub fn run() {
                     let (source_window, source_app) = clipboard::get_foreground_window_info();
 
                     match event {
-                        ClipboardEvent::Text(content) => {
+                        ClipboardEvent::Text(captured) => {
                             let settings = db.get_settings().unwrap_or_default();
 
-                            let content_type = detect_content_type(&content);
-                            let is_sensitive = settings.enable_sensitive_detection && detect_sensitive(&content);
-                            let hash = sha256_hash(&content);
+                            let content_type = detect_content_type(&captured.text);
+                            let is_sensitive =
+                                settings.enable_sensitive_detection && detect_sensitive(&captured.text);
+                            // Include HTML in hash so same plain text with different format is distinct
+                            let hash = sha256_hash(&captured.fingerprint());
 
                             db.cleanup_expired().ok();
                             db.cleanup_retention(settings.retention_days).ok();
                             match db.insert_record(
-                                &content,
+                                &captured.text,
                                 &content_type,
                                 &hash,
                                 is_sensitive,
@@ -667,9 +672,15 @@ pub fn run() {
                                 &source_app,
                                 &source_window,
                                 None,
+                                captured.html.as_deref(),
                             ) {
                                 Ok(id) => {
-                                    info!("New clipboard record: id={}, type={}", id, content_type);
+                                    info!(
+                                        "New clipboard record: id={}, type={}, formatted={}",
+                                        id,
+                                        content_type,
+                                        captured.html.is_some()
+                                    );
                                     if let Ok(record) = db.get_record(id) {
                                         if let Some(r) = record {
                                             app_handle_clone.emit("clipboard-changed", r).ok();
@@ -716,6 +727,7 @@ pub fn run() {
                                         &source_app,
                                         &source_window,
                                         Some(&image_meta),
+                                        None,
                                     ) {
                                         Ok(id) => {
                                             info!("New clipboard record: id={}, type=image", id);

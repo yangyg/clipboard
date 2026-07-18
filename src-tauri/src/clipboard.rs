@@ -14,14 +14,31 @@ pub struct CapturedImage {
 }
 
 #[derive(Debug, Clone)]
+pub struct CapturedText {
+    pub text: String,
+    /// CF_HTML / HTML clipboard fragment when present (Word, browser, etc.)
+    pub html: Option<String>,
+}
+
+impl CapturedText {
+    /// Fingerprint for change detection (plain + html).
+    pub fn fingerprint(&self) -> String {
+        match &self.html {
+            Some(h) => format!("{}\u{1e}{h}", self.text),
+            None => self.text.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum ClipboardEvent {
-    Text(String),
+    Text(CapturedText),
     Image(CapturedImage),
 }
 
 pub struct ClipboardMonitor {
     running: Arc<AtomicBool>,
-    last_text: Arc<parking_lot::Mutex<Option<String>>>,
+    last_text_fp: Arc<parking_lot::Mutex<Option<String>>>,
     last_image_hash: Arc<parking_lot::Mutex<Option<String>>>,
 }
 
@@ -29,7 +46,7 @@ impl ClipboardMonitor {
     pub fn new() -> Self {
         Self {
             running: Arc::new(AtomicBool::new(false)),
-            last_text: Arc::new(parking_lot::Mutex::new(None)),
+            last_text_fp: Arc::new(parking_lot::Mutex::new(None)),
             last_image_hash: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
@@ -45,13 +62,13 @@ impl ClipboardMonitor {
 
         self.running.store(true, Ordering::SeqCst);
         let running = self.running.clone();
-        let last_text = self.last_text.clone();
+        let last_text_fp = self.last_text_fp.clone();
         let last_image_hash = self.last_image_hash.clone();
 
         // Get initial clipboard content
         if let Ok(mut clipboard) = Clipboard::new() {
-            if let Ok(text) = clipboard.get_text() {
-                *last_text.lock() = Some(text);
+            if let Some(captured) = read_clipboard_text(&mut clipboard) {
+                *last_text_fp.lock() = Some(captured.fingerprint());
             }
         }
 
@@ -61,34 +78,38 @@ impl ClipboardMonitor {
             while running.load(Ordering::SeqCst) {
                 match Clipboard::new() {
                     Ok(mut clipboard) => {
-                        // --- Text check ---
-                        let text_changed = match clipboard.get_text() {
-                            Ok(text) => {
-                                let text_clone = text.clone();
-                                let should_notify = {
-                                    let mut last = last_text.lock();
-                                    match &*last {
-                                        Some(prev) if prev == &text => false,
-                                        _ => {
-                                            if !text.trim().is_empty() {
-                                                *last = Some(text);
-                                                true
-                                            } else {
-                                                *last = Some(text);
-                                                false
-                                            }
+                        // --- Text (+ optional HTML) check ---
+                        let text_changed = if let Some(captured) = read_clipboard_text(&mut clipboard)
+                        {
+                            let fp = captured.fingerprint();
+                            let should_notify = {
+                                let mut last = last_text_fp.lock();
+                                match &*last {
+                                    Some(prev) if prev == &fp => false,
+                                    _ => {
+                                        if !captured.text.trim().is_empty() {
+                                            *last = Some(fp);
+                                            true
+                                        } else {
+                                            *last = Some(fp);
+                                            false
                                         }
                                     }
-                                };
-                                if should_notify {
-                                    debug!("Clipboard changed (text): {} chars", text_clone.len());
-                                    on_change(ClipboardEvent::Text(text_clone));
-                                    true
-                                } else {
-                                    false
                                 }
+                            };
+                            if should_notify {
+                                debug!(
+                                    "Clipboard changed (text): {} chars, html={}",
+                                    captured.text.len(),
+                                    captured.html.is_some()
+                                );
+                                on_change(ClipboardEvent::Text(captured));
+                                true
+                            } else {
+                                false
                             }
-                            Err(_) => false,
+                        } else {
+                            false
                         };
 
                         // --- Image check (only if text didn't change) ---
@@ -96,7 +117,7 @@ impl ClipboardMonitor {
                             if let Ok(img) = clipboard.get_image() {
                                 let raw = img.bytes.to_vec();
                                 let hash = {
-                                    use sha2::{Sha256, Digest};
+                                    use sha2::{Digest, Sha256};
                                     let mut hasher = Sha256::new();
                                     hasher.update(&raw);
                                     hex::encode(hasher.finalize())
@@ -143,6 +164,17 @@ impl ClipboardMonitor {
     }
 }
 
+fn read_clipboard_text(clipboard: &mut Clipboard) -> Option<CapturedText> {
+    let text = clipboard.get_text().ok()?;
+    let html = clipboard
+        .get()
+        .html()
+        .ok()
+        .map(|h| h.trim().to_string())
+        .filter(|h| !h.is_empty());
+    Some(CapturedText { text, html })
+}
+
 /// Simulate Ctrl+V after clipboard content has been set.
 #[cfg(windows)]
 fn simulate_paste() {
@@ -160,9 +192,9 @@ fn simulate_paste() {
     }
 }
 
-/// Paste text to the active window via clipboard
+/// Paste plain text only.
 #[cfg(windows)]
-pub fn paste_text(text: &str) {
+pub fn paste_plain_text(text: &str) {
     if let Ok(mut clipboard) = Clipboard::new() {
         if let Err(e) = clipboard.set_text(text) {
             warn!("Failed to set clipboard for paste: {}", e);
@@ -173,12 +205,36 @@ pub fn paste_text(text: &str) {
 }
 
 #[cfg(not(windows))]
-pub fn paste_text(_text: &str) {
+pub fn paste_plain_text(_text: &str) {
     warn!("Paste simulation not available on this platform");
 }
 
-pub fn paste_plain_text(text: &str) {
-    paste_text(text);
+/// Paste with HTML format when available (keeps bold/color/etc. in Word, browsers…).
+#[cfg(windows)]
+pub fn paste_text(text: &str, html: Option<&str>) {
+    if let Ok(mut clipboard) = Clipboard::new() {
+        let ok = if let Some(h) = html.filter(|s| !s.trim().is_empty()) {
+            match clipboard.set_html(h, Some(text)) {
+                Ok(()) => true,
+                Err(e) => {
+                    warn!("Failed to set HTML clipboard, falling back to text: {}", e);
+                    clipboard.set_text(text).is_ok()
+                }
+            }
+        } else {
+            clipboard.set_text(text).is_ok()
+        };
+        if !ok {
+            warn!("Failed to set clipboard for paste");
+            return;
+        }
+        simulate_paste();
+    }
+}
+
+#[cfg(not(windows))]
+pub fn paste_text(_text: &str, _html: Option<&str>) {
+    warn!("Paste simulation not available on this platform");
 }
 
 /// Paste an RGBA image to the active window via clipboard

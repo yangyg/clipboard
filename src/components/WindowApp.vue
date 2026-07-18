@@ -5,7 +5,7 @@
       <div class="titlebar-left">
         <div class="titlebar-logo">
           <BrandMark :size="22" />
-          <span>ClipVault</span>
+          <span>剪贴板管理</span>
         </div>
         <span class="titlebar-version">v0.1.0</span>
       </div>

@@ -133,7 +133,7 @@
     <div class="preview-actions" v-if="record && !record.is_trashed">
       <button class="action-btn" @click="paste">
         <span class="action-icon"><AppIcon name="paste" :size="15" /></span>
-        <span class="action-label">粘贴</span>
+        <span class="action-label">复制</span>
       </button>
       <button class="action-btn" @click="pastePlain">
         <span class="action-icon"><AppIcon name="type" :size="15" /></span>

@@ -28,7 +28,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Data Flow
 1. Rust `ClipboardMonitor` polls the OS clipboard every 500ms
-2. **Prefer image:** `get_image()` first. Windows screenshots / browser copies often also set CF_TEXT/HTML; text-first would skip images. When an image is captured, also sync the text fingerprint so accompanying text is not treated as a new record on the next poll.
+2. **Image vs text:** Read both. Prefer **text** only when it looks like a real share (≥16 chars and not URL-only). Browser “Copy image” often sets the image URL as text — that stays on the **image** path. Screenshots with empty/stub text → image. Douyin/WeChat long captions (+ embedded link) → text.
 3. On change: hash content; text (+ optional `content_html`) → SQLite; image → write `media/` + thumb, DB stores metadata + label like `[image WxH]`
 4. Emit `clipboard-changed` to Vue; store prepends / updates the list
 5. Paste by type: text → `set_html`/`set_text` + Ctrl+V; image → load PNG from disk → `set_image` + Ctrl+V

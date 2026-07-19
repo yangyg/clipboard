@@ -33,10 +33,10 @@
 
     <!-- Content Preview -->
     <div class="preview-content" ref="contentRef">
-      <!-- Text -->
+      <!-- Text: HTML preview XOR plain — never both (Douyin shares duplicate otherwise). -->
       <template v-if="record.content_type === 'text'">
         <iframe
-          v-if="record.content_html"
+          v-if="showHtmlPreview"
           class="html-preview"
           sandbox=""
           :srcdoc="htmlPreviewDoc"
@@ -208,6 +208,31 @@ html,body{margin:0;padding:0;background:transparent;}
 body{padding:4px;font:13px/1.5 system-ui,sans-serif;color:CanvasText;word-break:break-word;}
 img{max-width:100%;height:auto;}
 </style></head><body>${html}</body></html>`;
+});
+/**
+ * Show rich HTML only when it adds real formatting (Word etc.).
+ * Share links (Douyin) usually wrap the same caption in <a>/<p>/<span> — use plain text.
+ */
+const showHtmlPreview = computed(() => {
+  const html = record.value?.content_html;
+  if (!html) return false;
+  const stripped = html
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!stripped) return false;
+  // Require formatting beyond link/paragraph wrappers
+  if (!/<(b|i|strong|em|u|ul|ol|li|h[1-6]|table|img|font)\b/i.test(html)
+    && !/<span\b[^>]*\bstyle\s*=/i.test(html)) {
+    return false;
+  }
+  const plain = (record.value?.content || "").replace(/\s+/g, " ").trim();
+  // Same body as plain text → no benefit to a second HTML view
+  if (plain && (stripped === plain || plain.includes(stripped) || stripped.includes(plain))) {
+    return false;
+  }
+  return true;
 });
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"assign" | "create">("assign");

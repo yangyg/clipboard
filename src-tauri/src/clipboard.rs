@@ -78,17 +78,35 @@ impl ClipboardMonitor {
             while running.load(Ordering::SeqCst) {
                 match Clipboard::new() {
                     Ok(mut clipboard) => {
-                        // Prefer image: Windows often puts CF_UNICODETEXT/HTML alongside
-                        // bitmaps (screenshots, Word, browsers). Text-first would skip images.
-                        let image_on_clipboard = match clipboard.get_image() {
-                            Ok(img) => {
-                                let raw = img.bytes.to_vec();
-                                let hash = {
-                                    use sha2::{Digest, Sha256};
-                                    let mut hasher = Sha256::new();
-                                    hasher.update(&raw);
-                                    hex::encode(hasher.finalize())
-                                };
+                        // Windows often puts BOTH a bitmap and text on the clipboard:
+                        // - Screenshots: image + empty/stub text → keep image
+                        // - Douyin/WeChat shares: thumb image + long share text → prefer text
+                        //   (image-only would swallow the share payload users care about)
+                        let image = clipboard.get_image().ok();
+                        let text = read_clipboard_text(&mut clipboard);
+
+                        let prefer_text = text
+                            .as_ref()
+                            .map(|t| is_meaningful_share_text(&t.text))
+                            .unwrap_or(false);
+
+                        if let Some(img) = image {
+                            let raw = img.bytes.to_vec();
+                            let hash = {
+                                use sha2::{Digest, Sha256};
+                                let mut hasher = Sha256::new();
+                                hasher.update(&raw);
+                                hex::encode(hasher.finalize())
+                            };
+
+                            if prefer_text {
+                                // Remember image so a later image-only poll doesn't re-fire it
+                                // after we already stored the accompanying share text.
+                                *last_image_hash.lock() = Some(hash);
+                                if let Some(captured) = text {
+                                    maybe_emit_text(&last_text_fp, captured, &on_change);
+                                }
+                            } else {
                                 let should_notify = {
                                     let mut last_hash = last_image_hash.lock();
                                     match &*last_hash {
@@ -111,43 +129,14 @@ impl ClipboardMonitor {
                                         hash,
                                     }));
                                 }
-                                // Sync text fingerprint so accompanying text formats
-                                // don't fire as a separate "new text" on the next poll.
-                                if let Some(captured) = read_clipboard_text(&mut clipboard) {
+                                // Sync text fp so stub/empty accompanying text doesn't
+                                // appear as a separate record on the next poll.
+                                if let Some(captured) = text {
                                     *last_text_fp.lock() = Some(captured.fingerprint());
                                 }
-                                true
                             }
-                            Err(_) => false,
-                        };
-
-                        if !image_on_clipboard {
-                            if let Some(captured) = read_clipboard_text(&mut clipboard) {
-                                let fp = captured.fingerprint();
-                                let should_notify = {
-                                    let mut last = last_text_fp.lock();
-                                    match &*last {
-                                        Some(prev) if prev == &fp => false,
-                                        _ => {
-                                            if !captured.text.trim().is_empty() {
-                                                *last = Some(fp);
-                                                true
-                                            } else {
-                                                *last = Some(fp);
-                                                false
-                                            }
-                                        }
-                                    }
-                                };
-                                if should_notify {
-                                    debug!(
-                                        "Clipboard changed (text): {} chars, html={}",
-                                        captured.text.len(),
-                                        captured.html.is_some()
-                                    );
-                                    on_change(ClipboardEvent::Text(captured));
-                                }
-                            }
+                        } else if let Some(captured) = text {
+                            maybe_emit_text(&last_text_fp, captured, &on_change);
                         }
                     }
                     Err(e) => {
@@ -176,6 +165,70 @@ fn read_clipboard_text(clipboard: &mut Clipboard) -> Option<CapturedText> {
         .map(|h| h.trim().to_string())
         .filter(|h| !h.is_empty());
     Some(CapturedText { text, html })
+}
+
+/// Prefer text over a co-existing bitmap only for real share/snippets.
+///
+/// Safe for image copies:
+/// - Screenshots: usually no / empty text → keep image
+/// - Browser "Copy image": text is often just the image URL → keep image
+/// - Douyin/WeChat shares: long caption (+ embedded link) → prefer text
+fn is_meaningful_share_text(text: &str) -> bool {
+    let t = text.trim();
+    if t.is_empty() {
+        return false;
+    }
+    // URL-only (or nearly) accompaniment → do not override the bitmap
+    if is_primarily_url(t) {
+        return false;
+    }
+    t.chars().count() >= 16
+}
+
+/// True when the payload is essentially one URL with negligible other text.
+fn is_primarily_url(t: &str) -> bool {
+    let lower = t.to_lowercase();
+    let start = ["https://", "http://", "ftp://"]
+        .iter()
+        .filter_map(|p| lower.find(p))
+        .min();
+    let Some(start) = start else {
+        return false;
+    };
+    let before = t[..start].trim();
+    let from_url = &t[start..];
+    let url_len = from_url
+        .find(|c: char| c.is_whitespace())
+        .unwrap_or(from_url.len());
+    let after = from_url[url_len..].trim();
+    // Allow tiny stubs around the URL (filename, punctuation), not a caption.
+    before.chars().count() <= 8 && after.chars().count() <= 8
+}
+
+fn maybe_emit_text(
+    last_text_fp: &parking_lot::Mutex<Option<String>>,
+    captured: CapturedText,
+    on_change: &impl Fn(ClipboardEvent),
+) {
+    let fp = captured.fingerprint();
+    let should_notify = {
+        let mut last = last_text_fp.lock();
+        match &*last {
+            Some(prev) if prev == &fp => false,
+            _ => {
+                *last = Some(fp);
+                !captured.text.trim().is_empty()
+            }
+        }
+    };
+    if should_notify {
+        debug!(
+            "Clipboard changed (text): {} chars, html={}",
+            captured.text.len(),
+            captured.html.is_some()
+        );
+        on_change(ClipboardEvent::Text(captured));
+    }
 }
 
 /// Simulate Ctrl+V after clipboard content has been set.

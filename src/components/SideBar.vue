@@ -68,9 +68,34 @@
 
     <!-- Bottom Actions -->
     <div class="sidebar-bottom">
-      <button type="button" class="nav-item" @click="$emit('openSettings')">
-        <span class="nav-icon"><AppIcon name="settings" :size="15" /></span>
-        <span class="nav-label">设置</span>
+      <button
+        type="button"
+        class="sidebar-icon-btn"
+        :class="{ 'sidebar-icon-btn-warning': clipboardStore.pauseCapture }"
+        :aria-pressed="clipboardStore.pauseCapture"
+        :aria-label="clipboardStore.pauseCapture ? '恢复捕获' : '暂停捕获'"
+        :title="clipboardStore.pauseCapture ? '恢复捕获' : '暂停捕获'"
+        @click="clipboardStore.togglePauseCapture()"
+      >
+        <AppIcon :name="clipboardStore.pauseCapture ? 'play' : 'pause'" :size="15" />
+      </button>
+      <button
+        type="button"
+        class="sidebar-icon-btn"
+        :aria-label="themeToggleLabel"
+        :title="themeToggleLabel"
+        @click="toggleTheme"
+      >
+        <AppIcon :name="themeToggleIcon" :size="15" />
+      </button>
+      <button
+        type="button"
+        class="sidebar-icon-btn"
+        aria-label="设置"
+        title="设置"
+        @click="$emit('openSettings')"
+      >
+        <AppIcon name="settings" :size="15" />
       </button>
     </div>
 
@@ -95,10 +120,22 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import { useSettingsStore } from "../stores/settings";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
+const settingsStore = useSettingsStore();
+
+/** Quick toggle: light ↔ dark; oled/system first click → light. */
+const offeringLight = computed(() => settingsStore.settings.theme !== "light");
+const themeToggleIcon = computed<AppIconName>(() => (offeringLight.value ? "sun" : "moon"));
+const themeToggleLabel = computed(() => (offeringLight.value ? "浅色模式" : "深色模式"));
+
+function toggleTheme() {
+  const next = settingsStore.settings.theme === "light" ? "dark" : "light";
+  settingsStore.updateSetting("theme", next);
+}
 
 const props = defineProps<{
   activeCategory?: string;
@@ -350,6 +387,40 @@ onUnmounted(() => {
   padding: 8px 10px 12px;
   border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  gap: 4px;
+}
+
+.sidebar-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-icon-btn-warning {
+  color: var(--warning);
+}
+
+.sidebar-icon-btn-warning:hover {
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 
 .context-menu {

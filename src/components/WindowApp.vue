@@ -15,7 +15,6 @@
       </div>
 
       <div class="titlebar-actions">
-        <CaptureStatus />
         <WindowControls />
       </div>
     </div>
@@ -92,7 +91,6 @@ import SideBar from "./SideBar.vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import TagDialog from "./TagDialog.vue";
-import CaptureStatus from "./CaptureStatus.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import BrandMark from "./icons/BrandMark.vue";
 import WindowControls from "./WindowControls.vue";
@@ -306,11 +304,6 @@ async function onEmptyTrash() {
   align-items: stretch;
   height: 100%;
   margin-right: -10px;
-}
-
-.titlebar-actions :deep(.capture-status) {
-  align-self: center;
-  margin-right: 4px;
 }
 
 .window-body {

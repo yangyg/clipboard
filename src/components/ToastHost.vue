@@ -26,11 +26,11 @@ const { toasts, dismiss } = useToast()
 .toast-host {
   position: fixed;
   left: 50%;
-  bottom: 28px;
+  top: 20px;
   transform: translateX(-50%);
   z-index: 1100;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
   pointer-events: none;
@@ -77,7 +77,7 @@ const { toasts, dismiss } = useToast()
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(8px);
+  transform: translateY(-8px);
 }
 
 .toast-move {

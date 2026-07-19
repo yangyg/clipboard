@@ -76,7 +76,6 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from "vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import CaptureStatus from "./CaptureStatus.vue";
@@ -84,6 +83,7 @@ import AppIcon from "./icons/AppIcon.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import type { FilterTab } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
+import { useBatchActions } from "../composables/useBatchActions";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 
@@ -95,6 +95,7 @@ const emit = defineEmits<{
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActions();
 
 useClipboardHotkeys({
   onClose: () => emit("close"),
@@ -109,10 +110,6 @@ const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "image", label: "图片" },
   { key: "file", label: "文件" },
 ];
-
-function toggleBatchMode() {
-  clipboardStore.toggleBatchMode();
-}
 
 async function toggleTrash() {
   const next = !clipboardStore.trashFilter;
@@ -136,42 +133,6 @@ async function onEmptyTrash() {
     toast("回收站已清空", "success");
   }
 }
-
-async function batchCopy() {
-  const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) {
-    toast("请先选择条目", "warning");
-    return;
-  }
-  const selected = clipboardStore.records.filter((record) => ids.includes(record.id));
-  if (selected.length) {
-    await navigator.clipboard.writeText(selected.map((record) => record.content).join("\n\n"));
-    toast(`已复制 ${selected.length} 项到剪贴板`, "success");
-  }
-}
-
-async function batchFavorite() {
-  const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) {
-    toast("请先选择条目", "warning");
-    return;
-  }
-  await clipboardStore.batchFavorite(ids);
-}
-
-async function batchDelete() {
-  const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) {
-    toast("请先选择条目", "warning");
-    return;
-  }
-  await clipboardStore.deleteBatch(ids);
-  toast("已移到回收站", "success");
-}
-
-onMounted(() => {
-  clipboardStore.loadTags();
-});
 </script>
 
 <style scoped>

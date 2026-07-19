@@ -58,9 +58,15 @@ pub struct ImageMeta {
     pub height: i32,
 }
 
+/// Full row including rich HTML (detail / paste / emit).
 const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, content_html";
+
+/// List/search omit heavy content_html (NULL) — preview lazy-loads via get_record.
+const RECORD_COLS_LIST: &str = "id, content, content_type, source_app, source_window, hash,
+               copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
+               created_at, updated_at, media_path, thumb_path, width, height, NULL as content_html";
 
 pub struct ClipboardDb {
     conn: Mutex<Connection>,
@@ -100,7 +106,9 @@ impl ClipboardDb {
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_records_hash ON records(hash);
             CREATE INDEX IF NOT EXISTS idx_records_content_type ON records(content_type);
-            CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);"#,
+            CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);
+            CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
+                ON records(is_trashed, updated_at DESC);"#,
         )?;
 
         // Migrations for databases created before these columns existed
@@ -112,6 +120,11 @@ impl ClipboardDb {
         conn.execute_batch("ALTER TABLE records ADD COLUMN width INTEGER;").ok();
         conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
         conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
+             ON records(is_trashed, updated_at DESC);",
+        )
+        .ok();
 
         conn.execute_batch(
             r#"
@@ -274,7 +287,7 @@ impl ClipboardDb {
         let conn = self.conn.lock();
         let mut sql = format!(
             "SELECT {} FROM records WHERE is_trashed = ?",
-            RECORD_COLS
+            RECORD_COLS_LIST
         );
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(if trashed { 1i32 } else { 0i32 })];
 
@@ -460,22 +473,47 @@ impl ClipboardDb {
         query: &str,
         limit: i32,
         offset: i32,
+        content_type: Option<&str>,
+        favorites_only: bool,
+        tag_name: Option<&str>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.conn.lock();
         let search = format!("%{}%", query);
-        let mut stmt = conn.prepare(&format!(
+        let mut sql = format!(
             "SELECT {} FROM records
-             WHERE is_trashed = 0 AND (content LIKE ? OR source_app LIKE ?)
-             ORDER BY is_pinned DESC, updated_at DESC
-             LIMIT ? OFFSET ?",
-            RECORD_COLS
-        ))?;
+             WHERE is_trashed = 0 AND (content LIKE ? OR source_app LIKE ?)",
+            RECORD_COLS_LIST
+        );
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
+            vec![Box::new(search.clone()), Box::new(search)];
+
+        if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
+            sql.push_str(" AND content_type = ?");
+            params.push(Box::new(ct.to_string()));
+        }
+        if favorites_only {
+            sql.push_str(" AND is_favorite = 1");
+        }
+        if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
+            sql.push_str(
+                " AND id IN (
+                    SELECT rt.record_id FROM record_tags rt
+                    INNER JOIN tags t ON t.id = rt.tag_id
+                    WHERE t.name = ?
+                )",
+            );
+            params.push(Box::new(tag.to_string()));
+        }
+        sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC LIMIT ? OFFSET ?");
+        params.push(Box::new(limit.max(1)));
+        params.push(Box::new(offset.max(0)));
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql)?;
 
         let mut records: Vec<ClipboardRecord> = stmt
-            .query_map(
-                params![search, search, limit.max(1), offset.max(0)],
-                |row| self.map_record_row(row),
-            )?
+            .query_map(param_refs.as_slice(), |row| self.map_record_row(row))?
             .filter_map(|r| r.ok())
             .collect();
 
@@ -623,6 +661,28 @@ impl ClipboardDb {
             params![new_val, id],
         )?;
         Ok(new_val == 1)
+    }
+
+    pub fn batch_set_favorite(&self, ids: &[i64], favorite: bool) -> SqlResult<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.conn.lock();
+        let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
+            vec![Box::new(if favorite { 1i32 } else { 0i32 })];
+        for id in ids {
+            params.push(Box::new(*id));
+        }
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let n = conn.execute(
+            &format!(
+                "UPDATE records SET is_favorite = ? WHERE id IN ({placeholders})"
+            ),
+            param_refs.as_slice(),
+        )?;
+        Ok(n)
     }
 
     pub fn toggle_pin(&self, id: i64) -> SqlResult<bool> {
@@ -909,9 +969,9 @@ impl ClipboardDb {
         let favorites_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_favorite = 1 AND is_trashed = 0", [], |row| row.get(0))?;
         let pinned_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_pinned = 1 AND is_trashed = 0", [], |row| row.get(0))?;
         let sensitive_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_sensitive = 1 AND is_trashed = 0", [], |row| row.get(0))?;
-        // Prefer on-disk media size approximation via content length + count of media paths
-        let storage_bytes = conn.query_row(
-            "SELECT COALESCE(SUM(length(content)), 0) FROM records WHERE is_trashed = 0",
+        let content_bytes: i64 = conn.query_row(
+            "SELECT COALESCE(SUM(length(content)), 0) + COALESCE(SUM(length(COALESCE(content_html, ''))), 0)
+             FROM records WHERE is_trashed = 0",
             [],
             |row| row.get(0),
         )?;
@@ -923,6 +983,11 @@ impl ClipboardDb {
             let (content_type, count) = row?;
             type_distribution.insert(content_type, count);
         }
+        drop(stmt);
+        drop(conn);
+
+        let media_bytes = media_dir_size(&self.media_root);
+        let storage_bytes = content_bytes.saturating_add(media_bytes);
 
         Ok(StatsData {
             total_records,
@@ -934,4 +999,23 @@ impl ClipboardDb {
             type_distribution,
         })
     }
+}
+
+fn media_dir_size(root: &std::path::Path) -> i64 {
+    fn walk(dir: &std::path::Path, acc: &mut u64) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, acc);
+            } else if let Ok(meta) = entry.metadata() {
+                *acc = acc.saturating_add(meta.len());
+            }
+        }
+    }
+    let mut total = 0u64;
+    walk(root, &mut total);
+    total.min(i64::MAX as u64) as i64
 }

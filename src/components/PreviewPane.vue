@@ -144,7 +144,7 @@
     <div class="preview-actions" v-if="record && !record.is_trashed">
       <button class="action-btn" @click="paste">
         <span class="action-icon"><AppIcon name="paste" :size="15" /></span>
-        <span class="action-label">复制</span>
+        <span class="action-label">粘贴</span>
       </button>
       <button class="action-btn" @click="pastePlain">
         <span class="action-icon"><AppIcon name="type" :size="15" /></span>
@@ -185,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import TagDialog from "./TagDialog.vue";
 import AppIcon from "./icons/AppIcon.vue";
@@ -295,8 +295,31 @@ function onTagCreated() {
   tagDialogMode.value = "assign";
 }
 
+const expireNow = ref(Date.now());
+let expireTimer: ReturnType<typeof setInterval> | null = null;
+
+watch(
+  () => record.value?.auto_expire_at,
+  (iso) => {
+    if (expireTimer) {
+      clearInterval(expireTimer);
+      expireTimer = null;
+    }
+    if (!iso) return;
+    expireNow.value = Date.now();
+    expireTimer = setInterval(() => {
+      expireNow.value = Date.now();
+    }, 1000);
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  if (expireTimer) clearInterval(expireTimer);
+});
+
 function formatExpireTime(iso: string): string {
-  const ms = new Date(iso).getTime() - Date.now();
+  const ms = new Date(iso).getTime() - expireNow.value;
   if (ms <= 0) return "已过期";
   const sec = Math.floor(ms / 1000);
   if (sec < 60) return `${sec} 秒`;

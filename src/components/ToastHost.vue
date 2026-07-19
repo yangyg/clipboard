@@ -1,12 +1,14 @@
 <template>
   <Teleport to="body">
-    <div class="toast-host" aria-live="polite">
+    <div class="toast-host">
       <TransitionGroup name="toast">
         <div
           v-for="item in toasts"
           :key="item.id"
           class="toast-item"
           :class="`toast-${item.kind}`"
+          :aria-live="item.kind === 'error' ? 'assertive' : 'polite'"
+          role="status"
           @click="dismiss(item.id)"
         >
           {{ item.message }}

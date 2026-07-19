@@ -5,6 +5,7 @@ mod media;
 use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{ClipboardMonitor, ClipboardEvent};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, LazyLock};
 use parking_lot::RwLock;
 use regex::Regex;
@@ -198,9 +199,7 @@ async fn get_records(
     favorites_only: Option<bool>,
     tag: Option<String>,
 ) -> Result<RecordsPage, String> {
-    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
-    state.db.cleanup_expired().map_err(|e| e.to_string())?;
-    state.db.cleanup_retention(settings.retention_days).map_err(|e| e.to_string())?;
+    maybe_run_cleanup(&state.db)?;
     let limit = limit.unwrap_or(60).max(1);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
@@ -224,13 +223,23 @@ async fn search_records(
     query: String,
     limit: Option<i32>,
     offset: Option<i32>,
+    content_type: Option<String>,
+    favorites_only: Option<bool>,
+    tag: Option<String>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
     let limit = limit.unwrap_or(60).max(1);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
         .db
-        .search_records(&query, limit, offset)
+        .search_records(
+            &query,
+            limit,
+            offset,
+            content_type.as_deref(),
+            favorites_only.unwrap_or(false),
+            tag.as_deref(),
+        )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
     let total = records.len();
@@ -242,6 +251,11 @@ async fn search_records(
         elapsed_ms,
         has_more,
     })
+}
+
+#[tauri::command]
+async fn get_record(state: State<'_, AppState>, id: i64) -> Result<Option<ClipboardRecord>, String> {
+    state.db.get_record(id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -311,6 +325,18 @@ async fn toggle_favorite(state: State<'_, AppState>, id: i64) -> Result<bool, St
 }
 
 #[tauri::command]
+async fn batch_set_favorite(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+    favorite: bool,
+) -> Result<usize, String> {
+    state
+        .db
+        .batch_set_favorite(&ids, favorite)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn toggle_pin(state: State<'_, AppState>, id: i64) -> Result<bool, String> {
     state.db.toggle_pin(id).map_err(|e| e.to_string())
 }
@@ -324,6 +350,7 @@ async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
 async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
     let previous = state.db.get_settings().map_err(|e| e.to_string())?;
     let autostart_changed = settings.auto_start != previous.auto_start;
+    let shortcut_changed = settings.global_shortcut != previous.global_shortcut;
 
     if autostart_changed {
         apply_autostart(&app, settings.auto_start)?;
@@ -337,6 +364,14 @@ async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settin
             }
         }
         return Err(e.to_string());
+    }
+
+    if shortcut_changed {
+        if let Err(e) = apply_global_shortcut(&app, &settings.global_shortcut) {
+            warn!("Failed to apply new global shortcut: {}", e);
+            // Persist succeeded; surface so UI can reload / warn
+            return Err(e);
+        }
     }
     Ok(())
 }
@@ -414,7 +449,7 @@ async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
-    state.db.cleanup_expired().map_err(|e| e.to_string())?;
+    maybe_run_cleanup(&state.db)?;
     state.db.get_stats().map_err(|e| e.to_string())
 }
 
@@ -544,6 +579,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_records,
             search_records,
+            get_record,
             paste_record,
             delete_record,
             delete_records_batch,
@@ -553,6 +589,7 @@ pub fn run() {
             empty_trash,
             get_trash_count,
             toggle_favorite,
+            batch_set_favorite,
             toggle_pin,
             get_settings,
             save_settings,
@@ -588,37 +625,17 @@ pub fn run() {
                 }
             }
 
-            const TOGGLE_SHORTCUT: &str = "Ctrl+Shift+V";
-            // Clear a leftover registration from a previous setup in this process
-            // (e.g. hot-reload). If another ClipVault instance owns the hotkey,
-            // Windows will still reject the register below.
-            if app.global_shortcut().is_registered(TOGGLE_SHORTCUT) {
-                if let Err(e) = app.global_shortcut().unregister(TOGGLE_SHORTCUT) {
-                    warn!("Failed to unregister existing shortcut: {}", e);
-                }
-            }
-            if let Err(e) = app.global_shortcut().on_shortcut(TOGGLE_SHORTCUT, |app, _shortcut, event| {
-                if event.state() == ShortcutState::Pressed {
-                    if let Some(window) = app.get_webview_window("main") {
-                        if window.is_visible().unwrap_or(false) {
-                            window.hide().ok();
-                            app.emit("toggle-panel", false).ok();
-                        } else {
-                            window.show().ok();
-                            window.set_focus().ok();
-                            app.emit("toggle-panel", true).ok();
-                        }
-                    }
-                }
-            }) {
-                warn!(
-                    "Failed to register global shortcut {}: {}",
-                    TOGGLE_SHORTCUT, e
-                );
+            let shortcut = db
+                .get_settings()
+                .map(|s| s.global_shortcut)
+                .unwrap_or_else(|_| "Ctrl+Shift+V".into());
+            if let Err(e) = apply_global_shortcut(app.handle(), &shortcut) {
+                warn!("Failed to register global shortcut {}: {}", shortcut, e);
+                let shortcut_label = shortcut.clone();
                 app.dialog()
                     .message(format!(
-                        "全局快捷键 {TOGGLE_SHORTCUT} 已被其他程序占用，无法注册。\n\n\
-                         请关闭占用该快捷键的应用后重新启动剪贴板管理。\
+                        "全局快捷键 {shortcut_label} 已被其他程序占用，无法注册。\n\n\
+                         请关闭占用该快捷键的应用后重新启动剪贴板管理，或在设置中更换快捷键。\
                          若本机已有另一个剪贴板管理在运行，请先退出那个实例。"
                     ))
                     .title("剪贴板管理")
@@ -656,8 +673,10 @@ pub fn run() {
                             }
                         }
                         "pause" => {
-                            *capture_paused_menu.write() = !*capture_paused_menu.read();
-                            info!("Tray menu: capture paused toggled");
+                            let next = !*capture_paused_menu.read();
+                            *capture_paused_menu.write() = next;
+                            app.emit("capture-paused", next).ok();
+                            info!("Tray menu: capture paused = {}", next);
                         }
                         "settings" => {
                             if let Some(window) = app.get_webview_window("main") {
@@ -704,6 +723,9 @@ pub fn run() {
                     match event {
                         ClipboardEvent::Text(captured) => {
                             let settings = db.get_settings().unwrap_or_default();
+                            if is_ignored_app(&source_app, &settings.ignored_apps) {
+                                return;
+                            }
 
                             let content_type = detect_content_type(&captured.text);
                             let is_sensitive =
@@ -711,8 +733,7 @@ pub fn run() {
                             // Include HTML in hash so same plain text with different format is distinct
                             let hash = sha256_hash(&captured.fingerprint());
 
-                            db.cleanup_expired().ok();
-                            db.cleanup_retention(settings.retention_days).ok();
+                            maybe_run_cleanup(&db).ok();
                             match db.insert_record(
                                 &captured.text,
                                 &content_type,
@@ -745,9 +766,11 @@ pub fn run() {
                         }
                         ClipboardEvent::Image(captured) => {
                             let settings = db.get_settings().unwrap_or_default();
+                            if is_ignored_app(&source_app, &settings.ignored_apps) {
+                                return;
+                            }
 
-                            db.cleanup_expired().ok();
-                            db.cleanup_retention(settings.retention_days).ok();
+                            maybe_run_cleanup(&db).ok();
 
                             match media::store_clipboard_image(
                                 &media_root,
@@ -846,6 +869,67 @@ static BANK_CARD_RE: LazyLock<Regex> =
 // Helper Functions
 // ============================================================
 
+static LAST_CLEANUP_UNIX: AtomicU64 = AtomicU64::new(0);
+const CLEANUP_INTERVAL_SECS: u64 = 60;
+
+fn maybe_run_cleanup(db: &ClipboardDb) -> Result<(), String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let last = LAST_CLEANUP_UNIX.load(AtomicOrdering::Relaxed);
+    if now.saturating_sub(last) < CLEANUP_INTERVAL_SECS {
+        return Ok(());
+    }
+    LAST_CLEANUP_UNIX.store(now, AtomicOrdering::Relaxed);
+    db.cleanup_expired().map_err(|e| e.to_string())?;
+    if let Ok(settings) = db.get_settings() {
+        db.cleanup_retention(settings.retention_days)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {
+    if source_app.is_empty() || ignored.is_empty() {
+        return false;
+    }
+    let app_lower = source_app.to_lowercase();
+    ignored.iter().any(|pat| {
+        let p = pat.trim().to_lowercase();
+        !p.is_empty() && (app_lower == p || app_lower.ends_with(&p) || app_lower.contains(&p))
+    })
+}
+
+fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
+    let shortcut = shortcut.trim();
+    if shortcut.is_empty() {
+        return Err("快捷键不能为空".into());
+    }
+    // Unregister any previously registered shortcuts for this app instance
+    if let Err(e) = app.global_shortcut().unregister_all() {
+        warn!("Failed to unregister shortcuts before rebind: {}", e);
+    }
+    app.global_shortcut()
+        .on_shortcut(shortcut, |app, _shortcut, event| {
+            if event.state() == ShortcutState::Pressed {
+                if let Some(window) = app.get_webview_window("main") {
+                    if window.is_visible().unwrap_or(false) {
+                        window.hide().ok();
+                        app.emit("toggle-panel", false).ok();
+                    } else {
+                        window.show().ok();
+                        window.set_focus().ok();
+                        app.emit("toggle-panel", true).ok();
+                    }
+                }
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    info!("Registered global shortcut: {}", shortcut);
+    Ok(())
+}
+
 fn detect_content_type(content: &str) -> ContentType {
     let trimmed = content.trim();
 
@@ -854,11 +938,12 @@ fn detect_content_type(content: &str) -> ContentType {
         return ContentType::Link;
     }
 
-    // File path detection
-    if (trimmed.contains(":\\") || trimmed.starts_with("/")) && trimmed.len() < 2048 {
-        if std::path::Path::new(trimmed).exists() || trimmed.contains(".") {
-            return ContentType::File;
-        }
+    // File path heuristic only — avoid Path::exists() disk IO on the monitor thread
+    if trimmed.len() < 2048
+        && ((trimmed.contains(":\\") && trimmed.contains('.'))
+            || (trimmed.starts_with('/') && trimmed.contains('.')))
+    {
+        return ContentType::File;
     }
 
     // Code detection (pre-compiled patterns)

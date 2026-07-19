@@ -299,7 +299,8 @@
             <div class="settings-section">
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">本地数据库体积</div>
+                  <div class="setting-label">本地存储占用</div>
+                  <div class="setting-desc">含数据库与 media 图片目录</div>
                   <div class="setting-desc">按剪贴板文本内容估算，不包含 SQLite 索引开销</div>
                 </div>
                 <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>

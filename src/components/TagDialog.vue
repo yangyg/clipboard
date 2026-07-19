@@ -140,11 +140,11 @@ watch(() => props.visible, async (v) => {
     if (props.mode === "assign" && props.recordId) {
       const record = clipboardStore.records.find((r) => r.id === props.recordId);
       const recordTagNames = record?.tags ?? [];
+      const next = new Set<number>();
       for (const tag of availableTags.value) {
-        if (recordTagNames.includes(tag.name)) {
-          assignedIds.value.add(tag.id);
-        }
+        if (recordTagNames.includes(tag.name)) next.add(tag.id);
       }
+      assignedIds.value = next;
     }
     await nextTick();
     nameInput.value?.focus();
@@ -152,11 +152,10 @@ watch(() => props.visible, async (v) => {
 });
 
 function toggleTag(tagId: number) {
-  if (assignedIds.value.has(tagId)) {
-    assignedIds.value.delete(tagId);
-  } else {
-    assignedIds.value.add(tagId);
-  }
+  const next = new Set(assignedIds.value);
+  if (next.has(tagId)) next.delete(tagId);
+  else next.add(tagId);
+  assignedIds.value = next;
 }
 
 async function confirmForm() {

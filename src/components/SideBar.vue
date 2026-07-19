@@ -1,29 +1,33 @@
 <template>
   <aside class="sidebar">
     <!-- Navigation: Categories -->
-    <nav class="sidebar-section">
+    <nav class="sidebar-section" aria-label="分类">
       <div class="sidebar-label">分类</div>
-      <div
+      <button
         v-for="item in categoryItems"
         :key="item.key"
+        type="button"
         class="nav-item"
         :class="{ active: props.activeCategory === item.key }"
+        :aria-current="props.activeCategory === item.key ? 'page' : undefined"
         @click="selectCategory(item.key)"
       >
         <span class="nav-icon"><AppIcon :name="item.icon" :size="15" /></span>
         <span class="nav-label">{{ item.label }}</span>
         <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
-      </div>
+      </button>
     </nav>
 
     <!-- Special -->
-    <nav class="sidebar-section">
+    <nav class="sidebar-section" aria-label="收藏与回收站">
       <div class="sidebar-label">收藏</div>
-      <div
+      <button
         v-for="item in specialItems"
         :key="item.key"
+        type="button"
         class="nav-item"
         :class="{ active: props.activeCategory === item.key }"
+        :aria-current="props.activeCategory === item.key ? 'page' : undefined"
         @click="selectCategory(item.key)"
       >
         <span class="nav-icon">
@@ -35,37 +39,39 @@
         </span>
         <span class="nav-label">{{ item.label }}</span>
         <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
-      </div>
+      </button>
     </nav>
 
     <!-- Tags Section -->
     <div class="sidebar-section sidebar-tags-section">
       <div class="sidebar-label">标签管理</div>
-      <div class="tags-list">
-        <div
+      <div class="tags-list" role="list">
+        <button
           v-for="tag in clipboardStore.tags"
           :key="tag.id"
+          type="button"
           class="tag-item"
           :class="{ active: props.activeTag === tag.name }"
+          :aria-pressed="props.activeTag === tag.name"
           @click="selectTag(tag.name)"
           @contextmenu.prevent.stop="showTagMenu($event, tag)"
         >
           <span class="tag-dot" :style="{ background: tag.color }"></span>
           <span class="tag-name">{{ tag.name }}</span>
           <span class="tag-count">{{ tag.count }}</span>
-        </div>
+        </button>
       </div>
-      <div class="tag-add" @click="$emit('addTag')">
+      <button type="button" class="tag-add" @click="$emit('addTag')">
         <AppIcon name="plus" :size="13" /> 新建标签
-      </div>
+      </button>
     </div>
 
     <!-- Bottom Actions -->
     <div class="sidebar-bottom">
-      <div class="nav-item" @click="$emit('openSettings')">
+      <button type="button" class="nav-item" @click="$emit('openSettings')">
         <span class="nav-icon"><AppIcon name="settings" :size="15" /></span>
         <span class="nav-label">设置</span>
-      </div>
+      </button>
     </div>
 
     <!-- Tag context menu -->
@@ -216,7 +222,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 7px 8px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-secondary);
@@ -270,7 +281,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 7px 8px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.75rem;
@@ -311,8 +327,13 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
   padding: 8px;
   margin-top: 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   color: var(--text-tertiary);

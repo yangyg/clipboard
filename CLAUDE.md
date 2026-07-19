@@ -13,70 +13,76 @@ npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
 
 The full Tauri dev command is `npm run tauri dev` (starts both Vite + Rust backend).
 
+Regenerate app icons from a source image (PNG preferred; JPEG renamed as `.png` must be converted first):
+
+```bash
+npx tauri icon app-icon.png -o src-tauri/icons
+```
+
 ## Architecture
 
 ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Stack
-- **Frontend:** Vue 3 + TypeScript + Vite + Pinia (state management)
-- **Backend:** Rust (Tauri v2 with plugins for single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
-- **Database:** SQLite via rusqlite (WAL mode), stored at `%LOCALAPPDATA%/ClipVault/clipvault.db`
-- **Media files:** Images stored as PNG under `%LOCALAPPDATA%/ClipVault/media/` (+ `thumbs/` JPEG); DB holds relative paths + width/height only
-- **Clipboard polling:** arboard polls every 500ms on a background thread (**image before text**)
-- **Asset protocol:** `protocol-asset` enabled; scope must use Tauri vars (`$LOCALDATA`, not OS env names like `$LOCALAPPDATA`)
-- **Autostart:** `tauri-plugin-autostart` registers Windows startup via the OS. Controlled only from Rust (`save_settings` / app setup); no frontend JS plugin binding.
+- **Frontend:** Vue 3 + TypeScript + Vite + Pinia
+- **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
+- **Database:** SQLite via rusqlite (WAL), `%LOCALAPPDATA%/ClipVault/clipvault.db`
+- **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only
+- **Clipboard polling:** arboard every 500ms; image quick-fingerprint before full SHA-256; text/image priority heuristics
+- **Asset protocol:** `protocol-asset`; scope uses `$LOCALDATA/ClipVault/media/**/*` (not `$LOCALAPPDATA`)
+- **Autostart / shortcut / ignore list:** applied from Rust on `save_settings` / setup (not frontend-only)
 
 ### Data Flow
-1. Rust `ClipboardMonitor` polls the OS clipboard every 500ms
-2. **Image vs text:** Read both. Prefer **text** only when it looks like a real share (≥16 chars and not URL-only). Browser “Copy image” often sets the image URL as text — that stays on the **image** path. Screenshots with empty/stub text → image. Douyin/WeChat long captions (+ embedded link) → text.
-3. On change: hash content; text (+ optional `content_html`) → SQLite; image → write `media/` + thumb, DB stores metadata + label like `[image WxH]`
-4. Emit `clipboard-changed` to Vue; store prepends / updates the list
-5. Paste by type: text → `set_html`/`set_text` + Ctrl+V; image → load PNG from disk → `set_image` + Ctrl+V
+1. `ClipboardMonitor` polls every 500ms; skip work when image quick-fp unchanged
+2. **Image vs text:** Prefer text only for meaningful shares (≥16 chars, not URL-only). Screenshots / browser “Copy image” (URL-only text) → image
+3. Skip capture when `source_app` matches `settings.ignored_apps`
+4. Persist: text (+ optional `content_html`) → SQLite; image → `media/` + thumb + metadata label `[image WxH]`
+5. Emit `clipboard-changed`; Vue store updates list
+6. Paste: text → `set_html`/`set_text` + Ctrl+V; image → disk PNG → `set_image` + Ctrl+V
 
 ### Frontend Component Tree
 ```
-App.vue                          # Root: events, show/hide, ToastHost + ConfirmDialog
-├── FloatingPanel.vue            # Floating: search-first, filters, trash, batch; shared hotkeys
-├── WindowApp.vue                # Window: SideBar + list + batch; WindowControls; shared hotkeys
-│   ├── SearchBar.vue            # Debounced search (150ms), / or Ctrl+K (platform-aware)
-│   ├── RecordList.vue           # List + PreviewPane; infinite scroll; context menu
-│   │   └── PreviewPane.vue      # Preview + paste/favorite/pin/delete + tags
-│   └── SideBar.vue              # Categories, tags (edit/delete via context menu), trash
-├── SettingsWindow.vue           # Header + nav + body; shortcut recording; behavior toggles
-├── WindowControls.vue           # Custom min/max/close (borderless chrome)
-├── ToastHost.vue / ConfirmDialog.vue / TagDialog.vue
-├── utils/mediaUrl.ts            # convertFileSrc for media_abs / thumb_abs
-├── icons/AppIcon.vue · TypeIcon.vue · BrandMark.vue
-└── TrayMenu.vue                 # Placeholder (native tray is Rust-rendered)
+App.vue                          # Events (clipboard-changed, capture-paused, toggle-panel), ToastHost, ConfirmDialog
+├── FloatingPanel.vue            # Floating UI; filters; trash; useBatchActions + useClipboardHotkeys
+├── WindowApp.vue                # Window UI; SideBar; same batch/hotkeys helpers
+│   ├── SearchBar.vue
+│   ├── RecordList.vue           # Infinite scroll; thumbs precomputed; PreviewPane
+│   │   └── PreviewPane.vue      # Paste / favorite / pin / trash; tags; expire countdown
+│   └── SideBar.vue              # Categories/tags as <button>; tag toggle-off; context edit/delete
+├── SettingsWindow.vue
+├── WindowControls.vue
+├── ToastHost.vue                # Top-center; error → aria-live assertive
+├── ConfirmDialog.vue / TagDialog.vue
+├── composables/useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts
+├── utils/mediaUrl.ts
+└── TrayMenu.vue                 # Placeholder (native tray is Rust)
 ```
 
 ### Backend (Rust) Module Layout
-- `src-tauri/src/lib.rs` — App setup, Tauri commands, system tray, global shortcut, content detection, sensitive detection, autostart sync (`apply_autostart`)
-- `src-tauri/src/clipboard.rs` — `ClipboardMonitor` (image-first poll), paste text/image via `keybd_event` (Windows)
-- `src-tauri/src/media.rs` — Image encode/store/load/delete; absolute paths built segment-by-segment (avoid mixed `/` `\`)
-- `src-tauri/src/db.rs` — `ClipboardDb`: records CRUD, pagination, media lifecycle on hard-delete, settings, import/export, stats, tags
-- `src-tauri/src/main.rs` — Entry point, calls `clipvault_lib::run()`
+- `lib.rs` — setup, commands, tray, `apply_global_shortcut`, `apply_autostart`, `ignored_apps`, content/sensitive detection, cleanup throttle (`maybe_run_cleanup` ~60s)
+- `clipboard.rs` — monitor (quick image fp + share-text heuristics), paste via `keybd_event`
+- `media.rs` — encode/store/load/delete; segment-joined absolute paths
+- `db.rs` — CRUD, list cols without `content_html`, search with type/tag/favorites filters, tags, stats (DB + media dir size)
+- `main.rs` — `clipvault_lib::run()`
 
-### State Management (Pinia Stores)
-- `clipboardStore` — records array, selection, search, filters (all/text/code/link/image/file/favorites), tags, batch mode, pause capture, stats; scroll pagination (page size 60, `RecordsPage { records, has_more }`)
-- `settingsStore` — all app settings with auto-save on change (debounced 200ms via `watch`), theme application. Changing `auto_start` persists via `save_settings`, which enables/disables OS autostart on the Rust side first; on failure the UI reloads settings so the toggle stays consistent.
+### State Management (Pinia)
+- `clipboardStore` — records, filters, tags, batch (`selectedIds` replaced as new `Set` for reactivity), pause, pagination (60 / `has_more`), `ensureRecordDetail` for HTML, `setPauseCapture` for tray sync
+- `settingsStore` — debounced auto-save (200ms); `auto_start` / shortcut / appearance; failed saves reload UI
 
 ### Key Design Decisions
-- **Floating vs window mode:** Both are borderless. Floating: always-on-top, auto-hide on focus loss. Window: larger layout with SideBar + custom `WindowControls`.
-- **Theming:** CSS custom properties on `:root` (dark default), class-based overrides (`.light-theme`, `.oled-theme`). Applied via `document.body.classList`.
-- **Sensitive content detection** (`detect_sensitive` on text only; images always non-sensitive). Enabled by `enable_sensitive_detection` (default on). Auto-expire via `sensitive_auto_expire_seconds` (default 600). Rules (any match):
-  - Contains `password` / `passwd` / `pwd` (case-insensitive)
-  - 4–8 digit run **and** contains `验证码` / `code` / `Code`
-  - API key `sk-` + ≥20 alphanumeric
-  - 16–19 digit run **and** whole string length ≤ 25
-- **Clipboard paste:** by `content_type` — text uses `set_html`+plain alt when `content_html` exists (原格式) or `set_text` only (纯文本); image loads PNG from disk and uses `set_image`; then simulates Ctrl+V. No IPC to foreground app.
-- **Rich text:** capture reads CF_HTML via arboard `get().html()` into `content_html`; list/search still use plain `content`.
-- **Image storage:** SQLite does not store image blobs; binary in `media/`, JPEG thumbs in `media/thumbs/`. Frontend loads via `convertFileSrc(media_abs|thumb_abs)`.
-- **Asset protocol scope:** `tauri.conf.json` → `app.security.assetProtocol.scope`: `["$LOCALDATA/ClipVault/media/**/*"]`. Wrong variable names (e.g. `$LOCALAPPDATA`) silently fail matching → “asset protocol not configured to allow the path”.
-- **Pagination:** `get_records` / `search_records` take `limit`/`offset` (default 60); return `has_more`. Sidebar counts come from `stats`, not the loaded page.
-- **Search:** SQL `LIKE` on content and source_app. Debounced 150ms frontend side.
-- **Deduplication:** by SHA-256 content hash. Same hash = increment copy count + update timestamp, no new record.
-- **Window hide-on-close:** `CloseRequested` event calls `api.prevent_close()` and hides window to minimize to tray.
-- **Single instance:** `tauri-plugin-single-instance` (registered first) ensures only one process runs. A second launch focuses the existing window instead of competing for the hotkey / clipboard monitor.
-- **Autostart:** `settings.auto_start` (default `false`) is not UI-only — `save_settings` applies OS registration before persisting, and app `setup` re-syncs from loaded settings (skips sync if settings fail to load). Sync is idempotent. OS failures surface as `save_settings` errors; DB save failure after a successful OS change reverts the startup entry.
-- **WebView noise:** `Failed to unregister class Chrome_WidgetWin_0. Error = 1412` on exit/hot-reload is harmless Chromium/WebView2 teardown, not an app bug.
+- **Floating vs window:** Both borderless. Floating: always-on-top, hide on blur. Window: SideBar + `WindowControls`.
+- **Theming:** CSS vars on `:root`; `.light-theme` / `.oled-theme` via `document.body.classList`.
+- **Sensitive detection** (text only): `password|passwd|pwd`; 4–8 digits + `验证码|code|Code`; `sk-`+≥20 alnum; 16–19 digits with len≤25. Default expire 600s.
+- **Soft delete:** Delete → trash (toast, no confirm). Permanent delete / empty trash still confirm.
+- **Toast policy:** Only for actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles. Position: top-center.
+- **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML (`NULL as content_html`); preview loads via `get_record`. Show HTML iframe only when markup differs from plain.
+- **Image storage + asset scope:** See stack; wrong `$VAR` → asset protocol 403.
+- **Pagination / search:** Server filters + optional client filter while searching. Search args: `contentType` / `favoritesOnly` / `tag`.
+- **Sets in Vue:** Never mutate `Set` in place — assign a new `Set` (`selectedIds`, `assignedIds`).
+- **Global shortcut:** Registered from `settings.global_shortcut` at startup; re-bound in `save_settings` when changed.
+- **Pause capture:** Frontend `set_capture_paused` and tray both update Rust; tray emits `capture-paused` for UI sync.
+- **Cleanup:** Expired/retention cleanup throttled (~60s), not on every list/stats call.
+- **File type detect:** Path heuristic only (no `Path::exists` on monitor thread).
+- **Dedup:** SHA-256 of text fingerprint or full image bytes.
+- **Hide-on-close / single instance / autostart:** unchanged tray minimize, single-instance focus, OS Run-key sync.
+- **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.

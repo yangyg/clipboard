@@ -139,6 +139,11 @@ onMounted(async () => {
     openSettings();
   });
 
+  // Tray pause/resume syncs Rust → frontend
+  await listen<boolean>("capture-paused", (event) => {
+    clipboardStore.setPauseCapture(event.payload);
+  });
+
   watch(
     () => settings.value.app_mode,
     async () => {

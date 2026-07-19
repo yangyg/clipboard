@@ -80,6 +80,19 @@ export const useClipboardStore = defineStore("clipboard", () => {
     };
   }
 
+  function searchFilterArgs() {
+    const favoritesOnly = activeFilter.value === "favorites";
+    const contentType =
+      !favoritesOnly && activeFilter.value !== "all" && !activeTag.value
+        ? activeFilter.value
+        : null;
+    return {
+      contentType,
+      favoritesOnly,
+      tag: activeTag.value,
+    };
+  }
+
   function appendRecords(batch: ClipboardRecord[]) {
     const seen = new Set(records.value.map((r) => r.id));
     for (const r of batch) {
@@ -121,6 +134,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
           query: searchQuery.value,
           limit: PAGE_SIZE,
           offset,
+          ...searchFilterArgs(),
         });
         if (seq !== loadSeq || trashFilter.value) return;
         appendRecords(result.records);
@@ -157,6 +171,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
         query,
         limit: PAGE_SIZE,
         offset: 0,
+        ...searchFilterArgs(),
       });
       // Stale guard: discard response if a newer search was dispatched,
       // or if user has navigated to trash while search was in-flight
@@ -178,19 +193,38 @@ export const useClipboardStore = defineStore("clipboard", () => {
   function selectRecord(id: number) {
     selectedId.value = id;
     if (!batchMode.value) {
-      selectedIds.value.clear();
+      selectedIds.value = new Set();
     }
+    void ensureRecordDetail(id);
   }
 
   function clearSelection() {
     selectedId.value = null;
   }
 
+  /** Lazy-load content_html for preview when list rows omit it. */
+  async function ensureRecordDetail(id: number) {
+    const record = records.value.find((r) => r.id === id);
+    if (!record || record.content_html != null || record.content_type === "image") return;
+    try {
+      const full = await invoke<ClipboardRecord | null>("get_record", { id });
+      if (!full) return;
+      const idx = records.value.findIndex((r) => r.id === id);
+      if (idx !== -1) {
+        records.value[idx] = { ...records.value[idx], ...full, tags: records.value[idx].tags };
+      }
+    } catch (e) {
+      console.error("Failed to load record detail:", e);
+    }
+  }
+
   function setFilter(filter: FilterTab) {
     activeFilter.value = filter;
     activeTag.value = null;
     selectedId.value = null;
-    if (!searchQuery.value) {
+    if (searchQuery.value) {
+      void search(searchQuery.value);
+    } else {
       void loadRecords();
     }
   }
@@ -206,11 +240,20 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   /** Set favorite on for all ids that are not already favorited. */
   async function batchFavorite(ids: number[]) {
-    for (const id of ids) {
-      const record = records.value.find((r) => r.id === id);
-      if (record && !record.is_favorite) {
-        await toggleFavorite(id);
+    const toFav = ids.filter((id) => {
+      const r = records.value.find((x) => x.id === id);
+      return r && !r.is_favorite;
+    });
+    if (!toFav.length) return;
+    try {
+      await invoke("batch_set_favorite", { ids: toFav, favorite: true });
+      for (const id of toFav) {
+        const record = records.value.find((r) => r.id === id);
+        if (record) record.is_favorite = true;
       }
+      await loadStats();
+    } catch (e) {
+      console.error("Batch favorite failed:", e);
     }
   }
 
@@ -267,7 +310,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (selectedId.value !== null && selectedIds.value.has(selectedId.value)) {
         selectedId.value = null;
       }
-      selectedIds.value.clear();
+      selectedIds.value = new Set();
       batchMode.value = false;
       await loadStats();
       await loadTrashCount();
@@ -297,7 +340,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (selectedId.value !== null && selectedIds.value.has(selectedId.value)) {
         selectedId.value = null;
       }
-      selectedIds.value.clear();
+      selectedIds.value = new Set();
       batchMode.value = false;
       await loadStats();
       await loadTrashCount();
@@ -323,6 +366,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       records.value = [];
       selectedId.value = null;
       trashCount.value = 0;
+      await loadStats();
     } catch (e) {
       console.error("Empty trash failed:", e);
     }
@@ -349,22 +393,27 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   function toggleBatchMode() {
     batchMode.value = !batchMode.value;
-    if (!batchMode.value) selectedIds.value.clear();
+    if (!batchMode.value) selectedIds.value = new Set();
   }
 
   function toggleBatchSelect(id: number) {
-    if (selectedIds.value.has(id)) {
-      selectedIds.value.delete(id);
-    } else {
-      selectedIds.value.add(id);
-    }
+    const next = new Set(selectedIds.value);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selectedIds.value = next;
+  }
+
+  function setPauseCapture(paused: boolean) {
+    pauseCapture.value = paused;
   }
 
   async function togglePauseCapture() {
-    pauseCapture.value = !pauseCapture.value;
+    const next = !pauseCapture.value;
+    pauseCapture.value = next;
     try {
-      await invoke("set_capture_paused", { paused: pauseCapture.value });
+      await invoke("set_capture_paused", { paused: next });
     } catch (e) {
+      pauseCapture.value = !next;
       console.error("Toggle pause failed:", e);
     }
   }
@@ -498,12 +547,17 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   function filterByTag(tagName: string | null) {
-    activeTag.value = tagName;
-    if (tagName) {
-      activeFilter.value = "all";
+    // Toggle off when clicking the same tag again
+    if (tagName && activeTag.value === tagName) {
+      activeTag.value = null;
+    } else {
+      activeTag.value = tagName;
+      if (tagName) activeFilter.value = "all";
     }
     selectedId.value = null;
-    if (!searchQuery.value) {
+    if (searchQuery.value) {
+      void search(searchQuery.value);
+    } else {
       void loadRecords();
     }
   }
@@ -551,7 +605,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
     setTrashFilter,
     toggleBatchMode,
     toggleBatchSelect,
+    setPauseCapture,
     togglePauseCapture,
+    ensureRecordDetail,
     onNewRecord,
     loadStats,
     importRecords,

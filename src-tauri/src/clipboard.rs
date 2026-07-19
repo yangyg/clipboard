@@ -91,46 +91,46 @@ impl ClipboardMonitor {
                             .unwrap_or(false);
 
                         if let Some(img) = image {
-                            let raw = img.bytes.to_vec();
-                            let hash = {
-                                use sha2::{Digest, Sha256};
-                                let mut hasher = Sha256::new();
-                                hasher.update(&raw);
-                                hex::encode(hasher.finalize())
+                            // Cheap fingerprint first — avoid full SHA-256 every 500ms
+                            // when the same screenshot sits on the clipboard.
+                            let quick = image_quick_fingerprint(&img);
+                            let unchanged = {
+                                let last = last_image_hash.lock();
+                                matches!(&*last, Some(prev) if prev == &quick)
                             };
 
-                            if prefer_text {
-                                // Remember image so a later image-only poll doesn't re-fire it
-                                // after we already stored the accompanying share text.
-                                *last_image_hash.lock() = Some(hash);
+                            if unchanged {
+                                if prefer_text {
+                                    if let Some(captured) = text {
+                                        maybe_emit_text(&last_text_fp, captured, &on_change);
+                                    }
+                                } else if let Some(captured) = text {
+                                    *last_text_fp.lock() = Some(captured.fingerprint());
+                                }
+                            } else if prefer_text {
+                                *last_image_hash.lock() = Some(quick);
                                 if let Some(captured) = text {
                                     maybe_emit_text(&last_text_fp, captured, &on_change);
                                 }
                             } else {
-                                let should_notify = {
-                                    let mut last_hash = last_image_hash.lock();
-                                    match &*last_hash {
-                                        Some(prev) if prev == &hash => false,
-                                        _ => {
-                                            *last_hash = Some(hash.clone());
-                                            true
-                                        }
-                                    }
+                                let raw = img.bytes.to_vec();
+                                let hash = {
+                                    use sha2::{Digest, Sha256};
+                                    let mut hasher = Sha256::new();
+                                    hasher.update(&raw);
+                                    hex::encode(hasher.finalize())
                                 };
-                                if should_notify {
-                                    debug!(
-                                        "Clipboard changed (image): {}x{}",
-                                        img.width, img.height
-                                    );
-                                    on_change(ClipboardEvent::Image(CapturedImage {
-                                        rgba: raw,
-                                        width: img.width as u32,
-                                        height: img.height as u32,
-                                        hash,
-                                    }));
-                                }
-                                // Sync text fp so stub/empty accompanying text doesn't
-                                // appear as a separate record on the next poll.
+                                *last_image_hash.lock() = Some(quick);
+                                debug!(
+                                    "Clipboard changed (image): {}x{}",
+                                    img.width, img.height
+                                );
+                                on_change(ClipboardEvent::Image(CapturedImage {
+                                    rgba: raw,
+                                    width: img.width as u32,
+                                    height: img.height as u32,
+                                    hash,
+                                }));
                                 if let Some(captured) = text {
                                     *last_text_fp.lock() = Some(captured.fingerprint());
                                 }
@@ -154,6 +154,22 @@ impl ClipboardMonitor {
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
     }
+}
+
+/// Width/height/len + sampled bytes — enough to skip unchanged images cheaply.
+fn image_quick_fingerprint(img: &arboard::ImageData<'_>) -> String {
+    use sha2::{Digest, Sha256};
+    let bytes = img.bytes.as_ref();
+    let mut hasher = Sha256::new();
+    hasher.update(img.width.to_le_bytes());
+    hasher.update(img.height.to_le_bytes());
+    hasher.update((bytes.len() as u64).to_le_bytes());
+    let n = bytes.len().min(2048);
+    hasher.update(&bytes[..n]);
+    if bytes.len() > 4096 {
+        hasher.update(&bytes[bytes.len() - 2048..]);
+    }
+    hex::encode(hasher.finalize())
 }
 
 fn read_clipboard_text(clipboard: &mut Clipboard) -> Option<CapturedText> {

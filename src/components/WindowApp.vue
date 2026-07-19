@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed } from "vue";
 import SideBar from "./SideBar.vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
@@ -98,6 +98,7 @@ import BrandMark from "./icons/BrandMark.vue";
 import WindowControls from "./WindowControls.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
+import { useBatchActions } from "../composables/useBatchActions";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -106,6 +107,7 @@ import type { Tag } from "../types";
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActions();
 const appWindow = getCurrentWindow();
 
 defineEmits<{
@@ -237,45 +239,6 @@ async function onEmptyTrash() {
   }
 }
 
-function toggleBatchMode() {
-  clipboardStore.toggleBatchMode();
-}
-
-async function batchCopy() {
-  const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) {
-    toast("请先选择条目", "warning");
-    return;
-  }
-  const selected = clipboardStore.records.filter((r) => ids.includes(r.id));
-  if (selected.length) {
-    await navigator.clipboard.writeText(selected.map((r) => r.content).join("\n\n"));
-    toast(`已复制 ${selected.length} 项到剪贴板`, "success");
-  }
-}
-
-async function batchFavorite() {
-  const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) {
-    toast("请先选择条目", "warning");
-    return;
-  }
-  await clipboardStore.batchFavorite(ids);
-}
-
-async function batchDelete() {
-  const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) {
-    toast("请先选择条目", "warning");
-    return;
-  }
-  await clipboardStore.deleteBatch(ids);
-  toast("已移到回收站", "success");
-}
-
-onMounted(() => {
-  clipboardStore.loadTags();
-});
 </script>
 
 <style scoped>

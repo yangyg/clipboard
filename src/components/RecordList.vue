@@ -37,12 +37,12 @@
           </div>
           <div
             class="record-type-icon"
-            :class="[item.record!.content_type, { 'has-thumb': !!thumbSrc(item.record!) }]"
+            :class="[item.record!.content_type, { 'has-thumb': !!item.thumb }]"
           >
             <img
-              v-if="thumbSrc(item.record!)"
+              v-if="item.thumb"
               class="record-thumb"
-              :src="thumbSrc(item.record!)!"
+              :src="item.thumb"
               alt=""
             />
             <TypeIcon v-else :type="item.record!.content_type" :size="13" />
@@ -188,18 +188,26 @@ function isTextLike(type: string): boolean {
 interface VisibleItem {
   type: "label" | "record";
   record?: ClipboardRecord;
+  thumb?: string | null;
 }
 
 const visibleItems = computed<VisibleItem[]>(() => {
   const items: VisibleItem[] = [];
   const records = clipboardStore.filteredRecords;
-  const pinned = records.filter((r) => r.is_pinned);
-  const regular = records.filter((r) => !r.is_pinned);
+  const pinned: ClipboardRecord[] = [];
+  const regular: ClipboardRecord[] = [];
+  for (const r of records) {
+    if (r.is_pinned) pinned.push(r);
+    else regular.push(r);
+  }
+  const pushRecord = (r: ClipboardRecord) => {
+    items.push({ type: "record", record: r, thumb: recordThumbSrc(r) });
+  };
   if (pinned.length > 0) {
     items.push({ type: "label" });
-    for (const r of pinned) items.push({ type: "record", record: r });
+    for (const r of pinned) pushRecord(r);
   }
-  for (const r of regular) items.push({ type: "record", record: r });
+  for (const r of regular) pushRecord(r);
   return items;
 });
 
@@ -246,11 +254,6 @@ const contextMenu = reactive({
   y: 0,
   record: null as ClipboardRecord | null,
 });
-
-function thumbSrc(record: ClipboardRecord): string | null {
-  if (record.content_type !== "image") return null;
-  return recordThumbSrc(record);
-}
 
 function getPreview(record: ClipboardRecord): string {
   if (record.content_type === "image") {
@@ -622,11 +625,18 @@ onUnmounted(() => {
   background: none;
   border: none;
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.35;
   transition: opacity var(--transition-fast), transform var(--transition-fast);
   line-height: 1;
   padding: 1px 2px;
   color: var(--text-muted, var(--text-tertiary));
+}
+
+.record-pin:focus-visible,
+.record-star:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--accent);
+  border-radius: 4px;
 }
 
 .record-star {

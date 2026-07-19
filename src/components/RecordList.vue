@@ -139,10 +139,12 @@ import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import type { ClipboardRecord, ContentType } from "../types";
 import { useConfirm } from "../composables/useConfirm";
+import { useToast } from "../composables/useToast";
 import { recordThumbSrc } from "../utils/mediaUrl";
 
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
+const { toast } = useToast();
 const listRef = ref<HTMLElement | null>(null);
 
 function onListScroll() {
@@ -331,13 +333,8 @@ async function ctxDelete() {
   const record = contextMenu.record;
   contextMenu.visible = false;
   if (!record) return;
-  const ok = await confirm({
-    title: "移到回收站",
-    message: "确定要将这条记录移到回收站吗？",
-    confirmText: "删除",
-    danger: true,
-  });
-  if (ok) await clipboardStore.deleteRecord(record.id);
+  await clipboardStore.deleteRecord(record.id);
+  toast("已移到回收站", "success");
 }
 
 async function ctxPermanentDelete() {

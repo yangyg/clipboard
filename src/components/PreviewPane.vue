@@ -191,12 +191,14 @@ import TagDialog from "./TagDialog.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import { useConfirm } from "../composables/useConfirm";
+import { useToast } from "../composables/useToast";
 import { useSettingsStore } from "../stores/settings";
 import { recordMediaSrc } from "../utils/mediaUrl";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
+const { toast } = useToast();
 const record = computed(() => clipboardStore.selectedRecord);
 const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
 /** Sandboxed preview document; inherits theme text color via body style. */
@@ -324,13 +326,8 @@ function pin() {
 
 async function del() {
   if (!record.value) return;
-  const ok = await confirm({
-    title: "移到回收站",
-    message: "确定要将这条记录移到回收站吗？",
-    confirmText: "删除",
-    danger: true,
-  });
-  if (ok) await clipboardStore.deleteRecord(record.value.id);
+  await clipboardStore.deleteRecord(record.value.id);
+  toast("已移到回收站", "success");
 }
 
 function restore() {

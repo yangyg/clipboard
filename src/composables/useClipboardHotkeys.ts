@@ -57,13 +57,8 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
       if (ok) await clipboardStore.permanentlyDeleteRecord(id);
       return;
     }
-    const ok = await confirm({
-      title: "移到回收站",
-      message: "确定要将这条记录移到回收站吗？",
-      confirmText: "删除",
-      danger: true,
-    });
-    if (ok) await clipboardStore.deleteRecord(id);
+    await clipboardStore.deleteRecord(id);
+    toast("已移到回收站", "success");
   }
 
   function onKeyDown(e: KeyboardEvent) {

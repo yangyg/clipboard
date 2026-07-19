@@ -152,16 +152,8 @@ async function batchFavorite() {
 async function batchDelete() {
   const ids = Array.from(clipboardStore.selectedIds);
   if (!ids.length) return;
-  const ok = await confirm({
-    title: "批量删除",
-    message: `确定将 ${ids.length} 项移到回收站吗？`,
-    confirmText: "删除",
-    danger: true,
-  });
-  if (ok) {
-    await clipboardStore.deleteBatch(ids);
-    toast("已移到回收站", "success");
-  }
+  await clipboardStore.deleteBatch(ids);
+  toast("已移到回收站", "success");
 }
 
 onMounted(() => {

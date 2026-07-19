@@ -220,6 +220,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       records.value = records.value.filter((r) => r.id !== id);
       if (selectedId.value === id) selectedId.value = null;
       await loadStats();
+      await loadTrashCount();
     } catch (e) {
       console.error("Delete failed:", e);
     }

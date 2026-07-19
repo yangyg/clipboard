@@ -16,7 +16,7 @@
         <button
           v-if="record.is_favorite"
           class="preview-action-btn active"
-          @click="clipboardStore.toggleFavorite(record.id)"
+          @click="favorite"
           title="取消收藏"
         ><AppIcon name="star" :size="13" fill="currentColor" /></button>
       </div>
@@ -137,7 +137,7 @@
       :recordId="record.id"
       @close="tagDialogVisible = false"
       @switchToCreate="tagDialogMode = 'create'"
-      @created="tagDialogMode = 'assign'"
+      @created="onTagCreated"
     />
 
     <!-- Actions -->
@@ -153,7 +153,7 @@
       <button
         class="action-btn"
         :class="{ 'action-active': record.is_favorite }"
-        @click="clipboardStore.toggleFavorite(record.id)"
+        @click="favorite"
       >
         <span class="action-icon"><AppIcon name="star" :size="15" :fill="record.is_favorite ? 'currentColor' : 'none'" /></span>
         <span class="action-label">{{ record.is_favorite ? '已收藏' : '收藏' }}</span>
@@ -291,6 +291,10 @@ async function removeTag(tagName: string) {
   }
 }
 
+function onTagCreated() {
+  tagDialogMode.value = "assign";
+}
+
 function formatExpireTime(iso: string): string {
   const ms = new Date(iso).getTime() - Date.now();
   if (ms <= 0) return "已过期";
@@ -310,18 +314,37 @@ function formatDateTime(iso: string): string {
   });
 }
 
-function paste() {
+async function paste() {
   if (!record.value) return;
   const mode = settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original";
-  clipboardStore.pasteRecord(record.value.id, mode);
+  try {
+    await clipboardStore.pasteRecord(record.value.id, mode);
+    toast(mode === "plain" ? "已粘贴为纯文本" : "已粘贴", "success");
+  } catch {
+    toast("粘贴失败", "error");
+  }
 }
 
-function pastePlain() {
-  if (record.value) clipboardStore.pasteRecord(record.value.id, "plain");
+async function pastePlain() {
+  if (!record.value) return;
+  try {
+    await clipboardStore.pasteRecord(record.value.id, "plain");
+    toast("已粘贴为纯文本", "success");
+  } catch {
+    toast("粘贴失败", "error");
+  }
 }
 
-function pin() {
-  if (record.value) clipboardStore.togglePin(record.value.id);
+async function favorite() {
+  if (!record.value) return;
+  const next = await clipboardStore.toggleFavorite(record.value.id);
+  if (next == null) toast("操作失败", "error");
+}
+
+async function pin() {
+  if (!record.value) return;
+  const next = await clipboardStore.togglePin(record.value.id);
+  if (next == null) toast("操作失败", "error");
 }
 
 async function del() {
@@ -330,10 +353,9 @@ async function del() {
   toast("已移到回收站", "success");
 }
 
-function restore() {
-  if (record.value) {
-    clipboardStore.restoreRecord(record.value.id);
-  }
+async function restore() {
+  if (!record.value) return;
+  await clipboardStore.restoreRecord(record.value.id);
 }
 
 async function permanentDel() {
@@ -345,7 +367,8 @@ async function permanentDel() {
     danger: true,
   });
   if (ok) {
-    clipboardStore.permanentlyDeleteRecord(record.value.id);
+    await clipboardStore.permanentlyDeleteRecord(record.value.id);
+    toast("已永久删除", "success");
   }
 }
 </script>

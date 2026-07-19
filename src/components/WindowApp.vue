@@ -53,7 +53,7 @@
               class="list-header-btn"
               :class="{ active: clipboardStore.batchMode }"
               title="批量操作"
-              @click="clipboardStore.toggleBatchMode()"
+              @click="toggleBatchMode"
             ><AppIcon name="batch" :size="14" /></button>
           </div>
         </div>
@@ -67,7 +67,7 @@
               <button class="batch-btn" @click="batchCopy"><AppIcon name="copy" :size="13" /> 复制</button>
               <button class="batch-btn" @click="batchFavorite"><AppIcon name="star" :size="13" /> 收藏</button>
               <button class="batch-btn danger" @click="batchDelete"><AppIcon name="trash" :size="13" /> 删除</button>
-              <button class="batch-btn" @click="clipboardStore.toggleBatchMode()"><AppIcon name="close" :size="13" /></button>
+              <button class="batch-btn" @click="toggleBatchMode"><AppIcon name="close" :size="13" /></button>
             </div>
           </div>
         </Transition>
@@ -82,7 +82,6 @@
       :editTag="editingTag"
       @close="onTagDialogClose"
       @switchToCreate="tagDialogMode = 'create'"
-      @updated="toast('标签已更新', 'success')"
     />
   </div>
 </template>
@@ -220,7 +219,6 @@ async function onDeleteTag(tag: Tag) {
   if (!ok) return;
   try {
     await clipboardStore.deleteTag(tag.id);
-    toast("标签已删除", "success");
   } catch {
     toast("删除失败", "error");
   }
@@ -239,9 +237,16 @@ async function onEmptyTrash() {
   }
 }
 
+function toggleBatchMode() {
+  clipboardStore.toggleBatchMode();
+}
+
 async function batchCopy() {
   const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) return;
+  if (!ids.length) {
+    toast("请先选择条目", "warning");
+    return;
+  }
   const selected = clipboardStore.records.filter((r) => ids.includes(r.id));
   if (selected.length) {
     await navigator.clipboard.writeText(selected.map((r) => r.content).join("\n\n"));
@@ -250,13 +255,20 @@ async function batchCopy() {
 }
 
 async function batchFavorite() {
-  await clipboardStore.batchFavorite(Array.from(clipboardStore.selectedIds));
-  toast("已收藏所选未收藏项", "success");
+  const ids = Array.from(clipboardStore.selectedIds);
+  if (!ids.length) {
+    toast("请先选择条目", "warning");
+    return;
+  }
+  await clipboardStore.batchFavorite(ids);
 }
 
 async function batchDelete() {
   const ids = Array.from(clipboardStore.selectedIds);
-  if (!ids.length) return;
+  if (!ids.length) {
+    toast("请先选择条目", "warning");
+    return;
+  }
   await clipboardStore.deleteBatch(ids);
   toast("已移到回收站", "success");
 }

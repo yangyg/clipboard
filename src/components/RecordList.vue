@@ -288,11 +288,16 @@ function onItemClick(id: number) {
   clipboardStore.selectRecord(id);
 }
 
-function onItemDoubleClick(id: number) {
+async function onItemDoubleClick(id: number) {
   if (clipboardStore.trashFilter) {
-    clipboardStore.restoreRecord(id);
-  } else {
-    clipboardStore.pasteRecord(id);
+    await clipboardStore.restoreRecord(id);
+    return;
+  }
+  try {
+    await clipboardStore.pasteRecord(id);
+    toast("已粘贴", "success");
+  } catch {
+    toast("粘贴失败", "error");
   }
 }
 
@@ -304,29 +309,51 @@ function showContextMenu(e: MouseEvent, record: ClipboardRecord) {
   contextMenu.record = record;
 }
 
-function ctxPaste() {
-  if (contextMenu.record) clipboardStore.pasteRecord(contextMenu.record.id);
+async function ctxPaste() {
+  const record = contextMenu.record;
   contextMenu.visible = false;
+  if (!record) return;
+  try {
+    await clipboardStore.pasteRecord(record.id);
+    toast("已粘贴", "success");
+  } catch {
+    toast("粘贴失败", "error");
+  }
 }
 
-function ctxPastePlain() {
-  if (contextMenu.record) clipboardStore.pasteRecord(contextMenu.record.id, "plain");
+async function ctxPastePlain() {
+  const record = contextMenu.record;
   contextMenu.visible = false;
+  if (!record) return;
+  try {
+    await clipboardStore.pasteRecord(record.id, "plain");
+    toast("已粘贴为纯文本", "success");
+  } catch {
+    toast("粘贴失败", "error");
+  }
 }
 
-function ctxFavorite() {
-  if (contextMenu.record) clipboardStore.toggleFavorite(contextMenu.record.id);
+async function ctxFavorite() {
+  const record = contextMenu.record;
   contextMenu.visible = false;
+  if (!record) return;
+  const next = await clipboardStore.toggleFavorite(record.id);
+  if (next == null) toast("操作失败", "error");
 }
 
-function ctxPin() {
-  if (contextMenu.record) clipboardStore.togglePin(contextMenu.record.id);
+async function ctxPin() {
+  const record = contextMenu.record;
   contextMenu.visible = false;
+  if (!record) return;
+  const next = await clipboardStore.togglePin(record.id);
+  if (next == null) toast("操作失败", "error");
 }
 
-function ctxRestore() {
-  if (contextMenu.record) clipboardStore.restoreRecord(contextMenu.record.id);
+async function ctxRestore() {
+  const record = contextMenu.record;
   contextMenu.visible = false;
+  if (!record) return;
+  await clipboardStore.restoreRecord(record.id);
 }
 
 async function ctxDelete() {
@@ -347,7 +374,10 @@ async function ctxPermanentDelete() {
     confirmText: "永久删除",
     danger: true,
   });
-  if (ok) await clipboardStore.permanentlyDeleteRecord(record.id);
+  if (ok) {
+    await clipboardStore.permanentlyDeleteRecord(record.id);
+    toast("已永久删除", "success");
+  }
 }
 
 function closeContextMenu() {

@@ -162,18 +162,22 @@ function toggleTag(tagId: number) {
 async function confirmForm() {
   const name = tagName.value.trim();
   if (!name) return;
-  if (props.mode === "edit") {
-    if (!props.editTag) return;
-    await clipboardStore.updateTag(props.editTag.id, name, selectedColor.value);
-    emit("updated");
+  try {
+    if (props.mode === "edit") {
+      if (!props.editTag) return;
+      await clipboardStore.updateTag(props.editTag.id, name, selectedColor.value);
+      emit("updated");
+      emit("close");
+      return;
+    }
+    await clipboardStore.createTag(name, selectedColor.value);
+    emit("created");
+    // Assign flow (has recordId): stay open so parent can return to assign mode
+    if (props.recordId != null) return;
     emit("close");
-    return;
+  } catch {
+    // parent / caller may toast; keep dialog open for retry
   }
-  await clipboardStore.createTag(name, selectedColor.value);
-  emit("created");
-  // Assign flow (has recordId): stay open so parent can return to assign mode
-  if (props.recordId != null) return;
-  emit("close");
 }
 
 async function confirmAssign() {

@@ -226,21 +226,23 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
-  async function toggleFavorite(id: number) {
+  async function toggleFavorite(id: number): Promise<boolean | null> {
     const record = records.value.find((r) => r.id === id);
-    if (!record) return;
+    if (!record) return null;
     try {
       const newVal = await invoke<boolean>("toggle_favorite", { id });
       record.is_favorite = newVal;
       await loadStats();
+      return newVal;
     } catch (e) {
       console.error("Toggle favorite failed:", e);
+      return null;
     }
   }
 
-  async function togglePin(id: number) {
+  async function togglePin(id: number): Promise<boolean | null> {
     const record = records.value.find((r) => r.id === id);
-    if (!record) return;
+    if (!record) return null;
     try {
       const newVal = await invoke<boolean>("toggle_pin", { id });
       record.is_pinned = newVal;
@@ -251,8 +253,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
         return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
       });
       await loadStats();
+      return newVal;
     } catch (e) {
       console.error("Toggle pin failed:", e);
+      return null;
     }
   }
 

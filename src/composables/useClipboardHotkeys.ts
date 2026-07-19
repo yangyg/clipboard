@@ -36,6 +36,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
       (settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original");
     try {
       await clipboardStore.pasteRecord(id, pasteMode);
+      toast(pasteMode === "plain" ? "已粘贴为纯文本" : "已粘贴", "success");
       if (settingsStore.settings.auto_close_on_paste && options.onClose) {
         options.onClose();
       }
@@ -54,7 +55,10 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
         confirmText: "永久删除",
         danger: true,
       });
-      if (ok) await clipboardStore.permanentlyDeleteRecord(id);
+      if (ok) {
+        await clipboardStore.permanentlyDeleteRecord(id);
+        toast("已永久删除", "success");
+      }
       return;
     }
     await clipboardStore.deleteRecord(id);
@@ -122,14 +126,20 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
       if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
       e.preventDefault();
-      void clipboardStore.toggleFavorite(clipboardStore.selectedId);
+      void (async () => {
+        const next = await clipboardStore.toggleFavorite(clipboardStore.selectedId!);
+        if (next == null) toast("操作失败", "error");
+      })();
       return;
     }
 
     if ((e.ctrlKey || e.metaKey) && (e.key === "t" || e.key === "T")) {
       if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
       e.preventDefault();
-      void clipboardStore.togglePin(clipboardStore.selectedId);
+      void (async () => {
+        const next = await clipboardStore.togglePin(clipboardStore.selectedId!);
+        if (next == null) toast("操作失败", "error");
+      })();
       return;
     }
 

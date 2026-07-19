@@ -402,6 +402,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useSettingsStore } from "../stores/settings";
 import { useClipboardStore } from "../stores/clipboard";
 import { useConfirm } from "../composables/useConfirm";
+import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
@@ -414,6 +415,7 @@ const emit = defineEmits<{ close: [] }>();
 const settingsStore = useSettingsStore();
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
+const { toast } = useToast();
 const settings = settingsStore.settings;
 const isWindowMode = computed(() => settings.app_mode === "window");
 const stats = computed(() => clipboardStore.stats);
@@ -478,11 +480,17 @@ function update(key: string, value: any) {
 
 function addIgnoredApp() {
   const name = newIgnoredApp.value.trim();
-  if (name && !settings.ignored_apps.includes(name)) {
-    const updated = [...settings.ignored_apps, name];
-    settingsStore.updateSetting("ignored_apps", updated);
-    newIgnoredApp.value = "";
+  if (!name) {
+    toast("请输入应用名称", "warning");
+    return;
   }
+  if (settings.ignored_apps.includes(name)) {
+    toast("该应用已在忽略列表中", "warning");
+    return;
+  }
+  const updated = [...settings.ignored_apps, name];
+  settingsStore.updateSetting("ignored_apps", updated);
+  newIgnoredApp.value = "";
 }
 
 function removeIgnoredApp(app: string) {
@@ -543,7 +551,7 @@ function onShortcutKeydown(e: KeyboardEvent) {
   if (parts.length < 2) return;
 
   const combo = parts.join("+");
-  update("global_shortcut", combo);
+  settingsStore.updateSetting("global_shortcut", combo);
   stopShortcutRecording();
 }
 
@@ -626,8 +634,10 @@ async function clearHistory() {
   try {
     await invoke("clear_history");
     await clipboardStore.loadRecords();
+    toast("历史已清空", "success");
   } catch (e) {
     console.error("Clear history failed:", e);
+    toast("清空失败", "error");
   }
 }
 

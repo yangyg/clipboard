@@ -3,10 +3,7 @@
     <!-- Title Bar -->
     <div class="titlebar" data-tauri-drag-region @dblclick="onTitlebarDblClick">
       <div class="titlebar-left">
-        <div class="titlebar-logo">
-          <BrandMark :size="22" />
-          <span>剪贴板管理</span>
-        </div>
+        <span class="titlebar-title">剪贴板管理</span>
         <span class="titlebar-version">v0.1.0</span>
       </div>
 
@@ -92,7 +89,6 @@ import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import TagDialog from "./TagDialog.vue";
 import AppIcon from "./icons/AppIcon.vue";
-import BrandMark from "./icons/BrandMark.vue";
 import WindowControls from "./WindowControls.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
@@ -270,10 +266,7 @@ async function onEmptyTrash() {
   -webkit-app-region: drag;
 }
 
-.titlebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.titlebar-title {
   font-weight: 700;
   font-size: 0.85rem;
   letter-spacing: -0.02em;

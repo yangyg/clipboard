@@ -13,7 +13,6 @@
       <div class="settings-main">
         <!-- Nav -->
         <nav class="settings-nav">
-          <div class="settings-nav-title"><BrandMark :size="18" /> 剪贴板管理</div>
           <div
             v-for="section in SECTIONS"
             :key="section.key"
@@ -202,8 +201,8 @@
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">保留天数</div>
-                  <div class="setting-desc">超出天数自动删除（收藏除外）</div>
+                  <div class="setting-label">回收站保留天数</div>
+                  <div class="setting-desc">回收站内超过天数后永久删除（收藏、置顶除外）</div>
                 </div>
                 <div class="slider-row">
                   <input type="range" min="7" max="365" step="1" :value="settings.retention_days" @input="(e) => update('retention_days', Number((e.target as HTMLInputElement).value))" />
@@ -385,7 +384,9 @@
           <template v-else-if="activeSection === 'about'">
             <div class="settings-section">
               <div class="about-content">
-                <div class="about-logo"><BrandMark :size="48" /></div>
+                <div class="about-logo">
+                  <img :src="appIconUrl" alt="" width="48" height="48" draggable="false" />
+                </div>
                 <div class="about-name">剪贴板管理</div>
                 <div class="about-version">版本 0.1.0</div>
                 <div class="about-desc">Windows 剪贴板管理工具 · Tauri + Vue 3 + Rust</div>
@@ -409,8 +410,8 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { ClipboardRecord } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
-import BrandMark from "./icons/BrandMark.vue";
 import WindowControls from "./WindowControls.vue";
+import appIconUrl from "../assets/app-icon-128.png";
 
 const emit = defineEmits<{ close: [] }>();
 const settingsStore = useSettingsStore();
@@ -754,18 +755,6 @@ onUnmounted(() => {
   flex-shrink: 0;
   overflow-y: auto;
   transition: background var(--transition-smooth), border-color var(--transition-smooth);
-}
-
-.settings-nav-title {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 0 16px 14px;
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--border-subtle);
-  margin-bottom: 8px;
 }
 
 .nav-item {
@@ -1263,6 +1252,14 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex;
   justify-content: center;
   margin-bottom: 12px;
+}
+
+.about-logo img {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: contain;
+  user-select: none;
 }
 
 .about-name {

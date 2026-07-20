@@ -1,5 +1,5 @@
 <template>
-  <div class="floating-panel">
+  <div class="floating-panel panel-surface">
     <!-- Header -->
     <div class="panel-header">
       <div class="panel-title-row">
@@ -139,12 +139,9 @@ async function onEmptyTrash() {
 .floating-panel {
   width: 100%;
   height: 100%;
-  background: color-mix(in srgb, var(--bg-surface) calc(var(--panel-opacity, 0.94) * 100%), transparent);
-  border-radius: var(--panel-radius, 20px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: background var(--transition-smooth);
 }
 
 .panel-header {

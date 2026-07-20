@@ -1,5 +1,5 @@
 <template>
-  <div class="window-app">
+  <div class="window-app panel-surface">
     <!-- Title Bar -->
     <div class="titlebar" data-tauri-drag-region @dblclick="onTitlebarDblClick">
       <div class="titlebar-left">
@@ -256,7 +256,6 @@ async function onEmptyTrash() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-surface);
   color: var(--text-primary);
 }
 

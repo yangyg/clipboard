@@ -1,6 +1,6 @@
 <template>
   <div class="settings-overlay" tabindex="-1" @keydown.esc="onOverlayEsc">
-    <div class="settings-window">
+    <div class="settings-window panel-surface">
       <!-- Header -->
       <div class="settings-header" :class="{ 'with-chrome': isWindowMode }" data-tauri-drag-region>
         <span class="settings-title"><AppIcon name="settings" :size="15" /> 设置</span>
@@ -13,16 +13,17 @@
       <div class="settings-main">
         <!-- Nav -->
         <nav class="settings-nav">
-          <div
+          <button
             v-for="section in SECTIONS"
             :key="section.key"
+            type="button"
             class="nav-item"
             :class="{ active: activeSection === section.key }"
             @click="activeSection = section.key"
           >
             <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
-            {{ section.label }}
-          </div>
+            <span class="nav-label">{{ section.label }}</span>
+          </button>
         </nav>
 
         <!-- Body -->
@@ -143,7 +144,7 @@
                 </div>
               </div>
               <div class="setting-row">
-                <div class="setting-label">透明度</div>
+                  <div class="setting-label">不透明度</div>
                 <div class="slider-row">
                   <input type="range" min="60" max="100" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_opacity }}%</span>
@@ -343,6 +344,10 @@
                 <button class="btn btn-danger" @click="clearHistory"><AppIcon name="trash" :size="13" /> 清空历史</button>
               </div>
             </div>
+          </template>
+
+          <!-- System -->
+          <template v-else-if="activeSection === 'system'">
             <div class="settings-section">
               <div class="settings-section-title">系统</div>
               <div class="setting-row">
@@ -431,12 +436,13 @@ const isImporting = ref(false);
 const isRecordingShortcut = ref(false);
 
 const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
+  { key: "appearance", icon: "palette", label: "外观" },
   { key: "shortcuts", icon: "keyboard", label: "快捷键" },
   { key: "history", icon: "history", label: "历史" },
-  { key: "appearance", icon: "palette", label: "外观" },
   { key: "privacy", icon: "shield", label: "隐私" },
-  { key: "stats", icon: "stats", label: "统计" },
+  { key: "system", icon: "settings", label: "系统" },
   { key: "data", icon: "package", label: "数据" },
+  { key: "stats", icon: "stats", label: "统计" },
   { key: "about", icon: "info", label: "关于" },
 ];
 
@@ -668,7 +674,7 @@ onUnmounted(() => {
 .settings-overlay {
   position: fixed;
   inset: 0;
-  background: var(--bg-surface);
+  background: transparent;
   display: flex;
   z-index: 200;
 }
@@ -676,7 +682,6 @@ onUnmounted(() => {
 .settings-window {
   width: 100%;
   height: 100%;
-  background: var(--bg-surface);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -761,12 +766,19 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
+  margin: 0;
   padding: 8px 16px;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  font: inherit;
   font-size: 12.5px;
+  line-height: 1;
+  text-align: left;
   color: var(--text-secondary);
   cursor: pointer;
-  border-left: 2px solid transparent;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .nav-item:hover {
@@ -781,9 +793,18 @@ onUnmounted(() => {
 }
 
 .nav-icon {
-  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   width: 18px;
-  text-align: center;
+  height: 18px;
+  color: inherit;
+  line-height: 0;
+}
+
+.nav-label {
+  line-height: 1.2;
 }
 
 .settings-body {

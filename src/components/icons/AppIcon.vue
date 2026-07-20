@@ -113,8 +113,8 @@ const icon = computed<Component>(() => ICONS[props.name]);
 
 <style scoped>
 .app-icon {
-  display: inline-block;
+  display: block;
   flex-shrink: 0;
-  vertical-align: middle;
+  line-height: 0;
 }
 </style>

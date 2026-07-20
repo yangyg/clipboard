@@ -373,6 +373,12 @@ async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settin
             return Err(e);
         }
     }
+
+    if settings.panel_radius != previous.panel_radius {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = apply_window_round_corners(&window, settings.panel_radius);
+        }
+    }
     Ok(())
 }
 
@@ -501,12 +507,73 @@ async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), Stri
     let is_window = mode == "window";
     let (w, h): (f64, f64) = if is_window { (920.0, 680.0) } else { (640.0, 620.0) };
     window.set_decorations(false).map_err(|e| e.to_string())?;
+    let _ = window.set_shadow(false);
     window.set_always_on_top(!is_window).map_err(|e| e.to_string())?;
     window.set_skip_taskbar(!is_window).map_err(|e| e.to_string())?;
     window.set_resizable(is_window).map_err(|e| e.to_string())?;
     let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+    // Re-apply rounded region after size change
+    let radius = app
+        .try_state::<AppState>()
+        .and_then(|s| s.db.get_settings().ok())
+        .map(|s| s.panel_radius)
+        .unwrap_or(20);
+    let _ = apply_window_round_corners(&window, radius);
     info!("App mode switched to: {}", mode);
     Ok(())
+}
+
+/// Clip the HWND to a rounded rect so corners are not rectangular (and not black).
+/// `radius` is logical CSS px from 面板外观 → 圆角大小; scaled to physical pixels.
+#[tauri::command]
+async fn set_window_corner_radius(app: tauri::AppHandle, radius: i32) -> Result<(), String> {
+    let window = app.get_webview_window("main").ok_or("window not found")?;
+    apply_window_round_corners(&window, radius)
+}
+
+fn apply_window_round_corners(window: &tauri::WebviewWindow, radius_logical: i32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn};
+
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        let size = window.outer_size().map_err(|e| e.to_string())?;
+        let w = size.width as i32;
+        let h = size.height as i32;
+        let scale = window.scale_factor().unwrap_or(1.0);
+        let radius = ((radius_logical.max(0) as f64) * scale).round() as i32;
+
+        // Clear region → rectangular window
+        if radius <= 0 {
+            let ok = unsafe { SetWindowRgn(hwnd.0 as _, std::ptr::null_mut(), 1) };
+            if ok == 0 {
+                return Err("SetWindowRgn(null) failed".into());
+            }
+            return Ok(());
+        }
+
+        // Ellipse width/height = 2 * corner radius (Win32 convention)
+        let ellipse = (radius * 2).max(1);
+        // +1 on bottom-right is required by CreateRoundRectRgn (exclusive edge)
+        let hrgn = unsafe { CreateRoundRectRgn(0, 0, w + 1, h + 1, ellipse, ellipse) };
+        if hrgn.is_null() {
+            return Err("CreateRoundRectRgn failed".into());
+        }
+        let ok = unsafe { SetWindowRgn(hwnd.0 as _, hrgn, 1) };
+        if ok == 0 {
+            unsafe {
+                DeleteObject(hrgn);
+            }
+            return Err("SetWindowRgn failed".into());
+        }
+        // Ownership of hrgn transferred to the system on success
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, radius_logical);
+        Ok(())
+    }
 }
 
 // ============================================================
@@ -606,6 +673,7 @@ pub fn run() {
             clear_history,
             get_stats,
             switch_app_mode,
+            set_window_corner_radius,
             get_all_tags,
             create_tag,
             delete_tag,
@@ -714,6 +782,18 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_shadow(false);
+                let radius = db
+                    .get_settings()
+                    .map(|s| s.panel_radius)
+                    .unwrap_or(20);
+                if let Err(e) = apply_window_round_corners(&window, radius) {
+                    warn!("Failed to apply window round corners: {}", e);
+                }
+            }
 
             // Start clipboard monitoring
             let app_handle_clone = app_handle.clone();
@@ -836,9 +916,27 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                window.hide().ok();
-                api.prevent_close();
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    window.hide().ok();
+                    api.prevent_close();
+                }
+                tauri::WindowEvent::Resized(_)
+                | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                    if window.label() != "main" {
+                        return;
+                    }
+                    let radius = window
+                        .app_handle()
+                        .try_state::<AppState>()
+                        .and_then(|s| s.db.get_settings().ok())
+                        .map(|s| s.panel_radius)
+                        .unwrap_or(20);
+                    if let Some(w) = window.app_handle().get_webview_window("main") {
+                        let _ = apply_window_round_corners(&w, radius);
+                    }
+                }
+                _ => {}
             }
         })
         .run(tauri::generate_context!())

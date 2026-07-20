@@ -98,6 +98,11 @@ export const useSettingsStore = defineStore("settings", () => {
     // Panel radius (used as CSS variable)
     root.style.setProperty("--panel-radius", `${s.panel_radius}px`);
 
+    // Clip native HWND to match CSS radius (Windows transparent window)
+    void invoke("set_window_corner_radius", { radius: s.panel_radius }).catch((e) => {
+      console.error("Failed to set window corner radius:", e);
+    });
+
     // Panel opacity (used as CSS variable)
     root.style.setProperty("--panel-opacity", String(s.panel_opacity / 100));
 

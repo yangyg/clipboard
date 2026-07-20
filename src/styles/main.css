@@ -128,7 +128,6 @@ html {
 html,
 body {
   font-family: var(--font-sans);
-  /* Transparent so panel opacity / blur / radius can show through the OS window */
   background: transparent;
   color: var(--text-primary);
   overflow: hidden;
@@ -182,6 +181,7 @@ input {
 
 /* Shared panel chrome (floating + window + settings) */
 .panel-surface {
+  overflow: hidden;
   background: color-mix(
     in srgb,
     var(--bg-surface) calc(var(--panel-opacity, 0.94) * 100%),
@@ -189,7 +189,6 @@ input {
   );
   border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: var(--panel-radius, 20px);
-  /* OS window shadow is off (required for transparency); draw edge in-content */
   box-shadow: var(--shadow-lg);
   transition: background var(--transition-smooth), border-color var(--transition-smooth);
 }

@@ -1,28 +1,10 @@
 <template>
   <aside class="sidebar">
-    <!-- Navigation: Categories -->
+    <!-- Navigation: Categories (includes favorites as a view filter) -->
     <nav class="sidebar-section" aria-label="分类">
       <div class="sidebar-label">分类</div>
       <button
         v-for="item in categoryItems"
-        :key="item.key"
-        type="button"
-        class="nav-item"
-        :class="{ active: props.activeCategory === item.key }"
-        :aria-current="props.activeCategory === item.key ? 'page' : undefined"
-        @click="selectCategory(item.key)"
-      >
-        <span class="nav-icon"><AppIcon :name="item.icon" :size="15" /></span>
-        <span class="nav-label">{{ item.label }}</span>
-        <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
-      </button>
-    </nav>
-
-    <!-- Special -->
-    <nav class="sidebar-section" aria-label="收藏与回收站">
-      <div class="sidebar-label">收藏</div>
-      <button
-        v-for="item in specialItems"
         :key="item.key"
         type="button"
         class="nav-item"
@@ -39,6 +21,21 @@
         </span>
         <span class="nav-label">{{ item.label }}</span>
         <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
+      </button>
+    </nav>
+
+    <!-- Trash: separate from categories / favorites -->
+    <nav class="sidebar-section" aria-label="回收站">
+      <button
+        type="button"
+        class="nav-item"
+        :class="{ active: props.activeCategory === 'trash' }"
+        :aria-current="props.activeCategory === 'trash' ? 'page' : undefined"
+        @click="selectCategory('trash')"
+      >
+        <span class="nav-icon"><AppIcon name="trash" :size="15" /></span>
+        <span class="nav-label">回收站</span>
+        <span class="nav-count">{{ clipboardStore.trashCount }}</span>
       </button>
     </nav>
 
@@ -165,11 +162,7 @@ const categoryItems = computed(() => [
   { key: "file", icon: "file" as AppIconName, label: "文件", count: clipboardStore.filterCounts.file },
   { key: "link", icon: "link" as AppIconName, label: "链接", count: clipboardStore.filterCounts.link },
   { key: "code", icon: "code" as AppIconName, label: "代码", count: clipboardStore.filterCounts.code },
-]);
-
-const specialItems = computed(() => [
   { key: "favorites", icon: "star" as AppIconName, label: "收藏夹", count: clipboardStore.filterCounts.favorites },
-  { key: "trash", icon: "trash" as AppIconName, label: "回收站", count: clipboardStore.trashCount },
 ]);
 
 function selectCategory(key: string) {

@@ -277,6 +277,14 @@ export const useClipboardStore = defineStore("clipboard", () => {
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
     try {
       await invoke("paste_record", { id, mode });
+      const row = records.value.find((r) => r.id === id);
+      if (row) row.copy_count += 1;
+      const detail = recordDetails.value.get(id);
+      if (detail) {
+        const next = new Map(recordDetails.value);
+        next.set(id, { ...detail, copy_count: detail.copy_count + 1 });
+        recordDetails.value = next;
+      }
     } catch (e) {
       console.error("Paste failed:", e);
       throw e;

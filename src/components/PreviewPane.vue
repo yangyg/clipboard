@@ -51,15 +51,13 @@
     </div>
 
     <!-- Content Preview -->
-    <div class="preview-content" ref="contentRef">
+    <div class="preview-content">
       <!-- Text: HTML preview XOR plain — never both (Douyin shares duplicate otherwise). -->
       <template v-if="record.content_type === 'text'">
-        <iframe
+        <div
           v-if="showHtmlPreview"
-          class="html-preview"
-          sandbox=""
-          :srcdoc="htmlPreviewDoc"
-          title="格式预览"
+          class="content-box html-preview"
+          v-html="sanitizedHtml"
         />
         <div v-else class="content-box">{{ record.content }}</div>
       </template>
@@ -185,6 +183,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useSettingsStore } from "../stores/settings";
 import { recordMediaSrc } from "../utils/mediaUrl";
+import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -192,16 +191,7 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const record = computed(() => clipboardStore.selectedRecord);
 const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
-/** Sandboxed preview document; inherits theme text color via body style. */
-const htmlPreviewDoc = computed(() => {
-  const html = record.value?.content_html;
-  if (!html) return "";
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;padding:0;background:transparent;}
-body{padding:4px;font:13px/1.5 system-ui,sans-serif;color:CanvasText;word-break:break-word;}
-img{max-width:100%;height:auto;}
-</style></head><body>${html}</body></html>`;
-});
+
 /**
  * Show rich HTML only when it adds real formatting (Word etc.).
  * Share links (Douyin) usually wrap the same caption in <a>/<p>/<span> — use plain text.
@@ -227,6 +217,13 @@ const showHtmlPreview = computed(() => {
   }
   return true;
 });
+
+const sanitizedHtml = computed(() => {
+  const html = record.value?.content_html;
+  if (!html || !showHtmlPreview.value) return "";
+  return sanitizeClipboardHtml(html);
+});
+
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"assign" | "create">("assign");
 
@@ -542,20 +539,45 @@ async function permanentDel() {
 /* Content */
 .preview-content {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   padding: 16px 20px;
+  overflow-x: hidden;
   overflow-y: auto;
 }
 
+/* Rich HTML often ships inline nowrap/fixed widths — force wrap inside preview. */
 .html-preview {
   display: block;
-  width: 100%;
-  min-height: 120px;
-  max-height: 280px;
-  border: 1px solid var(--border-light, var(--border-subtle));
-  border-radius: var(--radius-md, 10px);
-  background: var(--bg-surface);
-  color-scheme: inherit;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  white-space: normal !important;
+}
+
+.html-preview :deep(*) {
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+.html-preview :deep(img) {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.html-preview :deep(pre),
+.html-preview :deep(code) {
+  white-space: pre-wrap !important;
+}
+
+.html-preview :deep(table) {
+  width: 100% !important;
+  table-layout: fixed;
+  border-collapse: collapse;
 }
 
 .content-box {
@@ -566,7 +588,11 @@ async function permanentDel() {
   font-size: 0.813rem;
   line-height: 1.65;
   color: var(--text-primary);
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
   word-break: break-word;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
@@ -577,6 +603,9 @@ async function permanentDel() {
   background: var(--code-bg);
   color: var(--text-primary);
   border: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .link-card {

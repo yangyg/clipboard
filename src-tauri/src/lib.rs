@@ -455,9 +455,16 @@ async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
 
 // === Tag Commands ===
 
-#[tauri::command]
-async fn get_all_tags(state: State<'_, AppState>) -> Result<Vec<TagInfo>, String> {
-    state.db.get_all_tags().map_err(|e| e.to_string())
+#[tauri::command(rename_all = "snake_case")]
+async fn get_all_tags(
+    state: State<'_, AppState>,
+    content_type: Option<String>,
+    favorites_only: Option<bool>,
+) -> Result<Vec<TagInfo>, String> {
+    state
+        .db
+        .get_all_tags(content_type.as_deref(), favorites_only.unwrap_or(false))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

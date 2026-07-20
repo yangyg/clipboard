@@ -215,6 +215,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     // Keep activeTag — type/favorites and tag combine with AND.
     selectedId.value = null;
     reloadList();
+    void loadTags();
   }
 
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
@@ -377,6 +378,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       isSearching.value = false;
     }
     selectedId.value = null;
+    void loadTags();
   }
 
   function toggleBatchMode() {
@@ -447,7 +449,15 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   async function loadTags() {
     try {
-      tags.value = await invoke<Tag[]>("get_all_tags");
+      const favoritesOnly = !trashFilter.value && activeFilter.value === "favorites";
+      const contentType =
+        !trashFilter.value && !favoritesOnly && activeFilter.value !== "all"
+          ? activeFilter.value
+          : null;
+      tags.value = await invoke<Tag[]>("get_all_tags", {
+        content_type: contentType,
+        favorites_only: favoritesOnly,
+      });
     } catch (e) {
       console.error("Failed to load tags:", e);
     }

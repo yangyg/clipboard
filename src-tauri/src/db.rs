@@ -1102,17 +1102,35 @@ impl ClipboardDb {
 
     // === Tag CRUD ===
 
-    pub fn get_all_tags(&self) -> SqlResult<Vec<TagInfo>> {
+    /// Tag counts respect the current list facet (type / favorites), exclude trash.
+    pub fn get_all_tags(
+        &self,
+        content_type: Option<&str>,
+        favorites_only: bool,
+    ) -> SqlResult<Vec<TagInfo>> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare(
-            "SELECT t.id, t.name, t.color, t.is_auto, COUNT(rt.record_id) as cnt
+        let mut sql = String::from(
+            "SELECT t.id, t.name, t.color, t.is_auto, COUNT(r.id) as cnt
              FROM tags t
              LEFT JOIN record_tags rt ON rt.tag_id = t.id
-             GROUP BY t.id
-             ORDER BY t.name",
-        )?;
+             LEFT JOIN records r ON r.id = rt.record_id AND r.is_trashed = 0",
+        );
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        if favorites_only {
+            sql.push_str(" AND r.is_favorite = 1");
+        } else if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
+            sql.push_str(" AND r.content_type = ?");
+            params.push(Box::new(ct.to_string()));
+        }
+
+        sql.push_str(" GROUP BY t.id ORDER BY t.name");
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql)?;
         let tags = stmt
-            .query_map([], |row| {
+            .query_map(param_refs.as_slice(), |row| {
                 Ok(TagInfo {
                     id: row.get(0)?,
                     name: row.get(1)?,

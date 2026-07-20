@@ -21,12 +21,15 @@ pub struct CapturedText {
 }
 
 impl CapturedText {
-    /// Fingerprint for change detection (plain + html).
+    /// Fingerprint for change detection (plain + html) — hash only, no huge string retention.
     pub fn fingerprint(&self) -> String {
-        match &self.html {
-            Some(h) => format!("{}\u{1e}{h}", self.text),
-            None => self.text.clone(),
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(self.text.as_bytes());
+        if let Some(h) = &self.html {
+            hasher.update(h.as_bytes());
         }
+        hex::encode(hasher.finalize())
     }
 }
 

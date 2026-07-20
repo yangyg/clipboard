@@ -25,15 +25,34 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const pauseCapture = ref(false);
   const stats = ref<StatsData | null>(null);
   const tags = ref<Tag[]>([]);
+  /** Full content/HTML for preview only — never merge back into list rows. */
+  const recordDetails = ref<Map<number, ClipboardRecord>>(new Map());
   let searchSeq = 0;
   let loadSeq = 0;
   let expireSweepTimer: ReturnType<typeof setTimeout> | null = null;
   let expireSweepRunning = false;
 
+  /** Soft cap for in-memory list (onNewRecord prepend without bound was a leak). */
+  const LIST_SOFT_CAP = PAGE_SIZE * 2;
+  const DETAIL_CACHE_MAX = 6;
+
   // === Getters ===
-  const selectedRecord = computed(() =>
-    records.value.find((r) => r.id === selectedId.value) ?? null
-  );
+  const selectedRecord = computed(() => {
+    const base = records.value.find((r) => r.id === selectedId.value) ?? null;
+    if (!base) return null;
+    const detail = recordDetails.value.get(base.id);
+    if (!detail) return base;
+    return {
+      ...base,
+      content: detail.content,
+      content_html: detail.content_html,
+      content_len: detail.content_len ?? base.content_len,
+      media_abs: detail.media_abs ?? base.media_abs,
+      thumb_abs: detail.thumb_abs ?? base.thumb_abs,
+      width: detail.width ?? base.width,
+      height: detail.height ?? base.height,
+    };
+  });
 
   /** Server applies category/tag/trash/search filters; list is ready to render. */
   const filteredRecords = computed(() => records.value);
@@ -108,6 +127,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (seq !== loadSeq) return;
       records.value = page.records;
       hasMore.value = page.has_more;
+      recordDetails.value = new Map();
       await loadStats();
       await loadTrashCount();
     } catch (e) {
@@ -174,6 +194,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       }
       records.value = result.records;
       hasMore.value = result.has_more;
+      recordDetails.value = new Map();
     } catch (e) {
       console.error("Search failed:", e);
     } finally {
@@ -196,17 +217,50 @@ export const useClipboardStore = defineStore("clipboard", () => {
     selectedId.value = null;
   }
 
-  /** Lazy-load content_html for preview when list rows omit it. */
+  function pruneRecordDetails(keepId?: number | null) {
+    const alive = new Set(records.value.map((r) => r.id));
+    if (keepId != null) alive.add(keepId);
+    const next = new Map<number, ClipboardRecord>();
+    for (const [id, detail] of recordDetails.value) {
+      if (alive.has(id)) next.set(id, detail);
+    }
+    // Cap cache size (LRU-ish: prefer selected, then newest inserts order)
+    if (next.size > DETAIL_CACHE_MAX) {
+      const ids = [...next.keys()].filter((id) => id !== keepId && id !== selectedId.value);
+      for (const id of ids) {
+        if (next.size <= DETAIL_CACHE_MAX) break;
+        next.delete(id);
+      }
+    }
+    recordDetails.value = next;
+  }
+
+  /** Drop oldest non-pinned rows so in-memory list cannot grow without bound. */
+  function trimRecordsSoftCap() {
+    if (records.value.length <= LIST_SOFT_CAP) return;
+    const pinned = records.value.filter((r) => r.is_pinned);
+    const rest = records.value.filter((r) => !r.is_pinned);
+    const restKeep = Math.max(0, LIST_SOFT_CAP - pinned.length);
+    records.value = [...pinned, ...rest.slice(0, restKeep)];
+    hasMore.value = true;
+    if (selectedId.value !== null && !records.value.some((r) => r.id === selectedId.value)) {
+      selectedId.value = null;
+    }
+    pruneRecordDetails(selectedId.value);
+  }
+
+  /** Lazy-load full content / HTML into a separate detail cache (not list rows). */
   async function ensureRecordDetail(id: number) {
+    if (recordDetails.value.has(id)) return;
     const record = records.value.find((r) => r.id === id);
-    if (!record || record.content_html != null || record.content_type === "image") return;
+    if (!record || record.content_type === "image") return;
     try {
       const full = await invoke<ClipboardRecord | null>("get_record", { id });
-      if (!full) return;
-      const idx = records.value.findIndex((r) => r.id === id);
-      if (idx !== -1) {
-        records.value[idx] = { ...records.value[idx], ...full, tags: records.value[idx].tags };
-      }
+      if (!full || selectedId.value !== id) return;
+      const next = new Map(recordDetails.value);
+      next.set(id, full);
+      recordDetails.value = next;
+      pruneRecordDetails(id);
     } catch (e) {
       console.error("Failed to load record detail:", e);
     }
@@ -252,6 +306,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       await invoke("delete_record", { id });
       records.value = records.value.filter((r) => r.id !== id);
+      if (recordDetails.value.has(id)) {
+        const next = new Map(recordDetails.value);
+        next.delete(id);
+        recordDetails.value = next;
+      }
       if (selectedId.value === id) selectedId.value = null;
       await loadStats();
       await loadTrashCount();
@@ -344,6 +403,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       await invoke("permanently_delete_record", { id });
       records.value = records.value.filter((r) => r.id !== id);
+      if (recordDetails.value.has(id)) {
+        const next = new Map(recordDetails.value);
+        next.delete(id);
+        recordDetails.value = next;
+      }
       if (selectedId.value === id) selectedId.value = null;
       await loadTrashCount();
     } catch (e) {
@@ -362,6 +426,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
     if (selectedIds.value.size > 0) {
       const next = new Set([...selectedIds.value].filter((id) => !idSet.has(id)));
       selectedIds.value = next;
+    }
+    if (recordDetails.value.size > 0) {
+      const details = new Map(recordDetails.value);
+      for (const id of idSet) details.delete(id);
+      recordDetails.value = details;
     }
   }
 
@@ -441,6 +510,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       selectedIds.value = new Set();
       batchMode.value = false;
       trashCount.value = 0;
+      recordDetails.value = new Map();
       await loadStats();
       await loadTrashCount();
     } catch (e) {
@@ -517,6 +587,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     // Insert at top, after pinned items
     const pinCount = records.value.filter((r) => r.is_pinned).length;
     records.value.splice(pinCount, 0, record);
+    trimRecordsSoftCap();
   }
 
   async function loadStats() {

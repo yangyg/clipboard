@@ -80,6 +80,8 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Main UI (list / preview / sidebar / floating chrome) uses `rem`; Settings page keeps fixed `px` so the settings UI does not jump while dragging the slider.
 - **Sensitive detection** (text only): `password|passwd|pwd`; 4–8 digits + `验证码|code|Code`; `sk-`+≥20 alnum; 16–19 digits with len≤25. Default expire 600s.
 - **Soft delete:** Delete → trash (toast, no confirm). Permanent delete / empty trash still confirm.
+- **Memory (frontend):** List soft-capped (`PAGE_SIZE * 2`) on `onNewRecord`. Full content/HTML live in a small `recordDetails` map (max ~6), never merged into list rows. `loadRecords`/search clears detail cache.
+- **Clipboard fingerprint:** SHA-256 of text+html (not retaining full HTML string in `last_text_fp`).
 - **Retention “回收站保留天数”:** Only purges trashed rows (not the whole history). **最大记录数** evicts oldest non-favorite / non-pinned when inserting.
 - **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles.
 - **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML; preview loads via `get_record` / detail. Preview uses **DOMPurify + `v-html`** (not iframe) when markup differs from plain. Display CSS may force wrap; stored HTML for paste is unchanged. Manual select-copy from preview may normalize whitespace.

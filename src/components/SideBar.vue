@@ -174,12 +174,14 @@ const specialItems = computed(() => [
 
 function selectCategory(key: string) {
   emit("update:activeCategory", key);
-  emit("update:activeTag", null);
+  // Trash is exclusive; other categories keep the current tag (AND).
+  if (key === "trash") {
+    emit("update:activeTag", null);
+  }
 }
 
 function selectTag(name: string) {
-  // Only emit tag; parent updates category UI without calling setFilter
-  // (setFilter clears activeTag).
+  // Keep category selection — type/favorites AND tag combine.
   emit("update:activeTag", name);
 }
 

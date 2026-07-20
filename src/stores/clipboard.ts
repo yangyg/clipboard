@@ -33,19 +33,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     records.value.find((r) => r.id === selectedId.value) ?? null
   );
 
-  /** Server already applies category/tag/trash filters; search may still need client filter. */
-  const filteredRecords = computed(() => {
-    let list = records.value;
-    if (trashFilter.value || !searchQuery.value) return list;
-    if (activeTag.value) {
-      list = list.filter((r) => r.tags.includes(activeTag.value!));
-    } else if (activeFilter.value === "favorites") {
-      list = list.filter((r) => r.is_favorite);
-    } else if (activeFilter.value !== "all") {
-      list = list.filter((r) => r.content_type === activeFilter.value);
-    }
-    return list;
-  });
+  /** Server applies category/tag/trash/search filters; list is ready to render. */
+  const filteredRecords = computed(() => records.value);
 
   const filterCounts = computed(() => {
     const dist = (stats.value?.type_distribution ?? {}) as Record<string, number>;
@@ -63,34 +52,37 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   function listQueryArgs(offset: number) {
     const favoritesOnly = !trashFilter.value && activeFilter.value === "favorites";
-    const contentType =
-      !trashFilter.value &&
-      !favoritesOnly &&
-      activeFilter.value !== "all" &&
-      !activeTag.value
-        ? activeFilter.value
-        : null;
+    // Must match #[tauri::command(rename_all = "snake_case")] on get_records.
     return {
       limit: PAGE_SIZE,
       offset,
       trashed: trashFilter.value,
-      contentType,
-      favoritesOnly,
+      content_type:
+        !trashFilter.value && !favoritesOnly && activeFilter.value !== "all"
+          ? activeFilter.value
+          : null,
+      favorites_only: favoritesOnly,
       tag: !trashFilter.value ? activeTag.value : null,
     };
   }
 
   function searchFilterArgs() {
     const favoritesOnly = activeFilter.value === "favorites";
-    const contentType =
-      !favoritesOnly && activeFilter.value !== "all" && !activeTag.value
-        ? activeFilter.value
-        : null;
+    // Must match #[tauri::command(rename_all = "snake_case")] on search_records.
     return {
-      contentType,
-      favoritesOnly,
+      content_type:
+        !favoritesOnly && activeFilter.value !== "all" ? activeFilter.value : null,
+      favorites_only: favoritesOnly,
       tag: activeTag.value,
     };
+  }
+
+  function reloadList() {
+    if (searchQuery.value.trim()) {
+      void search(searchQuery.value);
+    } else {
+      void loadRecords();
+    }
   }
 
   function appendRecords(batch: ClipboardRecord[]) {
@@ -220,13 +212,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   function setFilter(filter: FilterTab) {
     activeFilter.value = filter;
-    activeTag.value = null;
+    // Keep activeTag — type/favorites and tag combine with AND.
     selectedId.value = null;
-    if (searchQuery.value) {
-      void search(searchQuery.value);
-    } else {
-      void loadRecords();
-    }
+    reloadList();
   }
 
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
@@ -547,19 +535,14 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   function filterByTag(tagName: string | null) {
-    // Toggle off when clicking the same tag again
+    // Toggle off when clicking the same tag again; keep type/favorites filter.
     if (tagName && activeTag.value === tagName) {
       activeTag.value = null;
     } else {
       activeTag.value = tagName;
-      if (tagName) activeFilter.value = "all";
     }
     selectedId.value = null;
-    if (searchQuery.value) {
-      void search(searchQuery.value);
-    } else {
-      void loadRecords();
-    }
+    reloadList();
   }
 
   return {
@@ -591,6 +574,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     selectRecord,
     clearSelection,
     setFilter,
+    reloadList,
     pasteRecord,
     deleteRecord,
     toggleFavorite,

@@ -218,6 +218,18 @@ const emptyState = computed(() => {
   if (clipboardStore.trashFilter) {
     return { icon: "trash" as AppIconName, title: "回收站是空的", hint: "删除的记录会出现在这里", clearSearch: false };
   }
+  if (clipboardStore.activeTag && clipboardStore.activeFilter !== "all") {
+    const typeLabel =
+      clipboardStore.activeFilter === "favorites"
+        ? "收藏"
+        : (TYPE_LABELS[clipboardStore.activeFilter] ?? clipboardStore.activeFilter);
+    return {
+      icon: "tag" as AppIconName,
+      title: `${typeLabel} · ${clipboardStore.activeTag} 下暂无记录`,
+      hint: "尝试取消其中一个筛选条件",
+      clearSearch: false,
+    };
+  }
   if (clipboardStore.activeTag) {
     return { icon: "tag" as AppIconName, title: "该标签下暂无记录", hint: "可在预览区为记录添加标签", clearSearch: false };
   }

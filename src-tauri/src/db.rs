@@ -77,7 +77,9 @@ impl ClipboardDb {
     pub fn new(db_path: &Path, media_root: PathBuf) -> SqlResult<Self> {
         let conn = Connection::open(db_path)?;
 
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")?;
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;",
+        )?;
 
         conn.execute_batch(
             r#"
@@ -157,12 +159,193 @@ impl ClipboardDb {
             "#,
         )?;
 
+        Self::ensure_fts(&conn)?;
+
         media::ensure_dirs(&media_root).ok();
 
         Ok(Self {
             conn: Mutex::new(conn),
             media_root,
         })
+    }
+
+    /// Escape `%`, `_`, `\` for use with `LIKE … ESCAPE '\'`.
+    fn escape_like(s: &str) -> String {
+        s.replace('\\', "\\\\")
+            .replace('%', "\\%")
+            .replace('_', "\\_")
+    }
+
+    /// FTS5 trigram needs ≥3 chars; quote + escape `"` for MATCH.
+    fn build_fts_match(query: &str) -> Option<String> {
+        let q = query.trim();
+        if q.chars().count() < 3 {
+            return None;
+        }
+        Some(format!("\"{}\"", q.replace('"', "\"\"")))
+    }
+
+    fn ensure_fts(conn: &Connection) -> SqlResult<()> {
+        const FTS_VERSION: &str = "1";
+        let current: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'fts_version'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if current.as_deref() == Some(FTS_VERSION) {
+            // Ensure table still exists (e.g. user deleted it manually)
+            let exists: bool = conn
+                .query_row(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='records_fts'",
+                    [],
+                    |_| Ok(true),
+                )
+                .unwrap_or(false);
+            if exists {
+                return Ok(());
+            }
+        }
+
+        conn.execute_batch(
+            r#"
+            DROP TRIGGER IF EXISTS records_fts_ai;
+            DROP TRIGGER IF EXISTS records_fts_ad;
+            DROP TRIGGER IF EXISTS records_fts_au;
+            DROP TRIGGER IF EXISTS record_tags_fts_ai;
+            DROP TRIGGER IF EXISTS record_tags_fts_ad;
+            DROP TRIGGER IF EXISTS tags_fts_au;
+            DROP TABLE IF EXISTS records_fts;
+            "#,
+        )?;
+
+        // trigram: substring MATCH for clipboard-style search (needs ≥3 chars)
+        conn.execute_batch(
+            r#"
+            CREATE VIRTUAL TABLE records_fts USING fts5(
+                content,
+                source_app,
+                source_window,
+                tags,
+                tokenize = 'trigram'
+            );
+
+            CREATE TRIGGER records_fts_ai AFTER INSERT ON records BEGIN
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                VALUES (
+                    new.id,
+                    new.content,
+                    new.source_app,
+                    new.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = new.id
+                    ), '')
+                );
+            END;
+
+            CREATE TRIGGER records_fts_ad AFTER DELETE ON records BEGIN
+                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', old.id);
+            END;
+
+            CREATE TRIGGER records_fts_au AFTER UPDATE OF content, source_app, source_window ON records BEGIN
+                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', old.id);
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                VALUES (
+                    new.id,
+                    new.content,
+                    new.source_app,
+                    new.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = new.id
+                    ), '')
+                );
+            END;
+
+            CREATE TRIGGER record_tags_fts_ai AFTER INSERT ON record_tags BEGIN
+                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', new.record_id);
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                SELECT
+                    r.id,
+                    r.content,
+                    r.source_app,
+                    r.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = r.id
+                    ), '')
+                FROM records r WHERE r.id = new.record_id;
+            END;
+
+            CREATE TRIGGER record_tags_fts_ad AFTER DELETE ON record_tags BEGIN
+                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', old.record_id);
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                SELECT
+                    r.id,
+                    r.content,
+                    r.source_app,
+                    r.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = r.id
+                    ), '')
+                FROM records r WHERE r.id = old.record_id;
+            END;
+
+            CREATE TRIGGER tags_fts_au AFTER UPDATE OF name ON tags BEGIN
+                INSERT INTO records_fts(records_fts, rowid)
+                    SELECT 'delete', rt.record_id FROM record_tags rt WHERE rt.tag_id = new.id;
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                SELECT
+                    r.id,
+                    r.content,
+                    r.source_app,
+                    r.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = r.id
+                    ), '')
+                FROM records r
+                WHERE r.id IN (SELECT rt.record_id FROM record_tags rt WHERE rt.tag_id = new.id);
+            END;
+            "#,
+        )?;
+
+        conn.execute_batch(
+            r#"
+            INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+            SELECT
+                r.id,
+                r.content,
+                r.source_app,
+                r.source_window,
+                COALESCE((
+                    SELECT group_concat(t.name, ' ')
+                    FROM record_tags rt
+                    INNER JOIN tags t ON t.id = rt.tag_id
+                    WHERE rt.record_id = r.id
+                ), '')
+            FROM records r;
+            "#,
+        )?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('fts_version', ?)",
+            [FTS_VERSION],
+        )?;
+        Ok(())
     }
 
     pub fn media_root(&self) -> &Path {
@@ -477,15 +660,40 @@ impl ClipboardDb {
         favorites_only: bool,
         tag_name: Option<&str>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let conn = self.conn.lock();
-        let search = format!("%{}%", query);
         let mut sql = format!(
-            "SELECT {} FROM records
-             WHERE is_trashed = 0 AND (content LIKE ? OR source_app LIKE ?)",
+            "SELECT {} FROM records WHERE is_trashed = 0 AND (",
             RECORD_COLS_LIST
         );
-        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
-            vec![Box::new(search.clone()), Box::new(search)];
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+        // ≥3 chars: FTS5 trigram (substring). Shorter: escaped LIKE across fields + tags.
+        if let Some(fts_match) = Self::build_fts_match(query) {
+            sql.push_str("id IN (SELECT rowid FROM records_fts WHERE records_fts MATCH ?)");
+            params.push(Box::new(fts_match));
+        } else {
+            let pattern = format!("%{}%", Self::escape_like(query));
+            sql.push_str(
+                "content LIKE ? ESCAPE '\\'
+                 OR source_app LIKE ? ESCAPE '\\'
+                 OR source_window LIKE ? ESCAPE '\\'
+                 OR id IN (
+                    SELECT rt.record_id FROM record_tags rt
+                    INNER JOIN tags t ON t.id = rt.tag_id
+                    WHERE t.name LIKE ? ESCAPE '\\'
+                 )",
+            );
+            params.push(Box::new(pattern.clone()));
+            params.push(Box::new(pattern.clone()));
+            params.push(Box::new(pattern.clone()));
+            params.push(Box::new(pattern));
+        }
+        sql.push(')');
 
         if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
             sql.push_str(" AND content_type = ?");

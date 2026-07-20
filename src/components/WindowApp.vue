@@ -110,7 +110,6 @@ defineEmits<{
 
 useClipboardHotkeys({ allowCloseOnEscape: false });
 
-const activeCategory = ref("all");
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"create" | "assign" | "edit">("create");
 const editingTag = ref<Tag | null>(null);
@@ -130,10 +129,21 @@ const CATEGORY_TITLES: Record<string, string> = {
   trash: "回收站",
 };
 
+/** Single source of truth: sidebar highlight follows store, not a separate ref. */
+const activeCategory = computed(() =>
+  clipboardStore.trashFilter ? "trash" : clipboardStore.activeFilter
+);
+
 const categoryTitle = computed(() => {
   if (clipboardStore.trashFilter) return "回收站";
-  if (clipboardStore.activeTag) return `标签: ${clipboardStore.activeTag}`;
-  return CATEGORY_TITLES[activeCategory.value] ?? "全部剪贴板";
+  const typeKey = clipboardStore.activeFilter;
+  const typePart =
+    typeKey !== "all" ? CATEGORY_TITLES[typeKey] ?? typeKey : null;
+  const tagPart = clipboardStore.activeTag;
+  if (typePart && tagPart) return `${typePart} · ${tagPart}`;
+  if (tagPart) return tagPart;
+  if (typePart) return typePart;
+  return "全部剪贴板";
 });
 
 const listCountLabel = computed(() => {
@@ -144,9 +154,10 @@ const listCountLabel = computed(() => {
   if (clipboardStore.trashFilter) {
     return `共 ${clipboardStore.trashCount} 项`;
   }
+  // Combined or tag-only: stats are not intersection-aware — use loaded page size.
   if (clipboardStore.activeTag) {
-    const tag = clipboardStore.tags.find((t) => t.name === clipboardStore.activeTag);
-    return `共 ${tag?.count ?? clipboardStore.filteredRecords.length} 项`;
+    const n = clipboardStore.filteredRecords.length;
+    return clipboardStore.hasMore ? `已加载 ${n}+ 项` : `共 ${n} 项`;
   }
   if (clipboardStore.activeFilter === "favorites") {
     return `共 ${clipboardStore.filterCounts.favorites} 项`;
@@ -158,13 +169,14 @@ const listCountLabel = computed(() => {
 });
 
 function onCategoryChange(key: string) {
-  activeCategory.value = key;
   if (key === "trash") {
     clipboardStore.setTrashFilter(true);
     void clipboardStore.loadRecords();
     return;
   }
-  clipboardStore.setTrashFilter(false);
+  if (clipboardStore.trashFilter) {
+    clipboardStore.setTrashFilter(false);
+  }
   const mapping: Record<string, "all" | "text" | "code" | "link" | "image" | "file" | "favorites"> = {
     all: "all",
     text: "text",
@@ -174,14 +186,16 @@ function onCategoryChange(key: string) {
     code: "code",
     favorites: "favorites",
   };
-  // setFilter triggers loadRecords when not searching
+  // setFilter keeps activeTag (AND combine)
   clipboardStore.setFilter(mapping[key] ?? "all");
 }
 
 function onTagChange(tagName: string | null) {
   if (tagName) {
-    activeCategory.value = "all";
-    clipboardStore.setTrashFilter(false);
+    // Leave trash; keep current type/favorites selection for AND combine.
+    if (clipboardStore.trashFilter) {
+      clipboardStore.setTrashFilter(false);
+    }
     clipboardStore.filterByTag(tagName);
   } else {
     clipboardStore.filterByTag(null);

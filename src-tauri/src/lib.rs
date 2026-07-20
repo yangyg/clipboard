@@ -189,7 +189,7 @@ pub struct StatsData {
 // Tauri Commands
 // ============================================================
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 async fn get_records(
     state: State<'_, AppState>,
     limit: Option<i32>,
@@ -217,7 +217,7 @@ async fn get_records(
     Ok(RecordsPage { records, has_more })
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 async fn search_records(
     state: State<'_, AppState>,
     query: String,

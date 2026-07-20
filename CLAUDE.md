@@ -77,7 +77,7 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - **Toast policy:** Only for actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles. Position: top-center.
 - **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML (`NULL as content_html`); preview loads via `get_record`. Show HTML iframe only when markup differs from plain.
 - **Image storage + asset scope:** See stack; wrong `$VAR` → asset protocol 403.
-- **Pagination / search:** Server filters + optional client filter while searching. Search args: `contentType` / `favoritesOnly` / `tag`.
+- **Pagination / search:** Server-side filters only. Search uses FTS5 trigram (≥3 chars) over content/source_app/source_window/tags; shorter queries use escaped `LIKE`. Args: `contentType` / `favoritesOnly` / `tag`.
 - **Sets in Vue:** Never mutate `Set` in place — assign a new `Set` (`selectedIds`, `assignedIds`).
 - **Global shortcut:** Registered from `settings.global_shortcut` at startup; re-bound in `save_settings` when changed.
 - **Pause capture:** Frontend `set_capture_paused` and tray both update Rust; tray emits `capture-paused` for UI sync.

@@ -352,12 +352,17 @@ export const useClipboardStore = defineStore("clipboard", () => {
   async function emptyTrash() {
     try {
       await invoke("empty_trash");
+      loadSeq += 1; // invalidate in-flight list loads
       records.value = [];
       selectedId.value = null;
+      selectedIds.value = new Set();
+      batchMode.value = false;
       trashCount.value = 0;
       await loadStats();
+      await loadTrashCount();
     } catch (e) {
       console.error("Empty trash failed:", e);
+      throw e;
     }
   }
 

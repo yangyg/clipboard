@@ -242,8 +242,12 @@ async function onEmptyTrash() {
     danger: true,
   });
   if (ok) {
-    await clipboardStore.emptyTrash();
-    toast("回收站已清空", "success");
+    try {
+      await clipboardStore.emptyTrash();
+      toast("回收站已清空", "success");
+    } catch {
+      toast("清空失败", "error");
+    }
   }
 }
 

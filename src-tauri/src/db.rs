@@ -186,7 +186,9 @@ impl ClipboardDb {
     }
 
     fn ensure_fts(conn: &Connection) -> SqlResult<()> {
-        const FTS_VERSION: &str = "1";
+        // v2: FTS5 'delete' command fails with "SQL logic error" on some SQLite
+        // builds (incl. Windows); use DELETE FROM fts WHERE rowid=... instead.
+        const FTS_VERSION: &str = "2";
         let current: Option<String> = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = 'fts_version'",
@@ -248,11 +250,11 @@ impl ClipboardDb {
             END;
 
             CREATE TRIGGER records_fts_ad AFTER DELETE ON records BEGIN
-                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', old.id);
+                DELETE FROM records_fts WHERE rowid = old.id;
             END;
 
             CREATE TRIGGER records_fts_au AFTER UPDATE OF content, source_app, source_window ON records BEGIN
-                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', old.id);
+                DELETE FROM records_fts WHERE rowid = old.id;
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
                 VALUES (
                     new.id,
@@ -269,7 +271,7 @@ impl ClipboardDb {
             END;
 
             CREATE TRIGGER record_tags_fts_ai AFTER INSERT ON record_tags BEGIN
-                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', new.record_id);
+                DELETE FROM records_fts WHERE rowid = new.record_id;
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
                 SELECT
                     r.id,
@@ -286,7 +288,7 @@ impl ClipboardDb {
             END;
 
             CREATE TRIGGER record_tags_fts_ad AFTER DELETE ON record_tags BEGIN
-                INSERT INTO records_fts(records_fts, rowid) VALUES('delete', old.record_id);
+                DELETE FROM records_fts WHERE rowid = old.record_id;
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
                 SELECT
                     r.id,
@@ -303,8 +305,9 @@ impl ClipboardDb {
             END;
 
             CREATE TRIGGER tags_fts_au AFTER UPDATE OF name ON tags BEGIN
-                INSERT INTO records_fts(records_fts, rowid)
-                    SELECT 'delete', rt.record_id FROM record_tags rt WHERE rt.tag_id = new.id;
+                DELETE FROM records_fts WHERE rowid IN (
+                    SELECT rt.record_id FROM record_tags rt WHERE rt.tag_id = new.id
+                );
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
                 SELECT
                     r.id,

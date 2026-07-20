@@ -6,7 +6,26 @@
         <div class="preview-type-icon" :class="record.content_type">
           <TypeIcon :type="record.content_type" :size="14" />
         </div>
-        <div class="preview-name">{{ typeLabel }}</div>
+        <div class="preview-heading">
+          <div class="preview-name">{{ typeLabel }}</div>
+          <div class="preview-meta-line">
+            <span>{{ record.source_app || '系统剪贴板' }}</span>
+            <span class="meta-sep">·</span>
+            <span>{{ formatDateTime(record.created_at) }}</span>
+            <template v-if="record.content_type === 'image' && record.width && record.height">
+              <span class="meta-sep">·</span>
+              <span>{{ record.width }}×{{ record.height }}</span>
+            </template>
+            <template v-else>
+              <span class="meta-sep">·</span>
+              <span>{{ record.content.length }} 字符</span>
+            </template>
+            <template v-if="record.content_html">
+              <span class="meta-sep">·</span>
+              <span>富文本</span>
+            </template>
+          </div>
+        </div>
         <button
           v-if="record.is_pinned"
           class="preview-action-btn preview-pin-btn active"
@@ -78,34 +97,6 @@
           <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> 暂无图片数据</div>
         </div>
       </template>
-
-      <!-- Meta Grid -->
-      <div class="preview-meta">
-        <div class="meta-item">
-          <div class="meta-label">类型</div>
-          <div class="meta-value">{{ TYPE_LABELS[record.content_type] || '文本' }}</div>
-        </div>
-        <div class="meta-item" v-if="record.content_type === 'image' && record.width && record.height">
-          <div class="meta-label">尺寸</div>
-          <div class="meta-value">{{ record.width }}×{{ record.height }}</div>
-        </div>
-        <div class="meta-item" v-else>
-          <div class="meta-label">字符数</div>
-          <div class="meta-value">{{ record.content.length }} 字符</div>
-        </div>
-        <div class="meta-item" v-if="record.content_html">
-          <div class="meta-label">格式</div>
-          <div class="meta-value">保留富文本</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">创建时间</div>
-          <div class="meta-value">{{ formatDateTime(record.created_at) }}</div>
-        </div>
-        <div class="meta-item">
-          <div class="meta-label">来源</div>
-          <div class="meta-value">{{ record.source_app || '系统剪贴板' }}</div>
-        </div>
-      </div>
     </div>
 
     <!-- Tags -->
@@ -405,7 +396,7 @@ async function permanentDel() {
   border-left: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* Header */
@@ -418,7 +409,6 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 10px;
 }
 
 .preview-type-icon {
@@ -458,11 +448,42 @@ async function permanentDel() {
   color: #e86a33;
 }
 
+.preview-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .preview-name {
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
-  flex: 1;
+}
+
+.preview-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 2px;
+  font-size: 0.688rem;
+  color: var(--text-muted, var(--text-tertiary));
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+.preview-meta-line > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.meta-sep {
+  flex-shrink: 0;
+  margin: 0 4px;
+  opacity: 0.7;
 }
 
 .preview-action-btn {
@@ -521,6 +542,7 @@ async function permanentDel() {
 /* Content */
 .preview-content {
   flex: 1;
+  min-height: 0;
   padding: 16px 20px;
   overflow-y: auto;
 }
@@ -546,8 +568,6 @@ async function permanentDel() {
   color: var(--text-primary);
   word-break: break-word;
   white-space: pre-wrap;
-  max-height: 280px;
-  overflow-y: auto;
 }
 
 .code-box {
@@ -638,35 +658,6 @@ async function permanentDel() {
   max-width: 100%;
   border-radius: var(--radius-md, 10px);
   border: 1px solid var(--border-default);
-}
-
-/* Meta Grid */
-.preview-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.meta-item {
-  background: var(--bg-surface);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
-}
-
-.meta-label {
-  font-size: 0.656rem;
-  color: var(--text-muted, var(--text-tertiary));
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.meta-value {
-  font-size: 0.781rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-top: 2px;
-  word-break: break-word;
 }
 
 /* Tags */

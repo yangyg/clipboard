@@ -24,7 +24,7 @@ npx tauri icon app-icon.png -o src-tauri/icons
 ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Stack
-- **Frontend:** Vue 3 + TypeScript + Vite + Pinia
+- **Frontend:** Vue 3 + TypeScript + Vite + Pinia; Lucide icons; DOMPurify for rich-text preview
 - **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
 - **Database:** SQLite via rusqlite (WAL), `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only
@@ -43,46 +43,50 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 ### Frontend Component Tree
 ```
 App.vue                          # Events (clipboard-changed, capture-paused, toggle-panel), ToastHost, ConfirmDialog
-├── FloatingPanel.vue            # Floating UI; filters; trash; useBatchActions + useClipboardHotkeys
+├── FloatingPanel.vue            # Floating UI; filters; empty trash; useBatchActions + useClipboardHotkeys
 ├── WindowApp.vue                # Window UI; SideBar; same batch/hotkeys helpers
 │   ├── SearchBar.vue
-│   ├── RecordList.vue           # Infinite scroll; thumbs precomputed; PreviewPane
-│   │   └── PreviewPane.vue      # Paste / favorite / pin / trash; tags; expire countdown
-│   └── SideBar.vue              # Categories/tags as <button>; tag toggle-off; context edit/delete
-├── SettingsWindow.vue
+│   ├── RecordList.vue           # Infinite scroll; thumbs; PreviewPane
+│   │   └── PreviewPane.vue      # Header meta line; DOMPurify HTML preview; paste / tags / trash
+│   └── SideBar.vue              # Categories (+ favorites); trash; tags; capture/theme/settings icons
+├── SettingsWindow.vue           # Nav: 外观 → 快捷键 → 历史 → 隐私 → 系统 → 数据 → 统计 → 关于
 ├── WindowControls.vue
-├── ToastHost.vue                # Top-center; error → aria-live assertive
+├── ToastHost.vue
 ├── ConfirmDialog.vue / TagDialog.vue
 ├── composables/useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts
-├── utils/mediaUrl.ts
+├── utils/mediaUrl.ts · sanitizeHtml.ts
 └── TrayMenu.vue                 # Placeholder (native tray is Rust)
 ```
 
 ### Backend (Rust) Module Layout
-- `lib.rs` — setup, commands, tray, `apply_global_shortcut`, `apply_autostart`, `ignored_apps`, content/sensitive detection, cleanup throttle (`maybe_run_cleanup` ~60s)
-- `clipboard.rs` — monitor (quick image fp + share-text heuristics), paste via `keybd_event`
-- `media.rs` — encode/store/load/delete; segment-joined absolute paths
-- `db.rs` — CRUD, list cols without `content_html`, search with type/tag/favorites filters, tags, stats (DB + media dir size)
+- `lib.rs` — setup, commands, tray, shortcuts, autostart, sensitive detection, cleanup throttle, **window round corners** (`CreateRoundRectRgn` / `SetWindowRgn`, synced on resize / settings / mode switch)
+- `clipboard.rs` — monitor + paste via `keybd_event`
+- `media.rs` — encode/store/load/delete
+- `db.rs` — CRUD, FTS5, trash, tags, stats, settings
 - `main.rs` — `clipvault_lib::run()`
 
 ### State Management (Pinia)
-- `clipboardStore` — records, filters, tags, batch (`selectedIds` replaced as new `Set` for reactivity), pause, pagination (60 / `has_more`), `ensureRecordDetail` for HTML, `setPauseCapture` for tray sync
-- `settingsStore` — debounced auto-save (200ms); `auto_start` / shortcut / appearance; failed saves reload UI
+- `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), `ensureRecordDetail` for HTML
+- `settingsStore` — debounced auto-save (200ms); theme / appearance (`font_size`, `panel_radius`, `panel_opacity`, blur); applies CSS vars + `set_window_corner_radius`
 
 ### Key Design Decisions
-- **Floating vs window:** Both borderless. Floating: always-on-top, hide on blur. Window: SideBar + `WindowControls`.
-- **Theming:** CSS vars on `:root`; `.light-theme` / `.oled-theme` via `document.body.classList`.
+- **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur. Window: SideBar + `WindowControls`. Shared `.panel-surface` chrome.
+- **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
+- **Theming:** CSS vars on `:root`; `.light-theme` / `.oled-theme` via `document.body.classList`. SideBar can toggle dark↔light.
+- **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Main UI (list / preview / sidebar / floating chrome) uses `rem`; Settings page keeps fixed `px` so the settings UI does not jump while dragging the slider.
 - **Sensitive detection** (text only): `password|passwd|pwd`; 4–8 digits + `验证码|code|Code`; `sk-`+≥20 alnum; 16–19 digits with len≤25. Default expire 600s.
 - **Soft delete:** Delete → trash (toast, no confirm). Permanent delete / empty trash still confirm.
-- **Toast policy:** Only for actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles. Position: top-center.
-- **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML (`NULL as content_html`); preview loads via `get_record`. Show HTML iframe only when markup differs from plain.
-- **Image storage + asset scope:** See stack; wrong `$VAR` → asset protocol 403.
-- **Pagination / search:** Server-side filters only. Search uses FTS5 trigram (≥3 chars) over content/source_app/source_window/tags; shorter queries use escaped `LIKE`. Args: `contentType` / `favoritesOnly` / `tag`.
-- **Sets in Vue:** Never mutate `Set` in place — assign a new `Set` (`selectedIds`, `assignedIds`).
-- **Global shortcut:** Registered from `settings.global_shortcut` at startup; re-bound in `save_settings` when changed.
-- **Pause capture:** Frontend `set_capture_paused` and tray both update Rust; tray emits `capture-paused` for UI sync.
-- **Cleanup:** Expired/retention cleanup throttled (~60s), not on every list/stats call.
+- **Retention “回收站保留天数”:** Only purges trashed rows (not the whole history). **最大记录数** evicts oldest non-favorite / non-pinned when inserting.
+- **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles.
+- **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML; preview loads via `get_record` / detail. Preview uses **DOMPurify + `v-html`** (not iframe) when markup differs from plain. Display CSS may force wrap; stored HTML for paste is unchanged. Manual select-copy from preview may normalize whitespace.
+- **Preview chrome:** Type + actions in header; source / time / size-or-chars / 富文本 as one meta line (`title` = content type). Single scroll on `.preview-content` (no nested scroll on content / rich HTML).
+- **Filters:** Type/favorites **AND** tag combine; trash is exclusive. IPC: `get_records` / `search_records` / `get_all_tags` use `#[tauri::command(rename_all = "snake_case")]` — pass `content_type`, `favorites_only`, `tag`, `trashed`. Tag counts follow active category (`get_all_tags`).
+- **Search:** FTS5 trigram (≥3 chars) on content / source_app / source_window / tags; shorter queries use escaped `LIKE`. FTS sync via triggers. **FTS v2:** use `DELETE FROM records_fts WHERE rowid=…` in triggers — the FTS5 `'delete'` command returns `SQL logic error` on current Windows SQLite and breaks empty-trash / permanent delete.
+- **Sets in Vue:** Never mutate `Set` in place — assign a new `Set`.
+- **Global shortcut:** From `settings.global_shortcut` at startup; re-bound in `save_settings`.
+- **Pause capture:** Frontend + tray both update Rust; tray emits `capture-paused`.
+- **Cleanup:** Expired/retention throttled (~60s).
 - **File type detect:** Path heuristic only (no `Path::exists` on monitor thread).
 - **Dedup:** SHA-256 of text fingerprint or full image bytes.
-- **Hide-on-close / single instance / autostart:** unchanged tray minimize, single-instance focus, OS Run-key sync.
+- **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.

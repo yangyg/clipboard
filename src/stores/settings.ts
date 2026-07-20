@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS: Settings = {
   panel_radius: 20,
   enable_blur: true,
   enable_animation: true,
-  font_size: 13,
+  font_size: 16,
   app_mode: "floating",
   default_paste_mode: "original",
   auto_close_on_paste: true,
@@ -91,8 +91,8 @@ export const useSettingsStore = defineStore("settings", () => {
     const s = settings.value;
     const root = document.documentElement;
 
-    // Font scale relative to 13px baseline (components use rem)
-    root.style.setProperty("--ui-font-scale", String(s.font_size / 13));
+    // Font scale relative to 16px rem baseline (components use rem)
+    root.style.setProperty("--ui-font-scale", String(s.font_size / 16));
     root.style.fontSize = `${s.font_size}px`;
 
     // Panel radius (used as CSS variable)

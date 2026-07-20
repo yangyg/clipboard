@@ -122,7 +122,7 @@ body.oled-theme,
 }
 
 html {
-  font-size: calc(13px * var(--ui-font-scale, 1));
+  font-size: calc(16px * var(--ui-font-scale, 1));
 }
 
 html,

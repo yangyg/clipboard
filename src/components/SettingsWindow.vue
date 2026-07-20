@@ -5,7 +5,7 @@
       <div class="settings-header" :class="{ 'with-chrome': isWindowMode }" data-tauri-drag-region>
         <span class="settings-title"><AppIcon name="settings" :size="15" /> 设置</span>
         <div class="settings-header-right">
-          <button class="icon-btn" title="返回" @click="emit('close')"><AppIcon name="close" :size="15" /></button>
+          <button class="icon-btn" title="返回" @click="emit('close')"><AppIcon name="back" :size="15" /></button>
           <WindowControls v-if="isWindowMode" />
         </div>
       </div>

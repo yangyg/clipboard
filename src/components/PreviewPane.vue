@@ -428,7 +428,7 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -459,14 +459,14 @@ async function permanentDel() {
 }
 
 .preview-name {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
   flex: 1;
 }
 
 .preview-action-btn {
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--text-muted, var(--text-tertiary));
   background: none;
   border: none;
@@ -490,7 +490,7 @@ async function permanentDel() {
 }
 
 .preview-more {
-  font-size: 16px;
+  font-size: 1rem;
   color: var(--text-muted, var(--text-tertiary));
   background: none;
   border: none;
@@ -507,14 +507,14 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 0.688rem;
   color: var(--danger);
   flex-shrink: 0;
 }
 
 .auto-expire {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 0.625rem;
   opacity: 0.8;
 }
 
@@ -541,7 +541,7 @@ async function permanentDel() {
   border: 1px solid var(--border-light, var(--border-subtle));
   border-radius: var(--radius-md, 10px);
   padding: 14px 16px;
-  font-size: 13px;
+  font-size: 0.813rem;
   line-height: 1.65;
   color: var(--text-primary);
   word-break: break-word;
@@ -571,19 +571,19 @@ async function permanentDel() {
 }
 
 .link-icon {
-  font-size: 22px;
+  font-size: 1.375rem;
   opacity: 0.8;
 }
 
 .link-title {
-  font-size: 13px;
+  font-size: 0.813rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .link-url {
   color: var(--accent);
-  font-size: 12px;
+  font-size: 0.75rem;
   word-break: break-all;
   text-decoration: none;
 }
@@ -614,7 +614,7 @@ async function permanentDel() {
 
 .file-path {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   word-break: break-all;
 }
@@ -630,7 +630,7 @@ async function permanentDel() {
   padding: 20px;
   background: var(--bg-surface);
   border-radius: var(--radius-md, 10px);
-  font-size: 32px;
+  font-size: 2rem;
   opacity: 0.5;
 }
 
@@ -655,14 +655,14 @@ async function permanentDel() {
 }
 
 .meta-label {
-  font-size: 10.5px;
+  font-size: 0.656rem;
   color: var(--text-muted, var(--text-tertiary));
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .meta-value {
-  font-size: 12.5px;
+  font-size: 0.781rem;
   font-weight: 600;
   color: var(--text-primary);
   margin-top: 2px;
@@ -675,7 +675,7 @@ async function permanentDel() {
 }
 
 .tags-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 8px;
@@ -693,7 +693,7 @@ async function permanentDel() {
   gap: 5px;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 11.5px;
+  font-size: 0.719rem;
   font-weight: 500;
 }
 
@@ -710,7 +710,7 @@ async function permanentDel() {
   background: transparent;
   color: inherit;
   opacity: 0.6;
-  font-size: 9px;
+  font-size: 0.563rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -731,7 +731,7 @@ async function permanentDel() {
   gap: 4px;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 11.5px;
+  font-size: 0.719rem;
   color: var(--text-muted, var(--text-tertiary));
   cursor: pointer;
   border: 1px dashed var(--border-default, var(--border-subtle));
@@ -798,11 +798,11 @@ async function permanentDel() {
 }
 
 .action-icon {
-  font-size: 18px;
+  font-size: 1.125rem;
 }
 
 .action-label {
-  font-size: 11px;
+  font-size: 0.688rem;
   font-weight: 600;
   color: var(--text-secondary);
   transition: color var(--transition-fast);

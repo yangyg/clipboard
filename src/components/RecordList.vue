@@ -424,7 +424,7 @@ onUnmounted(() => {
 }
 
 .section-label {
-  font-size: 10px;
+  font-size: 0.625rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -484,7 +484,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 0.563rem;
   color: transparent;
   transition: all var(--transition-fast);
   flex-shrink: 0;
@@ -504,7 +504,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 0.813rem;
   font-weight: 600;
   flex-shrink: 0;
   margin-top: 1px;
@@ -554,7 +554,7 @@ onUnmounted(() => {
 }
 
 .record-title {
-  font-size: 13px;
+  font-size: 0.813rem;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.35;
@@ -570,7 +570,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   margin-top: 5px;
-  font-size: 11.5px;
+  font-size: 0.719rem;
   color: var(--text-tertiary);
 }
 
@@ -583,7 +583,7 @@ onUnmounted(() => {
 }
 
 .record-badge {
-  font-size: 10.5px;
+  font-size: 0.656rem;
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 4px;
@@ -633,7 +633,7 @@ onUnmounted(() => {
 
 .record-pin,
 .record-star {
-  font-size: 14px;
+  font-size: 0.875rem;
   background: none;
   border: none;
   cursor: pointer;
@@ -652,7 +652,7 @@ onUnmounted(() => {
 }
 
 .record-star {
-  font-size: 17px;
+  font-size: 1.063rem;
 }
 
 .record-pin.pinned {
@@ -691,7 +691,7 @@ onUnmounted(() => {
 .list-footer {
   padding: 10px 16px 14px;
   text-align: center;
-  font-size: 11.5px;
+  font-size: 0.719rem;
   color: var(--text-muted, var(--text-tertiary));
   border-top: 1px solid var(--border-light, var(--border-subtle));
   margin-top: 4px;
@@ -706,7 +706,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: 0.75rem;
   flex: 1;
   padding: 20px;
   text-align: center;
@@ -740,11 +740,11 @@ onUnmounted(() => {
 }
 
 .empty-text {
-  font-size: 13px;
+  font-size: 0.813rem;
 }
 
 .empty-hint {
-  font-size: 11px;
+  font-size: 0.688rem;
   color: var(--text-tertiary);
 }
 
@@ -771,7 +771,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
@@ -794,12 +794,12 @@ onUnmounted(() => {
 .ctx-icon {
   width: 16px;
   text-align: center;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .ctx-shortcut {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 0.625rem;
   font-family: var(--font-mono);
   color: var(--text-tertiary);
 }

@@ -38,6 +38,7 @@ import {
   AppWindow,
   Circle,
   Pencil,
+  ArrowLeft,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -49,6 +50,7 @@ const ICONS = {
   trash: Trash2,
   batch: SquareCheck,
   close: X,
+  back: ArrowLeft,
   paste: CornerDownLeft,
   type: Type,
   link: Link2,

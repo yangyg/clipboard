@@ -434,7 +434,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  font-size: 12px;
+  font-size: 0.75rem;
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;

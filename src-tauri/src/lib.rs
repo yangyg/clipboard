@@ -123,7 +123,7 @@ impl Default for Settings {
             panel_radius: 20,
             enable_blur: true,
             enable_animation: true,
-            font_size: 13,
+            font_size: 16,
             app_mode: "floating".to_string(),
             default_paste_mode: "original".to_string(),
             auto_close_on_paste: true,

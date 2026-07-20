@@ -70,6 +70,9 @@ pub struct ClipboardRecord {
     pub media_abs: Option<String>,
     #[serde(rename = "thumb_abs")]
     pub thumb_abs: Option<String>,
+    /// Full content character length (list rows may truncate `content`)
+    #[serde(rename = "content_len")]
+    pub content_len: Option<i32>,
 }
 
 // === Settings (must match src/types.ts Settings) ===
@@ -890,7 +893,9 @@ pub fn run() {
                                     );
                                     if let Ok(record) = db.get_record(id) {
                                         if let Some(r) = record {
-                                            app_handle_clone.emit("clipboard-changed", r).ok();
+                                            app_handle_clone
+                                                .emit("clipboard-changed", list_ipc_payload(r))
+                                                .ok();
                                         }
                                     }
                                 }
@@ -913,7 +918,7 @@ pub fn run() {
 
                             match media::store_clipboard_image(
                                 &media_root,
-                                &captured.rgba,
+                                captured.rgba,
                                 captured.width,
                                 captured.height,
                                 &captured.hash,
@@ -946,7 +951,9 @@ pub fn run() {
                                             info!("New clipboard record: id={}, type=image", id);
                                             if let Ok(record) = db.get_record(id) {
                                                 if let Some(r) = record {
-                                                    app_handle_clone.emit("clipboard-changed", r).ok();
+                                                    app_handle_clone
+                                                        .emit("clipboard-changed", list_ipc_payload(r))
+                                                        .ok();
                                                 }
                                             }
                                         }
@@ -1118,6 +1125,20 @@ fn detect_content_type(content: &str) -> ContentType {
     }
 
     ContentType::Text
+}
+
+/// Strip HTML and truncate content for clipboard-changed IPC (list stays light).
+fn list_ipc_payload(mut r: ClipboardRecord) -> ClipboardRecord {
+    r.content_html = None;
+    let full_len = r
+        .content_len
+        .unwrap_or_else(|| r.content.chars().count() as i32);
+    r.content_len = Some(full_len);
+    const MAX: usize = 400;
+    if r.content.chars().count() > MAX {
+        r.content = r.content.chars().take(MAX).collect();
+    }
+    r
 }
 
 fn detect_sensitive(content: &str) -> bool {

@@ -417,12 +417,20 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   watch(
-    records,
+    () => records.value.map((r) => r.auto_expire_at),
     () => {
       scheduleExpireSweep();
-    },
-    { deep: true }
+    }
   );
+
+  let statsTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleLoadStats() {
+    if (statsTimer) clearTimeout(statsTimer);
+    statsTimer = setTimeout(() => {
+      statsTimer = null;
+      void loadStats();
+    }, 800);
+  }
 
   async function emptyTrash() {
     try {
@@ -490,7 +498,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   // Called by event listener when clipboard changes
   function onNewRecord(record: ClipboardRecord) {
-    loadStats().catch(() => {}); // fire-and-forget in hot path
+    scheduleLoadStats();
     if (trashFilter.value || searchQuery.value) return;
     if (activeTag.value && !record.tags.includes(activeTag.value)) return;
     if (activeFilter.value === "favorites" && !record.is_favorite) return;

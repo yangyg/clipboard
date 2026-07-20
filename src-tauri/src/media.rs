@@ -35,7 +35,7 @@ pub fn absolute(app_data_dir: &Path, relative: &str) -> PathBuf {
 /// Downscales if either edge exceeds MAX_EDGE.
 pub fn store_clipboard_image(
     app_data_dir: &Path,
-    rgba: &[u8],
+    rgba: Vec<u8>,
     width: u32,
     height: u32,
     hash: &str,
@@ -62,7 +62,7 @@ pub fn store_clipboard_image(
 
     // Clipboard RGBA may include stride padding or truncation from some apps
     let expected = (width as usize).saturating_mul(height as usize).saturating_mul(4);
-    let mut pixels = rgba.to_vec();
+    let mut pixels = rgba; // take ownership — avoid second full copy
     if pixels.len() < expected {
         pixels.resize(expected, 0);
     } else if pixels.len() > expected {

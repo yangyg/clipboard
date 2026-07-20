@@ -61,12 +61,14 @@ pub struct ImageMeta {
 /// Full row including rich HTML (detail / paste / emit).
 const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
-               created_at, updated_at, media_path, thumb_path, width, height, content_html";
+               created_at, updated_at, media_path, thumb_path, width, height, content_html,
+               length(content) as content_len";
 
-/// List/search omit heavy content_html (NULL) — preview lazy-loads via get_record.
-const RECORD_COLS_LIST: &str = "id, content, content_type, source_app, source_window, hash,
+/// List/search: omit HTML, truncate content for IPC/memory; content_len is full length.
+const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
-               created_at, updated_at, media_path, thumb_path, width, height, NULL as content_html";
+               created_at, updated_at, media_path, thumb_path, width, height, NULL as content_html,
+               length(content) as content_len";
 
 pub struct ClipboardDb {
     conn: Mutex<Connection>,
@@ -393,6 +395,7 @@ impl ClipboardDb {
             content_html: row.get(18)?,
             media_abs,
             thumb_abs,
+            content_len: row.get(19).ok(),
         })
     }
 
@@ -1218,7 +1221,8 @@ impl ClipboardDb {
         drop(stmt);
         drop(conn);
 
-        let media_bytes = media_dir_size(&self.media_root);
+        // Cache media dir walk — hot path (every clipboard event) must not re-walk disk
+        let media_bytes = cached_media_dir_size(&self.media_root);
         let storage_bytes = content_bytes.saturating_add(media_bytes);
 
         Ok(StatsData {
@@ -1231,6 +1235,37 @@ impl ClipboardDb {
             type_distribution,
         })
     }
+}
+
+use std::sync::Mutex as StdMutex;
+use std::time::{Duration, Instant};
+
+struct MediaSizeCache {
+    at: Instant,
+    bytes: i64,
+    root: PathBuf,
+}
+
+static MEDIA_SIZE_CACHE: StdMutex<Option<MediaSizeCache>> = StdMutex::new(None);
+const MEDIA_SIZE_TTL: Duration = Duration::from_secs(30);
+
+fn cached_media_dir_size(root: &std::path::Path) -> i64 {
+    if let Ok(guard) = MEDIA_SIZE_CACHE.lock() {
+        if let Some(c) = guard.as_ref() {
+            if c.root == root && c.at.elapsed() < MEDIA_SIZE_TTL {
+                return c.bytes;
+            }
+        }
+    }
+    let bytes = media_dir_size(root);
+    if let Ok(mut guard) = MEDIA_SIZE_CACHE.lock() {
+        *guard = Some(MediaSizeCache {
+            at: Instant::now(),
+            bytes,
+            root: root.to_path_buf(),
+        });
+    }
+    bytes
 }
 
 fn media_dir_size(root: &std::path::Path) -> i64 {

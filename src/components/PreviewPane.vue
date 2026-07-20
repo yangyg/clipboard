@@ -18,7 +18,7 @@
             </template>
             <template v-else>
               <span class="meta-sep" aria-hidden="true">·</span>
-              <span :title="`字符数：${record.content.length}`">{{ record.content.length }} 字符</span>
+              <span :title="`字符数：${record.content_len ?? record.content.length}`">{{ record.content_len ?? record.content.length }} 字符</span>
             </template>
             <template v-if="record.content_html">
               <span class="meta-sep" aria-hidden="true">·</span>

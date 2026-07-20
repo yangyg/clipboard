@@ -1,5 +1,5 @@
 use arboard::{Clipboard, ImageData};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -71,77 +71,90 @@ impl ClipboardMonitor {
                 *last_text_fp.lock() = Some(captured.fingerprint());
             }
         }
+        let last_seq = AtomicU32::new(clipboard_sequence_number());
 
         thread::spawn(move || {
             let poll_interval = Duration::from_millis(500);
+            // Reuse handle across polls; recreate only after open failure
+            let mut clipboard_slot: Option<Clipboard> = Clipboard::new().ok();
 
             while running.load(Ordering::SeqCst) {
-                match Clipboard::new() {
-                    Ok(mut clipboard) => {
-                        // Windows often puts BOTH a bitmap and text on the clipboard:
-                        // - Screenshots: image + empty/stub text → keep image
-                        // - Douyin/WeChat shares: thumb image + long share text → prefer text
-                        //   (image-only would swallow the share payload users care about)
-                        let image = clipboard.get_image().ok();
-                        let text = read_clipboard_text(&mut clipboard);
+                let seq = clipboard_sequence_number();
+                // Sequence unchanged → skip all clipboard reads (esp. get_image RGBA copy)
+                if seq != 0 && seq == last_seq.load(Ordering::Relaxed) {
+                    thread::sleep(poll_interval);
+                    continue;
+                }
+                last_seq.store(seq, Ordering::Relaxed);
 
-                        let prefer_text = text
-                            .as_ref()
-                            .map(|t| is_meaningful_share_text(&t.text))
-                            .unwrap_or(false);
+                if clipboard_slot.is_none() {
+                    clipboard_slot = Clipboard::new().ok();
+                }
+                let Some(clipboard) = clipboard_slot.as_mut() else {
+                    thread::sleep(poll_interval);
+                    continue;
+                };
 
-                        if let Some(img) = image {
-                            // Cheap fingerprint first — avoid full SHA-256 every 500ms
-                            // when the same screenshot sits on the clipboard.
-                            let quick = image_quick_fingerprint(&img);
-                            let unchanged = {
-                                let last = last_image_hash.lock();
-                                matches!(&*last, Some(prev) if prev == &quick)
-                            };
+                // Windows often puts BOTH a bitmap and text on the clipboard:
+                // - Screenshots: image + empty/stub text → keep image
+                // - Douyin/WeChat shares: thumb image + long share text → prefer text
+                let image = clipboard.get_image().ok();
+                let text = read_clipboard_text(clipboard);
 
-                            if unchanged {
-                                if prefer_text {
-                                    if let Some(captured) = text {
-                                        maybe_emit_text(&last_text_fp, captured, &on_change);
-                                    }
-                                } else if let Some(captured) = text {
-                                    *last_text_fp.lock() = Some(captured.fingerprint());
-                                }
-                            } else if prefer_text {
-                                *last_image_hash.lock() = Some(quick);
-                                if let Some(captured) = text {
-                                    maybe_emit_text(&last_text_fp, captured, &on_change);
-                                }
-                            } else {
-                                let raw = img.bytes.to_vec();
-                                let hash = {
-                                    use sha2::{Digest, Sha256};
-                                    let mut hasher = Sha256::new();
-                                    hasher.update(&raw);
-                                    hex::encode(hasher.finalize())
-                                };
-                                *last_image_hash.lock() = Some(quick);
-                                debug!(
-                                    "Clipboard changed (image): {}x{}",
-                                    img.width, img.height
-                                );
-                                on_change(ClipboardEvent::Image(CapturedImage {
-                                    rgba: raw,
-                                    width: img.width as u32,
-                                    height: img.height as u32,
-                                    hash,
-                                }));
-                                if let Some(captured) = text {
-                                    *last_text_fp.lock() = Some(captured.fingerprint());
-                                }
+                let prefer_text = text
+                    .as_ref()
+                    .map(|t| is_meaningful_share_text(&t.text))
+                    .unwrap_or(false);
+
+                if let Some(img) = image {
+                    // Cheap fingerprint first — avoid full SHA-256 when bitmap unchanged
+                    let quick = image_quick_fingerprint(&img);
+                    let unchanged = {
+                        let last = last_image_hash.lock();
+                        matches!(&*last, Some(prev) if prev == &quick)
+                    };
+
+                    if unchanged {
+                        if prefer_text {
+                            if let Some(captured) = text {
+                                maybe_emit_text(&last_text_fp, captured, &on_change);
                             }
                         } else if let Some(captured) = text {
+                            *last_text_fp.lock() = Some(captured.fingerprint());
+                        }
+                    } else if prefer_text {
+                        *last_image_hash.lock() = Some(quick);
+                        if let Some(captured) = text {
                             maybe_emit_text(&last_text_fp, captured, &on_change);
                         }
+                    } else {
+                        let width = img.width as u32;
+                        let height = img.height as u32;
+                        // Prefer moving owned buffer; only copy when Cow is borrowed
+                        let raw = match img.bytes {
+                            std::borrow::Cow::Owned(v) => v,
+                            std::borrow::Cow::Borrowed(b) => b.to_vec(),
+                        };
+                        let hash = {
+                            use sha2::{Digest, Sha256};
+                            let mut hasher = Sha256::new();
+                            hasher.update(&raw);
+                            hex::encode(hasher.finalize())
+                        };
+                        *last_image_hash.lock() = Some(quick);
+                        debug!("Clipboard changed (image): {}x{}", width, height);
+                        on_change(ClipboardEvent::Image(CapturedImage {
+                            rgba: raw,
+                            width,
+                            height,
+                            hash,
+                        }));
+                        if let Some(captured) = text {
+                            *last_text_fp.lock() = Some(captured.fingerprint());
+                        }
                     }
-                    Err(e) => {
-                        debug!("Failed to access clipboard: {}", e);
-                    }
+                } else if let Some(captured) = text {
+                    maybe_emit_text(&last_text_fp, captured, &on_change);
                 }
 
                 thread::sleep(poll_interval);
@@ -153,6 +166,22 @@ impl ClipboardMonitor {
 
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
+    }
+}
+
+/// OS clipboard generation counter. Unchanged ⇒ skip poll reads.
+fn clipboard_sequence_number() -> u32 {
+    #[cfg(windows)]
+    {
+        #[link(name = "user32")]
+        extern "system" {
+            fn GetClipboardSequenceNumber() -> u32;
+        }
+        unsafe { GetClipboardSequenceNumber() }
+    }
+    #[cfg(not(windows))]
+    {
+        0
     }
 }
 

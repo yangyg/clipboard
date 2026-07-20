@@ -32,6 +32,8 @@ export interface ClipboardRecord {
   /** Absolute filesystem paths for convertFileSrc */
   media_abs?: string | null;
   thumb_abs?: string | null;
+  /** Full content length (list rows may truncate `content`) */
+  content_len?: number | null;
   /** Preview-specific fields (not stored) */
   preview?: string; // truncated content for list
   display_time?: string; // relative time string

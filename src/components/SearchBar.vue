@@ -41,7 +41,7 @@ function onInput() {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     clipboardStore.search(query.value);
-  }, 150);
+  }, 250);
 }
 
 function clearSearch() {

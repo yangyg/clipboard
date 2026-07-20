@@ -28,7 +28,11 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 - **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
 - **Database:** SQLite via rusqlite (WAL), `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only
-- **Clipboard polling:** arboard every 500ms; image quick-fingerprint before full SHA-256; text/image priority heuristics
+- **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged (avoids per-tick `get_image` RGBA). Clipboard handle is reused. Image path moves owned buffers into `store_clipboard_image` (no double `to_vec`).
+- **List IPC:** `substr(content,1,400)` + `content_len`; `content_html` omitted. `clipboard-changed` emits the same light payload. Detail/`get_record` still full.
+- **Stats:** `media/` directory size cached ~30s. Frontend `loadStats` debounced 800ms on new records.
+- **Expire sweep:** watches `auto_expire_at` list (not deep `records`).
+- **Appearance IPC:** `set_window_corner_radius` only when `panel_radius` changes.
 - **Asset protocol:** `protocol-asset`; scope uses `$LOCALDATA/ClipVault/media/**/*` (not `$LOCALAPPDATA`)
 - **Autostart / shortcut / ignore list:** applied from Rust on `save_settings` / setup (not frontend-only)
 

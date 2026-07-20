@@ -70,7 +70,7 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - `settingsStore` — debounced auto-save (200ms); theme / appearance (`font_size`, `panel_radius`, `panel_opacity`, blur); applies CSS vars + `set_window_corner_radius`
 
 ### Key Design Decisions
-- **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur. Window: SideBar + `WindowControls`. Shared `.panel-surface` chrome.
+- **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur. Window: SideBar + `WindowControls`. Shared `.panel-surface` chrome. **Size is adaptive** via `adaptive_panel_size`: floating ≈ 40%×65% of monitor work area (clamp 480–800 × 480–780); window ≈ 55%×72% (clamp 720–1280 × 520–900). Logical px after DPI divide. Applied in `switch_app_mode`.
 - **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
 - **Theming:** CSS vars on `:root`; `.light-theme` / `.oled-theme` via `document.body.classList`. SideBar can toggle dark↔light.
 - **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Main UI (list / preview / sidebar / floating chrome) uses `rem`; Settings page keeps fixed `px` so the settings UI does not jump while dragging the slider.

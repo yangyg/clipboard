@@ -506,11 +506,46 @@ async fn remove_tag_from_record(state: State<'_, AppState>, record_id: i64, tag_
 
 // === App Mode ===
 
+/// Logical panel size from the current (or primary) monitor work area.
+/// Floating ≈ 40%×65% of screen; window ≈ 55%×72%; clamped so small laptops
+/// stay usable and large 4K screens don't open a huge panel.
+fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (f64, f64) {
+    let (frac_w, frac_h, min_w, min_h, max_w, max_h) = if is_window_mode {
+        (0.55, 0.72, 720.0, 520.0, 1280.0, 900.0)
+    } else {
+        (0.40, 0.65, 480.0, 480.0, 800.0, 780.0)
+    };
+
+    let (screen_w, screen_h) = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .map(|m| {
+            let scale = m.scale_factor().max(0.5);
+            // Prefer work area (excludes taskbar) when available; fall back to full size.
+            let (pw, ph) = {
+                let area = m.work_area();
+                (area.size.width as f64, area.size.height as f64)
+            };
+            ((pw / scale).max(320.0), (ph / scale).max(320.0))
+        })
+        .unwrap_or((1920.0, 1080.0));
+
+    let w = (screen_w * frac_w)
+        .clamp(min_w, max_w)
+        .min((screen_w - 32.0).max(min_w));
+    let h = (screen_h * frac_h)
+        .clamp(min_h, max_h)
+        .min((screen_h - 32.0).max(min_h));
+    (w.round(), h.round())
+}
+
 #[tauri::command]
 async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("window not found")?;
     let is_window = mode == "window";
-    let (w, h): (f64, f64) = if is_window { (920.0, 680.0) } else { (640.0, 620.0) };
+    let (w, h) = adaptive_panel_size(&window, is_window);
     window.set_decorations(false).map_err(|e| e.to_string())?;
     let _ = window.set_shadow(false);
     window.set_always_on_top(!is_window).map_err(|e| e.to_string())?;
@@ -524,7 +559,10 @@ async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), Stri
         .map(|s| s.panel_radius)
         .unwrap_or(20);
     let _ = apply_window_round_corners(&window, radius);
-    info!("App mode switched to: {}", mode);
+    info!(
+        "App mode switched to: {} (size {}x{}, adaptive)",
+        mode, w, h
+    );
     Ok(())
 }
 

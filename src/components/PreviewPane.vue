@@ -3,26 +3,26 @@
     <!-- Header -->
     <div class="preview-header">
       <div class="preview-type-row">
-        <div class="preview-type-icon" :class="record.content_type">
+        <div class="preview-type-icon" :class="record.content_type" :title="`内容类型：${typeLabel}`">
           <TypeIcon :type="record.content_type" :size="14" />
         </div>
         <div class="preview-heading">
-          <div class="preview-name">{{ typeLabel }}</div>
+          <div class="preview-name" :title="`内容类型：${typeLabel}`">{{ typeLabel }}</div>
           <div class="preview-meta-line">
-            <span>{{ record.source_app || '系统剪贴板' }}</span>
-            <span class="meta-sep">·</span>
-            <span>{{ formatDateTime(record.created_at) }}</span>
+            <span :title="`来源：${record.source_app || '系统剪贴板'}`">{{ record.source_app || '系统剪贴板' }}</span>
+            <span class="meta-sep" aria-hidden="true">·</span>
+            <span :title="`创建时间：${formatDateTime(record.created_at)}`">{{ formatDateTime(record.created_at) }}</span>
             <template v-if="record.content_type === 'image' && record.width && record.height">
-              <span class="meta-sep">·</span>
-              <span>{{ record.width }}×{{ record.height }}</span>
+              <span class="meta-sep" aria-hidden="true">·</span>
+              <span :title="`尺寸：${record.width}×${record.height}`">{{ record.width }}×{{ record.height }}</span>
             </template>
             <template v-else>
-              <span class="meta-sep">·</span>
-              <span>{{ record.content.length }} 字符</span>
+              <span class="meta-sep" aria-hidden="true">·</span>
+              <span :title="`字符数：${record.content.length}`">{{ record.content.length }} 字符</span>
             </template>
             <template v-if="record.content_html">
-              <span class="meta-sep">·</span>
-              <span>富文本</span>
+              <span class="meta-sep" aria-hidden="true">·</span>
+              <span title="格式：保留富文本">富文本</span>
             </template>
           </div>
         </div>

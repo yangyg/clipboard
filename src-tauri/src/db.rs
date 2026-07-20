@@ -956,7 +956,7 @@ impl ClipboardDb {
         Ok(())
     }
 
-    pub fn cleanup_expired(&self) -> SqlResult<()> {
+    pub fn cleanup_expired(&self) -> SqlResult<Vec<i64>> {
         let conn = self.conn.lock();
         let now = chrono::Utc::now().to_rfc3339();
         let ids: Vec<i64> = {
@@ -969,6 +969,9 @@ impl ClipboardDb {
                 .collect();
             ids
         };
+        if ids.is_empty() {
+            return Ok(ids);
+        }
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         conn.execute(
             "DELETE FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?",
@@ -976,7 +979,7 @@ impl ClipboardDb {
         )?;
         drop(conn);
         self.purge_media_pairs(&media);
-        Ok(())
+        Ok(ids)
     }
 
     pub fn cleanup_retention(&self, retention_days: i32) -> SqlResult<()> {

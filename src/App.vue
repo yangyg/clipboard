@@ -114,6 +114,12 @@ onMounted(async () => {
     }
   });
 
+  // Sensitive auto-expire deleted in Rust (throttled cleanup) → sync list
+  await listen<number[]>("records-expired", (event) => {
+    clipboardStore.removeExpiredFromList(event.payload ?? []);
+    void clipboardStore.loadStats();
+  });
+
   // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
   await listen<boolean>("toggle-panel", (event) => {
     if (event.payload) {

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from "../types";
 
@@ -27,6 +27,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const tags = ref<Tag[]>([]);
   let searchSeq = 0;
   let loadSeq = 0;
+  let expireSweepTimer: ReturnType<typeof setTimeout> | null = null;
+  let expireSweepRunning = false;
 
   // === Getters ===
   const selectedRecord = computed(() =>
@@ -349,6 +351,79 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  /** Remove expired sensitive records from DB + local list; reschedule next sweep. */
+  function removeExpiredFromList(ids: number[]) {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    records.value = records.value.filter((r) => !idSet.has(r.id));
+    if (selectedId.value !== null && idSet.has(selectedId.value)) {
+      selectedId.value = null;
+    }
+    if (selectedIds.value.size > 0) {
+      const next = new Set([...selectedIds.value].filter((id) => !idSet.has(id)));
+      selectedIds.value = next;
+    }
+  }
+
+  async function purgeExpiredRecords() {
+    if (expireSweepRunning) return;
+    expireSweepRunning = true;
+    try {
+      const ids = await invoke<number[]>("cleanup_expired");
+      removeExpiredFromList(ids);
+      // Also drop any locally past-due rows (clock skew / missed event)
+      const now = Date.now();
+      const stale = records.value
+        .filter((r) => r.auto_expire_at && new Date(r.auto_expire_at).getTime() <= now)
+        .map((r) => r.id);
+      if (stale.length > 0) {
+        removeExpiredFromList(stale);
+      }
+      if (ids.length > 0 || stale.length > 0) {
+        await loadStats();
+      }
+    } catch (e) {
+      console.error("Purge expired failed:", e);
+    } finally {
+      expireSweepRunning = false;
+      scheduleExpireSweep();
+    }
+  }
+
+  function scheduleExpireSweep() {
+    if (expireSweepTimer) {
+      clearTimeout(expireSweepTimer);
+      expireSweepTimer = null;
+    }
+    const now = Date.now();
+    let nextAt = Infinity;
+    for (const r of records.value) {
+      if (!r.auto_expire_at) continue;
+      const t = new Date(r.auto_expire_at).getTime();
+      if (Number.isNaN(t)) continue;
+      if (t <= now) {
+        void purgeExpiredRecords();
+        return;
+      }
+      if (t < nextAt) nextAt = t;
+    }
+    if (nextAt < Infinity) {
+      const delay = Math.max(50, nextAt - Date.now() + 30);
+      expireSweepTimer = setTimeout(() => {
+        expireSweepTimer = null;
+        void purgeExpiredRecords();
+      }, delay);
+    }
+  }
+
+  watch(
+    records,
+    () => {
+      scheduleExpireSweep();
+    },
+    { deep: true }
+  );
+
   async function emptyTrash() {
     try {
       await invoke("empty_trash");
@@ -599,6 +674,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     restoreRecord,
     restoreRecordsBatch,
     permanentlyDeleteRecord,
+    purgeExpiredRecords,
+    removeExpiredFromList,
     emptyTrash,
     loadTrashCount,
     setTrashFilter,

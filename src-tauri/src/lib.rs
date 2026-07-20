@@ -310,6 +310,11 @@ async fn permanently_delete_record(state: State<'_, AppState>, id: i64) -> Resul
 }
 
 #[tauri::command]
+async fn cleanup_expired(state: State<'_, AppState>) -> Result<Vec<i64>, String> {
+    state.db.cleanup_expired().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn empty_trash(state: State<'_, AppState>) -> Result<usize, String> {
     state.db.empty_trash().map_err(|e| e.to_string())
 }
@@ -661,6 +666,7 @@ pub fn run() {
             restore_records_batch,
             permanently_delete_record,
             empty_trash,
+            cleanup_expired,
             get_trash_count,
             toggle_favorite,
             batch_set_favorite,
@@ -820,7 +826,11 @@ pub fn run() {
                             // Include HTML in hash so same plain text with different format is distinct
                             let hash = sha256_hash(&captured.fingerprint());
 
-                            maybe_run_cleanup(&db).ok();
+                            if let Ok(ids) = maybe_run_cleanup(&db) {
+                                if !ids.is_empty() {
+                                    app_handle_clone.emit("records-expired", &ids).ok();
+                                }
+                            }
                             match db.insert_record(
                                 &captured.text,
                                 &content_type,
@@ -857,7 +867,11 @@ pub fn run() {
                                 return;
                             }
 
-                            maybe_run_cleanup(&db).ok();
+                            if let Ok(ids) = maybe_run_cleanup(&db) {
+                                if !ids.is_empty() {
+                                    app_handle_clone.emit("records-expired", &ids).ok();
+                                }
+                            }
 
                             match media::store_clipboard_image(
                                 &media_root,
@@ -977,22 +991,22 @@ static BANK_CARD_RE: LazyLock<Regex> =
 static LAST_CLEANUP_UNIX: AtomicU64 = AtomicU64::new(0);
 const CLEANUP_INTERVAL_SECS: u64 = 60;
 
-fn maybe_run_cleanup(db: &ClipboardDb) -> Result<(), String> {
+fn maybe_run_cleanup(db: &ClipboardDb) -> Result<Vec<i64>, String> {
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let last = LAST_CLEANUP_UNIX.load(AtomicOrdering::Relaxed);
     if now.saturating_sub(last) < CLEANUP_INTERVAL_SECS {
-        return Ok(());
+        return Ok(Vec::new());
     }
     LAST_CLEANUP_UNIX.store(now, AtomicOrdering::Relaxed);
-    db.cleanup_expired().map_err(|e| e.to_string())?;
+    let expired = db.cleanup_expired().map_err(|e| e.to_string())?;
     if let Ok(settings) = db.get_settings() {
         db.cleanup_retention(settings.retention_days)
             .map_err(|e| e.to_string())?;
     }
-    Ok(())
+    Ok(expired)
 }
 
 fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {

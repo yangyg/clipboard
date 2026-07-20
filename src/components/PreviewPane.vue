@@ -286,13 +286,17 @@ function onTagCreated() {
 const expireNow = ref(Date.now());
 let expireTimer: ReturnType<typeof setInterval> | null = null;
 
+function clearExpireTimer() {
+  if (expireTimer) {
+    clearInterval(expireTimer);
+    expireTimer = null;
+  }
+}
+
 watch(
-  () => record.value?.auto_expire_at,
+  () => record.value?.auto_expire_at ?? null,
   (iso) => {
-    if (expireTimer) {
-      clearInterval(expireTimer);
-      expireTimer = null;
-    }
+    clearExpireTimer();
     if (!iso) return;
     expireNow.value = Date.now();
     expireTimer = setInterval(() => {
@@ -303,15 +307,18 @@ watch(
 );
 
 onUnmounted(() => {
-  if (expireTimer) clearInterval(expireTimer);
+  clearExpireTimer();
 });
 
+/** Live countdown — always include seconds so the UI visibly ticks. */
 function formatExpireTime(iso: string): string {
   const ms = new Date(iso).getTime() - expireNow.value;
   if (ms <= 0) return "已过期";
-  const sec = Math.floor(ms / 1000);
-  if (sec < 60) return `${sec} 秒`;
-  return `${Math.floor(sec / 60)} 分钟`;
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m > 0) return `${m} 分 ${String(s).padStart(2, "0")} 秒`;
+  return `${s} 秒`;
 }
 
 function formatDateTime(iso: string): string {

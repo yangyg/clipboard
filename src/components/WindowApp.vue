@@ -44,7 +44,19 @@
         <div class="list-toolbar">
           <div class="list-count">{{ listCountLabel }}</div>
           <div class="list-toolbar-right">
-            <div class="list-sort" title="当前按最近更新排序">最新在前</div>
+            <select
+              class="list-sort"
+              :value="clipboardStore.listSort"
+              title="列表排序"
+              aria-label="列表排序"
+              @change="onSortChange"
+            >
+              <option
+                v-for="opt in LIST_SORT_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >{{ opt.label }}</option>
+            </select>
             <button
               class="list-header-btn"
               :class="{ active: clipboardStore.batchMode }"
@@ -90,7 +102,7 @@ import RecordList from "./RecordList.vue";
 import TagDialog from "./TagDialog.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
-import { useClipboardStore } from "../stores/clipboard";
+import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useBatchActions } from "../composables/useBatchActions";
 import { useConfirm } from "../composables/useConfirm";
@@ -113,6 +125,11 @@ useClipboardHotkeys({ allowCloseOnEscape: false });
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"create" | "assign" | "edit">("create");
 const editingTag = ref<Tag | null>(null);
+
+function onSortChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value as ListSort;
+  clipboardStore.setListSort(value);
+}
 
 async function onTitlebarDblClick() {
   await appWindow.toggleMaximize();
@@ -394,9 +411,24 @@ async function onEmptyTrash() {
 }
 
 .list-sort {
+  height: 26px;
+  max-width: 7.5rem;
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
   font-size: 0.75rem;
-  color: var(--text-tertiary);
-  padding: 4px 0;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.list-sort:hover,
+.list-sort:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
 }
 
 .list-header-btn {

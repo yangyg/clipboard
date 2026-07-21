@@ -4,6 +4,18 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from "../types";
 
 export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
+export type ListSort =
+  | "updated_desc"
+  | "updated_asc"
+  | "created_desc"
+  | "copies_desc";
+
+export const LIST_SORT_OPTIONS: { value: ListSort; label: string }[] = [
+  { value: "updated_desc", label: "最新在前" },
+  { value: "updated_asc", label: "最早在前" },
+  { value: "created_desc", label: "最近创建" },
+  { value: "copies_desc", label: "使用最多" },
+];
 
 const PAGE_SIZE = 60;
 
@@ -20,6 +32,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const activeTag = ref<string | null>(null);
   const trashFilter = ref(false);
   const trashCount = ref(0);
+  const listSort = ref<ListSort>("updated_desc");
   const batchMode = ref(false);
   const selectedIds = ref<Set<number>>(new Set());
   const pauseCapture = ref(false);
@@ -84,6 +97,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
           : null,
       favorites_only: favoritesOnly,
       tag: !trashFilter.value ? activeTag.value : null,
+      sort: listSort.value,
     };
   }
 
@@ -95,6 +109,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
         !favoritesOnly && activeFilter.value !== "all" ? activeFilter.value : null,
       favorites_only: favoritesOnly,
       tag: activeTag.value,
+      sort: listSort.value,
     };
   }
 
@@ -347,16 +362,20 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       const newVal = await invoke<boolean>("toggle_pin", { id });
       record.is_pinned = newVal;
-      // Re-sort to bring pinned to top. Parse each updated_at once (cached by id)
-      // instead of twice per comparison inside the sort.
-      const tsById = new Map<number, number>();
-      for (const r of records.value) {
-        tsById.set(r.id, new Date(r.updated_at).getTime());
+      if (listSort.value === "updated_desc") {
+        // Re-sort to bring pinned to top. Parse each updated_at once (cached by id)
+        // instead of twice per comparison inside the sort.
+        const tsById = new Map<number, number>();
+        for (const r of records.value) {
+          tsById.set(r.id, new Date(r.updated_at).getTime());
+        }
+        records.value.sort((a, b) => {
+          if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+          return (tsById.get(b.id) ?? 0) - (tsById.get(a.id) ?? 0);
+        });
+      } else {
+        reloadList();
       }
-      records.value.sort((a, b) => {
-        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
-        return (tsById.get(b.id) ?? 0) - (tsById.get(a.id) ?? 0);
-      });
       await loadStats();
       return newVal;
     } catch (e) {
@@ -591,6 +610,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
     ) {
       return;
     }
+    // Only the default "newest first" order can safely prepend; other sorts reload.
+    if (listSort.value !== "updated_desc") {
+      reloadList();
+      return;
+    }
     // Remove existing record with same id (backend dedup returns same id on hash match)
     const existing = records.value.findIndex((r) => r.id === record.id);
     if (existing !== -1) {
@@ -600,6 +624,12 @@ export const useClipboardStore = defineStore("clipboard", () => {
     const pinCount = records.value.filter((r) => r.is_pinned).length;
     records.value.splice(pinCount, 0, record);
     trimRecordsSoftCap();
+  }
+
+  function setListSort(sort: ListSort) {
+    if (listSort.value === sort) return;
+    listSort.value = sort;
+    reloadList();
   }
 
   async function loadStats() {
@@ -739,6 +769,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     activeTag,
     trashFilter,
     trashCount,
+    listSort,
     batchMode,
     selectedIds,
     pauseCapture,
@@ -755,6 +786,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     selectRecord,
     clearSelection,
     setFilter,
+    setListSort,
     reloadList,
     pasteRecord,
     deleteRecord,

@@ -191,6 +191,26 @@ impl ClipboardDb {
         Some(format!("\"{}\"", q.replace('"', "\"\"")))
     }
 
+    /// Whitelist sort keys → ORDER BY fragment. Unknown values fall back to updated_desc.
+    /// Non-trash lists keep pinned rows first.
+    fn order_by_clause(trashed: bool, sort: Option<&str>) -> &'static str {
+        let secondary = match sort.unwrap_or("updated_desc") {
+            "updated_asc" => "updated_at ASC",
+            "created_desc" => "created_at DESC",
+            "copies_desc" => "copy_count DESC, updated_at DESC",
+            _ => "updated_at DESC",
+        };
+        if trashed {
+            return secondary;
+        }
+        match secondary {
+            "updated_at ASC" => "is_pinned DESC, updated_at ASC",
+            "created_at DESC" => "is_pinned DESC, created_at DESC",
+            "copy_count DESC, updated_at DESC" => "is_pinned DESC, copy_count DESC, updated_at DESC",
+            _ => "is_pinned DESC, updated_at DESC",
+        }
+    }
+
     /// Build a comma-joined `?,?,…` placeholder list for an `IN (…)` clause.
     fn id_placeholders(n: usize) -> String {
         std::iter::repeat("?").take(n).collect::<Vec<_>>().join(",")
@@ -481,6 +501,7 @@ impl ClipboardDb {
         content_type: Option<&str>,
         favorites_only: bool,
         tag_name: Option<&str>,
+        sort: Option<&str>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.conn.lock();
         let mut sql = format!(
@@ -507,11 +528,9 @@ impl ClipboardDb {
             params.push(Box::new(tag.to_string()));
         }
 
-        if trashed {
-            sql.push_str(" ORDER BY updated_at DESC LIMIT ? OFFSET ?");
-        } else {
-            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC LIMIT ? OFFSET ?");
-        }
+        sql.push_str(" ORDER BY ");
+        sql.push_str(Self::order_by_clause(trashed, sort));
+        sql.push_str(" LIMIT ? OFFSET ?");
         params.push(Box::new(limit.max(1)));
         params.push(Box::new(offset.max(0)));
 
@@ -685,6 +704,7 @@ impl ClipboardDb {
         content_type: Option<&str>,
         favorites_only: bool,
         tag_name: Option<&str>,
+        sort: Option<&str>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let query = query.trim();
         if query.is_empty() {
@@ -738,7 +758,9 @@ impl ClipboardDb {
             );
             params.push(Box::new(tag.to_string()));
         }
-        sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC LIMIT ? OFFSET ?");
+        sql.push_str(" ORDER BY ");
+        sql.push_str(Self::order_by_clause(false, sort));
+        sql.push_str(" LIMIT ? OFFSET ?");
         params.push(Box::new(limit.max(1)));
         params.push(Box::new(offset.max(0)));
 

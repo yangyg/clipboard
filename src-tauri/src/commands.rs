@@ -22,6 +22,7 @@ pub async fn get_records(
     content_type: Option<String>,
     favorites_only: Option<bool>,
     tag: Option<String>,
+    sort: Option<String>,
 ) -> Result<RecordsPage, String> {
     crate::maybe_run_cleanup(&state.db)?;
     let limit = limit.unwrap_or(60).max(1);
@@ -35,6 +36,7 @@ pub async fn get_records(
             content_type.as_deref(),
             favorites_only.unwrap_or(false),
             tag.as_deref(),
+            sort.as_deref(),
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
@@ -50,6 +52,7 @@ pub async fn search_records(
     content_type: Option<String>,
     favorites_only: Option<bool>,
     tag: Option<String>,
+    sort: Option<String>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
     let limit = limit.unwrap_or(60).max(1);
@@ -63,6 +66,7 @@ pub async fn search_records(
             content_type.as_deref(),
             favorites_only.unwrap_or(false),
             tag.as_deref(),
+            sort.as_deref(),
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
@@ -330,7 +334,7 @@ pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Res
 pub async fn export_data(state: State<'_, AppState>) -> Result<String, String> {
     let records = state
         .db
-        .get_records(10000, 0, false, None, false, None)
+        .get_records(10000, 0, false, None, false, None, None)
         .map_err(|e| e.to_string())?;
     serde_json::to_string_pretty(&records).map_err(|e| e.to_string())
 }

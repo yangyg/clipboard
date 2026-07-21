@@ -113,6 +113,15 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     #[serde(rename = "ignored_apps")]
     pub ignored_apps: Vec<String>,
+    /// Remembered logical size (0 = use adaptive default). Per app mode.
+    #[serde(default, rename = "floating_width")]
+    pub floating_width: i32,
+    #[serde(default, rename = "floating_height")]
+    pub floating_height: i32,
+    #[serde(default, rename = "window_width")]
+    pub window_width: i32,
+    #[serde(default, rename = "window_height")]
+    pub window_height: i32,
 }
 
 impl Default for Settings {
@@ -139,6 +148,10 @@ impl Default for Settings {
                 "1Password.exe".to_string(),
                 "ICBCNetBank.exe".to_string(),
             ],
+            floating_width: 0,
+            floating_height: 0,
+            window_width: 0,
+            window_height: 0,
         }
     }
 }
@@ -355,10 +368,21 @@ async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
 }
 
 #[tauri::command]
-async fn save_settings(app: tauri::AppHandle, state: State<'_, AppState>, settings: Settings) -> Result<(), String> {
+async fn save_settings(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    mut settings: Settings,
+) -> Result<(), String> {
     let previous = state.db.get_settings().map_err(|e| e.to_string())?;
     let autostart_changed = settings.auto_start != previous.auto_start;
     let shortcut_changed = settings.global_shortcut != previous.global_shortcut;
+
+    // Window sizes are only written by resize persistence — never let frontend
+    // autosave (stale/zero defaults) wipe remembered dimensions.
+    settings.floating_width = previous.floating_width;
+    settings.floating_height = previous.floating_height;
+    settings.window_width = previous.window_width;
+    settings.window_height = previous.window_height;
 
     if autostart_changed {
         apply_autostart(&app, settings.auto_start)?;
@@ -509,6 +533,22 @@ async fn remove_tag_from_record(state: State<'_, AppState>, record_id: i64, tag_
 
 // === App Mode ===
 
+fn monitor_work_area_logical(window: &tauri::WebviewWindow) -> (f64, f64) {
+    window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+        .map(|m| {
+            let scale = m.scale_factor().max(0.5);
+            let area = m.work_area();
+            let w = (area.size.width as f64 / scale).max(320.0);
+            let h = (area.size.height as f64 / scale).max(320.0);
+            (w, h)
+        })
+        .unwrap_or((1920.0, 1080.0))
+}
+
 /// Logical panel size from the current (or primary) monitor work area.
 /// Floating ≈ 40%×65% of screen; window ≈ 55%×72%; clamped so small laptops
 /// stay usable and large 4K screens don't open a huge panel.
@@ -519,21 +559,7 @@ fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (
         (0.40, 0.65, 480.0, 480.0, 800.0, 780.0)
     };
 
-    let (screen_w, screen_h) = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .or_else(|| window.primary_monitor().ok().flatten())
-        .map(|m| {
-            let scale = m.scale_factor().max(0.5);
-            // Prefer work area (excludes taskbar) when available; fall back to full size.
-            let (pw, ph) = {
-                let area = m.work_area();
-                (area.size.width as f64, area.size.height as f64)
-            };
-            ((pw / scale).max(320.0), (ph / scale).max(320.0))
-        })
-        .unwrap_or((1920.0, 1080.0));
+    let (screen_w, screen_h) = monitor_work_area_logical(window);
 
     let w = (screen_w * frac_w)
         .clamp(min_w, max_w)
@@ -544,26 +570,132 @@ fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (
     (w.round(), h.round())
 }
 
+fn mode_size_bounds(is_window_mode: bool) -> (f64, f64, f64, f64) {
+    if is_window_mode {
+        (480.0, 400.0, 1600.0, 1200.0)
+    } else {
+        (400.0, 400.0, 1000.0, 900.0)
+    }
+}
+
+/// Prefer remembered size when valid; otherwise adaptive. Always clamp to work area.
+fn resolve_panel_size(
+    window: &tauri::WebviewWindow,
+    settings: &Settings,
+    is_window_mode: bool,
+) -> (f64, f64) {
+    let (saved_w, saved_h) = if is_window_mode {
+        (settings.window_width, settings.window_height)
+    } else {
+        (settings.floating_width, settings.floating_height)
+    };
+    let (min_w, min_h, max_w, max_h) = mode_size_bounds(is_window_mode);
+    let (screen_w, screen_h) = monitor_work_area_logical(window);
+
+    if saved_w >= min_w as i32 && saved_h >= min_h as i32 {
+        let w = (saved_w as f64)
+            .clamp(min_w, max_w)
+            .min((screen_w - 32.0).max(min_w));
+        let h = (saved_h as f64)
+            .clamp(min_h, max_h)
+            .min((screen_h - 32.0).max(min_h));
+        return (w.round(), h.round());
+    }
+    adaptive_panel_size(window, is_window_mode)
+}
+
+fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    // Don't remember maximized geometry as the restored size
+    if window.is_maximized().unwrap_or(false) {
+        return;
+    }
+    let Ok(size) = window.outer_size() else {
+        return;
+    };
+    let scale = window.scale_factor().unwrap_or(1.0).max(0.5);
+    let w = ((size.width as f64) / scale).round() as i32;
+    let h = ((size.height as f64) / scale).round() as i32;
+    if w < 200 || h < 200 {
+        return;
+    }
+
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let Ok(mut settings) = state.db.get_settings() else {
+        return;
+    };
+    // Prefer live window chrome over DB app_mode (mode switch may not be saved yet).
+    let is_window = !window.is_always_on_top().unwrap_or(settings.app_mode == "window");
+    let (min_w, min_h, _, _) = mode_size_bounds(is_window);
+    if (w as f64) < min_w || (h as f64) < min_h {
+        return;
+    }
+
+    if is_window {
+        if settings.window_width == w && settings.window_height == h {
+            return;
+        }
+        settings.window_width = w;
+        settings.window_height = h;
+    } else {
+        if settings.floating_width == w && settings.floating_height == h {
+            return;
+        }
+        settings.floating_width = w;
+        settings.floating_height = h;
+    }
+    if let Err(e) = state.db.save_settings(&settings) {
+        warn!("Failed to persist window size: {}", e);
+    } else {
+        let mode = if is_window { "window" } else { "floating" };
+        info!("Remembered {} size {}x{}", mode, w, h);
+    }
+}
+
+/// Debounce resize → settings write (Resized fires continuously while dragging).
+static SIZE_SAVE_GEN: AtomicU64 = AtomicU64::new(0);
+
+fn schedule_persist_window_size(app: tauri::AppHandle) {
+    let gen = SIZE_SAVE_GEN.fetch_add(1, AtomicOrdering::Relaxed) + 1;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        if SIZE_SAVE_GEN.load(AtomicOrdering::Relaxed) != gen {
+            return;
+        }
+        if let Some(window) = app.get_webview_window("main") {
+            persist_current_window_size(&app, &window);
+        }
+    });
+}
+
 #[tauri::command]
 async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("window not found")?;
     let is_window = mode == "window";
-    let (w, h) = adaptive_panel_size(&window, is_window);
+    let settings = app
+        .try_state::<AppState>()
+        .and_then(|s| s.db.get_settings().ok())
+        .unwrap_or_default();
+    let (w, h) = resolve_panel_size(&window, &settings, is_window);
+    let (min_w, min_h, _, _) = mode_size_bounds(is_window);
     window.set_decorations(false).map_err(|e| e.to_string())?;
     let _ = window.set_shadow(false);
     window.set_always_on_top(!is_window).map_err(|e| e.to_string())?;
     window.set_skip_taskbar(!is_window).map_err(|e| e.to_string())?;
-    window.set_resizable(is_window).map_err(|e| e.to_string())?;
+    // Both modes resizable so remembered size can be adjusted
+    window.set_resizable(true).map_err(|e| e.to_string())?;
+    let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
+        min_w, min_h,
+    ))));
+    // Cancel pending resize-save so programmatic set_size doesn't overwrite
+    // the other mode's remembered size while app_mode is mid-switch.
+    SIZE_SAVE_GEN.fetch_add(1, AtomicOrdering::Relaxed);
     let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
     // Re-apply rounded region after size change
-    let radius = app
-        .try_state::<AppState>()
-        .and_then(|s| s.db.get_settings().ok())
-        .map(|s| s.panel_radius)
-        .unwrap_or(20);
-    let _ = apply_window_round_corners(&window, radius);
+    let _ = apply_window_round_corners(&window, settings.panel_radius);
     info!(
-        "App mode switched to: {} (size {}x{}, adaptive)",
+        "App mode switched to: {} (size {}x{})",
         mode, w, h
     );
     Ok(())
@@ -985,14 +1117,18 @@ pub fn run() {
                     if window.label() != "main" {
                         return;
                     }
-                    let radius = window
-                        .app_handle()
+                    let app = window.app_handle().clone();
+                    let radius = app
                         .try_state::<AppState>()
                         .and_then(|s| s.db.get_settings().ok())
                         .map(|s| s.panel_radius)
                         .unwrap_or(20);
-                    if let Some(w) = window.app_handle().get_webview_window("main") {
+                    if let Some(w) = app.get_webview_window("main") {
                         let _ = apply_window_round_corners(&w, radius);
+                    }
+                    // Remember user-adjusted size (debounced); skip maximized.
+                    if matches!(event, tauri::WindowEvent::Resized(_)) {
+                        schedule_persist_window_size(app);
                     }
                 }
                 _ => {}

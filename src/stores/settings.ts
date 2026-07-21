@@ -22,6 +22,10 @@ const DEFAULT_SETTINGS: Settings = {
   auto_start: false,
   minimize_to_tray: true,
   ignored_apps: ["1Password.exe", "ICBCNetBank.exe"],
+  floating_width: 0,
+  floating_height: 0,
+  window_width: 0,
+  window_height: 0,
 };
 
 const SAVE_DEBOUNCE_MS = 200;

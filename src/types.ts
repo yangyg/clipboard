@@ -74,6 +74,11 @@ export interface Settings {
   minimize_to_tray: boolean;
   // Ignore apps
   ignored_apps: string[];
+  /** Remembered logical window size (0 = adaptive). */
+  floating_width: number;
+  floating_height: number;
+  window_width: number;
+  window_height: number;
 }
 
 export interface SearchResult {

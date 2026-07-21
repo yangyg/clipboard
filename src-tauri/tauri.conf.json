@@ -16,7 +16,7 @@
         "title": "剪贴板管理",
         "width": 640,
         "height": 620,
-        "resizable": false,
+        "resizable": true,
         "decorations": false,
         "transparent": true,
         "shadow": false,

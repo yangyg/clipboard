@@ -1,14 +1,15 @@
 mod db;
 mod clipboard;
 mod media;
+mod detect;
 
 use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{ClipboardMonitor, ClipboardEvent};
+use detect::{detect_content_type, detect_sensitive, sha256_hash};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 use parking_lot::RwLock;
-use regex::Regex;
 use tauri::{Emitter, Manager, State};
 use tauri::tray::{TrayIconBuilder, MouseButton, MouseButtonState, TrayIconEvent};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
@@ -76,7 +77,7 @@ pub struct ClipboardRecord {
 }
 
 // === Settings (must match src/types.ts Settings) ===
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(rename = "global_shortcut")]
     pub global_shortcut: String,
@@ -1142,33 +1143,6 @@ pub fn run() {
 }
 
 // ============================================================
-// Pre-compiled Regex Patterns
-// ============================================================
-
-static CODE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
-    [
-        r#"^\s*(fn|function|def|class|struct|impl|pub|const|let|var|import|from|require|module)\s"#,
-        r#"^\s*(if|for|while|switch|match)\s*[({]"#,
-        r#"^\s*(const|let|var)\s+\w+\s*[=:>]"#,
-        r#"^\s*#[a-z]+\s"#,
-        r#"\{\s*["']\w+["']\s*:"#,
-        r#"</?[a-z][a-z0-9]*"#,
-        r#"^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s"#,
-        r#"^\s*---\s*$"#,
-    ]
-    .iter()
-    .map(|p| Regex::new(p).unwrap())
-    .collect()
-});
-
-static VERIFICATION_CODE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\d{4,8}").unwrap());
-static API_KEY_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap());
-static BANK_CARD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\d{16,19}").unwrap());
-
-// ============================================================
 // Helper Functions
 // ============================================================
 
@@ -1233,39 +1207,6 @@ fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> Result<(), S
     Ok(())
 }
 
-fn detect_content_type(content: &str) -> ContentType {
-    let trimmed = content.trim();
-
-    // URL detection
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") || trimmed.starts_with("ftp://") {
-        return ContentType::Link;
-    }
-
-    // File path heuristic only — avoid Path::exists() disk IO on the monitor thread
-    if trimmed.len() < 2048
-        && ((trimmed.contains(":\\") && trimmed.contains('.'))
-            || (trimmed.starts_with('/') && trimmed.contains('.')))
-    {
-        return ContentType::File;
-    }
-
-    // Code detection (pre-compiled patterns)
-    for re in CODE_PATTERNS.iter() {
-        if re.is_match(trimmed) {
-            return ContentType::Code;
-        }
-    }
-
-    // JSON detection
-    if (trimmed.starts_with("{") && trimmed.ends_with("}")) || (trimmed.starts_with("[") && trimmed.ends_with("]")) {
-        if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
-            return ContentType::Code;
-        }
-    }
-
-    ContentType::Text
-}
-
 /// Strip HTML and truncate content for clipboard-changed IPC (list stays light).
 fn list_ipc_payload(mut r: ClipboardRecord) -> ClipboardRecord {
     r.content_html = None;
@@ -1278,38 +1219,4 @@ fn list_ipc_payload(mut r: ClipboardRecord) -> ClipboardRecord {
         r.content = r.content.chars().take(MAX).collect();
     }
     r
-}
-
-fn detect_sensitive(content: &str) -> bool {
-    let trimmed = content.trim();
-
-    // Password fields
-    if trimmed.to_lowercase().contains("password") || trimmed.to_lowercase().contains("passwd") || trimmed.to_lowercase().contains("pwd") {
-        return true;
-    }
-
-    // Verification codes (4-8 digit codes with "验证码" or similar)
-    if VERIFICATION_CODE_RE.is_match(trimmed)
-        && (trimmed.contains("验证码") || trimmed.contains("code") || trimmed.contains("Code")) {
-        return true;
-    }
-
-    // API keys (sk-...)
-    if API_KEY_RE.is_match(trimmed) {
-        return true;
-    }
-
-    // Bank card numbers (16-19 digits)
-    if BANK_CARD_RE.is_match(trimmed) && trimmed.len() <= 25 {
-        return true;
-    }
-
-    false
-}
-
-fn sha256_hash(content: &str) -> String {
-    use sha2::{Sha256, Digest};
-    let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
-    hex::encode(hasher.finalize())
 }

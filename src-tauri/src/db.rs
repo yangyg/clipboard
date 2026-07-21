@@ -1,5 +1,5 @@
 use rusqlite::{Connection, Result as SqlResult, params, Row};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::path::{Path, PathBuf};
 use std::fmt;
 use crate::media;
@@ -73,6 +73,9 @@ const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_
 pub struct ClipboardDb {
     conn: Mutex<Connection>,
     media_root: PathBuf,
+    /// In-memory copy of `app_settings`, populated lazily. Avoids re-parsing the
+    /// settings JSON on every clipboard event (the monitor reads it 2-3x/event).
+    settings_cache: RwLock<Option<Settings>>,
 }
 
 impl ClipboardDb {
@@ -168,6 +171,7 @@ impl ClipboardDb {
         Ok(Self {
             conn: Mutex::new(conn),
             media_root,
+            settings_cache: RwLock::new(None),
         })
     }
 
@@ -185,6 +189,11 @@ impl ClipboardDb {
             return None;
         }
         Some(format!("\"{}\"", q.replace('"', "\"\"")))
+    }
+
+    /// Build a comma-joined `?,?,…` placeholder list for an `IN (…)` clause.
+    fn id_placeholders(n: usize) -> String {
+        std::iter::repeat("?").take(n).collect::<Vec<_>>().join(",")
     }
 
     fn ensure_fts(conn: &Connection) -> SqlResult<()> {
@@ -417,10 +426,10 @@ impl ClipboardDb {
         if ids.is_empty() {
             return Ok(Vec::new());
         }
-        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
             "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
-            placeholders.join(",")
+            placeholders
         );
         let params: Vec<&dyn rusqlite::types::ToSql> =
             ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
@@ -437,13 +446,13 @@ impl ClipboardDb {
         if record_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
-        let placeholders: Vec<String> = record_ids.iter().map(|_| "?".to_string()).collect();
+        let placeholders = Self::id_placeholders(record_ids.len());
         let sql = format!(
             "SELECT rt.record_id, t.name FROM tags t
              INNER JOIN record_tags rt ON rt.tag_id = t.id
              WHERE rt.record_id IN ({})
              ORDER BY rt.record_id",
-            placeholders.join(",")
+            placeholders
         );
         let params: Vec<&dyn rusqlite::types::ToSql> =
             record_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
@@ -628,31 +637,41 @@ impl ClipboardDb {
 
         let id = conn.last_insert_rowid();
 
-        // Collect media of records about to be evicted by max_records
-        let overflow_ids: Vec<i64> = {
-            let mut stmt = conn.prepare(
-                "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                 ORDER BY updated_at ASC
-                 LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)",
-            )?;
-            let ids = stmt
-                .query_map([max_records.max(1)], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
-            ids
-        };
-        let overflow_media = self.fetch_media_paths_by_ids(&conn, &overflow_ids)?;
-
-        conn.execute(
-            "DELETE FROM records WHERE id IN (
-                SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                ORDER BY updated_at ASC
-                LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)
-            )",
-            [max_records.max(1)],
+        // Only run the (more expensive) eviction scan when we're actually over
+        // the cap. Steady state is at/under the cap, so this skips the two
+        // ORDER-BY-scan statements on the vast majority of inserts.
+        let active_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM records WHERE is_trashed = 0",
+            [],
+            |row| row.get(0),
         )?;
-        drop(conn);
-        self.purge_media_pairs(&overflow_media);
+        if active_count > max_records.max(1) as i64 {
+            // Collect media of records about to be evicted by max_records
+            let overflow_ids: Vec<i64> = {
+                let mut stmt = conn.prepare(
+                    "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
+                     ORDER BY updated_at ASC
+                     LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)",
+                )?;
+                let ids = stmt
+                    .query_map([max_records.max(1)], |row| row.get(0))?
+                    .filter_map(|r| r.ok())
+                    .collect();
+                ids
+            };
+            let overflow_media = self.fetch_media_paths_by_ids(&conn, &overflow_ids)?;
+
+            conn.execute(
+                "DELETE FROM records WHERE id IN (
+                    SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
+                    ORDER BY updated_at ASC
+                    LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)
+                )",
+                [max_records.max(1)],
+            )?;
+            drop(conn);
+            self.purge_media_pairs(&overflow_media);
+        }
 
         Ok(id)
     }
@@ -757,10 +776,10 @@ impl ClipboardDb {
         }
         let conn = self.conn.lock();
         let media = self.fetch_media_paths_by_ids(&conn, ids)?;
-        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
             "DELETE FROM records WHERE id IN ({})",
-            placeholders.join(",")
+            placeholders
         );
         let params: Vec<&dyn rusqlite::types::ToSql> =
             ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
@@ -786,10 +805,10 @@ impl ClipboardDb {
             return Ok(0);
         }
         let conn = self.conn.lock();
-        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
             "UPDATE records SET is_trashed = 1, is_pinned = 0 WHERE id IN ({})",
-            placeholders.join(",")
+            placeholders
         );
         let params: Vec<&dyn rusqlite::types::ToSql> =
             ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
@@ -808,10 +827,10 @@ impl ClipboardDb {
             return Ok(0);
         }
         let conn = self.conn.lock();
-        let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+        let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
             "UPDATE records SET is_trashed = 0 WHERE id IN ({})",
-            placeholders.join(",")
+            placeholders
         );
         let params: Vec<&dyn rusqlite::types::ToSql> =
             ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
@@ -914,29 +933,38 @@ impl ClipboardDb {
     }
 
     pub fn get_settings(&self) -> SqlResult<Settings> {
-        let conn = self.conn.lock();
-        let mut settings = Settings::default();
+        if let Some(cached) = self.settings_cache.read().as_ref() {
+            return Ok(cached.clone());
+        }
 
-        if let Ok(json) = conn.query_row::<String, _, _>(
-            "SELECT value FROM settings WHERE key = 'app_settings'",
-            [],
-            |row| row.get(0),
-        ) {
-            if let Ok(s) = serde_json::from_str::<Settings>(&json) {
-                settings = s;
+        let mut settings = Settings::default();
+        {
+            let conn = self.conn.lock();
+            if let Ok(json) = conn.query_row::<String, _, _>(
+                "SELECT value FROM settings WHERE key = 'app_settings'",
+                [],
+                |row| row.get(0),
+            ) {
+                if let Ok(s) = serde_json::from_str::<Settings>(&json) {
+                    settings = s;
+                }
             }
         }
 
+        *self.settings_cache.write() = Some(settings.clone());
         Ok(settings)
     }
 
     pub fn save_settings(&self, settings: &Settings) -> SqlResult<()> {
-        let conn = self.conn.lock();
         let json = serde_json::to_string(settings).unwrap_or_default();
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_settings', ?)",
-            [&json],
-        )?;
+        {
+            let conn = self.conn.lock();
+            conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_settings', ?)",
+                [&json],
+            )?;
+        }
+        *self.settings_cache.write() = Some(settings.clone());
         Ok(())
     }
 
@@ -1079,10 +1107,10 @@ impl ClipboardDb {
             if overflow_ids.is_empty() {
                 Vec::new()
             } else {
-                let placeholders: Vec<String> = overflow_ids.iter().map(|_| "?".to_string()).collect();
+                let placeholders = Self::id_placeholders(overflow_ids.len());
                 let sql = format!(
                     "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
-                    placeholders.join(",")
+                    placeholders
                 );
                 let params: Vec<&dyn rusqlite::types::ToSql> =
                     overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
@@ -1286,4 +1314,39 @@ fn media_dir_size(root: &std::path::Path) -> i64 {
     let mut total = 0u64;
     walk(root, &mut total);
     total.min(i64::MAX as u64) as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClipboardDb;
+
+    #[test]
+    fn escape_like_escapes_wildcards() {
+        assert_eq!(ClipboardDb::escape_like("100%"), "100\\%");
+        assert_eq!(ClipboardDb::escape_like("a_b"), "a\\_b");
+        assert_eq!(ClipboardDb::escape_like("c:\\x"), "c:\\\\x");
+        assert_eq!(ClipboardDb::escape_like("plain"), "plain");
+    }
+
+    #[test]
+    fn fts_match_needs_three_chars() {
+        assert_eq!(ClipboardDb::build_fts_match("ab"), None);
+        assert_eq!(ClipboardDb::build_fts_match("  x "), None);
+        assert_eq!(ClipboardDb::build_fts_match("abc"), Some("\"abc\"".to_string()));
+    }
+
+    #[test]
+    fn fts_match_escapes_quotes() {
+        assert_eq!(
+            ClipboardDb::build_fts_match(r#"a"b"#),
+            Some("\"a\"\"b\"".to_string())
+        );
+    }
+
+    #[test]
+    fn placeholders_join_count() {
+        assert_eq!(ClipboardDb::id_placeholders(0), "");
+        assert_eq!(ClipboardDb::id_placeholders(1), "?");
+        assert_eq!(ClipboardDb::id_placeholders(3), "?,?,?");
+    }
 }

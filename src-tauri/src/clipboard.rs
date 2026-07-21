@@ -422,3 +422,30 @@ pub fn get_foreground_window_info() -> (String, String) {
 pub fn get_foreground_window_info() -> (String, String) {
     (String::new(), String::new())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{is_meaningful_share_text, is_primarily_url};
+
+    #[test]
+    fn url_only_is_primarily_url() {
+        assert!(is_primarily_url("https://example.com/path"));
+        assert!(is_primarily_url("see https://example.com"));
+    }
+
+    #[test]
+    fn url_with_caption_is_not_primarily_url() {
+        assert!(!is_primarily_url(
+            "Check out this really long descriptive caption https://example.com"
+        ));
+        assert!(!is_primarily_url("no link here at all"));
+    }
+
+    #[test]
+    fn share_text_needs_length_and_no_dominant_url() {
+        assert!(is_meaningful_share_text("this is a meaningful caption"));
+        assert!(!is_meaningful_share_text("   "));
+        assert!(!is_meaningful_share_text("short"));
+        assert!(!is_meaningful_share_text("https://example.com/some/long/path"));
+    }
+}

@@ -347,11 +347,15 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       const newVal = await invoke<boolean>("toggle_pin", { id });
       record.is_pinned = newVal;
-      // Re-sort to bring pinned to top
+      // Re-sort to bring pinned to top. Parse each updated_at once (cached by id)
+      // instead of twice per comparison inside the sort.
+      const tsById = new Map<number, number>();
+      for (const r of records.value) {
+        tsById.set(r.id, new Date(r.updated_at).getTime());
+      }
       records.value.sort((a, b) => {
-        if (a.is_pinned && !b.is_pinned) return -1;
-        if (!a.is_pinned && b.is_pinned) return 1;
-        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+        return (tsById.get(b.id) ?? 0) - (tsById.get(a.id) ?? 0);
       });
       await loadStats();
       return newVal;

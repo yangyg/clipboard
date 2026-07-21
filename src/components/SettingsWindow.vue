@@ -312,18 +312,7 @@
                     {{ stats.data_path }}
                   </div>
                 </div>
-                <div class="storage-card-actions">
-                  <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
-                  <button
-                    class="btn btn-secondary"
-                    :disabled="!stats?.data_path"
-                    title="在资源管理器中打开"
-                    @click="openDataFolder"
-                  >
-                    <AppIcon name="folder" :size="13" />
-                    打开目录
-                  </button>
-                </div>
+                <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
               </div>
             </div>
           </template>
@@ -432,7 +421,6 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { open as openPath } from "@tauri-apps/plugin-shell";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { ClipboardRecord } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
@@ -674,17 +662,6 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-async function openDataFolder() {
-  const path = stats.value?.data_path;
-  if (!path) return;
-  try {
-    await openPath(path);
-  } catch (e) {
-    console.error("Open data folder failed:", e);
-    toast("无法打开存储目录", "error");
-  }
 }
 
 function onWindowKeydown(e: KeyboardEvent) {
@@ -1301,14 +1278,6 @@ input[type="range"]::-webkit-slider-thumb {
   line-height: 1.4;
   word-break: break-all;
   user-select: text;
-}
-
-.storage-card-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
 }
 
 .status-line {

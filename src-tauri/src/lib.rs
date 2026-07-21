@@ -197,6 +197,9 @@ pub struct StatsData {
     pub sensitive_count: i64,
     #[serde(rename = "storage_bytes")]
     pub storage_bytes: i64,
+    /// Absolute path to app data dir (DB + media).
+    #[serde(rename = "data_path")]
+    pub data_path: String,
     #[serde(rename = "type_distribution")]
     pub type_distribution: std::collections::HashMap<String, i64>,
 }

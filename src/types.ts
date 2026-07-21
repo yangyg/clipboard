@@ -117,5 +117,7 @@ export interface StatsData {
   pinned_count: number;
   sensitive_count: number;
   storage_bytes: number;
+  /** Absolute path to app data directory (DB + media). */
+  data_path: string;
   type_distribution: Record<ContentType, number>;
 }

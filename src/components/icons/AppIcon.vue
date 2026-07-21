@@ -39,6 +39,7 @@ import {
   Circle,
   Pencil,
   ArrowLeft,
+  FolderOpen,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -79,6 +80,7 @@ const ICONS = {
   window: AppWindow,
   circle: Circle,
   edit: Pencil,
+  folder: FolderOpen,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;

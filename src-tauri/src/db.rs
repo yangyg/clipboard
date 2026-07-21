@@ -1232,6 +1232,7 @@ impl ClipboardDb {
             pinned_count,
             sensitive_count,
             storage_bytes,
+            data_path: self.media_root.display().to_string(),
             type_distribution,
         })
     }

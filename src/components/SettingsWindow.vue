@@ -297,13 +297,33 @@
             </div>
 
             <div class="settings-section">
-              <div class="setting-row">
-                <div>
+              <div class="settings-section-title">存储</div>
+              <div class="data-card storage-card">
+                <div class="storage-card-main">
                   <div class="setting-label">本地存储占用</div>
-                  <div class="setting-desc">含数据库与 media 图片目录</div>
-                  <div class="setting-desc">按剪贴板文本内容估算，不包含 SQLite 索引开销</div>
+                  <div class="setting-desc">
+                    文本内容估算 + media 图片目录（不含 SQLite 索引开销）
+                  </div>
+                  <div
+                    v-if="stats?.data_path"
+                    class="storage-path"
+                    :title="stats.data_path"
+                  >
+                    {{ stats.data_path }}
+                  </div>
                 </div>
-                <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
+                <div class="storage-card-actions">
+                  <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
+                  <button
+                    class="btn btn-secondary"
+                    :disabled="!stats?.data_path"
+                    title="在资源管理器中打开"
+                    @click="openDataFolder"
+                  >
+                    <AppIcon name="folder" :size="13" />
+                    打开目录
+                  </button>
+                </div>
               </div>
             </div>
           </template>
@@ -412,6 +432,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { open as openPath } from "@tauri-apps/plugin-shell";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { ClipboardRecord } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
@@ -653,6 +674,17 @@ function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function openDataFolder() {
+  const path = stats.value?.data_path;
+  if (!path) return;
+  try {
+    await openPath(path);
+  } catch (e) {
+    console.error("Open data folder failed:", e);
+    toast("无法打开存储目录", "error");
+  }
 }
 
 function onWindowKeydown(e: KeyboardEvent) {
@@ -1247,6 +1279,36 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
+}
+
+.storage-card {
+  align-items: flex-start;
+}
+
+.storage-card-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.storage-path {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  line-height: 1.4;
+  word-break: break-all;
+  user-select: text;
+}
+
+.storage-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .status-line {

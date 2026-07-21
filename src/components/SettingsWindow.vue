@@ -394,6 +394,53 @@
             </div>
           </template>
 
+          <!-- Help -->
+          <template v-else-if="activeSection === 'help'">
+            <div class="settings-section">
+              <div class="settings-section-title">使用指南</div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="keyboard" :size="14" /> 唤起面板</div>
+                <div class="guide-text">在任意应用中按下全局快捷键 <span class="guide-kbd">{{ settings.global_shortcut }}</span> 即可唤起剪贴板面板；可在“快捷键”中自定义。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="clipboard" :size="14" /> 自动记录</div>
+                <div class="guide-text">复制任意文本、链接、代码、图片或文件，内容会自动进入历史列表，无需手动保存。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="paste" :size="14" /> 粘贴到当前应用</div>
+                <div class="guide-text">双击条目、按 <span class="guide-kbd">Enter</span> 或右键菜单选“粘贴”，会自动填入你上一个操作的应用；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="search" :size="14" /> 搜索与筛选</div>
+                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框；左侧导航可按类型、收藏、标签筛选。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="star" :size="14" /> 收藏、置顶与标签</div>
+                <div class="guide-text">常用内容可收藏或置顶，不会被自动清理；为条目添加标签可更方便地分类和检索。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="shield" :size="14" /> 隐私保护</div>
+                <div class="guide-text">开启“自动检测敏感内容”后，密码、验证码等会被标记并在设定时间后自动删除；可在“隐私”中将密码管理器等应用加入忽略列表，不记录其剪贴板。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="trash" :size="14" /> 回收站与清理</div>
+                <div class="guide-text">删除的条目会进入回收站，超过“保留天数”后自动清除（收藏、置顶除外）；历史超过最大记录数时也会自动淘汰最旧的普通记录。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="panel" :size="14" /> 两种应用模式</div>
+                <div class="guide-text">“悬浮面板”无边框置顶、失焦自动隐藏，适合快速粘贴；“独立窗口”保留系统边框与任务栏，适合长期管理。可在“外观”中切换。</div>
+              </div>
+            </div>
+          </template>
+
           <!-- About -->
           <template v-else-if="activeSection === 'about'">
             <div class="settings-section">
@@ -452,6 +499,7 @@ const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
   { key: "system", icon: "settings", label: "系统" },
   { key: "data", icon: "package", label: "数据" },
   { key: "stats", icon: "stats", label: "统计" },
+  { key: "help", icon: "help", label: "帮助" },
   { key: "about", icon: "info", label: "关于" },
 ];
 
@@ -1292,6 +1340,45 @@ input[type="range"]::-webkit-slider-thumb {
 .status-line.success {
   background: var(--success-soft);
   color: var(--success);
+}
+
+/* Help / Guide */
+.guide-block {
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.guide-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.guide-heading .app-icon {
+  color: var(--accent);
+}
+
+.guide-text {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.guide-kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-active);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
 }
 
 /* About */

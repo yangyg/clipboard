@@ -37,12 +37,8 @@ pub(crate) fn build_tray(
         .on_menu_event(move |app, event| {
             match event.id().as_ref() {
                 "show" => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        window.show().ok();
-                        window.set_focus().ok();
-                        app.emit("toggle-panel", true).ok();
-                        info!("Tray menu: show panel");
-                    }
+                    crate::show_main_panel(app);
+                    info!("Tray menu: show panel");
                 }
                 "pause" => {
                     let next = !*capture_paused_menu.read();
@@ -52,6 +48,8 @@ pub(crate) fn build_tray(
                 }
                 "settings" => {
                     if let Some(window) = app.get_webview_window("main") {
+                        let our = window.hwnd().ok().map(|h| h.0 as isize);
+                        crate::clipboard::remember_paste_target(our);
                         window.show().ok();
                         window.set_focus().ok();
                         app.emit("open-settings", ()).ok();
@@ -71,9 +69,7 @@ pub(crate) fn build_tray(
                         window.hide().ok();
                         app.emit("toggle-panel", false).ok();
                     } else {
-                        window.show().ok();
-                        window.set_focus().ok();
-                        app.emit("toggle-panel", true).ok();
+                        crate::show_main_panel(app);
                     }
                 }
             }

@@ -42,7 +42,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 3. Skip capture when `source_app` matches `settings.ignored_apps`
 4. Persist: text (+ optional `content_html`) → SQLite; image → `media/` + thumb + metadata label `[image WxH]`
 5. Emit `clipboard-changed`; Vue store updates list
-6. Paste: text → `set_html`/`set_text` + Ctrl+V; image → disk PNG → `set_image` + Ctrl+V
+6. Paste: write clipboard → (floating: hide panel) → restore previous foreground HWND → Ctrl+V. Target HWND remembered when panel opens. If no valid target, only updates clipboard.
 
 ### Frontend Component Tree
 ```
@@ -93,7 +93,7 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - **Pause capture:** Frontend + tray both update Rust; tray emits `capture-paused`.
 - **Cleanup:** Expired/retention throttled (~60s).
 - **File type detect:** Path heuristic only (no `Path::exists` on monitor thread).
-- **Dedup:** SHA-256 of text fingerprint or full image bytes.
+- **Dedup:** SHA-256 of text fingerprint (plain+html) or full image bytes. Hash match updates `copy_count` / `updated_at` (active rows only). **Paste self-write:** `paste_record` suppresses monitor emits ~1.5s so CF_HTML/plain round-trips don't insert a duplicate (fingerprint would otherwise diverge from the stored hash).
 - **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.
 

@@ -37,9 +37,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
     try {
       await clipboardStore.pasteRecord(id, pasteMode);
       toast(pasteMode === "plain" ? "已粘贴为纯文本" : "已粘贴", "success");
-      if (settingsStore.settings.auto_close_on_paste && options.onClose) {
-        options.onClose();
-      }
+      // Floating hide is handled in Rust (focus restore). Don't double-hide here.
     } catch {
       toast("粘贴失败", "error");
     }

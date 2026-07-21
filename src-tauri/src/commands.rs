@@ -4,7 +4,7 @@
 
 use std::sync::atomic::Ordering as AtomicOrdering;
 
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tracing::{info, warn};
 
@@ -84,27 +84,80 @@ pub async fn get_record(state: State<'_, AppState>, id: i64) -> Result<Option<Cl
 
 #[tauri::command]
 pub async fn paste_record(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     id: i64,
     mode: Option<String>,
 ) -> Result<(), String> {
+    use tauri::Manager;
+
     let record = state.db.get_record(id).map_err(|e| e.to_string())?;
-    if let Some(r) = record {
-        let _ = state.db.increment_copy_count(id);
-        if r.content_type == "image" {
-            if let Some(media_path) = r.media_path.as_deref() {
-                let (rgba, w, h) = media::load_image_rgba(state.db.media_root(), media_path)?;
-                clipboard::paste_image(&rgba, w, h);
-            } else {
-                return Err("Image file missing for this record".into());
-            }
+    let Some(r) = record else {
+        return Ok(());
+    };
+
+    let _ = state.db.increment_copy_count(id);
+    // Paste writes the OS clipboard; suppress re-capture so CF_HTML / plain
+    // round-trips don't create a duplicate row (hash includes HTML).
+    state
+        .monitor
+        .read()
+        .suppress_self_writes(std::time::Duration::from_millis(1500));
+
+    let wrote = if r.content_type == "image" {
+        if let Some(media_path) = r.media_path.as_deref() {
+            let (rgba, w, h) = media::load_image_rgba(state.db.media_root(), media_path)?;
+            clipboard::write_clipboard_image(&rgba, w, h)
         } else {
-            match mode.as_deref() {
-                Some("plain") => clipboard::paste_plain_text(&r.content),
-                _ => clipboard::paste_text(&r.content, r.content_html.as_deref()),
-            }
+            return Err("Image file missing for this record".into());
         }
+    } else {
+        match mode.as_deref() {
+            Some("plain") => clipboard::write_clipboard_plain(&r.content),
+            _ => clipboard::write_clipboard_text(&r.content, r.content_html.as_deref()),
+        }
+    };
+    if !wrote {
+        return Err("Failed to set clipboard".into());
     }
+
+    let settings = state.db.get_settings().unwrap_or_default();
+    let is_floating = settings.app_mode != "window";
+    let auto_close = settings.auto_close_on_paste;
+
+    // Floating: hide so we can yield focus. Window mode stays open behind the target.
+    if is_floating {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.hide();
+        }
+        let _ = app.emit("toggle-panel", false);
+    }
+
+    let target = clipboard::paste_target_hwnd();
+    let focused = target
+        .map(clipboard::focus_window)
+        .unwrap_or(false);
+
+    if focused {
+        clipboard::simulate_paste();
+    } else {
+        warn!(
+            "Paste target unavailable (hwnd={:?}); clipboard updated, skipped Ctrl+V",
+            target
+        );
+    }
+
+    // Floating + keep panel open: bring ourselves back after pasting into the target.
+    if is_floating && !auto_close {
+        if let Some(window) = app.get_webview_window("main") {
+            let our = window.hwnd().ok().map(|h| h.0 as isize);
+            clipboard::remember_paste_target(our);
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+        let _ = app.emit("toggle-panel", true);
+    }
+
     Ok(())
 }
 

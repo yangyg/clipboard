@@ -67,7 +67,7 @@
               <div class="setting-row">
                 <div>
                   <div class="setting-label">粘贴后自动关闭面板</div>
-                  <div class="setting-desc">粘贴完成后隐藏悬浮面板</div>
+                  <div class="setting-desc">悬浮模式下粘贴后保持面板关闭（关闭则粘贴后重新打开）</div>
                 </div>
                 <div
                   class="toggle"

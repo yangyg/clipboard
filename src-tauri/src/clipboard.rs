@@ -2,7 +2,7 @@ use arboard::{Clipboard, ImageData};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tracing::{debug, warn};
 
 #[derive(Debug, Clone)]
@@ -43,6 +43,8 @@ pub struct ClipboardMonitor {
     running: Arc<AtomicBool>,
     last_text_fp: Arc<parking_lot::Mutex<Option<String>>>,
     last_image_hash: Arc<parking_lot::Mutex<Option<String>>>,
+    /// Skip emits until this instant (our own paste/set_clipboard must not re-capture).
+    suppress_until: Arc<parking_lot::Mutex<Option<Instant>>>,
 }
 
 impl ClipboardMonitor {
@@ -51,7 +53,15 @@ impl ClipboardMonitor {
             running: Arc::new(AtomicBool::new(false)),
             last_text_fp: Arc::new(parking_lot::Mutex::new(None)),
             last_image_hash: Arc::new(parking_lot::Mutex::new(None)),
+            suppress_until: Arc::new(parking_lot::Mutex::new(None)),
         }
+    }
+
+    /// Ignore clipboard changes for a short window after we write the clipboard ourselves.
+    /// Paste re-writes OS clipboard; CF_HTML round-trips often change the HTML bytes, so the
+    /// text+html fingerprint no longer matches the DB hash and would insert a duplicate row.
+    pub fn suppress_self_writes(&self, duration: Duration) {
+        *self.suppress_until.lock() = Some(Instant::now() + duration);
     }
 
     pub fn start<F>(&mut self, on_change: F)
@@ -67,6 +77,7 @@ impl ClipboardMonitor {
         let running = self.running.clone();
         let last_text_fp = self.last_text_fp.clone();
         let last_image_hash = self.last_image_hash.clone();
+        let suppress_until = self.suppress_until.clone();
 
         // Get initial clipboard content
         if let Ok(mut clipboard) = Clipboard::new() {
@@ -98,6 +109,8 @@ impl ClipboardMonitor {
                     continue;
                 };
 
+                let suppressed = is_capture_suppressed(&suppress_until);
+
                 // Windows often puts BOTH a bitmap and text on the clipboard:
                 // - Screenshots: image + empty/stub text → keep image
                 // - Douyin/WeChat shares: thumb image + long share text → prefer text
@@ -120,7 +133,7 @@ impl ClipboardMonitor {
                     if unchanged {
                         if prefer_text {
                             if let Some(captured) = text {
-                                maybe_emit_text(&last_text_fp, captured, &on_change);
+                                maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                             }
                         } else if let Some(captured) = text {
                             *last_text_fp.lock() = Some(captured.fingerprint());
@@ -128,7 +141,7 @@ impl ClipboardMonitor {
                     } else if prefer_text {
                         *last_image_hash.lock() = Some(quick);
                         if let Some(captured) = text {
-                            maybe_emit_text(&last_text_fp, captured, &on_change);
+                            maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                         }
                     } else {
                         let width = img.width as u32;
@@ -145,19 +158,23 @@ impl ClipboardMonitor {
                             hex::encode(hasher.finalize())
                         };
                         *last_image_hash.lock() = Some(quick);
-                        debug!("Clipboard changed (image): {}x{}", width, height);
-                        on_change(ClipboardEvent::Image(CapturedImage {
-                            rgba: raw,
-                            width,
-                            height,
-                            hash,
-                        }));
                         if let Some(captured) = text {
                             *last_text_fp.lock() = Some(captured.fingerprint());
                         }
+                        if !suppressed {
+                            debug!("Clipboard changed (image): {}x{}", width, height);
+                            on_change(ClipboardEvent::Image(CapturedImage {
+                                rgba: raw,
+                                width,
+                                height,
+                                hash,
+                            }));
+                        } else {
+                            debug!("Suppressed self-write image capture {}x{}", width, height);
+                        }
                     }
                 } else if let Some(captured) = text {
-                    maybe_emit_text(&last_text_fp, captured, &on_change);
+                    maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                 }
 
                 thread::sleep(poll_interval);
@@ -169,6 +186,18 @@ impl ClipboardMonitor {
 
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
+    }
+}
+
+fn is_capture_suppressed(suppress_until: &parking_lot::Mutex<Option<Instant>>) -> bool {
+    let mut guard = suppress_until.lock();
+    match *guard {
+        Some(until) if Instant::now() < until => true,
+        Some(_) => {
+            *guard = None;
+            false
+        }
+        None => false,
     }
 }
 
@@ -256,6 +285,7 @@ fn is_primarily_url(t: &str) -> bool {
 fn maybe_emit_text(
     last_text_fp: &parking_lot::Mutex<Option<String>>,
     captured: CapturedText,
+    suppressed: bool,
     on_change: &impl Fn(ClipboardEvent),
 ) {
     let fp = captured.fingerprint();
@@ -269,6 +299,14 @@ fn maybe_emit_text(
             }
         }
     };
+    if should_notify && suppressed {
+        debug!(
+            "Suppressed self-write text capture: {} chars, html={}",
+            captured.text.len(),
+            captured.html.is_some()
+        );
+        return;
+    }
     if should_notify {
         debug!(
             "Clipboard changed (text): {} chars, html={}",
@@ -281,7 +319,7 @@ fn maybe_emit_text(
 
 /// Simulate Ctrl+V after clipboard content has been set.
 #[cfg(windows)]
-fn simulate_paste() {
+pub fn simulate_paste() {
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         keybd_event, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
     };
@@ -296,26 +334,134 @@ fn simulate_paste() {
     }
 }
 
-/// Paste plain text only.
+#[cfg(not(windows))]
+pub fn simulate_paste() {
+    warn!("Paste simulation not available on this platform");
+}
+
+/// Paste target HWND remembered when the panel is shown (before we steal focus).
+static PASTE_TARGET_HWND: parking_lot::Mutex<Option<isize>> = parking_lot::Mutex::new(None);
+
+/// Snapshot the current foreground window as the paste destination, unless it is us.
 #[cfg(windows)]
-pub fn paste_plain_text(text: &str) {
-    if let Ok(mut clipboard) = Clipboard::new() {
-        if let Err(e) = clipboard.set_text(text) {
-            warn!("Failed to set clipboard for paste: {}", e);
+pub fn remember_paste_target(our_hwnd: Option<isize>) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_null() {
             return;
         }
-        simulate_paste();
+        let fg_id = fg as isize;
+        if our_hwnd == Some(fg_id) {
+            return;
+        }
+        *PASTE_TARGET_HWND.lock() = Some(fg_id);
+        debug!("Remembered paste target hwnd={:#x}", fg_id);
     }
 }
 
 #[cfg(not(windows))]
-pub fn paste_plain_text(_text: &str) {
-    warn!("Paste simulation not available on this platform");
+pub fn remember_paste_target(_our_hwnd: Option<isize>) {}
+
+#[cfg(windows)]
+pub fn paste_target_hwnd() -> Option<isize> {
+    *PASTE_TARGET_HWND.lock()
 }
 
-/// Paste with HTML format when available (keeps bold/color/etc. in Word, browsers…).
+#[cfg(not(windows))]
+pub fn paste_target_hwnd() -> Option<isize> {
+    None
+}
+
+/// Bring a window to the foreground so simulated Ctrl+V lands in it.
 #[cfg(windows)]
-pub fn paste_text(text: &str, html: Option<&str>) {
+pub fn focus_window(hwnd_id: isize) -> bool {
+    use windows_sys::Win32::Foundation::{FALSE, TRUE};
+    use windows_sys::Win32::System::Threading::{
+        AttachThreadInput, GetCurrentThreadId,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        AllowSetForegroundWindow, BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId,
+        IsIconic, IsWindow, SetForegroundWindow, ShowWindow, SW_RESTORE,
+    };
+
+    unsafe {
+        let hwnd = hwnd_id as windows_sys::Win32::Foundation::HWND;
+        if hwnd.is_null() || IsWindow(hwnd) == 0 {
+            return false;
+        }
+
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+
+        let fg = GetForegroundWindow();
+        let mut fg_pid = 0u32;
+        let mut target_pid = 0u32;
+        let fg_tid = if !fg.is_null() {
+            GetWindowThreadProcessId(fg, &mut fg_pid)
+        } else {
+            0
+        };
+        let target_tid = GetWindowThreadProcessId(hwnd, &mut target_pid);
+        let cur_tid = GetCurrentThreadId();
+
+        // ASFW_ANY (-1): allow us to set foreground while we hold input attachment.
+        AllowSetForegroundWindow(u32::MAX);
+
+        if fg_tid != 0 && fg_tid != cur_tid {
+            AttachThreadInput(cur_tid, fg_tid, TRUE);
+        }
+        if target_tid != 0 && target_tid != cur_tid && target_tid != fg_tid {
+            AttachThreadInput(cur_tid, target_tid, TRUE);
+        }
+
+        BringWindowToTop(hwnd);
+        let ok = SetForegroundWindow(hwnd) != 0;
+
+        if target_tid != 0 && target_tid != cur_tid && target_tid != fg_tid {
+            AttachThreadInput(cur_tid, target_tid, FALSE);
+        }
+        if fg_tid != 0 && fg_tid != cur_tid {
+            AttachThreadInput(cur_tid, fg_tid, FALSE);
+        }
+
+        if ok {
+            debug!("Focused paste target hwnd={:#x}", hwnd_id);
+        } else {
+            warn!("SetForegroundWindow failed for hwnd={:#x}", hwnd_id);
+        }
+        ok
+    }
+}
+
+#[cfg(not(windows))]
+pub fn focus_window(_hwnd_id: isize) -> bool {
+    false
+}
+
+/// Write plain text to the clipboard (no key simulation).
+#[cfg(windows)]
+pub fn write_clipboard_plain(text: &str) -> bool {
+    if let Ok(mut clipboard) = Clipboard::new() {
+        if let Err(e) = clipboard.set_text(text) {
+            warn!("Failed to set clipboard for paste: {}", e);
+            return false;
+        }
+        return true;
+    }
+    false
+}
+
+#[cfg(not(windows))]
+pub fn write_clipboard_plain(_text: &str) -> bool {
+    false
+}
+
+/// Write text (+ optional HTML) to the clipboard (no key simulation).
+#[cfg(windows)]
+pub fn write_clipboard_text(text: &str, html: Option<&str>) -> bool {
     if let Ok(mut clipboard) = Clipboard::new() {
         let ok = if let Some(h) = html.filter(|s| !s.trim().is_empty()) {
             match clipboard.set_html(h, Some(text)) {
@@ -330,20 +476,20 @@ pub fn paste_text(text: &str, html: Option<&str>) {
         };
         if !ok {
             warn!("Failed to set clipboard for paste");
-            return;
         }
-        simulate_paste();
+        return ok;
     }
+    false
 }
 
 #[cfg(not(windows))]
-pub fn paste_text(_text: &str, _html: Option<&str>) {
-    warn!("Paste simulation not available on this platform");
+pub fn write_clipboard_text(_text: &str, _html: Option<&str>) -> bool {
+    false
 }
 
-/// Paste an RGBA image to the active window via clipboard
+/// Write an RGBA image to the clipboard (no key simulation).
 #[cfg(windows)]
-pub fn paste_image(rgba: &[u8], width: usize, height: usize) {
+pub fn write_clipboard_image(rgba: &[u8], width: usize, height: usize) -> bool {
     if let Ok(mut clipboard) = Clipboard::new() {
         let img = ImageData {
             width,
@@ -352,15 +498,16 @@ pub fn paste_image(rgba: &[u8], width: usize, height: usize) {
         };
         if let Err(e) = clipboard.set_image(img) {
             warn!("Failed to set clipboard image for paste: {}", e);
-            return;
+            return false;
         }
-        simulate_paste();
+        return true;
     }
+    false
 }
 
 #[cfg(not(windows))]
-pub fn paste_image(_rgba: &[u8], _width: usize, _height: usize) {
-    warn!("Paste simulation not available on this platform");
+pub fn write_clipboard_image(_rgba: &[u8], _width: usize, _height: usize) -> bool {
+    false
 }
 
 /// Capture the foreground window's title and module name (Windows only)

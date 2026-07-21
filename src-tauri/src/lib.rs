@@ -266,11 +266,7 @@ pub fn run() {
         // Must be registered first so a second process exits before grabbing OS resources
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             info!("Second instance detected; focusing existing window");
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-                let _ = app.emit("toggle-panel", true);
-            }
+            crate::show_main_panel(app);
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
@@ -562,6 +558,17 @@ fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {
     })
 }
 
+/// Remember the previous foreground app, then show + focus the main panel.
+pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let our = window.hwnd().ok().map(|h| h.0 as isize);
+        clipboard::remember_paste_target(our);
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = app.emit("toggle-panel", true);
+    }
+}
+
 pub(crate) fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     let shortcut = shortcut.trim();
     if shortcut.is_empty() {
@@ -579,9 +586,7 @@ pub(crate) fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> R
                         window.hide().ok();
                         app.emit("toggle-panel", false).ok();
                     } else {
-                        window.show().ok();
-                        window.set_focus().ok();
-                        app.emit("toggle-panel", true).ok();
+                        crate::show_main_panel(app);
                     }
                 }
             }

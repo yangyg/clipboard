@@ -582,7 +582,8 @@ impl ClipboardDb {
 
         let existing: Option<i64> = conn
             .query_row(
-                "SELECT id FROM records WHERE hash = ? ORDER BY updated_at DESC LIMIT 1",
+                "SELECT id FROM records WHERE hash = ? AND is_trashed = 0
+                 ORDER BY updated_at DESC LIMIT 1",
                 [hash],
                 |row| row.get(0),
             )

@@ -11,9 +11,13 @@ npm run preview      # Preview the built frontend
 npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
 npm test             # Run Vitest once (Pinia store smoke tests, jsdom)
 npm run lint         # Run ESLint over src (.ts + .vue)
+
+cargo test --manifest-path src-tauri/Cargo.toml   # Run Rust backend tests (17 tests)
 ```
 
 The full Tauri dev command is `npm run tauri dev` (starts both Vite + Rust backend).
+
+**After modifying Rust code** (`src-tauri/src/*.rs`), run `cargo test --manifest-path src-tauri/Cargo.toml` to verify the backend still passes its tests.
 
 Regenerate app icons from a source image (PNG preferred; JPEG renamed as `.png` must be converted first):
 

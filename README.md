@@ -39,8 +39,14 @@ npm run tauri dev
 npm run dev              # 仅前端（端口 1420）
 npm run build            # 类型检查 + 前端构建
 npm run tauri build      # 打包桌面应用
+npm test                 # 前端 Vitest（Pinia store 冒烟测试）
+npm run lint             # ESLint 检查 src（.ts + .vue）
 npx tauri icon app-icon.png -o src-tauri/icons   # 从源图生成全套图标
+
+cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试（17 个）
 ```
+
+修改 Rust 代码（`src-tauri/src/*.rs`）后，运行 `cargo test --manifest-path src-tauri/Cargo.toml` 验证后端测试仍全部通过。
 
 ## 数据位置
 

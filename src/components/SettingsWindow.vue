@@ -411,12 +411,12 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="paste" :size="14" /> 粘贴到当前应用</div>
-                <div class="guide-text">双击条目、按 <span class="guide-kbd">Enter</span> 或右键菜单选“粘贴”，会自动填入你上一个操作的应用；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
+                <div class="guide-text">双击条目、按 <span class="guide-kbd">Enter</span> 或右键菜单选“粘贴”，会把内容写回系统剪贴板，并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
               </div>
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="search" :size="14" /> 搜索与筛选</div>
-                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框；左侧导航可按类型、收藏、标签筛选。</div>
+                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框；左侧导航可按类型、收藏、标签筛选。独立窗口模式下，列表工具栏可切换排序（最新 / 最早 / 最近创建 / 使用最多；置顶仍优先）。</div>
               </div>
 
               <div class="guide-block">
@@ -436,7 +436,12 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="panel" :size="14" /> 两种应用模式</div>
-                <div class="guide-text">“悬浮面板”无边框置顶、失焦自动隐藏，适合快速粘贴；“独立窗口”保留系统边框与任务栏，适合长期管理。可在“外观”中切换。</div>
+                <div class="guide-text">“悬浮面板”无边框置顶、失焦自动隐藏，适合快速粘贴；“独立窗口”带侧边栏与任务栏入口，适合长期管理。两种模式都会记住你上次调整的窗口大小。可在“外观”中切换。</div>
+              </div>
+
+              <div class="guide-block">
+                <div class="guide-heading"><AppIcon name="stats" :size="14" /> 数据与占用</div>
+                <div class="guide-text">设置 → 统计可查看记录概览、类型分布、本地存储占用估算，以及数据目录绝对路径（默认在 %LOCALAPPDATA%\ClipVault）。</div>
               </div>
             </div>
           </template>

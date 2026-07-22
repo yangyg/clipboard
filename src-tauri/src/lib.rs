@@ -279,6 +279,7 @@ pub fn run() {
             commands::get_records,
             commands::search_records,
             commands::get_record,
+            commands::open_record_media,
             commands::paste_record,
             commands::delete_record,
             commands::delete_records_batch,

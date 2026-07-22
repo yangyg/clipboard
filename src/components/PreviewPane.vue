@@ -93,6 +93,9 @@
             v-if="imageSrc"
             :src="imageSrc"
             alt="剪贴板图片"
+            class="image-thumb"
+            title="点击用系统查看器打开"
+            @click.stop="openImageExternally"
           />
           <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> 暂无图片数据</div>
         </div>
@@ -184,6 +187,7 @@ import TypeIcon from "./icons/TypeIcon.vue";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useSettingsStore } from "../stores/settings";
+import { invoke } from "@tauri-apps/api/core";
 import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 
@@ -193,6 +197,18 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const record = computed(() => clipboardStore.selectedRecord);
 const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
+
+async function openImageExternally() {
+  const id = record.value?.id;
+  if (id == null) return;
+  try {
+    await invoke("open_record_media", { id });
+  } catch (e) {
+    console.error("Open image failed:", e);
+    const msg = typeof e === "string" ? e : "无法用系统查看器打开";
+    toast(msg, "error");
+  }
+}
 
 /**
  * Show rich HTML only when it adds real formatting (Word etc.).
@@ -692,10 +708,12 @@ async function permanentDel() {
   opacity: 0.5;
 }
 
-.image-card img {
+.image-card img,
+.image-thumb {
   max-width: 100%;
   border-radius: var(--radius-md, 10px);
   border: 1px solid var(--border-default);
+  cursor: zoom-in;
 }
 
 /* Tags */

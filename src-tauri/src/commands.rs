@@ -86,6 +86,59 @@ pub async fn get_record(state: State<'_, AppState>, id: i64) -> Result<Option<Cl
     state.db.get_record(id).map_err(|e| e.to_string())
 }
 
+/// Open a record's media file with the OS default app (Photos, etc.).
+/// Prefer this over `shell.open`: shell's allow-open only scopes http(s)/mailto/tel.
+#[tauri::command]
+pub async fn open_record_media(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    let record = state.db.get_record(id).map_err(|e| e.to_string())?;
+    let Some(r) = record else {
+        return Err("记录不存在".into());
+    };
+    let Some(rel) = r.media_path.as_deref().filter(|s| !s.is_empty()) else {
+        return Err("没有可打开的本地图片文件".into());
+    };
+
+    let abs = media::absolute(state.db.media_root(), rel);
+    let root = state
+        .db
+        .media_root()
+        .canonicalize()
+        .unwrap_or_else(|_| state.db.media_root().to_path_buf());
+    let canon = abs
+        .canonicalize()
+        .map_err(|_| format!("图片文件不存在: {}", abs.display()))?;
+    if !canon.starts_with(&root) {
+        return Err("路径不在媒体目录内".into());
+    }
+    if !canon.is_file() {
+        return Err(format!("图片文件不存在: {}", canon.display()));
+    }
+
+    open_path_with_default_app(&canon)
+}
+
+#[cfg(windows)]
+fn open_path_with_default_app(path: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    // `start` requires an empty window-title arg when the path may contain spaces.
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path.to_string_lossy()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("打开失败: {e}"))?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn open_path_with_default_app(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("xdg-open")
+        .arg(path)
+        .spawn()
+        .map_err(|e| format!("打开失败: {e}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn paste_record(
     app: tauri::AppHandle,

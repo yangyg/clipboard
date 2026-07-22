@@ -91,7 +91,7 @@ export const useSettingsStore = defineStore("settings", () => {
     }
   }
 
-  let lastAppliedRadius = ref<number | null>(null);
+  const lastAppliedRadius = ref<number | null>(null);
 
   function applyAppearance() {
     const s = settings.value;

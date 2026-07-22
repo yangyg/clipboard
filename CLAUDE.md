@@ -9,6 +9,8 @@ npm run dev          # Start Vite dev server (port 1420)
 npm run build        # vue-tsc type-check + vite build
 npm run preview      # Preview the built frontend
 npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
+npm test             # Run Vitest once (Pinia store smoke tests, jsdom)
+npm run lint         # Run ESLint over src (.ts + .vue)
 ```
 
 The full Tauri dev command is `npm run tauri dev` (starts both Vite + Rust backend).

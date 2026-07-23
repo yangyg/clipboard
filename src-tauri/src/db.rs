@@ -594,6 +594,48 @@ impl ClipboardDb {
         }
     }
 
+    /// List-shaped row (truncated content, no HTML) — cheaper emit after capture.
+    pub fn get_record_list(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
+        let conn = self.lock_read();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {} FROM records WHERE id = ?",
+            RECORD_COLS_LIST
+        ))?;
+        let mut rows = stmt.query([id])?;
+        if let Some(row) = rows.next()? {
+            let mut record = self.map_record_row(row)?;
+            record.tags = self.get_record_tags_locked(&conn, record.id)?;
+            Ok(Some(record))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Full record + bump copy_count in one write lock (paste hot path).
+    pub fn take_record_for_paste(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
+        let conn = self.conn.lock();
+        let mut record = {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT {} FROM records WHERE id = ? AND is_trashed = 0",
+                RECORD_COLS
+            ))?;
+            let mut rows = stmt.query([id])?;
+            let Some(row) = rows.next()? else {
+                return Ok(None);
+            };
+            self.map_record_row(row)?
+        };
+        record.tags = self.get_record_tags_locked(&conn, record.id)?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE records SET copy_count = copy_count + 1, updated_at = ? WHERE id = ?",
+            params![now, id],
+        )?;
+        record.copy_count = record.copy_count.saturating_add(1);
+        Ok(Some(record))
+    }
+
     fn get_record_tags_locked(&self, conn: &Connection, record_id: i64) -> SqlResult<Vec<String>> {
         let mut stmt = conn.prepare(
             "SELECT t.name FROM tags t

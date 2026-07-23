@@ -50,7 +50,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 4. Persist: text (+ optional `content_html`) → SQLite; image → `media/` + thumb + metadata label `[image WxH]`
 5. On **new** insert only: if `enable_auto_tag`, `apply_auto_tags` matches `auto_tag_rules` (content type OR keyword, case-insensitive) → `ensure_auto_tag` + `record_tags`. Hash-dedup updates skip retagging.
 6. Emit `clipboard-changed`; Vue store updates list (refreshes tag counts when the record has tags)
-7. Paste: write clipboard → (floating: hide panel) → restore previous foreground HWND → Ctrl+V. Target HWND remembered when panel opens. If no valid target, only updates clipboard.
+6. Paste: `take_record_for_paste` (single write lock: load + copy_count++) → write clipboard → (floating: hide panel) → restore previous foreground HWND → Ctrl+V. Target HWND remembered when panel opens. If no valid target, only updates clipboard.
 
 ### Frontend Component Tree
 ```

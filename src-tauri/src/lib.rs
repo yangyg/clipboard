@@ -566,7 +566,7 @@ fn process_capture_job(
                         captured.html.is_some(),
                         is_new
                     );
-                    if let Ok(Some(r)) = db.get_record(id) {
+                    if let Ok(Some(r)) = db.get_record_list(id) {
                         app.emit("clipboard-changed", list_ipc_payload(r)).ok();
                     }
                 }
@@ -631,7 +631,7 @@ fn process_capture_job(
                                 "New clipboard record: id={}, type=image, is_new={}",
                                 id, is_new
                             );
-                            if let Ok(Some(r)) = db.get_record(id) {
+                            if let Ok(Some(r)) = db.get_record_list(id) {
                                 app.emit("clipboard-changed", list_ipc_payload(r)).ok();
                             }
                         }

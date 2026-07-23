@@ -148,12 +148,14 @@ pub async fn paste_record(
 ) -> Result<(), String> {
     use tauri::Manager;
 
-    let record = state.db.get_record(id).map_err(|e| e.to_string())?;
+    let record = state
+        .db
+        .take_record_for_paste(id)
+        .map_err(|e| e.to_string())?;
     let Some(r) = record else {
         return Ok(());
     };
 
-    let _ = state.db.increment_copy_count(id);
     // Paste writes the OS clipboard; suppress re-capture so CF_HTML / plain
     // round-trips don't create a duplicate row (hash includes HTML).
     state

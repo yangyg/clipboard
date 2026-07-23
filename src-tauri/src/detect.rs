@@ -71,11 +71,17 @@ pub fn detect_content_type(content: &str) -> ContentType {
         }
     }
 
-    // JSON detection
+    // JSON detection — avoid full parse of huge clipboard payloads
+    const JSON_DETECT_MAX: usize = 64 * 1024;
     if (trimmed.starts_with('{') && trimmed.ends_with('}'))
         || (trimmed.starts_with('[') && trimmed.ends_with(']'))
     {
-        if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+        if trimmed.len() <= JSON_DETECT_MAX {
+            if serde_json::from_str::<serde_json::Value>(trimmed).is_ok() {
+                return ContentType::Code;
+            }
+        } else {
+            // Oversized: treat brace-wrapped blobs as code without parsing.
             return ContentType::Code;
         }
     }

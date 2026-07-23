@@ -536,9 +536,33 @@ pub fn write_clipboard_image(_rgba: &[u8], _width: usize, _height: usize) -> boo
     false
 }
 
-/// Capture the foreground window's title and module name (Windows only)
+/// Capture the foreground window's title and module name (Windows only).
+/// Cached briefly so bursty clipboard events don't OpenProcess every time.
 #[cfg(windows)]
 pub fn get_foreground_window_info() -> (String, String) {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    static CACHE: Mutex<Option<(Instant, String, String)>> = Mutex::new(None);
+    const TTL: Duration = Duration::from_millis(250);
+
+    if let Ok(guard) = CACHE.lock() {
+        if let Some((at, title, app)) = guard.as_ref() {
+            if at.elapsed() < TTL {
+                return (title.clone(), app.clone());
+            }
+        }
+    }
+
+    let info = get_foreground_window_info_uncached();
+    if let Ok(mut guard) = CACHE.lock() {
+        *guard = Some((Instant::now(), info.0.clone(), info.1.clone()));
+    }
+    info
+}
+
+#[cfg(windows)]
+fn get_foreground_window_info_uncached() -> (String, String) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId};
     use windows_sys::Win32::System::LibraryLoader::GetModuleFileNameW;
     use windows_sys::Win32::Foundation::CloseHandle;

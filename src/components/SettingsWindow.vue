@@ -1187,42 +1187,6 @@ onUnmounted(() => {
   margin-top: 2px;
 }
 
-.toggle {
-  width: 36px;
-  height: 20px;
-  background: var(--bg-active);
-  border-radius: 10px;
-  position: relative;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.toggle.on {
-  background: var(--accent);
-}
-
-.toggle::after {
-  content: "";
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  background: white;
-  border-radius: 50%;
-  top: 2px;
-  left: 2px;
-  transition: transform var(--transition-fast);
-}
-
-.toggle.on::after {
-  transform: translateX(16px);
-}
-
 .shortcut-btn {
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);

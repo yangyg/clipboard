@@ -11,24 +11,33 @@
       <SearchBar />
       <div class="header-actions">
         <button
+          type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.batchMode }"
           title="批量操作"
+          aria-label="批量操作"
+          :aria-pressed="clipboardStore.batchMode"
           @click="toggleBatchMode"
         ><AppIcon name="batch" :size="15" /></button>
         <button
+          type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.activeFilter === 'favorites' }"
           title="收藏"
+          aria-label="收藏"
+          :aria-pressed="clipboardStore.activeFilter === 'favorites'"
           @click="clipboardStore.setFilter(clipboardStore.activeFilter === 'favorites' ? 'all' : 'favorites')"
         ><AppIcon name="star" :size="15" :fill="clipboardStore.activeFilter === 'favorites' ? 'currentColor' : 'none'" /></button>
         <button
+          type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.trashFilter }"
           title="回收站"
+          aria-label="回收站"
+          :aria-pressed="clipboardStore.trashFilter"
           @click="toggleTrash"
         ><AppIcon name="trash" :size="15" /></button>
-        <button class="icon-btn" title="设置" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
+        <button type="button" class="icon-btn" title="设置" aria-label="设置" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
       </div>
     </div>
 

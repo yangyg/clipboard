@@ -30,15 +30,21 @@
         </div>
         <button
           v-if="record.is_pinned"
+          type="button"
           class="preview-action-btn preview-pin-btn active"
           @click="pin"
           title="取消置顶"
+          aria-label="取消置顶"
+          :aria-pressed="true"
         ><AppIcon name="pin" :size="13" fill="currentColor" /></button>
         <button
           v-if="record.is_favorite"
+          type="button"
           class="preview-action-btn active"
           @click="favorite"
           title="取消收藏"
+          aria-label="取消收藏"
+          :aria-pressed="true"
         ><AppIcon name="star" :size="13" fill="currentColor" /></button>
       </div>
     </div>
@@ -688,7 +694,8 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(79, 110, 247, 0.1);
+  background: color-mix(in srgb, var(--type-file) 15%, transparent);
+  color: var(--type-file);
 }
 
 .file-path {

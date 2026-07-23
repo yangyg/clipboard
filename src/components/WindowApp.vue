@@ -57,9 +57,12 @@
               >{{ opt.label }}</option>
             </select>
             <button
+              type="button"
               class="list-header-btn"
               :class="{ active: clipboardStore.batchMode }"
               title="批量操作"
+              aria-label="批量操作"
+              :aria-pressed="clipboardStore.batchMode"
               @click="toggleBatchMode"
             ><AppIcon name="batch" :size="14" /></button>
           </div>

@@ -287,6 +287,10 @@ body.anim-disabled *::after {
   transition: background var(--transition-fast);
   flex-shrink: 0;
 }
+.toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .toggle.on {
   background: var(--accent);
 }

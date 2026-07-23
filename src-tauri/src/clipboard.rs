@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
+use image::{imageops::FilterType, RgbaImage};
 
 #[derive(Debug, Clone)]
 pub struct CapturedImage {
@@ -155,25 +156,30 @@ impl ClipboardMonitor {
                                 "Suppressed self-write image capture {}x{}",
                                 img.width, img.height
                             );
-                        } else {
-                            let width = img.width as u32;
-                            let height = img.height as u32;
-                            // Prefer moving owned buffer; only copy when Cow is borrowed
-                            let raw = match img.bytes {
-                                std::borrow::Cow::Owned(v) => v,
-                                std::borrow::Cow::Borrowed(b) => b.to_vec(),
-                            };
-                            // SHA-256 of full RGBA is done on the capture worker —
-                            // poll only needs the cheap quick fingerprint for change detection.
-                            *last_image_hash.lock() = Some(quick);
-                            debug!("Clipboard changed (image): {}x{}", width, height);
-                            on_change(ClipboardEvent::Image(CapturedImage {
-                                rgba: raw,
-                                width,
-                                height,
-                                hash: String::new(),
-                            }));
-                        }
+                    } else {
+                        let width = img.width as u32;
+                        let height = img.height as u32;
+                        // Prefer moving owned buffer; only copy when Cow is borrowed
+                        let raw = match img.bytes {
+                            std::borrow::Cow::Owned(v) => v,
+                            std::borrow::Cow::Borrowed(b) => b.to_vec(),
+                        };
+                        // SHA-256 of full RGBA is done on the capture worker —
+                        // poll only needs the cheap quick fingerprint for change detection.
+                        *last_image_hash.lock() = Some(quick);
+                        // Cap very large bitmaps BEFORE they enter the bounded channel:
+                        // raw RGBA at 8K ≈ 660MB. We only need a 4096px-max edge for
+                        // preview + paste; store_clipboard_image() also targets MAX_EDGE.
+                        let (rgba, width, height) =
+                            downscale_captured_rgba_if_large(raw, width, height);
+                        debug!("Clipboard changed (image): {}x{}", width, height);
+                        on_change(ClipboardEvent::Image(CapturedImage {
+                            rgba,
+                            width,
+                            height,
+                            hash: String::new(),
+                        }));
+                    }
                     } else if let Some(captured) = text {
                         maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                     }
@@ -261,6 +267,62 @@ fn image_quick_fingerprint(img: &arboard::ImageData<'_>) -> String {
         hasher.update(&bytes[bytes.len() - 2048..]);
     }
     hex::encode(hasher.finalize())
+}
+
+/// Maximum edge (px) for a captured bitmap entering the process pipeline.
+/// Mirrors `media::MAX_EDGE` so the on-disk file and in-memory buffer match.
+const CAPTURE_MAX_EDGE: u32 = 4096;
+
+/// Downscale an RGBA clipboard bitmap to at most `CAPTURE_MAX_EDGE` on its
+/// longest side before it is moved into the bounded capture channel.
+///
+/// Without this, an 8K screenshot carries ~660MB of raw RGBA that sits in the
+/// channel (capacity) plus the worker until PNG encoding completes — a real OOM
+/// risk on memory-constrained machines. `arboard` guarantees RGBA byte order,
+/// which matches `image::RgbaImage`.
+fn downscale_captured_rgba_if_large(
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+) -> (Vec<u8>, u32, u32) {
+    if width <= CAPTURE_MAX_EDGE && height <= CAPTURE_MAX_EDGE {
+        return (rgba, width, height);
+    }
+    // Zero-sized bitmaps: nothing to downscale, pass through unchanged.
+    if width == 0 || height == 0 {
+        return (rgba, width, height);
+    }
+    let expected = (width as usize)
+        .saturating_mul(height as usize)
+        .saturating_mul(4);
+    // arboard pixel buffers can carry trailing stride padding or be short from
+    // some sources; normalize to width*height*4 before handing to the image crate.
+    let mut pixels = rgba;
+    if pixels.len() < expected {
+        pixels.resize(expected, 0);
+    } else if pixels.len() > expected {
+        pixels.truncate(expected);
+    }
+    // After normalization pixels.len() == expected, so from_raw cannot fail.
+    let img = match RgbaImage::from_raw(width, height, pixels) {
+        Some(img) => img,
+        None => {
+            warn!(
+                "Failed to wrap {}x{} RGBA buffer for downscale; sending as-is",
+                width, height
+            );
+            return (Vec::new(), width, height);
+        }
+    };
+    let scale = (CAPTURE_MAX_EDGE as f32 / width.max(height) as f32).min(1.0);
+    let nw = ((width as f32) * scale).round().max(1.0) as u32;
+    let nh = ((height as f32) * scale).round().max(1.0) as u32;
+    let out = image::imageops::resize(&img, nw, nh, FilterType::Triangle);
+    debug!(
+        "Downscaled captured image {}x{} -> {}x{}",
+        width, height, nw, nh
+    );
+    (out.into_raw(), nw, nh)
 }
 
 fn read_clipboard_text(clipboard: &mut Clipboard) -> Option<CapturedText> {

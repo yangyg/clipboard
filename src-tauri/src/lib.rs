@@ -422,7 +422,11 @@ pub fn run() {
             // Clipboard monitor only enqueues; a worker does media encode / DB / emit
             // so the poll thread is not blocked on PNG compression or SQLite.
             let media_root = db.media_root().to_path_buf();
-            let (capture_tx, capture_rx) = mpsc::sync_channel::<CaptureJob>(4);
+            // Bounded channel: capacity 2 keeps at most 2 queued jobs + 1 in the
+            // worker. Combined with pre-channel downscaling (clipboard.rs), the
+            // in-flight RGBA peak stays small even for 8K captures. A full queue
+            // is dropped (not blocking) by the poll thread — see try_send below.
+            let (capture_tx, capture_rx) = mpsc::sync_channel::<CaptureJob>(2);
             let db_worker = db.clone();
             let app_worker = app_handle.clone();
             let media_root_worker = media_root.clone();

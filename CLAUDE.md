@@ -60,7 +60,7 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 │   ├── RecordList.vue           # Infinite scroll; thumbs; PreviewPane
 │   │   └── PreviewPane.vue      # Header meta line; DOMPurify HTML preview; paste / tags / trash
 │   └── SideBar.vue              # Categories (+ favorites); trash; tags (「自动」 badge); capture/theme/settings
-├── SettingsWindow.vue           # Nav: 外观 → 快捷键 → 历史（含自动打标规则）→ 隐私 → 系统 → 数据 → 统计 → 帮助 → 关于
+├── SettingsWindow.vue           # Nav: 外观 → 快捷键 → 历史 → 标签（自动打标规则）→ 隐私 → 系统 → 数据 → 统计 → 帮助 → 关于
 ├── WindowControls.vue
 ├── ToastHost.vue
 ├── ConfirmDialog.vue / TagDialog.vue
@@ -99,7 +99,7 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML; preview loads via `get_record` / detail. Preview uses **DOMPurify + `v-html`** (not iframe) when markup differs from plain. Display CSS may force wrap; stored HTML for paste is unchanged. Manual select-copy from preview may normalize whitespace. Preview sanitization does **not** affect paste (original HTML is written back).
 - **Preview chrome:** Type + actions in header; source / time / size-or-chars / 富文本 / 使用次数 as one meta line (`title` = content type). Single scroll on `.preview-content` (no nested scroll on content / rich HTML). Image preview: click → `open_record_media` opens the file with the OS default app (`cmd /c start`, path must stay under media root). Do not use `shell.open` for local files (default scope is http/https only).
 - **Filters:** Type/favorites **AND** tag combine; trash is exclusive. IPC: `get_records` / `search_records` / `get_all_tags` use `#[tauri::command(rename_all = "snake_case")]` — pass `content_type`, `favorites_only`, `tag`, `trashed`, `sort`. Tag counts follow active category (`get_all_tags`). SideBar shows an 「自动」 badge for `is_auto` tags.
-- **Auto-tag:** Settings `enable_auto_tag` (default **true**) + `auto_tag_rules` (`tag_name`, `keywords[]`, `content_types[]`). Per-rule match is OR (type hit or any keyword substring, case-insensitive). Defaults: 链接←`link`; 部署 / 前端←keyword lists. Rules live only in settings (not `tags` table). Missing tag names are created with `is_auto=1`. No backfill of existing history. UI under Settings → 历史.
+- **Auto-tag:** Settings `enable_auto_tag` (default **true**) + `auto_tag_rules` (`tag_name`, `keywords[]`, `content_types[]`). Per-rule match is OR (type hit or any keyword substring, case-insensitive). Defaults: 链接←`link`; 部署 / 前端←keyword lists. Rules live only in settings (not `tags` table). Missing tag names are created with `is_auto=1`. No backfill of existing history. UI under Settings → 标签.
 - **Search:** FTS5 trigram (≥3 chars) on content / source_app / source_window / tags; shorter queries use escaped `LIKE`. FTS sync via triggers. **FTS v2:** use `DELETE FROM records_fts WHERE rowid=…` in triggers — the FTS5 `'delete'` command returns `SQL logic error` on current Windows SQLite and breaks empty-trash / permanent delete.
 - **Stats storage:** `storage_bytes` ≈ text content length sum + cached `media/` dir size (not full SQLite file/index). `data_path` is the absolute app data dir shown on the stats page.
 - **Sets in Vue:** Never mutate `Set` in place — assign a new `Set`.

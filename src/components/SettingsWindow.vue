@@ -211,6 +211,10 @@
                 </div>
               </div>
             </div>
+          </template>
+
+          <!-- Tags -->
+          <template v-else-if="activeSection === 'tags'">
             <div class="settings-section">
               <div class="settings-section-title">自动打标</div>
               <div class="setting-row">
@@ -492,7 +496,7 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="star" :size="14" /> 收藏、置顶与标签</div>
-                <div class="guide-text">常用内容可收藏或置顶，不会被自动清理；也可手动为条目添加标签。开启「自动打标」（设置 → 历史，默认开）后，新记录会按内容类型或关键词规则打上标签（如链接、部署、前端）；可自定义规则。同一内容再次复制不会重复打标。</div>
+                <div class="guide-text">常用内容可收藏或置顶，不会被自动清理；也可手动为条目添加标签。开启「自动打标」（设置 → 标签，默认开）后，新记录会按内容类型或关键词规则打上标签（如链接、部署、前端）；可自定义规则。同一内容再次复制不会重复打标。</div>
               </div>
 
               <div class="guide-block">
@@ -580,6 +584,7 @@ const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
   { key: "appearance", icon: "palette", label: "外观" },
   { key: "shortcuts", icon: "keyboard", label: "快捷键" },
   { key: "history", icon: "history", label: "历史" },
+  { key: "tags", icon: "tag", label: "标签" },
   { key: "privacy", icon: "shield", label: "隐私" },
   { key: "system", icon: "settings", label: "系统" },
   { key: "data", icon: "package", label: "数据" },

@@ -181,20 +181,18 @@ async function confirmForm() {
 
 async function confirmAssign() {
   if (!props.recordId) return;
-  const record = clipboardStore.records.find((r) => r.id === props.recordId);
-  const recordTagNames = record?.tags ?? [];
-
-  // Remove unselected tags
-  for (const tag of availableTags.value) {
-    if (recordTagNames.includes(tag.name) && !assignedIds.value.has(tag.id)) {
-      await clipboardStore.removeTagFromRecord(props.recordId, tag.id, tag.name);
-    }
-    if (!recordTagNames.includes(tag.name) && assignedIds.value.has(tag.id)) {
-      await clipboardStore.addTagToRecord(props.recordId, tag.id, tag.name);
-    }
+  const selected = availableTags.value.filter((t) => assignedIds.value.has(t.id));
+  try {
+    await clipboardStore.setRecordTags(
+      props.recordId,
+      selected.map((t) => t.id),
+      selected.map((t) => t.name),
+    );
+    emit("assigned");
+    emit("close");
+  } catch {
+    // keep dialog open for retry
   }
-  emit("assigned");
-  emit("close");
 }
 </script>
 

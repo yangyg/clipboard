@@ -52,21 +52,44 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const DETAIL_CACHE_MAX = 6;
 
   // === Getters ===
+  /** Reuse last merged object when id/list row/detail identity unchanged. */
+  let selectedRecordCache: {
+    id: number;
+    base: ClipboardRecord;
+    detail: ClipboardRecord | undefined;
+    merged: ClipboardRecord;
+  } | null = null;
+
   const selectedRecord = computed(() => {
     const base = records.value.find((r) => r.id === selectedId.value) ?? null;
-    if (!base) return null;
+    if (!base) {
+      selectedRecordCache = null;
+      return null;
+    }
     const detail = recordDetails.value.get(base.id);
-    if (!detail) return base;
-    return {
-      ...base,
-      content: detail.content,
-      content_html: detail.content_html,
-      content_len: detail.content_len ?? base.content_len,
-      media_abs: detail.media_abs ?? base.media_abs,
-      thumb_abs: detail.thumb_abs ?? base.thumb_abs,
-      width: detail.width ?? base.width,
-      height: detail.height ?? base.height,
-    };
+    const cached = selectedRecordCache;
+    if (
+      cached &&
+      cached.id === base.id &&
+      cached.base === base &&
+      cached.detail === detail
+    ) {
+      return cached.merged;
+    }
+    const merged = detail
+      ? {
+          ...base,
+          content: detail.content,
+          content_html: detail.content_html,
+          content_len: detail.content_len ?? base.content_len,
+          media_abs: detail.media_abs ?? base.media_abs,
+          thumb_abs: detail.thumb_abs ?? base.thumb_abs,
+          width: detail.width ?? base.width,
+          height: detail.height ?? base.height,
+        }
+      : base;
+    selectedRecordCache = { id: base.id, base, detail, merged };
+    return merged;
   });
 
   /** Server applies category/tag/trash/search filters; list is ready to render. */
@@ -601,6 +624,16 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  let sortReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleReloadList() {
+    if (sortReloadTimer) clearTimeout(sortReloadTimer);
+    sortReloadTimer = setTimeout(() => {
+      sortReloadTimer = null;
+      reloadList();
+    }, 400);
+  }
+
   // Called by event listener when clipboard changes
   function onNewRecord(record: ClipboardRecord) {
     scheduleLoadStats();
@@ -617,9 +650,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
     ) {
       return;
     }
-    // Only the default "newest first" order can safely prepend; other sorts reload.
+    // Only the default "newest first" order can safely prepend; other sorts reload (debounced).
     if (listSort.value !== "updated_desc") {
-      reloadList();
+      scheduleReloadList();
       return;
     }
     // Remove existing record with same id (backend dedup returns same id on hash match)
@@ -761,6 +794,27 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  /** Replace all tags on a record in one IPC/DB transaction. */
+  async function setRecordTags(recordId: number, tagIds: number[], tagNames: string[]) {
+    try {
+      await invoke("set_record_tags", { record_id: recordId, tag_ids: tagIds });
+      const record = records.value.find((r) => r.id === recordId);
+      if (record) {
+        record.tags = [...tagNames];
+      }
+      const detail = recordDetails.value.get(recordId);
+      if (detail) {
+        const next = new Map(recordDetails.value);
+        next.set(recordId, { ...detail, tags: [...tagNames] });
+        recordDetails.value = next;
+      }
+      scheduleLoadTags();
+    } catch (e) {
+      console.error("Failed to set record tags:", e);
+      throw e;
+    }
+  }
+
   function filterByTag(tagName: string | null) {
     // Toggle off when clicking the same tag again; keep type/favorites filter.
     if (tagName && activeTag.value === tagName) {
@@ -832,6 +886,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     createTag,
     deleteTag,
     updateTag,
+    setRecordTags,
     addTagToRecord,
     removeTagFromRecord,
     filterByTag,

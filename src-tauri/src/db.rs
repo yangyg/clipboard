@@ -1369,8 +1369,8 @@ impl ClipboardDb {
         drop(stmt);
         drop(conn);
 
-        // Cache media dir walk — hot path (every clipboard event) must not re-walk disk
-        let media_bytes = cached_media_dir_size(&self.media_root);
+        // Media size: TTL walk of media/, adjusted on write/delete (see media.rs).
+        let media_bytes = media::cached_media_dir_size(&self.media_root);
         let storage_bytes = content_bytes.saturating_add(media_bytes);
 
         Ok(StatsData {
@@ -1384,56 +1384,21 @@ impl ClipboardDb {
             type_distribution,
         })
     }
-}
 
-use std::sync::Mutex as StdMutex;
-use std::time::{Duration, Instant};
-
-struct MediaSizeCache {
-    at: Instant,
-    bytes: i64,
-    root: PathBuf,
-}
-
-static MEDIA_SIZE_CACHE: StdMutex<Option<MediaSizeCache>> = StdMutex::new(None);
-const MEDIA_SIZE_TTL: Duration = Duration::from_secs(120);
-
-fn cached_media_dir_size(root: &std::path::Path) -> i64 {
-    if let Ok(guard) = MEDIA_SIZE_CACHE.lock() {
-        if let Some(c) = guard.as_ref() {
-            if c.root == root && c.at.elapsed() < MEDIA_SIZE_TTL {
-                return c.bytes;
-            }
+    /// Replace a record's tags in one transaction (avoids N round-trips from the UI).
+    pub fn set_record_tags(&self, record_id: i64, tag_ids: &[i64]) -> SqlResult<()> {
+        let conn = self.conn.lock();
+        let tx = conn.unchecked_transaction()?;
+        tx.execute("DELETE FROM record_tags WHERE record_id = ?", [record_id])?;
+        for tag_id in tag_ids {
+            tx.execute(
+                "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
+                params![record_id, tag_id],
+            )?;
         }
+        tx.commit()?;
+        Ok(())
     }
-    let bytes = media_dir_size(root);
-    if let Ok(mut guard) = MEDIA_SIZE_CACHE.lock() {
-        *guard = Some(MediaSizeCache {
-            at: Instant::now(),
-            bytes,
-            root: root.to_path_buf(),
-        });
-    }
-    bytes
-}
-
-fn media_dir_size(root: &std::path::Path) -> i64 {
-    fn walk(dir: &std::path::Path, acc: &mut u64) {
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk(&path, acc);
-            } else if let Ok(meta) = entry.metadata() {
-                *acc = acc.saturating_add(meta.len());
-            }
-        }
-    }
-    let mut total = 0u64;
-    walk(root, &mut total);
-    total.min(i64::MAX as u64) as i64
 }
 
 #[cfg(test)]

@@ -366,6 +366,7 @@ pub fn run() {
             commands::update_tag,
             commands::add_tag_to_record,
             commands::remove_tag_from_record,
+            commands::set_record_tags,
         ])
         .setup(move |app| {
             let app_handle = app.handle().clone();

@@ -3,6 +3,8 @@ use image::{ImageEncoder, ImageFormat};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex as StdMutex;
+use std::time::{Duration, Instant};
 use tracing::{debug, warn};
 
 const THUMB_MAX_EDGE: u32 = 240;
@@ -47,7 +49,7 @@ pub fn store_clipboard_image(
     let media_abs = absolute(app_data_dir, &media_rel);
     let thumb_abs = absolute(app_data_dir, &thumb_rel);
 
-    // Already stored (dedup hit at file level)
+    // Already stored (dedup hit at file level) — no size-cache bump.
     if media_abs.exists() && thumb_abs.exists() {
         let (w, h) = image::image_dimensions(&media_abs)
             .map(|(w, h)| (w, h))
@@ -104,6 +106,9 @@ pub fn store_clipboard_image(
         fs::write(&thumb_abs, buf.into_inner()).map_err(|e| e.to_string())?;
     }
 
+    let added = file_len(&media_abs).saturating_add(file_len(&thumb_abs));
+    bump_media_dir_size_cache(app_data_dir, added as i64);
+
     debug!("Stored image {} ({}x{})", hash, out_w, out_h);
     Ok(StoredImage {
         media_path: media_rel,
@@ -114,14 +119,91 @@ pub fn store_clipboard_image(
 }
 
 pub fn delete_media_files(app_data_dir: &Path, media_path: Option<&str>, thumb_path: Option<&str>) {
+    let mut removed: u64 = 0;
     for rel in [media_path, thumb_path].into_iter().flatten() {
         let path = absolute(app_data_dir, rel);
         if path.exists() {
+            removed = removed.saturating_add(file_len(&path));
             if let Err(e) = fs::remove_file(&path) {
                 warn!("Failed to delete media file {:?}: {}", path, e);
             }
         }
     }
+    if removed > 0 {
+        bump_media_dir_size_cache(app_data_dir, -(removed as i64));
+    }
+}
+
+fn file_len(path: &Path) -> u64 {
+    fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+}
+
+// --- media directory size cache (shared with get_stats) ---
+
+struct MediaSizeCache {
+    at: Instant,
+    bytes: i64,
+    root: PathBuf,
+}
+
+static MEDIA_SIZE_CACHE: StdMutex<Option<MediaSizeCache>> = StdMutex::new(None);
+const MEDIA_SIZE_TTL: Duration = Duration::from_secs(120);
+
+/// Walk `media/` once per TTL; writes/deletes adjust the cached total in place.
+pub fn cached_media_dir_size(root: &Path) -> i64 {
+    if let Ok(guard) = MEDIA_SIZE_CACHE.lock() {
+        if let Some(c) = guard.as_ref() {
+            if c.root == root && c.at.elapsed() < MEDIA_SIZE_TTL {
+                return c.bytes;
+            }
+        }
+    }
+    let bytes = media_dir_size(root);
+    if let Ok(mut guard) = MEDIA_SIZE_CACHE.lock() {
+        *guard = Some(MediaSizeCache {
+            at: Instant::now(),
+            bytes,
+            root: root.to_path_buf(),
+        });
+    }
+    bytes
+}
+
+fn bump_media_dir_size_cache(root: &Path, delta: i64) {
+    if let Ok(mut guard) = MEDIA_SIZE_CACHE.lock() {
+        if let Some(c) = guard.as_mut() {
+            if c.root == root {
+                c.bytes = c.bytes.saturating_add(delta).max(0);
+                return;
+            }
+        }
+        // No live cache for this root — next stats call will walk.
+        *guard = None;
+    }
+}
+
+fn media_dir_size(root: &Path) -> i64 {
+    fn walk(dir: &Path, acc: &mut u64) {
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, acc);
+            } else if let Ok(meta) = entry.metadata() {
+                *acc = acc.saturating_add(meta.len());
+            }
+        }
+    }
+    let mut total = 0u64;
+    let media = root.join("media");
+    if media.is_dir() {
+        walk(&media, &mut total);
+    } else {
+        walk(root, &mut total);
+    }
+    total.min(i64::MAX as u64) as i64
 }
 
 /// Load PNG from disk into RGBA bytes for arboard set_image.

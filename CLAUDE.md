@@ -37,7 +37,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 - **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged. **Text-first:** meaningful share text skips `get_image()`; otherwise only call it when `IsClipboardFormatAvailable` reports bitmap/DIB. Monitor **enqueues** to a bounded worker (`sync_channel(4)`) so PNG encode / SQLite / auto-tag do not block the poll thread.
 - **List IPC:** `substr(content,1,400)` + `content_len`; `content_html` omitted. `clipboard-changed` emits the same light payload. Detail/`get_record` still full.
 - **List UI:** `RecordList` window-virtualizes rows (fixed-height estimate + overscan); soft-cap still bounds in-memory pages. Export streams JSON to a user-chosen path (no full `Vec` / string in IPC). Preview HTML sanitize is fingerprint-cached.
-- **Stats:** `media/` directory size cached ~30s. Frontend `loadStats` debounced 800ms on new records.
+- **Stats:** `media/` size cached 120s and **incrementally adjusted** on image store/delete (no re-walk until TTL). Frontend `loadStats` debounced 800ms. Tag assign uses `set_record_tags` (one transaction). Non-default list sorts debounce reload (~400ms) on new captures.
 - **Expire sweep:** watches `auto_expire_at` list (not deep `records`).
 - **Appearance IPC:** `set_window_corner_radius` only when `panel_radius` changes.
 - **Asset protocol:** `protocol-asset`; scope uses `$LOCALDATA/ClipVault/media/**/*` (not `$LOCALAPPDATA`)

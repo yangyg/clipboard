@@ -477,6 +477,18 @@ pub async fn remove_tag_from_record(state: State<'_, AppState>, record_id: i64, 
     state.db.remove_tag_from_record(record_id, tag_id).map_err(|e| e.to_string())
 }
 
+#[tauri::command(rename_all = "snake_case")]
+pub async fn set_record_tags(
+    state: State<'_, AppState>,
+    record_id: i64,
+    tag_ids: Vec<i64>,
+) -> Result<(), String> {
+    state
+        .db
+        .set_record_tags(record_id, &tag_ids)
+        .map_err(|e| e.to_string())
+}
+
 // === App Mode / Window Commands ===
 
 #[tauri::command]

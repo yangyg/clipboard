@@ -211,6 +211,77 @@
                 </div>
               </div>
             </div>
+            <div class="settings-section">
+              <div class="settings-section-title">自动打标</div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">根据内容自动打标签</div>
+                  <div class="setting-desc">新记录按规则匹配标签（默认规则可改）</div>
+                </div>
+                <div
+                  class="toggle"
+                  :class="{ on: settings.enable_auto_tag }"
+                  role="switch"
+                  :aria-checked="settings.enable_auto_tag"
+                  tabindex="0"
+                  @click="update('enable_auto_tag', !settings.enable_auto_tag)"
+                  @keydown.enter.prevent="update('enable_auto_tag', !settings.enable_auto_tag)"
+                  @keydown.space.prevent="update('enable_auto_tag', !settings.enable_auto_tag)"
+                ></div>
+              </div>
+              <div v-if="settings.enable_auto_tag" class="auto-tag-rules">
+                <div
+                  v-for="(rule, index) in settings.auto_tag_rules"
+                  :key="index"
+                  class="auto-tag-rule"
+                >
+                  <div class="auto-tag-rule-header">
+                    <input
+                      class="auto-tag-name"
+                      :value="rule.tag_name"
+                      placeholder="标签名"
+                      @input="updateRuleField(index, 'tag_name', (($event.target as HTMLInputElement).value))"
+                    />
+                    <button
+                      type="button"
+                      class="auto-tag-remove"
+                      title="删除规则"
+                      @click="removeAutoTagRule(index)"
+                    >
+                      <AppIcon name="close" :size="12" />
+                    </button>
+                  </div>
+                  <input
+                    class="auto-tag-keywords"
+                    :value="rule.keywords.join(', ')"
+                    placeholder="关键词，逗号分隔"
+                    @change="updateRuleKeywords(index, ($event.target as HTMLInputElement).value)"
+                  />
+                  <div class="auto-tag-types">
+                    <label
+                      v-for="ct in CONTENT_TYPE_OPTIONS"
+                      :key="ct.value"
+                      class="auto-tag-type"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="rule.content_types.includes(ct.value)"
+                        @change="toggleRuleContentType(index, ct.value)"
+                      />
+                      {{ ct.label }}
+                    </label>
+                  </div>
+                </div>
+                <div class="auto-tag-actions">
+                  <button type="button" class="btn btn-secondary" @click="addAutoTagRule">
+                    <AppIcon name="plus" :size="13" /> 添加规则
+                  </button>
+                  <button type="button" class="btn btn-secondary" @click="restoreDefaultAutoTagRules">
+                    恢复默认规则
+                  </button>
+                </div>
+              </div>
+            </div>
           </template>
 
           <!-- Privacy -->
@@ -421,7 +492,7 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="star" :size="14" /> 收藏、置顶与标签</div>
-                <div class="guide-text">常用内容可收藏或置顶，不会被自动清理；为条目添加标签可更方便地分类和检索。</div>
+                <div class="guide-text">常用内容可收藏或置顶，不会被自动清理；也可手动为条目添加标签。开启「自动打标」（设置 → 历史，默认开）后，新记录会按内容类型或关键词规则打上标签（如链接、部署、前端）；可自定义规则。同一内容再次复制不会重复打标。</div>
               </div>
 
               <div class="guide-block">
@@ -475,6 +546,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import type { ClipboardRecord } from "../types";
+import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
 import appIconUrl from "../assets/app-icon-128.png";
@@ -495,6 +567,14 @@ const importStatus = ref("");
 const isExporting = ref(false);
 const isImporting = ref(false);
 const isRecordingShortcut = ref(false);
+
+const CONTENT_TYPE_OPTIONS = [
+  { value: "text", label: "文本" },
+  { value: "code", label: "代码" },
+  { value: "link", label: "链接" },
+  { value: "image", label: "图片" },
+  { value: "file", label: "文件" },
+] as const;
 
 const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
   { key: "appearance", icon: "palette", label: "外观" },
@@ -546,6 +626,61 @@ const KEY_ALIASES: Record<string, string> = {
 
 function update(key: string, value: any) {
   settingsStore.updateSetting(key as any, value);
+}
+
+function cloneRules(rules: AutoTagRule[]): AutoTagRule[] {
+  return rules.map((r) => ({
+    tag_name: r.tag_name,
+    keywords: [...r.keywords],
+    content_types: [...r.content_types],
+  }));
+}
+
+function commitAutoTagRules(next: AutoTagRule[]) {
+  update("auto_tag_rules", cloneRules(next));
+}
+
+function updateRuleField(index: number, field: "tag_name", value: string) {
+  const next = cloneRules(settings.auto_tag_rules);
+  if (!next[index]) return;
+  next[index][field] = value;
+  commitAutoTagRules(next);
+}
+
+function updateRuleKeywords(index: number, raw: string) {
+  const next = cloneRules(settings.auto_tag_rules);
+  if (!next[index]) return;
+  next[index].keywords = raw
+    .split(/[,，]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  commitAutoTagRules(next);
+}
+
+function toggleRuleContentType(index: number, contentType: string) {
+  const next = cloneRules(settings.auto_tag_rules);
+  if (!next[index]) return;
+  const types = next[index].content_types;
+  const i = types.indexOf(contentType);
+  if (i >= 0) types.splice(i, 1);
+  else types.push(contentType);
+  commitAutoTagRules(next);
+}
+
+function addAutoTagRule() {
+  const next = cloneRules(settings.auto_tag_rules);
+  next.push({ tag_name: "", keywords: [], content_types: [] });
+  commitAutoTagRules(next);
+}
+
+function removeAutoTagRule(index: number) {
+  const next = cloneRules(settings.auto_tag_rules);
+  next.splice(index, 1);
+  commitAutoTagRules(next);
+}
+
+function restoreDefaultAutoTagRules() {
+  commitAutoTagRules(DEFAULT_AUTO_TAG_RULES);
 }
 
 function addIgnoredApp() {
@@ -1147,6 +1282,94 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 11px;
   color: var(--text-tertiary);
   line-height: 1.4;
+}
+
+/* Auto-tag rules */
+.auto-tag-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+
+.auto-tag-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.auto-tag-rule-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auto-tag-name,
+.auto-tag-keywords {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.auto-tag-name:focus,
+.auto-tag-keywords:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.auto-tag-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.auto-tag-remove:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.auto-tag-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.auto-tag-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.auto-tag-type input {
+  accent-color: var(--accent);
+}
+
+.auto-tag-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Ignore apps */

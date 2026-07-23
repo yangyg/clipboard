@@ -47,6 +47,12 @@ export interface Tag {
   count: number;
 }
 
+export interface AutoTagRule {
+  tag_name: string;
+  keywords: string[];
+  content_types: string[];
+}
+
 export interface Settings {
   // Shortcuts
   global_shortcut: string;
@@ -79,7 +85,24 @@ export interface Settings {
   floating_height: number;
   window_width: number;
   window_height: number;
+  /** Auto-tag new records from rules (default on). */
+  enable_auto_tag: boolean;
+  auto_tag_rules: AutoTagRule[];
 }
+
+export const DEFAULT_AUTO_TAG_RULES: AutoTagRule[] = [
+  { tag_name: "链接", keywords: [], content_types: ["link"] },
+  {
+    tag_name: "部署",
+    keywords: ["deploy", "kubectl", "docker", "helm", "k8s", "npm run build", "生产环境"],
+    content_types: [],
+  },
+  {
+    tag_name: "前端",
+    keywords: ["vue", "react", "typescript", "tsx", "vite", "webpack", "frontend", "前端"],
+    content_types: [],
+  },
+];
 
 export interface SearchResult {
   records: ClipboardRecord[];

@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "../types";
+import { DEFAULT_AUTO_TAG_RULES } from "../types";
 
 const DEFAULT_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V",
@@ -26,6 +27,12 @@ const DEFAULT_SETTINGS: Settings = {
   floating_height: 0,
   window_width: 0,
   window_height: 0,
+  enable_auto_tag: true,
+  auto_tag_rules: DEFAULT_AUTO_TAG_RULES.map((r) => ({
+    ...r,
+    keywords: [...r.keywords],
+    content_types: [...r.content_types],
+  })),
 };
 
 const SAVE_DEBOUNCE_MS = 200;

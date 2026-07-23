@@ -78,6 +78,57 @@ pub struct ClipboardRecord {
 
 // === Settings (must match src/types.ts Settings) ===
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutoTagRule {
+    #[serde(rename = "tag_name")]
+    pub tag_name: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default, rename = "content_types")]
+    pub content_types: Vec<String>,
+}
+
+fn default_enable_auto_tag() -> bool {
+    true
+}
+
+pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
+    vec![
+        AutoTagRule {
+            tag_name: "链接".to_string(),
+            keywords: vec![],
+            content_types: vec!["link".to_string()],
+        },
+        AutoTagRule {
+            tag_name: "部署".to_string(),
+            keywords: vec![
+                "deploy".into(),
+                "kubectl".into(),
+                "docker".into(),
+                "helm".into(),
+                "k8s".into(),
+                "npm run build".into(),
+                "生产环境".into(),
+            ],
+            content_types: vec![],
+        },
+        AutoTagRule {
+            tag_name: "前端".to_string(),
+            keywords: vec![
+                "vue".into(),
+                "react".into(),
+                "typescript".into(),
+                "tsx".into(),
+                "vite".into(),
+                "webpack".into(),
+                "frontend".into(),
+                "前端".into(),
+            ],
+            content_types: vec![],
+        },
+    ]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(rename = "global_shortcut")]
     pub global_shortcut: String,
@@ -123,6 +174,10 @@ pub struct Settings {
     pub window_width: i32,
     #[serde(default, rename = "window_height")]
     pub window_height: i32,
+    #[serde(default = "default_enable_auto_tag", rename = "enable_auto_tag")]
+    pub enable_auto_tag: bool,
+    #[serde(default = "default_auto_tag_rules", rename = "auto_tag_rules")]
+    pub auto_tag_rules: Vec<AutoTagRule>,
 }
 
 impl Default for Settings {
@@ -153,6 +208,8 @@ impl Default for Settings {
             floating_height: 0,
             window_width: 0,
             window_height: 0,
+            enable_auto_tag: true,
+            auto_tag_rules: default_auto_tag_rules(),
         }
     }
 }
@@ -401,12 +458,23 @@ pub fn run() {
                                 None,
                                 captured.html.as_deref(),
                             ) {
-                                Ok(id) => {
+                                Ok((id, is_new)) => {
+                                    if is_new && settings.enable_auto_tag {
+                                        if let Err(e) = db.apply_auto_tags(
+                                            id,
+                                            &captured.text,
+                                            &content_type,
+                                            &settings.auto_tag_rules,
+                                        ) {
+                                            warn!("Failed to apply auto tags: {}", e);
+                                        }
+                                    }
                                     info!(
-                                        "New clipboard record: id={}, type={}, formatted={}",
+                                        "New clipboard record: id={}, type={}, formatted={}, is_new={}",
                                         id,
                                         content_type,
-                                        captured.html.is_some()
+                                        captured.html.is_some(),
+                                        is_new
                                     );
                                     if let Ok(record) = db.get_record(id) {
                                         if let Some(r) = record {
@@ -464,8 +532,21 @@ pub fn run() {
                                         Some(&image_meta),
                                         None,
                                     ) {
-                                        Ok(id) => {
-                                            info!("New clipboard record: id={}, type=image", id);
+                                        Ok((id, is_new)) => {
+                                            if is_new && settings.enable_auto_tag {
+                                                if let Err(e) = db.apply_auto_tags(
+                                                    id,
+                                                    &label,
+                                                    &ContentType::Image,
+                                                    &settings.auto_tag_rules,
+                                                ) {
+                                                    warn!("Failed to apply auto tags: {}", e);
+                                                }
+                                            }
+                                            info!(
+                                                "New clipboard record: id={}, type=image, is_new={}",
+                                                id, is_new
+                                            );
                                             if let Ok(record) = db.get_record(id) {
                                                 if let Some(r) = record {
                                                     app_handle_clone

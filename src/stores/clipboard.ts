@@ -600,6 +600,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
   // Called by event listener when clipboard changes
   function onNewRecord(record: ClipboardRecord) {
     scheduleLoadStats();
+    if (record.tags.length > 0) {
+      void loadTags();
+    }
     if (trashFilter.value || searchQuery.value) return;
     if (activeTag.value && !record.tags.includes(activeTag.value)) return;
     if (activeFilter.value === "favorites" && !record.is_favorite) return;

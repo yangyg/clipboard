@@ -596,7 +596,7 @@ impl ClipboardDb {
         source_window: &str,
         image: Option<&ImageMeta>,
         content_html: Option<&str>,
-    ) -> SqlResult<i64> {
+    ) -> SqlResult<(i64, bool)> {
         let conn = self.conn.lock();
 
         let existing: Option<i64> = conn
@@ -614,7 +614,7 @@ impl ClipboardDb {
                 "UPDATE records SET updated_at = ?, copy_count = copy_count + 1, source_app = ?, source_window = ? WHERE id = ?",
                 params![now, source_app, source_window, id],
             )?;
-            return Ok(id);
+            return Ok((id, false));
         }
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -693,7 +693,7 @@ impl ClipboardDb {
             self.purge_media_pairs(&overflow_media);
         }
 
-        Ok(id)
+        Ok((id, true))
     }
 
     pub fn search_records(
@@ -1211,6 +1211,58 @@ impl ClipboardDb {
             params![name, color],
         )?;
         Ok(conn.last_insert_rowid())
+    }
+
+    /// Find a tag by name, or create one with `is_auto = 1`.
+    pub fn ensure_auto_tag(&self, name: &str) -> SqlResult<i64> {
+        let conn = self.conn.lock();
+        if let Ok(id) = conn.query_row(
+            "SELECT id FROM tags WHERE name = ?",
+            [name],
+            |row| row.get(0),
+        ) {
+            return Ok(id);
+        }
+        let color = match name {
+            "部署" => "#34d399",
+            "前端" => "#6366f1",
+            "链接" => "#fbbf24",
+            _ => "#6366f1",
+        };
+        conn.execute(
+            "INSERT INTO tags (name, color, is_auto) VALUES (?, ?, 1)",
+            params![name, color],
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    /// Apply auto-tag rules to a newly inserted record (OR within each rule).
+    pub fn apply_auto_tags(
+        &self,
+        record_id: i64,
+        content: &str,
+        content_type: &ContentType,
+        rules: &[crate::AutoTagRule],
+    ) -> SqlResult<()> {
+        let ct = content_type.as_str();
+        let content_lower = content.to_lowercase();
+
+        for rule in rules {
+            let tag_name = rule.tag_name.trim();
+            if tag_name.is_empty() {
+                continue;
+            }
+            let type_hit = rule.content_types.iter().any(|t| t.as_str() == ct);
+            let keyword_hit = rule.keywords.iter().any(|kw| {
+                let k = kw.trim();
+                !k.is_empty() && content_lower.contains(&k.to_lowercase())
+            });
+            if type_hit || keyword_hit {
+                let tag_id = self.ensure_auto_tag(tag_name)?;
+                self.add_tag_to_record(record_id, tag_id)?;
+            }
+        }
+        Ok(())
     }
 
     pub fn delete_tag(&self, id: i64) -> SqlResult<()> {

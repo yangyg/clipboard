@@ -55,6 +55,7 @@
         >
           <span class="tag-dot" :style="{ background: tag.color }"></span>
           <span class="tag-name">{{ tag.name }}</span>
+          <span v-if="tag.is_auto" class="tag-auto-badge">自动</span>
           <span class="tag-count">{{ tag.count }}</span>
         </button>
       </div>
@@ -348,6 +349,16 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tag-auto-badge {
+  flex-shrink: 0;
+  font-size: 0.5625rem;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .tag-count {

@@ -47,8 +47,9 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 2. **Image vs text:** Prefer text only for meaningful shares (≥16 chars, not URL-only). Screenshots / browser “Copy image” (URL-only text) → image
 3. Skip capture when `source_app` matches `settings.ignored_apps`
 4. Persist: text (+ optional `content_html`) → SQLite; image → `media/` + thumb + metadata label `[image WxH]`
-5. Emit `clipboard-changed`; Vue store updates list
-6. Paste: write clipboard → (floating: hide panel) → restore previous foreground HWND → Ctrl+V. Target HWND remembered when panel opens. If no valid target, only updates clipboard.
+5. On **new** insert only: if `enable_auto_tag`, `apply_auto_tags` matches `auto_tag_rules` (content type OR keyword, case-insensitive) → `ensure_auto_tag` + `record_tags`. Hash-dedup updates skip retagging.
+6. Emit `clipboard-changed`; Vue store updates list (refreshes tag counts when the record has tags)
+7. Paste: write clipboard → (floating: hide panel) → restore previous foreground HWND → Ctrl+V. Target HWND remembered when panel opens. If no valid target, only updates clipboard.
 
 ### Frontend Component Tree
 ```
@@ -58,8 +59,8 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 │   ├── SearchBar.vue
 │   ├── RecordList.vue           # Infinite scroll; thumbs; PreviewPane
 │   │   └── PreviewPane.vue      # Header meta line; DOMPurify HTML preview; paste / tags / trash
-│   └── SideBar.vue              # Categories (+ favorites); trash; tags; capture/theme/settings icons
-├── SettingsWindow.vue           # Nav: 外观 → 快捷键 → 历史 → 隐私 → 系统 → 数据 → 统计 → 帮助 → 关于
+│   └── SideBar.vue              # Categories (+ favorites); trash; tags (「自动」 badge); capture/theme/settings
+├── SettingsWindow.vue           # Nav: 外观 → 快捷键 → 历史（含自动打标规则）→ 隐私 → 系统 → 数据 → 统计 → 帮助 → 关于
 ├── WindowControls.vue
 ├── ToastHost.vue
 ├── ConfirmDialog.vue / TagDialog.vue
@@ -69,19 +70,19 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 ```
 
 ### Backend (Rust) Module Layout
-- `lib.rs` — setup, command registration, `show_main_panel` (remembers paste-target HWND), shortcuts, ignore-list helpers, list IPC payload trim
+- `lib.rs` — setup, command registration, `Settings` / `AutoTagRule`, capture path auto-tag hook, `show_main_panel` (paste-target HWND), shortcuts, ignore-list helpers, list IPC payload trim
 - `commands.rs` — Tauri commands (CRUD, paste, settings, import/export, stats, mode switch)
 - `window.rs` — adaptive / remembered size, round corners, resize persistence
 - `tray.rs` — system tray menu / click
 - `clipboard.rs` — monitor, paste-target HWND, write clipboard, focus restore + `keybd_event` Ctrl+V, suppress self-write
 - `media.rs` — encode/store/load/delete
-- `db.rs` — CRUD, FTS5, trash, tags, stats (`data_path`), settings, list/search `ORDER BY` whitelist
+- `db.rs` — CRUD, FTS5, trash, tags (`ensure_auto_tag` / `apply_auto_tags`), `insert_record` → `(id, is_new)`, stats (`data_path`), settings, list/search `ORDER BY` whitelist
 - `detect.rs` — content type + sensitive detection + SHA-256 helper
 - `main.rs` — `clipvault_lib::run()`
 
 ### State Management (Pinia)
 - `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), `listSort` (session), `ensureRecordDetail` for HTML
-- `settingsStore` — debounced auto-save (200ms); theme / appearance (`font_size`, `panel_radius`, `panel_opacity`, blur); applies CSS vars + `set_window_corner_radius`
+- `settingsStore` — debounced auto-save (200ms); theme / appearance; `enable_auto_tag` + `auto_tag_rules`; applies CSS vars + `set_window_corner_radius`
 
 ### Key Design Decisions
 - **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur. Window: SideBar + `WindowControls` + list-toolbar. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size` (floating ≈ 40%×65%, window ≈ 55%×72%, clamped). Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields.
@@ -97,7 +98,8 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles.
 - **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML; preview loads via `get_record` / detail. Preview uses **DOMPurify + `v-html`** (not iframe) when markup differs from plain. Display CSS may force wrap; stored HTML for paste is unchanged. Manual select-copy from preview may normalize whitespace. Preview sanitization does **not** affect paste (original HTML is written back).
 - **Preview chrome:** Type + actions in header; source / time / size-or-chars / 富文本 / 使用次数 as one meta line (`title` = content type). Single scroll on `.preview-content` (no nested scroll on content / rich HTML). Image preview: click → `open_record_media` opens the file with the OS default app (`cmd /c start`, path must stay under media root). Do not use `shell.open` for local files (default scope is http/https only).
-- **Filters:** Type/favorites **AND** tag combine; trash is exclusive. IPC: `get_records` / `search_records` / `get_all_tags` use `#[tauri::command(rename_all = "snake_case")]` — pass `content_type`, `favorites_only`, `tag`, `trashed`, `sort`. Tag counts follow active category (`get_all_tags`).
+- **Filters:** Type/favorites **AND** tag combine; trash is exclusive. IPC: `get_records` / `search_records` / `get_all_tags` use `#[tauri::command(rename_all = "snake_case")]` — pass `content_type`, `favorites_only`, `tag`, `trashed`, `sort`. Tag counts follow active category (`get_all_tags`). SideBar shows an 「自动」 badge for `is_auto` tags.
+- **Auto-tag:** Settings `enable_auto_tag` (default **true**) + `auto_tag_rules` (`tag_name`, `keywords[]`, `content_types[]`). Per-rule match is OR (type hit or any keyword substring, case-insensitive). Defaults: 链接←`link`; 部署 / 前端←keyword lists. Rules live only in settings (not `tags` table). Missing tag names are created with `is_auto=1`. No backfill of existing history. UI under Settings → 历史.
 - **Search:** FTS5 trigram (≥3 chars) on content / source_app / source_window / tags; shorter queries use escaped `LIKE`. FTS sync via triggers. **FTS v2:** use `DELETE FROM records_fts WHERE rowid=…` in triggers — the FTS5 `'delete'` command returns `SQL logic error` on current Windows SQLite and breaks empty-trash / permanent delete.
 - **Stats storage:** `storage_bytes` ≈ text content length sum + cached `media/` dir size (not full SQLite file/index). `data_path` is the absolute app data dir shown on the stats page.
 - **Sets in Vue:** Never mutate `Set` in place — assign a new `Set`.

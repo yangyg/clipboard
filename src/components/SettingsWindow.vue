@@ -72,8 +72,8 @@
               <div class="settings-section-title">行为</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">粘贴后自动关闭面板</div>
-                  <div class="setting-desc">悬浮模式下粘贴后保持面板关闭（关闭则粘贴后重新打开）</div>
+                  <div class="setting-label">粘贴后自动隐藏</div>
+                  <div class="setting-desc">悬浮模式隐藏到托盘；窗口模式最小化到任务栏（关闭则粘贴后保持打开）</div>
                 </div>
                 <div
                   class="toggle"

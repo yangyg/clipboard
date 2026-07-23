@@ -258,7 +258,7 @@ pub async fn paste_record(
     if target.is_none() {
         warn!(
             "No paste target yet (panel may have opened before any other app was focused); \
-             will retry after hide"
+             will retry after yielding foreground"
         );
     }
     let mut focused = false;
@@ -266,18 +266,22 @@ pub async fn paste_record(
         focused = focus_paste_target_on_main_thread(&app, hwnd).await;
     }
 
-    // 3) Then hide ourselves — do NOT hide before focus (that drops FG rights).
-    if let Some(hwnd) = our_hwnd {
-        clipboard::hide_hwnd(hwnd);
-    }
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
-    }
+    // 3) Yield foreground — do NOT leave FG before focus (that drops FG rights).
+    // Floating: hide to tray. Window: minimize to taskbar (hide feels like "closed").
     if is_floating {
+        if let Some(hwnd) = our_hwnd {
+            clipboard::hide_hwnd(hwnd);
+        }
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.hide();
+        }
         let _ = app.emit("toggle-panel", false);
+    } else if let Some(window) = app.get_webview_window("main") {
+        let _ = window.minimize();
     }
 
-    // After hide, Windows may activate the previous app — pick it up if we had no target.
+    // After we leave the foreground, Windows may activate the previous app —
+    // pick it up if we had no target yet.
     for _ in 0..5 {
         if target.is_some() && focused {
             break;
@@ -309,15 +313,15 @@ pub async fn paste_record(
     }
 
     // 5) Re-show only when keep-open; never steal focus back after a successful paste.
-    if is_floating && !auto_close {
+    // auto_close + floating → stay hidden; auto_close + window → stay minimized.
+    if !auto_close {
         if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
             let _ = window.show();
             // Deliberately no set_focus — leave the target app active.
         }
-        let _ = app.emit("toggle-panel", true);
-    } else if !is_floating && !auto_close {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.show();
+        if is_floating {
+            let _ = app.emit("toggle-panel", true);
         }
     }
 

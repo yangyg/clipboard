@@ -34,7 +34,7 @@ const clipboardStore = useClipboardStore();
 }
 
 .capture-status.compact .status-text {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
 }
 
 .live-dot {
@@ -52,7 +52,7 @@ const clipboardStore = useClipboardStore();
 }
 
 .status-text {
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -60,11 +60,11 @@ const clipboardStore = useClipboardStore();
   height: 24px;
   padding: 0 10px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   background: var(--success-soft);
   color: var(--success);
-  border: 1px solid rgba(52, 211, 153, 0.18);
+  border: 1px solid color-mix(in srgb, var(--success) 18%, transparent);
   cursor: pointer;
   transition: all var(--transition-fast);
   font-family: inherit;
@@ -73,6 +73,6 @@ const clipboardStore = useClipboardStore();
 .capture-toggle.paused {
   background: var(--warning-soft);
   color: var(--warning);
-  border-color: rgba(251, 191, 36, 0.22);
+  border-color: color-mix(in srgb, var(--warning) 22%, transparent);
 }
 </style>

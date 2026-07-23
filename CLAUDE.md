@@ -55,16 +55,19 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 ### Frontend Component Tree
 ```
 App.vue                          # Events; FloatingPanel v-show (warm); ToastHost, ConfirmDialog
-├── FloatingPanel.vue            # Floating UI; filters; empty trash; useBatchActions + useClipboardHotkeys
-├── WindowApp.vue                # Window UI; SideBar; list-toolbar sort select; batch/hotkeys
-│   ├── SearchBar.vue
-│   ├── RecordList.vue           # Virtual list; keyset/infinite scroll; thumbs; PreviewPane
-│   │   └── PreviewPane.vue      # Header meta line; DOMPurify HTML preview; paste / tags / trash
-│   └── SideBar.vue              # Categories (+ favorites); trash; tags (「自动」 badge); capture/theme/settings
-├── SettingsWindow.vue           # Nav: 外观 → 快捷键 → 历史 → 标签（自动打标规则）→ 隐私 → 系统 → 数据 → 统计 → 帮助 → 关于
+├── FloatingPanel.vue            # Floating UI; filters; BatchBar; useBatchActions + useClipboardHotkeys
+├── WindowApp.vue                # Window UI; SideBar; list-toolbar sort; BatchBar; hotkeys
+│   ├── SearchBar.vue            # aria-label; / or Ctrl+K focus
+│   ├── RecordList.vue           # Virtual listbox (role=listbox/option); ContextMenu; PreviewPane
+│   │   └── PreviewPane.vue      # Paste primary CTA; icon-only delete; tags; trash
+│   └── SideBar.vue              # Categories; trash; tags; ContextMenu; ≤720px icon rail
+├── SettingsWindow.vue           # Nav: 外观 → … → 关于；theme radiogroup; ≤720px icon nav
+├── BatchBar.vue                 # Shared batch actions (floating + window)
+├── BaseDialog.vue               # Teleport + Esc + focus trap; shared dialog chrome
+├── ConfirmDialog.vue / TagDialog.vue  # Content slots on BaseDialog
+├── ContextMenu.vue              # Fixed + clamp; Arrow/Enter/Esc; role=menu
 ├── WindowControls.vue
 ├── ToastHost.vue
-├── ConfirmDialog.vue / TagDialog.vue
 ├── composables/useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts
 ├── utils/mediaUrl.ts · sanitizeHtml.ts
 └── TrayMenu.vue                 # Placeholder (native tray is Rust)
@@ -73,7 +76,7 @@ App.vue                          # Events; FloatingPanel v-show (warm); ToastHos
 ### Backend (Rust) Module Layout
 - `lib.rs` — setup, command registration, capture worker + **periodic cleanup thread** (~60s), `Settings` / `AutoTagRule`, `show_main_panel`, shortcuts, ignore-list helpers, `list_ipc_payload`
 - `commands.rs` — Tauri commands (CRUD, paste on `spawn_blocking`, settings, import/export, stats, mode switch)
-- `window.rs` — adaptive / remembered size, round corners, resize persistence
+- `window.rs` — adaptive / remembered size, round corners, resize persistence. **Window mode** min width **760** (SideBar+List+Preview ≥740); floating stays compact.
 - `tray.rs` — system tray menu / click
 - `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**)
 - `media.rs` — encode/store/load/delete; media dir size cache
@@ -83,20 +86,25 @@ App.vue                          # Events; FloatingPanel v-show (warm); ToastHos
 
 ### State Management (Pinia)
 - `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection
-- `settingsStore` — debounced auto-save (200ms); theme / appearance; `enable_auto_tag` + `auto_tag_rules`; applies CSS vars + `set_window_corner_radius`
+- `settingsStore` — debounced auto-save (200ms); theme / appearance; `enable_auto_tag` + `auto_tag_rules`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
 
 ### Key Design Decisions
-- **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur; panel kept mounted with `v-show`. Window: SideBar + `WindowControls` + list-toolbar. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size`. Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields (`SIZE_SAVE_GEN`).
+- **Brand:** Product name **ClipVault** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.
+- **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur; panel kept mounted with `v-show`. Window: SideBar + `WindowControls` + list-toolbar; `mode_size_bounds` min width **760**. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size`. Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields (`SIZE_SAVE_GEN`).
 - **List sort (window mode):** Toolbar `<select>` → `clipboardStore.listSort` → `get_records` / `search_records` `sort` param. Whitelist: `updated_desc` (default), `updated_asc`, `created_desc`, `copies_desc`. Non-trash: `is_pinned DESC` first. Session-only. `onNewRecord` prepends only for `updated_desc`; other sorts reload (debounced ~400ms).
 - **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
-- **Theming:** CSS vars on `:root`; `.light-theme` / `.oled-theme` via `document.body.classList`. SideBar can toggle dark↔light.
-- **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Virtual list row height scales with `font_size`. Settings page keeps fixed `px` for the slider UX.
+- **Theming / tokens:** CSS vars on `:root` (incl. `--type-*`, `--text-xs`…`--text-xl`, `--space-*`, `--win-close-hover`). Themes: `.light-theme` / `.oled-theme`. Type badges use global `.badge-*` + `--type-*` only (no per-component hardcodes). SideBar can toggle dark↔light.
+- **Blur:** Setting `enable_blur` applies `backdrop-filter` **only in floating mode**. Window mode always skips blur (`body.mode-window`) to avoid full-viewport compositing cost; setting remains for when the user returns to floating.
+- **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Prefer `rem` / `--text-*` so Settings / dialogs scale with the user preference. Virtual list row height scales with `font_size`.
+- **Responsive (window):** `@media (max-width: 720px)` — SideBar / settings nav → icon rail; preview actions denser grid; theme cards 2×2.
+- **A11y (baseline):** Record list `role="listbox"` / `option` + roving tabindex; dialogs via `BaseDialog` (Esc + focus trap); `ContextMenu` keyboard + clamp; global `:focus-visible`; theme cards `role="radio"`; form `aria-label`s on search / ranges / ignore-app input. Tertiary text colors raised for WCAG-ish contrast.
+- **Preview actions:** 「粘贴」is `action-primary` (solid accent); delete is icon-only. Pin available via header / hotkey / context menu when the narrow grid hides it.
 - **Sensitive detection** (text only): `password|passwd|pwd`; 4–8 digits + `验证码|code|Code`; `sk-`+≥20 alnum; 16–19 digits with len≤25. Default expire 600s. `is_sensitive` is a **bool**, not a `content_type` (ContentType = text|code|link|image|file only).
 - **Soft delete:** Delete → trash (toast, no confirm). Permanent delete / empty trash still confirm.
 - **Memory (frontend):** List soft-capped (`PAGE_SIZE * 2`) on `onNewRecord` / `loadMore`. Full content/HTML in `recordDetails` (max ~6). Batch copy fetches full text via `get_record` (list rows are truncated).
 - **Clipboard fingerprint:** SHA-256 of text+html (not retaining full HTML string in `last_text_fp`). Image poll: quick-fp only; worker computes full hash.
 - **Retention “回收站保留天数”:** Only purges trashed rows. **最大记录数** evicts oldest non-favorite / non-pinned when inserting (write lock).
-- **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles.
+- **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles. Failed tag create/assign must toast error.
 - **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML; preview loads via `get_record` / detail. Preview uses **DOMPurify + `v-html`**. Paste writes original HTML back.
 - **Preview chrome:** Type + actions in header; source / time / size-or-chars / 富文本 / 使用次数 as one meta line. Image preview: click → `open_record_media` (`cmd /c start` under media root). Do not use `shell.open` for local files.
 - **Filters:** Type/favorites **AND** tag combine; trash is exclusive. IPC: `get_records` / `search_records` / `get_all_tags` use `rename_all = "snake_case"`. Tag counts follow active category. SideBar 「自动」 badge for `is_auto` tags.
@@ -113,6 +121,7 @@ App.vue                          # Events; FloatingPanel v-show (warm); ToastHos
 - **Paste focus:** On panel show, remember previous foreground HWND. Paste writes clipboard (PNG bytes preferred for images), hides floating panel, focuses target, async delay, Ctrl+V. No valid target → clipboard only. `auto_close_on_paste` false → floating panel reopens.
 - **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.
+- **UI review:** Historical findings + batch status in [`docs/ui-design-review.md`](docs/ui-design-review.md).
 
 ## Agent skills
 

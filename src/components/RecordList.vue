@@ -20,25 +20,46 @@
     </div>
 
     <!-- Record List (windowed: only mount rows near the viewport) -->
-    <div v-else class="record-list" ref="listRef" @scroll="onListScroll">
+    <div
+      v-else
+      class="record-list"
+      ref="listRef"
+      role="listbox"
+      aria-label="剪贴板记录"
+      :aria-activedescendant="activeDescendantId"
+      tabindex="-1"
+      @scroll="onListScroll"
+    >
       <div class="virtual-spacer" :style="{ height: `${virtualPadTop}px` }" aria-hidden="true"></div>
       <template v-for="item in windowItems" :key="item.key">
-        <div v-if="item.type === 'label'" class="section-label"><AppIcon name="pin" :size="11" /> 置顶</div>
+        <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> 置顶</div>
         <div
           v-else
+          :id="`record-option-${item.record!.id}`"
           class="record-item"
+          role="option"
+          :aria-selected="clipboardStore.selectedId === item.record!.id"
+          :tabindex="isOptionTabbable(item.record!.id) ? 0 : -1"
           :class="{ selected: clipboardStore.selectedId === item.record!.id, 'batch-mode': clipboardStore.batchMode }"
           :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
           @dblclick="onItemDoubleClick(item.record!.id)"
           @contextmenu.prevent="showContextMenu($event, item.record!)"
+          @keydown.enter.prevent="onItemActivate(item.record!.id)"
+          @keydown.space.prevent="onItemClick(item.record!.id)"
         >
-          <div v-if="clipboardStore.batchMode" class="record-checkbox" :class="{ checked: clipboardStore.selectedIds.has(item.record!.id) }">
+          <div
+            v-if="clipboardStore.batchMode"
+            class="record-checkbox"
+            :class="{ checked: clipboardStore.selectedIds.has(item.record!.id) }"
+            aria-hidden="true"
+          >
             <span v-if="clipboardStore.selectedIds.has(item.record!.id)">✓</span>
           </div>
           <div
             class="record-type-icon"
             :class="[item.record!.content_type, { 'has-thumb': !!item.thumb }]"
+            aria-hidden="true"
           >
             <img
               v-if="item.thumb"
@@ -63,16 +84,20 @@
           </div>
           <div class="record-actions">
             <button
+              type="button"
               class="record-pin"
               :class="{ pinned: item.record!.is_pinned }"
-              @click.stop="clipboardStore.togglePin(item.record!.id)"
+              :aria-label="item.record!.is_pinned ? '取消置顶' : '置顶'"
               :title="item.record!.is_pinned ? '取消置顶' : '置顶'"
+              @click.stop="clipboardStore.togglePin(item.record!.id)"
             ><AppIcon name="pin" :size="13" :fill="item.record!.is_pinned ? 'currentColor' : 'none'" /></button>
             <button
+              type="button"
               class="record-star"
               :class="{ starred: item.record!.is_favorite }"
-              @click.stop="clipboardStore.toggleFavorite(item.record!.id)"
+              :aria-label="item.record!.is_favorite ? '取消收藏' : '收藏'"
               :title="item.record!.is_favorite ? '取消收藏' : '收藏'"
+              @click.stop="clipboardStore.toggleFavorite(item.record!.id)"
             ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
           </div>
         </div>
@@ -90,46 +115,14 @@
     <PreviewPane v-if="clipboardStore.selectedRecord && !clipboardStore.batchMode" />
 
     <!-- Context Menu -->
-    <div
-      v-if="contextMenu.visible"
-      class="context-menu"
-      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-      @click.stop
-    >
-      <template v-if="!clipboardStore.trashFilter">
-        <div class="ctx-item" @click="ctxPaste">
-          <span class="ctx-icon"><AppIcon name="paste" :size="14" /></span>粘贴
-          <span class="ctx-shortcut">Enter</span>
-        </div>
-        <div class="ctx-item" @click="ctxPastePlain">
-          <span class="ctx-icon"><AppIcon name="type" :size="14" /></span>纯文本粘贴
-          <span class="ctx-shortcut">Alt+V</span>
-        </div>
-        <div class="ctx-sep"></div>
-        <div class="ctx-item" @click="ctxFavorite">
-          <span class="ctx-icon"><AppIcon name="star" :size="14" /></span>{{ contextMenu.record?.is_favorite ? '取消收藏' : '收藏' }}
-          <span class="ctx-shortcut">Ctrl+D</span>
-        </div>
-        <div class="ctx-item" @click="ctxPin">
-          <span class="ctx-icon"><AppIcon name="pin" :size="14" /></span>{{ contextMenu.record?.is_pinned ? '取消置顶' : '置顶' }}
-          <span class="ctx-shortcut">Ctrl+T</span>
-        </div>
-        <div class="ctx-sep"></div>
-        <div class="ctx-item danger" @click="ctxDelete">
-          <span class="ctx-icon"><AppIcon name="trash" :size="14" /></span>删除
-          <span class="ctx-shortcut">Del</span>
-        </div>
-      </template>
-      <template v-else>
-        <div class="ctx-item" @click="ctxRestore">
-          <span class="ctx-icon"><AppIcon name="restore" :size="14" /></span>恢复
-        </div>
-        <div class="ctx-sep"></div>
-        <div class="ctx-item danger" @click="ctxPermanentDelete">
-          <span class="ctx-icon"><AppIcon name="trash" :size="14" /></span>永久删除
-        </div>
-      </template>
-    </div>
+    <ContextMenu
+      :visible="contextMenu.visible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :items="contextMenuItems"
+      @close="closeContextMenu"
+      @select="onContextSelect"
+    />
   </div>
 </template>
 
@@ -138,6 +131,7 @@ import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted, shall
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
+import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import type { ClipboardRecord } from "../types";
@@ -150,6 +144,23 @@ const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const listRef = ref<HTMLElement | null>(null);
+
+const activeDescendantId = computed(() =>
+  clipboardStore.selectedId != null ? `record-option-${clipboardStore.selectedId}` : undefined
+);
+
+const firstRecordId = computed(() => {
+  for (const it of flatItems.value) {
+    if (it.type === "record" && it.id != null) return it.id;
+  }
+  return null;
+});
+
+function isOptionTabbable(id: number): boolean {
+  if (clipboardStore.selectedId === id) return true;
+  if (clipboardStore.selectedId == null && firstRecordId.value === id) return true;
+  return false;
+}
 
 /** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
 const BASE_ROW_HEIGHT = 58;
@@ -405,6 +416,34 @@ const contextMenu = reactive({
   record: null as ClipboardRecord | null,
 });
 
+const contextMenuItems = computed<ContextMenuItem[]>(() => {
+  if (clipboardStore.trashFilter) {
+    return [
+      { id: "restore", label: "恢复", icon: "restore" },
+      { id: "permanentDelete", label: "永久删除", icon: "trash", danger: true, separatorBefore: true },
+    ];
+  }
+  const rec = contextMenu.record;
+  return [
+    { id: "paste", label: "粘贴", icon: "paste", shortcut: "Enter" },
+    { id: "pastePlain", label: "纯文本粘贴", icon: "type", shortcut: "Alt+V" },
+    {
+      id: "favorite",
+      label: rec?.is_favorite ? "取消收藏" : "收藏",
+      icon: "star",
+      shortcut: "Ctrl+D",
+      separatorBefore: true,
+    },
+    {
+      id: "pin",
+      label: rec?.is_pinned ? "取消置顶" : "置顶",
+      icon: "pin",
+      shortcut: "Ctrl+T",
+    },
+    { id: "delete", label: "删除", icon: "trash", shortcut: "Del", danger: true, separatorBefore: true },
+  ];
+});
+
 function getPreview(record: ClipboardRecord): string {
   if (record.content_type === "image") {
     if (record.width && record.height) {
@@ -455,6 +494,14 @@ function onItemClick(id: number) {
   clipboardStore.selectRecord(id);
 }
 
+async function onItemActivate(id: number) {
+  if (clipboardStore.batchMode) {
+    clipboardStore.toggleBatchSelect(id);
+    return;
+  }
+  await onItemDoubleClick(id);
+}
+
 async function onItemDoubleClick(id: number) {
   if (clipboardStore.trashFilter) {
     await clipboardStore.restoreRecord(id);
@@ -469,81 +516,65 @@ async function onItemDoubleClick(id: number) {
 }
 
 function showContextMenu(e: MouseEvent, record: ClipboardRecord) {
-  const wrapper = (e.currentTarget as HTMLElement).closest(".record-list-wrapper")?.getBoundingClientRect();
   contextMenu.visible = true;
-  contextMenu.x = wrapper ? e.clientX - wrapper.left : e.offsetX;
-  contextMenu.y = wrapper ? Math.min(e.clientY - wrapper.top, wrapper.height - 210) : Math.min(e.offsetY, 300);
+  contextMenu.x = e.clientX;
+  contextMenu.y = e.clientY;
   contextMenu.record = record;
 }
 
-async function ctxPaste() {
+async function onContextSelect(id: string) {
   const record = contextMenu.record;
   contextMenu.visible = false;
   if (!record) return;
-  try {
-    await clipboardStore.pasteRecord(record.id);
-    toast("已粘贴", "success");
-  } catch {
-    toast("粘贴失败", "error");
+
+  if (id === "paste") {
+    try {
+      await clipboardStore.pasteRecord(record.id);
+      toast("已粘贴", "success");
+    } catch {
+      toast("粘贴失败", "error");
+    }
+    return;
   }
-}
-
-async function ctxPastePlain() {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-  try {
-    await clipboardStore.pasteRecord(record.id, "plain");
-    toast("已粘贴为纯文本", "success");
-  } catch {
-    toast("粘贴失败", "error");
+  if (id === "pastePlain") {
+    try {
+      await clipboardStore.pasteRecord(record.id, "plain");
+      toast("已粘贴为纯文本", "success");
+    } catch {
+      toast("粘贴失败", "error");
+    }
+    return;
   }
-}
-
-async function ctxFavorite() {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-  const next = await clipboardStore.toggleFavorite(record.id);
-  if (next == null) toast("操作失败", "error");
-}
-
-async function ctxPin() {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-  const next = await clipboardStore.togglePin(record.id);
-  if (next == null) toast("操作失败", "error");
-}
-
-async function ctxRestore() {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-  await clipboardStore.restoreRecord(record.id);
-}
-
-async function ctxDelete() {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-  await clipboardStore.deleteRecord(record.id);
-  toast("已移到回收站", "success");
-}
-
-async function ctxPermanentDelete() {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-  const ok = await confirm({
-    title: "永久删除",
-    message: "确定要永久删除这条记录吗？此操作不可恢复。",
-    confirmText: "永久删除",
-    danger: true,
-  });
-  if (ok) {
-    await clipboardStore.permanentlyDeleteRecord(record.id);
-    toast("已永久删除", "success");
+  if (id === "favorite") {
+    const next = await clipboardStore.toggleFavorite(record.id);
+    if (next == null) toast("操作失败", "error");
+    return;
+  }
+  if (id === "pin") {
+    const next = await clipboardStore.togglePin(record.id);
+    if (next == null) toast("操作失败", "error");
+    return;
+  }
+  if (id === "restore") {
+    await clipboardStore.restoreRecord(record.id);
+    return;
+  }
+  if (id === "delete") {
+    await clipboardStore.deleteRecord(record.id);
+    toast("已移到回收站", "success");
+    return;
+  }
+  if (id === "permanentDelete") {
+    const ok = await confirm({
+      title: "永久删除",
+      message: "确定要永久删除这条记录吗？此操作不可恢复。",
+      confirmText: "永久删除",
+      danger: true,
+    });
+    if (ok) {
+      await clipboardStore.permanentlyDeleteRecord(record.id);
+      toast("已永久删除", "success");
+    }
   }
 }
 
@@ -552,7 +583,6 @@ function closeContextMenu() {
 }
 
 onMounted(() => {
-  window.addEventListener("click", closeContextMenu);
   const el = listRef.value;
   if (el) {
     viewportHeight.value = el.clientHeight;
@@ -561,7 +591,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  window.removeEventListener("click", closeContextMenu);
   if (scrollRaf) cancelAnimationFrame(scrollRaf);
 });
 </script>
@@ -590,8 +619,7 @@ onUnmounted(() => {
 .section-label {
   font-size: 0.625rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: var(--text-tertiary);
   padding: 8px 16px 2px;
 }
@@ -619,7 +647,12 @@ onUnmounted(() => {
 
 .record-item.selected {
   background: var(--bg-selected, var(--accent-soft));
-  border-color: rgba(79, 110, 247, 0.2);
+  border-color: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.record-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .record-item.selected::before {
@@ -688,28 +721,28 @@ onUnmounted(() => {
 }
 
 .record-type-icon.text {
-  background: rgba(79, 110, 247, 0.1);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--type-text) 15%, transparent);
+  color: var(--type-text);
 }
 
 .record-type-icon.code {
-  background: rgba(124, 92, 252, 0.1);
-  color: #7c5cfc;
+  background: color-mix(in srgb, var(--type-code) 15%, transparent);
+  color: var(--type-code);
 }
 
 .record-type-icon.link {
-  background: rgba(23, 192, 146, 0.1);
-  color: #17a97b;
+  background: color-mix(in srgb, var(--type-link) 15%, transparent);
+  color: var(--type-link);
 }
 
 .record-type-icon.image {
-  background: rgba(232, 125, 62, 0.1);
-  color: #e87d3e;
+  background: color-mix(in srgb, var(--type-image) 15%, transparent);
+  color: var(--type-image);
 }
 
 .record-type-icon.file {
-  background: rgba(232, 106, 51, 0.1);
-  color: #e86a33;
+  background: color-mix(in srgb, var(--type-file) 15%, transparent);
+  color: var(--type-file);
 }
 
 .record-body {
@@ -751,38 +784,6 @@ onUnmounted(() => {
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 4px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.badge-text {
-  background: rgba(79, 110, 247, 0.1);
-  color: var(--accent);
-}
-
-.badge-code {
-  background: rgba(124, 92, 252, 0.1);
-  color: #7c5cfc;
-}
-
-.badge-link {
-  background: rgba(23, 192, 146, 0.1);
-  color: #17a97b;
-}
-
-.badge-image {
-  background: rgba(232, 125, 62, 0.1);
-  color: #e87d3e;
-}
-
-.badge-file {
-  background: rgba(232, 106, 51, 0.1);
-  color: #e86a33;
-}
-
-.badge-sensitive {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 
 /* Pin + Star buttons - hidden by default, shows on row hover */
@@ -916,61 +917,5 @@ onUnmounted(() => {
   color: var(--accent);
   cursor: pointer;
   text-decoration: underline;
-}
-
-/* Context Menu */
-.context-menu {
-  position: absolute;
-  width: 190px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: 6px;
-  z-index: 100;
-}
-
-.ctx-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  font-size: 0.75rem;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.ctx-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.ctx-item.danger {
-  color: var(--danger);
-}
-
-.ctx-item.danger:hover {
-  background: var(--danger-soft);
-}
-
-.ctx-icon {
-  width: 16px;
-  text-align: center;
-  font-size: 0.75rem;
-}
-
-.ctx-shortcut {
-  margin-left: auto;
-  font-size: 0.625rem;
-  font-family: var(--font-mono);
-  color: var(--text-tertiary);
-}
-
-.ctx-sep {
-  height: 1px;
-  background: var(--border-subtle);
-  margin: 3px 6px;
 }
 </style>

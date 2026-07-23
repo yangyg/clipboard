@@ -12,7 +12,7 @@
       <div class="settings-main">
         <!-- Nav -->
         <nav class="settings-nav">
-          <button type="button" class="nav-item nav-back" @click="emit('close')">
+          <button type="button" class="nav-item nav-back" title="返回" aria-label="返回" @click="emit('close')">
             <span class="nav-icon"><AppIcon name="back" :size="15" /></span>
             <span class="nav-label">返回</span>
           </button>
@@ -23,6 +23,8 @@
             type="button"
             class="nav-item"
             :class="{ active: activeSection === section.key }"
+            :title="section.label"
+            :aria-label="section.label"
             @click="activeSection = section.key"
           >
             <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
@@ -109,26 +111,40 @@
           <template v-else-if="activeSection === 'appearance'">
             <div class="settings-section">
               <div class="settings-section-title">主题</div>
-              <div class="theme-cards">
+              <div class="theme-cards" role="radiogroup" aria-label="主题">
                 <div
-                  v-for="t in THEMES"
+                  v-for="(t, idx) in THEMES"
                   :key="t.key"
                   class="theme-card"
+                  role="radio"
+                  :data-theme="t.key"
+                  :aria-checked="settings.theme === t.key"
+                  :aria-label="t.label"
+                  :tabindex="settings.theme === t.key ? 0 : -1"
                   :class="{ selected: settings.theme === t.key }"
                   @click="update('theme', t.key)"
+                  @keydown.enter.prevent="update('theme', t.key)"
+                  @keydown.space.prevent="update('theme', t.key)"
+                  @keydown.arrowright.prevent="focusTheme(idx + 1)"
+                  @keydown.arrowleft.prevent="focusTheme(idx - 1)"
+                  @keydown.arrowdown.prevent="focusTheme(idx + 1)"
+                  @keydown.arrowup.prevent="focusTheme(idx - 1)"
                 >
-                  <div class="theme-preview" :class="`theme-${t.key}`"></div>
+                  <div class="theme-preview" :class="`theme-${t.key}`" aria-hidden="true"></div>
                   <div class="theme-name"><AppIcon :name="t.icon" :size="13" /> {{ t.label }}</div>
                 </div>
               </div>
             </div>
             <div class="settings-section">
               <div class="settings-section-title">应用模式</div>
-              <div class="mode-grid">
+              <div class="mode-grid" role="radiogroup" aria-label="应用模式">
                 <button
                   v-for="mode in APP_MODES"
                   :key="mode.key"
+                  type="button"
                   class="mode-card"
+                  role="radio"
+                  :aria-checked="settings.app_mode === mode.key"
                   :class="{ selected: settings.app_mode === mode.key }"
                   @click="update('app_mode', mode.key)"
                 >
@@ -143,19 +159,22 @@
               <div class="setting-row">
                 <div class="setting-label">圆角大小</div>
                 <div class="slider-row">
-                  <input type="range" min="0" max="40" :value="settings.panel_radius" @input="(e) => update('panel_radius', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="0" max="40" aria-label="圆角大小" :value="settings.panel_radius" @input="(e) => update('panel_radius', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_radius }}px</span>
                 </div>
               </div>
               <div class="setting-row">
                   <div class="setting-label">不透明度</div>
                 <div class="slider-row">
-                  <input type="range" min="60" max="100" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="60" max="100" aria-label="不透明度" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_opacity }}%</span>
                 </div>
               </div>
               <div class="setting-row">
-                <div class="setting-label">毛玻璃效果</div>
+                <div>
+                  <div class="setting-label">毛玻璃效果</div>
+                  <div class="setting-desc">仅悬浮模式生效；窗口模式为降低合成开销自动关闭</div>
+                </div>
                 <div
                   class="toggle"
                   :class="{ on: settings.enable_blur }"
@@ -183,7 +202,7 @@
               <div class="setting-row">
                 <div class="setting-label">字体大小</div>
                 <div class="slider-row">
-                  <input type="range" min="11" max="18" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="11" max="18" aria-label="字体大小" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.font_size }}px</span>
                 </div>
               </div>
@@ -200,7 +219,7 @@
                   <div class="setting-desc">超出后自动清理旧记录</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="100" max="10000" step="100" :value="settings.max_records" @input="(e) => update('max_records', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="100" max="10000" step="100" aria-label="最大记录数" :value="settings.max_records" @input="(e) => update('max_records', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.max_records }}</span>
                 </div>
               </div>
@@ -210,7 +229,7 @@
                   <div class="setting-desc">回收站内超过天数后永久删除（收藏、置顶除外）</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="7" max="365" step="1" :value="settings.retention_days" @input="(e) => update('retention_days', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="7" max="365" step="1" aria-label="回收站保留天数" :value="settings.retention_days" @input="(e) => update('retention_days', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.retention_days }} 天</span>
                 </div>
               </div>
@@ -359,7 +378,7 @@
                   <div class="setting-desc">敏感内容自动删除</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="10" max="3600" step="10" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="10" max="3600" step="10" aria-label="敏感内容自动过期秒数" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ Math.floor(settings.sensitive_auto_expire_seconds / 60) }} 分钟</span>
                 </div>
               </div>
@@ -370,12 +389,12 @@
                 <div v-for="app in settings.ignored_apps" :key="app" class="ignore-item">
                   <span class="ignore-icon"><AppIcon name="monitor" :size="14" /></span>
                   <span class="ignore-name">{{ app }}</span>
-                  <button class="ignore-remove" @click="removeIgnoredApp(app)"><AppIcon name="close" :size="12" /></button>
+                  <button type="button" class="ignore-remove" :aria-label="`移除 ${app}`" @click="removeIgnoredApp(app)"><AppIcon name="close" :size="12" /></button>
                 </div>
               </div>
               <div class="ignore-add-row">
-                <input class="ignore-input" placeholder="输入应用进程名…" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
-                <button class="ignore-add-btn" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> 添加</button>
+                <input class="ignore-input" aria-label="忽略应用进程名" placeholder="输入应用进程名…" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
+                <button type="button" class="ignore-add-btn" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> 添加</button>
               </div>
             </div>
           </template>
@@ -451,7 +470,7 @@
                   {{ isExporting ? '导出中…' : '选择保存位置' }}
                 </button>
               </div>
-              <div v-if="exportStatus" class="status-line success">{{ exportStatus }}</div>
+              <div v-if="exportStatus" class="status-line" :class="exportStatusKind">{{ exportStatus }}</div>
 
               <div class="data-card">
                 <div>
@@ -463,7 +482,7 @@
                   {{ isImporting ? '导入中…' : '选择备份文件' }}
                 </button>
               </div>
-              <div v-if="importStatus" class="status-line">{{ importStatus }}</div>
+              <div v-if="importStatus" class="status-line" :class="importStatusKind">{{ importStatus }}</div>
 
               <div class="setting-row">
                 <div>
@@ -556,7 +575,7 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="panel" :size="14" /> 两种应用模式</div>
-                <div class="guide-text">“悬浮面板”无边框置顶、失焦自动隐藏，适合快速粘贴；“独立窗口”带侧边栏与任务栏入口，适合长期管理。两种模式都会记住你上次调整的窗口大小。可在“外观”中切换。</div>
+                <div class="guide-text">“悬浮面板”无边框置顶、失焦自动隐藏，适合快速粘贴（毛玻璃仅在此模式生效）；“独立窗口”带侧边栏与任务栏入口，适合长期管理（为降低合成开销自动关闭毛玻璃）。两种模式都会记住你上次调整的窗口大小。可在“外观”中切换。</div>
               </div>
 
               <div class="guide-block">
@@ -571,9 +590,9 @@
             <div class="settings-section">
               <div class="about-content">
                 <div class="about-logo">
-                  <img :src="appIconUrl" alt="" width="48" height="48" draggable="false" />
+                  <img :src="appIconUrl" alt="ClipVault" width="48" height="48" draggable="false" />
                 </div>
-                <div class="about-name">剪贴板管理</div>
+                <div class="about-name">ClipVault</div>
                 <div class="about-version">版本 0.1.0</div>
                 <div class="about-desc">Windows 剪贴板管理工具 · Tauri + Vue 3 + Rust</div>
               </div>
@@ -612,7 +631,9 @@ const stats = computed(() => clipboardStore.stats);
 const activeSection = ref("appearance");
 const newIgnoredApp = ref("");
 const exportStatus = ref("");
+const exportStatusKind = ref<"success" | "error" | "">("");
 const importStatus = ref("");
+const importStatusKind = ref<"success" | "error" | "">("");
 const isExporting = ref(false);
 const isImporting = ref(false);
 const isRecordingShortcut = ref(false);
@@ -654,6 +675,17 @@ const THEMES: { key: string; icon: AppIconName; label: string }[] = [
   { key: "oled", icon: "circle", label: "深黑" },
   { key: "system", icon: "monitor", label: "跟随系统" },
 ];
+
+function focusTheme(index: number) {
+  const len = THEMES.length;
+  const next = ((index % len) + len) % len;
+  const key = THEMES[next].key;
+  update("theme", key);
+  requestAnimationFrame(() => {
+    const el = document.querySelector<HTMLElement>(`.theme-card[data-theme="${key}"]`);
+    el?.focus();
+  });
+}
 
 const APP_MODES = [
   {
@@ -889,6 +921,7 @@ const typeDistribution = computed(() => {
 
 async function exportData() {
   exportStatus.value = "";
+  exportStatusKind.value = "";
   isExporting.value = true;
   try {
     const path = await save({
@@ -899,9 +932,11 @@ async function exportData() {
     // Backend streams JSON to disk — avoids holding the full export in JS/Rust heap.
     await invoke("export_data", { path });
     exportStatus.value = "导出完成，备份文件已保存。";
+    exportStatusKind.value = "success";
   } catch (e) {
     console.error("Export failed:", e);
     exportStatus.value = `导出失败：${String(e)}`;
+    exportStatusKind.value = "error";
   } finally {
     isExporting.value = false;
   }
@@ -909,6 +944,7 @@ async function exportData() {
 
 async function importData() {
   importStatus.value = "";
+  importStatusKind.value = "";
   isImporting.value = true;
   try {
     const path = await open({
@@ -923,9 +959,11 @@ async function importData() {
     }
     const imported = await clipboardStore.importRecords(records);
     importStatus.value = `导入完成：新增 ${imported} 条记录。`;
+    importStatusKind.value = "success";
   } catch (e) {
     console.error("Import failed:", e);
     importStatus.value = `导入失败：${String(e)}`;
+    importStatusKind.value = "error";
   } finally {
     isImporting.value = false;
   }
@@ -1017,7 +1055,7 @@ onUnmounted(() => {
 }
 
 .settings-title {
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   display: inline-flex;
@@ -1071,7 +1109,7 @@ onUnmounted(() => {
   border-left: 2px solid transparent;
   background: transparent;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--text-md);
   line-height: 1;
   text-align: left;
   color: var(--text-secondary);
@@ -1117,7 +1155,7 @@ onUnmounted(() => {
 }
 
 .settings-section-title {
-  font-size: 14px;
+  font-size: var(--text-lg);
   font-weight: 600;
   margin-bottom: 14px;
   color: var(--text-primary);
@@ -1138,13 +1176,13 @@ onUnmounted(() => {
 }
 
 .setting-label {
-  font-size: 12.5px;
+  font-size: var(--text-md);
   color: var(--text-primary);
   flex: 1;
 }
 
 .setting-desc {
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   margin-top: 2px;
 }
@@ -1190,7 +1228,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 5px 12px;
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
   color: var(--text-secondary);
   min-width: 140px;
@@ -1219,7 +1257,7 @@ onUnmounted(() => {
   background: var(--bg-active);
   padding: 3px 8px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -1238,7 +1276,7 @@ onUnmounted(() => {
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   padding: 4px 10px;
   border-radius: calc(var(--radius-sm) - 1px);
   cursor: pointer;
@@ -1262,7 +1300,7 @@ onUnmounted(() => {
 }
 
 .slider-value {
-  font-size: 12px;
+  font-size: var(--text-md);
   font-family: var(--font-mono);
   color: var(--accent);
   min-width: 50px;
@@ -1316,6 +1354,11 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent-soft);
 }
 
+.theme-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .theme-preview {
   width: 100%;
   height: 36px;
@@ -1329,7 +1372,7 @@ input[type="range"]::-webkit-slider-thumb {
 .theme-system { background: linear-gradient(135deg, #181a22 50%, #ffffff 50%); }
 
 .theme-name {
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   display: inline-flex;
@@ -1374,13 +1417,13 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .mode-title {
-  font-size: 13px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .mode-desc {
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.4;
 }
@@ -1403,13 +1446,13 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .auto-tag-panel-title {
-  font-size: 12px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .auto-tag-panel-meta {
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -1429,7 +1472,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .auto-tag-empty p {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.5;
   max-width: 260px;
 }
@@ -1476,7 +1519,7 @@ input[type="range"]::-webkit-slider-thumb {
 .auto-tag-rule-index {
   flex: 1;
   min-width: 0;
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-secondary);
@@ -1509,7 +1552,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .auto-tag-field-label {
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   font-weight: 500;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1524,7 +1567,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: var(--radius-sm);
   background: var(--bg-input);
   color: var(--text-primary);
-  font-size: 12.5px;
+  font-size: var(--text-md);
   transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
@@ -1544,7 +1587,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .auto-tag-input-mono {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 
 .auto-tag-keyword-chips {
@@ -1559,7 +1602,7 @@ input[type="range"]::-webkit-slider-thumb {
   max-width: 100%;
   padding: 2px 7px;
   border-radius: 999px;
-  font-size: 10.5px;
+  font-size: var(--text-xs);
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1588,7 +1631,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 999px;
   background: var(--bg-input);
   color: var(--text-secondary);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   cursor: pointer;
   transition:
     background var(--transition-fast),
@@ -1647,12 +1690,12 @@ input[type="range"]::-webkit-slider-thumb {
 
 .ignore-name {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--text-md);
   color: var(--text-secondary);
 }
 
 .ignore-remove {
-  font-size: 12px;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
   cursor: pointer;
   padding: 2px 6px;
@@ -1677,7 +1720,7 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 0 10px;
-  font-size: 12px;
+  font-size: var(--text-md);
   color: var(--text-primary);
   transition: border-color var(--transition-fast), background var(--transition-smooth);
 }
@@ -1692,7 +1735,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent);
   color: white;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: background var(--transition-fast);
@@ -1726,7 +1769,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .stats-value {
   font-family: var(--font-mono);
-  font-size: 24px;
+  font-size: 1.5rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -1738,7 +1781,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .stats-label {
   margin-top: 6px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -1752,7 +1795,7 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex;
   justify-content: space-between;
   margin-bottom: 5px;
-  font-size: 11.5px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -1796,7 +1839,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: var(--radius-sm);
   background: var(--bg-active);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
   line-height: 1.4;
   word-break: break-all;
@@ -1809,12 +1852,17 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11.5px;
+  font-size: var(--text-sm);
 }
 
 .status-line.success {
   background: var(--success-soft);
   color: var(--success);
+}
+
+.status-line.error {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 /* Help / Guide */
@@ -1830,7 +1878,7 @@ input[type="range"]::-webkit-slider-thumb {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12.5px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 6px;
@@ -1841,7 +1889,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .guide-text {
-  font-size: 12px;
+  font-size: var(--text-md);
   line-height: 1.7;
   color: var(--text-secondary);
 }
@@ -1852,7 +1900,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: 4px;
   background: var(--bg-active);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -1877,20 +1925,41 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .about-name {
-  font-size: 22px;
+  font-size: 1.375rem;
   font-weight: 700;
   margin-bottom: 4px;
 }
 
 .about-version {
-  font-size: 12px;
+  font-size: var(--text-md);
   color: var(--accent);
   font-family: var(--font-mono);
   margin-bottom: 8px;
 }
 
 .about-desc {
-  font-size: 12px;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
+}
+
+@media (max-width: 720px) {
+  .settings-nav {
+    width: 56px;
+    padding: 8px 0 12px;
+  }
+
+  .settings-nav .nav-item {
+    justify-content: center;
+    padding: 10px 8px;
+  }
+
+  .settings-nav .nav-label {
+    display: none;
+  }
+
+  .theme-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 }
 </style>

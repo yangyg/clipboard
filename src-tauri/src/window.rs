@@ -29,7 +29,8 @@ fn monitor_work_area_logical(window: &tauri::WebviewWindow) -> (f64, f64) {
 /// stay usable and large 4K screens don't open a huge panel.
 fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (f64, f64) {
     let (frac_w, frac_h, min_w, min_h, max_w, max_h) = if is_window_mode {
-        (0.55, 0.72, 720.0, 520.0, 1280.0, 900.0)
+        // Window mode needs ≥760 so SideBar(200)+List(240)+Preview(300) fit.
+        (0.55, 0.72, 760.0, 520.0, 1280.0, 900.0)
     } else {
         (0.40, 0.65, 480.0, 480.0, 800.0, 780.0)
     };
@@ -47,7 +48,7 @@ fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (
 
 pub(crate) fn mode_size_bounds(is_window_mode: bool) -> (f64, f64, f64, f64) {
     if is_window_mode {
-        (480.0, 400.0, 1600.0, 1200.0)
+        (760.0, 400.0, 1600.0, 1200.0)
     } else {
         (400.0, 400.0, 1000.0, 900.0)
     }

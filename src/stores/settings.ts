@@ -122,8 +122,12 @@ export const useSettingsStore = defineStore("settings", () => {
     // Panel opacity (used as CSS variable)
     root.style.setProperty("--panel-opacity", String(s.panel_opacity / 100));
 
-    // Blur effect
-    if (s.enable_blur) {
+    // App mode class (used for blur / layout performance gates)
+    document.body.classList.toggle("mode-window", s.app_mode === "window");
+    document.body.classList.toggle("mode-floating", s.app_mode !== "window");
+
+    // Blur: floating only — full-viewport blur in window mode is too expensive
+    if (s.enable_blur && s.app_mode !== "window") {
       document.body.classList.add("blur-enabled");
     } else {
       document.body.classList.remove("blur-enabled");
@@ -143,7 +147,11 @@ export const useSettingsStore = defineStore("settings", () => {
       applyTheme(value as Settings["theme"]);
     }
     // Apply appearance changes immediately for real-time preview
-    if (["font_size", "panel_radius", "panel_opacity", "enable_blur", "enable_animation"].includes(key)) {
+    if (
+      ["font_size", "panel_radius", "panel_opacity", "enable_blur", "enable_animation", "app_mode"].includes(
+        key as string,
+      )
+    ) {
       applyAppearance();
     }
     // Auto-save is handled by the deep watch below

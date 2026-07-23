@@ -74,7 +74,7 @@
         <div class="link-card">
           <div class="link-icon"><AppIcon name="link" :size="22" /></div>
           <div class="link-title">网页链接</div>
-          <a class="link-url" :href="record.content" target="_blank">{{ record.content }}</a>
+          <a class="link-url" :href="record.content" target="_blank" rel="noopener noreferrer">{{ record.content }}</a>
         </div>
       </template>
 
@@ -136,15 +136,16 @@
 
     <!-- Actions -->
     <div class="preview-actions" v-if="record && !record.is_trashed">
-      <button class="action-btn" @click="paste">
+      <button type="button" class="action-btn action-primary" @click="paste">
         <span class="action-icon"><AppIcon name="paste" :size="15" /></span>
         <span class="action-label">粘贴</span>
       </button>
-      <button class="action-btn" @click="pastePlain">
+      <button type="button" class="action-btn" @click="pastePlain">
         <span class="action-icon"><AppIcon name="type" :size="15" /></span>
         <span class="action-label">纯文本</span>
       </button>
       <button
+        type="button"
         class="action-btn"
         :class="{ 'action-active': record.is_favorite }"
         @click="favorite"
@@ -153,6 +154,7 @@
         <span class="action-label">{{ record.is_favorite ? '已收藏' : '收藏' }}</span>
       </button>
       <button
+        type="button"
         class="action-btn"
         :class="{ 'action-active': record.is_pinned }"
         @click="pin"
@@ -160,19 +162,17 @@
         <span class="action-icon"><AppIcon name="pin" :size="15" :fill="record.is_pinned ? 'currentColor' : 'none'" /></span>
         <span class="action-label">{{ record.is_pinned ? '已置顶' : '置顶' }}</span>
       </button>
-      <button class="action-btn danger" @click="del">
+      <button type="button" class="action-btn action-icon-only danger" aria-label="删除" title="删除" @click="del">
         <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
-        <span class="action-label">删除</span>
       </button>
     </div>
     <div class="preview-actions trash-actions" v-if="record && record.is_trashed">
-      <button class="action-btn" @click="restore">
+      <button type="button" class="action-btn action-primary" @click="restore">
         <span class="action-icon"><AppIcon name="restore" :size="15" /></span>
         <span class="action-label">恢复</span>
       </button>
-      <button class="action-btn danger" @click="permanentDel">
+      <button type="button" class="action-btn action-icon-only danger" aria-label="永久删除" title="永久删除" @click="permanentDel">
         <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
-        <span class="action-label">永久删除</span>
       </button>
     </div>
   </div>
@@ -451,28 +451,28 @@ async function permanentDel() {
 }
 
 .preview-type-icon.text {
-  background: rgba(79, 110, 247, 0.1);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--type-text) 15%, transparent);
+  color: var(--type-text);
 }
 
 .preview-type-icon.code {
-  background: rgba(124, 92, 252, 0.1);
-  color: #7c5cfc;
+  background: color-mix(in srgb, var(--type-code) 15%, transparent);
+  color: var(--type-code);
 }
 
 .preview-type-icon.link {
-  background: rgba(23, 192, 146, 0.1);
-  color: #17a97b;
+  background: color-mix(in srgb, var(--type-link) 15%, transparent);
+  color: var(--type-link);
 }
 
 .preview-type-icon.image {
-  background: rgba(232, 125, 62, 0.1);
-  color: #e87d3e;
+  background: color-mix(in srgb, var(--type-image) 15%, transparent);
+  color: var(--type-image);
 }
 
 .preview-type-icon.file {
-  background: rgba(232, 106, 51, 0.1);
-  color: #e86a33;
+  background: color-mix(in srgb, var(--type-file) 15%, transparent);
+  color: var(--type-file);
 }
 
 .preview-heading {
@@ -550,7 +550,7 @@ async function permanentDel() {
 /* Sensitive Warning */
 .sensitive-warning {
   background: var(--danger-soft);
-  border-bottom: 1px solid rgba(242, 85, 85, 0.2);
+  border-bottom: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
   padding: 6px 12px;
   display: flex;
   align-items: center;
@@ -801,7 +801,7 @@ async function permanentDel() {
   padding: 12px 20px 20px;
   border-top: 1px solid var(--border-light, var(--border-subtle));
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: 1.5fr repeat(3, 1fr) auto;
   gap: 8px;
 }
 
@@ -809,6 +809,7 @@ async function permanentDel() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 10px 4px;
   border-radius: var(--radius-md, 10px);
@@ -816,29 +817,58 @@ async function permanentDel() {
   background: var(--bg-card, var(--bg-surface));
   cursor: pointer;
   transition: all var(--transition-fast);
+  font-family: inherit;
 }
 
 .action-btn:hover {
   background: var(--accent-soft);
-  border-color: rgba(79, 110, 247, 0.25);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .action-btn:hover .action-label {
   color: var(--accent);
 }
 
+.action-btn.action-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.action-btn.action-primary .action-label {
+  color: #fff;
+}
+
+.action-btn.action-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.action-btn.action-primary:hover .action-label {
+  color: #fff;
+}
+
 .action-btn.action-active {
   background: var(--warning-soft);
-  border-color: rgba(245, 166, 35, 0.2);
+  border-color: color-mix(in srgb, var(--warning) 20%, transparent);
 }
 
 .action-btn.action-active .action-label {
   color: var(--warning);
 }
 
+.action-btn.action-icon-only {
+  padding: 10px;
+  min-width: 42px;
+}
+
+.action-btn.danger {
+  color: var(--danger);
+}
+
 .action-btn.danger:hover {
   background: var(--danger-soft);
-  border-color: rgba(242, 85, 85, 0.2);
+  border-color: color-mix(in srgb, var(--danger) 20%, transparent);
 }
 
 .action-btn.danger:hover .action-label {
@@ -846,17 +876,30 @@ async function permanentDel() {
 }
 
 .trash-actions {
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1.5fr auto;
 }
 
 .action-icon {
   font-size: 1.125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .action-label {
-  font-size: 0.688rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-secondary);
   transition: color var(--transition-fast);
+}
+
+@media (max-width: 720px) {
+  .preview-actions:not(.trash-actions) {
+    grid-template-columns: 1.4fr 1fr 1fr auto;
+  }
+
+  .preview-actions:not(.trash-actions) .action-btn:nth-child(4) {
+    display: none;
+  }
 }
 </style>

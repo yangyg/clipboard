@@ -1,0 +1,89 @@
+<template>
+  <div class="batch-bar">
+    <div class="batch-info">
+      <AppIcon name="batch" :size="13" />
+      已选择 <strong>{{ clipboardStore.selectedIds.size }}</strong> 项
+    </div>
+    <div class="batch-actions">
+      <button type="button" class="batch-btn" @click="batchCopy">
+        <AppIcon name="copy" :size="13" /> 复制
+      </button>
+      <button type="button" class="batch-btn" @click="batchFavorite">
+        <AppIcon name="star" :size="13" /> 收藏
+      </button>
+      <button type="button" class="batch-btn danger" @click="batchDelete">
+        <AppIcon name="trash" :size="13" /> 删除
+      </button>
+      <button type="button" class="batch-btn" :aria-label="'退出批量'" @click="toggleBatchMode">
+        <AppIcon name="close" :size="13" />
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import AppIcon from "./icons/AppIcon.vue";
+import { useClipboardStore } from "../stores/clipboard";
+import { useBatchActions } from "../composables/useBatchActions";
+
+const clipboardStore = useClipboardStore();
+const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActions();
+</script>
+
+<style scoped>
+.batch-bar {
+  padding: 8px 14px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.batch-info {
+  font-size: var(--text-sm);
+  color: var(--accent);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.batch-btn {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.batch-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.batch-btn.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
+.batch-btn.danger:hover {
+  filter: brightness(1.05);
+}
+</style>

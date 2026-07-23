@@ -10,6 +10,8 @@
         class="nav-item"
         :class="{ active: props.activeCategory === item.key }"
         :aria-current="props.activeCategory === item.key ? 'page' : undefined"
+        :title="item.label"
+        :aria-label="item.label"
         @click="selectCategory(item.key)"
       >
         <span class="nav-icon">
@@ -31,6 +33,8 @@
         class="nav-item"
         :class="{ active: props.activeCategory === 'trash' }"
         :aria-current="props.activeCategory === 'trash' ? 'page' : undefined"
+        title="回收站"
+        aria-label="回收站"
         @click="selectCategory('trash')"
       >
         <span class="nav-icon"><AppIcon name="trash" :size="15" /></span>
@@ -50,6 +54,8 @@
           class="tag-item"
           :class="{ active: props.activeTag === tag.name }"
           :aria-pressed="props.activeTag === tag.name"
+          :title="tag.name"
+          :aria-label="tag.name"
           @click="selectTag(tag.name)"
           @contextmenu.prevent.stop="showTagMenu($event, tag)"
         >
@@ -59,8 +65,8 @@
           <span class="tag-count">{{ tag.count }}</span>
         </button>
       </div>
-      <button type="button" class="tag-add" @click="$emit('addTag')">
-        <AppIcon name="plus" :size="13" /> 新建标签
+        <button type="button" class="tag-add" title="新建标签" aria-label="新建标签" @click="$emit('addTag')">
+        <AppIcon name="plus" :size="13" /> <span class="tag-add-label">新建标签</span>
       </button>
     </div>
 
@@ -97,29 +103,24 @@
       </button>
     </div>
 
-    <!-- Tag context menu -->
-    <div
-      v-if="tagMenu.visible"
-      class="context-menu"
-      :style="{ left: tagMenu.x + 'px', top: tagMenu.y + 'px' }"
-      @click.stop
-    >
-      <div class="ctx-item" @click="onEdit">
-        <span class="ctx-icon"><AppIcon name="edit" :size="14" /></span>编辑
-      </div>
-      <div class="ctx-sep"></div>
-      <div class="ctx-item danger" @click="onDelete">
-        <span class="ctx-icon"><AppIcon name="trash" :size="14" /></span>删除
-      </div>
-    </div>
+    <ContextMenu
+      :visible="tagMenu.visible"
+      :x="tagMenu.x"
+      :y="tagMenu.y"
+      :width="140"
+      :items="tagMenuItems"
+      @close="closeTagMenu"
+      @select="onTagMenuSelect"
+    />
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive } from "vue";
+import { computed, reactive } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
+import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
@@ -156,6 +157,11 @@ const tagMenu = reactive({
   tag: null as Tag | null,
 });
 
+const tagMenuItems: ContextMenuItem[] = [
+  { id: "edit", label: "编辑", icon: "edit" },
+  { id: "delete", label: "删除", icon: "trash", danger: true, separatorBefore: true },
+];
+
 const categoryItems = computed(() => [
   { key: "all", icon: "clipboard" as AppIconName, label: "全部剪贴板", count: clipboardStore.filterCounts.all },
   { key: "text", icon: "type" as AppIconName, label: "文本", count: clipboardStore.filterCounts.text },
@@ -180,10 +186,8 @@ function selectTag(name: string) {
 }
 
 function showTagMenu(e: MouseEvent, tag: Tag) {
-  const menuW = 140;
-  const menuH = 80;
-  tagMenu.x = Math.min(e.clientX, window.innerWidth - menuW - 8);
-  tagMenu.y = Math.min(e.clientY, window.innerHeight - menuH - 8);
+  tagMenu.x = e.clientX;
+  tagMenu.y = e.clientY;
   tagMenu.tag = tag;
   tagMenu.visible = true;
 }
@@ -193,27 +197,11 @@ function closeTagMenu() {
   tagMenu.tag = null;
 }
 
-function onEdit() {
-  if (tagMenu.tag) emit("editTag", tagMenu.tag);
-  closeTagMenu();
+function onTagMenuSelect(id: string) {
+  if (!tagMenu.tag) return;
+  if (id === "edit") emit("editTag", tagMenu.tag);
+  if (id === "delete") emit("deleteTag", tagMenu.tag);
 }
-
-function onDelete() {
-  if (tagMenu.tag) emit("deleteTag", tagMenu.tag);
-  closeTagMenu();
-}
-
-function onGlobalClick() {
-  if (tagMenu.visible) closeTagMenu();
-}
-
-onMounted(() => {
-  window.addEventListener("click", onGlobalClick);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("click", onGlobalClick);
-});
 </script>
 
 <style scoped>
@@ -245,8 +233,7 @@ onUnmounted(() => {
 .sidebar-label {
   font-size: 0.625rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.02em;
   color: var(--text-tertiary);
   padding: 0 8px 6px;
 }
@@ -429,52 +416,40 @@ onUnmounted(() => {
   background: var(--warning-soft);
 }
 
-.context-menu {
-  position: fixed;
-  width: 140px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default, var(--border-subtle));
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: 6px;
-  z-index: 200;
-}
+/* Narrow window: icon rail */
+@media (max-width: 720px) {
+  .sidebar {
+    width: 56px;
+    min-width: 56px;
+  }
 
-.ctx-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  font-size: 0.75rem;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
+  .sidebar-label,
+  .nav-label,
+  .nav-count,
+  .tag-name,
+  .tag-count,
+  .tag-auto-badge {
+    display: none;
+  }
 
-.ctx-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
+  .nav-item,
+  .tag-item {
+    justify-content: center;
+    padding: 8px;
+  }
 
-.ctx-item.danger {
-  color: var(--danger);
-}
+  .tag-add {
+    justify-content: center;
+    padding: 8px;
+  }
 
-.ctx-item.danger:hover {
-  background: var(--danger-soft);
-}
+  .tag-add-label {
+    display: none;
+  }
 
-.ctx-icon {
-  width: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ctx-sep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border-subtle);
+  .sidebar-bottom {
+    flex-direction: column;
+    align-items: center;
+  }
 }
 </style>

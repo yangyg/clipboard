@@ -3,8 +3,7 @@
     <!-- Title Bar -->
     <div class="titlebar" data-tauri-drag-region @dblclick="onTitlebarDblClick">
       <div class="titlebar-left">
-        <span class="titlebar-title">剪贴板管理</span>
-        <span class="titlebar-version">v0.1.0</span>
+        <span class="titlebar-title">ClipVault</span>
       </div>
 
       <div class="titlebar-center" data-tauri-drag-region>
@@ -67,17 +66,7 @@
         </div>
 
         <Transition name="fade">
-          <div v-if="clipboardStore.batchMode" class="batch-bar">
-            <div class="batch-info">
-              已选择 <strong>{{ clipboardStore.selectedIds.size }}</strong> 项
-            </div>
-            <div class="batch-actions">
-              <button class="batch-btn" @click="batchCopy"><AppIcon name="copy" :size="13" /> 复制</button>
-              <button class="batch-btn" @click="batchFavorite"><AppIcon name="star" :size="13" /> 收藏</button>
-              <button class="batch-btn danger" @click="batchDelete"><AppIcon name="trash" :size="13" /> 删除</button>
-              <button class="batch-btn" @click="toggleBatchMode"><AppIcon name="close" :size="13" /></button>
-            </div>
-          </div>
+          <BatchBar v-if="clipboardStore.batchMode" />
         </Transition>
 
         <RecordList />
@@ -100,6 +89,7 @@ import SideBar from "./SideBar.vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import TagDialog from "./TagDialog.vue";
+import BatchBar from "./BatchBar.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
 import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/clipboard";
@@ -113,7 +103,7 @@ import type { Tag } from "../types";
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
-const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActions();
+const { toggleBatchMode } = useBatchActions();
 const appWindow = getCurrentWindow();
 
 defineEmits<{
@@ -307,15 +297,6 @@ async function onEmptyTrash() {
   color: var(--text-primary);
 }
 
-.titlebar-version {
-  font-size: 0.66rem;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  padding: 2px 7px;
-  background: var(--bg-surface);
-  border-radius: 20px;
-}
-
 .titlebar-center {
   flex: 1;
   display: flex;
@@ -449,48 +430,5 @@ async function onEmptyTrash() {
 .list-header-btn.active {
   background: var(--accent-soft);
   color: var(--accent);
-}
-
-.batch-bar {
-  padding: 8px 16px;
-  background: var(--accent-soft);
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.batch-info {
-  font-size: 0.72rem;
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.batch-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.batch-btn {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.69rem;
-  font-weight: 500;
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
-  cursor: pointer;
-}
-
-.batch-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
-.batch-btn.danger {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 </style>

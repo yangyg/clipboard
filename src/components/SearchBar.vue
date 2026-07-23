@@ -6,15 +6,16 @@
       v-model="query"
       class="search-box"
       type="text"
+      aria-label="搜索剪贴板"
       :placeholder="compact ? '搜索剪贴板内容…' : '搜索剪贴板历史…'"
       @focus="isFocused = true"
       @blur="isFocused = false"
       @input="onInput"
       @keydown.escape.stop.prevent="onEscapeInSearch"
     />
-    <span v-if="!query && !isFocused" class="search-kbd">{{ searchHint }}</span>
-    <span v-if="clipboardStore.isSearching" class="search-spinner"></span>
-    <button v-if="query" class="clear-btn" @click="clearSearch"><AppIcon name="close" :size="11" /></button>
+    <span v-if="!query && !isFocused" class="search-kbd" aria-hidden="true">{{ searchHint }}</span>
+    <span v-if="clipboardStore.isSearching" class="search-spinner" aria-label="搜索中"></span>
+    <button v-if="query" type="button" class="clear-btn" aria-label="清除搜索" @click="clearSearch"><AppIcon name="close" :size="11" /></button>
   </div>
 </template>
 

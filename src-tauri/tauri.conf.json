@@ -28,9 +28,9 @@
       {
         "label": "tray-menu",
         "title": "ClipVault Tray Menu",
-        "url": "tray-menu.html",
-        "width": 260,
-        "height": 220,
+          "url": "tray-menu.html",
+          "width": 176,
+          "height": 148,
         "resizable": false,
         "decorations": false,
         "transparent": true,

@@ -1,6 +1,6 @@
 <template>
   <div class="tray-shell" ref="root" tabindex="0" @keydown="onKeydown">
-    <div class="tray-menu panel-surface" role="menu">
+    <div class="tray-menu" ref="menuEl" role="menu">
       <template v-for="(item, index) in items" :key="item.id">
         <div v-if="item.separatorBefore" class="sep" role="separator" />
         <button
@@ -12,7 +12,7 @@
           @mouseenter="focusIndex = index"
         >
           <span class="icon"><AppIcon :name="item.icon" :size="14" /></span>
-          {{ item.label }}
+          <span class="label">{{ item.label }}</span>
         </button>
       </template>
     </div>
@@ -23,6 +23,7 @@
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import AppIcon from "./components/icons/AppIcon.vue";
 import { buildTrayMenuItems, type TrayMenuItemDef } from "./utils/trayMenuItems";
@@ -34,7 +35,10 @@ interface TrayMenuState {
   panel_opacity: number;
 }
 
+const MENU_WIDTH = 176;
+
 const root = ref<HTMLElement | null>(null);
+const menuEl = ref<HTMLElement | null>(null);
 const items = ref<TrayMenuItemDef[]>([]);
 const focusIndex = ref(0);
 const appWindow = getCurrentWindow();
@@ -68,6 +72,19 @@ async function refreshState() {
   const state = await invoke<TrayMenuState>("get_tray_menu_state");
   applyChrome(state);
   applyPaused(state.paused);
+}
+
+async function fitWindowToContent() {
+  await nextTick();
+  const el = menuEl.value ?? root.value;
+  if (!el) return;
+  const height = Math.ceil(el.getBoundingClientRect().height);
+  if (height <= 0) return;
+  try {
+    await appWindow.setSize(new LogicalSize(MENU_WIDTH, height));
+  } catch (e) {
+    console.error("tray-menu setSize failed:", e);
+  }
 }
 
 async function focusRoot() {
@@ -119,6 +136,7 @@ onMounted(async () => {
     applyPaused(false);
   }
   focusIndex.value = 0;
+  await fitWindowToContent();
   await focusRoot();
 
   unlisteners.push(
@@ -129,13 +147,15 @@ onMounted(async () => {
         console.error("get_tray_menu_state failed:", e);
       }
       focusIndex.value = 0;
+      await fitWindowToContent();
       await focusRoot();
     }),
   );
 
   unlisteners.push(
-    await listen<boolean>("capture-paused", (event) => {
+    await listen<boolean>("capture-paused", async (event) => {
       applyPaused(!!event.payload);
+      await fitWindowToContent();
     }),
   );
 
@@ -146,6 +166,7 @@ onMounted(async () => {
       } catch (e) {
         console.error("get_tray_menu_state failed:", e);
       }
+      await fitWindowToContent();
     }),
   );
 
@@ -163,29 +184,52 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* Size to content — do not stretch to window height (avoids bottom blank) */
 .tray-shell {
-  padding: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  margin: 0;
+  padding: 0;
   background: transparent;
   outline: none;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
 }
 
+/* Own surface styles — avoid .panel-surface (--panel-radius clash) */
 .tray-menu {
-  width: 220px;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  padding: 6px;
+  overflow: hidden;
+  background: color-mix(
+    in srgb,
+    var(--bg-surface) calc(var(--panel-opacity, 0.94) * 100%),
+    transparent
+  );
+  border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: var(--radius-lg);
-  padding: 8px;
+  box-shadow: var(--shadow-lg);
+}
+
+:global(body.blur-enabled) .tray-menu {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 7px 8px;
   font-size: var(--text-md);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
   background: transparent;
   border: none;
   font-family: inherit;
@@ -211,16 +255,23 @@ onUnmounted(() => {
 }
 
 .icon {
-  width: 16px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  color: inherit;
+}
+
+.label {
+  min-width: 0;
+  line-height: 1.25;
 }
 
 .sep {
   height: 1px;
-  margin: 4px 6px;
+  margin: 4px 4px;
   background: var(--border-subtle);
 }
 </style>

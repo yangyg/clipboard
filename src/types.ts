@@ -4,7 +4,7 @@
 //   ClipboardRecord, Settings, StatsData, TagInfo, SearchResult
 // ============================================================
 
-export type ContentType = 'text' | 'code' | 'link' | 'image' | 'file' | 'sensitive';
+export type ContentType = 'text' | 'code' | 'link' | 'image' | 'file';
 
 export interface ClipboardRecord {
   id: number;
@@ -142,5 +142,5 @@ export interface StatsData {
   storage_bytes: number;
   /** Absolute path to app data directory (DB + media). */
   data_path: string;
-  type_distribution: Record<ContentType, number>;
+  type_distribution: Record<string, number>;
 }

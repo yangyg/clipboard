@@ -240,6 +240,11 @@ fn clipboard_has_bitmap_format() -> bool {
 }
 
 /// Width/height/len + sampled bytes — enough to skip unchanged images cheaply.
+/// Cheap change-detection fingerprint for clipboard bitmaps (poll thread).
+/// Hashes width/height/len + first/last 2KB of RGBA — not cryptographic uniqueness.
+/// Collision risk: two different images with identical size and matching edge
+/// samples (e.g. large near-solid screenshots) may be treated as unchanged;
+/// full SHA-256 still runs on the capture worker when we do emit.
 fn image_quick_fingerprint(img: &arboard::ImageData<'_>) -> String {
     use sha2::{Digest, Sha256};
     let bytes = img.bytes.as_ref();
@@ -342,13 +347,12 @@ fn maybe_emit_text(
 }
 
 /// Simulate Ctrl+V after clipboard content has been set.
+/// Caller should delay (~80ms) after focusing the target so the window is ready.
 #[cfg(windows)]
-pub fn simulate_paste() {
+pub fn simulate_paste_keys() {
     use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
         keybd_event, KEYEVENTF_KEYUP, VK_CONTROL, VK_V,
     };
-
-    thread::sleep(Duration::from_millis(80));
 
     unsafe {
         keybd_event(VK_CONTROL as u8, 0, 0, 0);
@@ -356,6 +360,20 @@ pub fn simulate_paste() {
         keybd_event(VK_V as u8, 0, KEYEVENTF_KEYUP, 0);
         keybd_event(VK_CONTROL as u8, 0, KEYEVENTF_KEYUP, 0);
     }
+}
+
+/// Focus delay + key simulation (blocking). Prefer async sleep + [`simulate_paste_keys`]
+/// on the Tauri command path so the blocking pool is not held during sleep.
+#[cfg(windows)]
+#[allow(dead_code)]
+pub fn simulate_paste() {
+    thread::sleep(Duration::from_millis(80));
+    simulate_paste_keys();
+}
+
+#[cfg(not(windows))]
+pub fn simulate_paste_keys() {
+    warn!("Paste simulation not available on this platform");
 }
 
 #[cfg(not(windows))]

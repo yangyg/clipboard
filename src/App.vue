@@ -125,7 +125,7 @@ onMounted(async () => {
     }
   });
 
-  // Sensitive auto-expire deleted in Rust (throttled cleanup) → sync list
+  // Sensitive auto-expire deleted in Rust (periodic cleanup thread) → sync list
   await listen<number[]>("records-expired", (event) => {
     clipboardStore.removeExpiredFromList(event.payload ?? []);
     clipboardStore.scheduleLoadStats();

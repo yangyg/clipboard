@@ -140,7 +140,7 @@ import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
-import type { ClipboardRecord, ContentType } from "../types";
+import type { ClipboardRecord } from "../types";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { recordThumbSrc } from "../utils/mediaUrl";
@@ -201,19 +201,19 @@ async function fillViewportIfNeeded() {
 }
 
 watch(
-  () => [clipboardStore.records.length, clipboardStore.hasMore, clipboardStore.isLoading] as const,
-  () => {
-    if (!clipboardStore.isLoading) void fillViewportIfNeeded();
+  () => clipboardStore.isLoading,
+  (loading, wasLoading) => {
+    // Only fill after a load finishes — avoids re-entry on hasMore / length churn.
+    if (wasLoading && !loading) void fillViewportIfNeeded();
   }
 );
 
-const TYPE_LABELS: Record<ContentType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   text: '文本',
   code: '代码',
   link: '链接',
   image: '图片',
   file: '文件',
-  sensitive: '敏感',
 };
 
 function isTextLike(type: string): boolean {

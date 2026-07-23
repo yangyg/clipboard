@@ -23,8 +23,11 @@ pub async fn get_records(
     favorites_only: Option<bool>,
     tag: Option<String>,
     sort: Option<String>,
+    before_pinned: Option<i32>,
+    before_updated_at: Option<String>,
+    before_id: Option<i64>,
 ) -> Result<RecordsPage, String> {
-    // Cleanup runs on capture / expire sweep — keep list reads off the hot path.
+    // Cleanup runs on the periodic thread — keep list reads off the hot path.
     let limit = limit.unwrap_or(60).max(1);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
@@ -37,6 +40,9 @@ pub async fn get_records(
             favorites_only.unwrap_or(false),
             tag.as_deref(),
             sort.as_deref(),
+            before_pinned,
+            before_updated_at.as_deref(),
+            before_id,
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
@@ -149,6 +155,10 @@ pub async fn paste_record(
 ) -> Result<(), String> {
     use tauri::Manager;
 
+    // Serialize paste (async mutex — safe to hold across .await).
+    static PASTE_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _paste_guard = PASTE_GATE.lock().await;
+
     let settings = state.db.get_settings().unwrap_or_default();
     let is_floating = settings.app_mode != "window";
     let auto_close = settings.auto_close_on_paste;
@@ -165,15 +175,13 @@ pub async fn paste_record(
     let monitor = state.monitor.clone();
     let media_root = state.db.media_root().to_path_buf();
 
-    // DB + disk + clipboard OS APIs + keybd sleep — keep them off the async runtime.
-    let wrote = tokio::task::spawn_blocking(move || {
+    // DB + disk + clipboard + focus — no thread::sleep inside spawn_blocking.
+    let outcome = tokio::task::spawn_blocking(move || {
         let record = db.take_record_for_paste(id).map_err(|e| e.to_string())?;
         let Some(r) = record else {
-            return Ok::<_, String>(false);
+            return Ok::<_, String>(PasteOutcome::Missing);
         };
 
-        // Paste writes the OS clipboard; suppress re-capture so CF_HTML / plain
-        // round-trips don't create a duplicate row (hash includes HTML).
         monitor
             .read()
             .suppress_self_writes(std::time::Duration::from_millis(1500));
@@ -202,22 +210,30 @@ pub async fn paste_record(
 
         let target = clipboard::paste_target_hwnd();
         let focused = target.map(clipboard::focus_window).unwrap_or(false);
-        if focused {
-            clipboard::simulate_paste();
-        } else {
+        if !focused {
             warn!(
                 "Paste target unavailable (hwnd={:?}); clipboard updated, skipped Ctrl+V",
                 target
             );
         }
-
-        Ok(true)
+        Ok(PasteOutcome::Ready { focused })
     })
     .await
     .map_err(|e| format!("paste task join error: {e}"))??;
 
+    match outcome {
+        PasteOutcome::Missing => return Ok(()),
+        PasteOutcome::Ready { focused } => {
+            if focused {
+                // Async delay — does not occupy a blocking-pool worker.
+                tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+                clipboard::simulate_paste_keys();
+            }
+        }
+    }
+
     // Floating + keep panel open: bring ourselves back after pasting into the target.
-    if wrote && is_floating && !auto_close {
+    if is_floating && !auto_close {
         if let Some(window) = app.get_webview_window("main") {
             let our = window.hwnd().ok().map(|h| h.0 as isize);
             clipboard::remember_paste_target(our);
@@ -228,6 +244,11 @@ pub async fn paste_record(
     }
 
     Ok(())
+}
+
+enum PasteOutcome {
+    Missing,
+    Ready { focused: bool },
 }
 
 #[tauri::command]

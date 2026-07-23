@@ -62,13 +62,13 @@ pub struct ImageMeta {
 const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, content_html,
-               COALESCE(NULLIF(content_len, 0), length(content)) as content_len";
+               content_len";
 
-/// List/search: omit HTML, truncate content for IPC/memory; content_len from column (no full TEXT scan).
+/// List/search: omit HTML, truncate content for IPC/memory; prefer content_len column.
 const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, NULL as content_html,
-               COALESCE(NULLIF(content_len, 0), length(content)) as content_len";
+               content_len";
 
 pub struct ClipboardDb {
     /// Writer connection (schema, inserts, updates, deletes).
@@ -265,13 +265,37 @@ impl ClipboardDb {
             .replace('_', "\\_")
     }
 
-    /// FTS5 trigram needs ≥3 chars; quote + escape `"` for MATCH.
+    /// FTS5 trigram: substring MATCH needs ≥3 chars. Returns quoted token.
     fn build_fts_match(query: &str) -> Option<String> {
         let q = query.trim();
         if q.chars().count() < 3 {
             return None;
         }
         Some(format!("\"{}\"", q.replace('"', "\"\"")))
+    }
+
+    /// Short (1–2 char) search: one `instr` pass over records + tag EXISTS.
+    /// Avoids leading-wildcard `LIKE '%X%'` which cannot use indexes and multiplies scans.
+    fn push_short_query_predicate(
+        sql: &mut String,
+        params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+        query: &str,
+    ) {
+        sql.push_str(
+            "instr(content, ?) > 0
+             OR instr(source_app, ?) > 0
+             OR instr(source_window, ?) > 0
+             OR EXISTS (
+                SELECT 1 FROM record_tags rt
+                INNER JOIN tags t ON t.id = rt.tag_id
+                WHERE rt.record_id = records.id AND instr(t.name, ?) > 0
+             )",
+        );
+        let q = query.to_string();
+        params.push(Box::new(q.clone()));
+        params.push(Box::new(q.clone()));
+        params.push(Box::new(q.clone()));
+        params.push(Box::new(q));
     }
 
     /// Whitelist sort keys → ORDER BY fragment. Unknown values fall back to updated_desc.
@@ -579,6 +603,10 @@ impl ClipboardDb {
         favorites_only: bool,
         tag_name: Option<&str>,
         sort: Option<&str>,
+        // Keyset cursor (preferred over OFFSET when list mutates via prepend).
+        before_pinned: Option<i32>,
+        before_updated_at: Option<&str>,
+        before_id: Option<i64>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.lock_read();
         let mut sql = format!(
@@ -605,11 +633,39 @@ impl ClipboardDb {
             params.push(Box::new(tag.to_string()));
         }
 
-        sql.push_str(" ORDER BY ");
-        sql.push_str(Self::order_by_clause(trashed, sort));
-        sql.push_str(" LIMIT ? OFFSET ?");
-        params.push(Box::new(limit.max(1)));
-        params.push(Box::new(offset.max(0)));
+        // Keyset for default newest-first (+ pinned). Avoids OFFSET drift when
+        // clipboard-changed prepends rows while the user scrolls.
+        let use_keyset = before_id.is_some()
+            && before_updated_at.is_some()
+            && matches!(sort.unwrap_or("updated_desc"), "updated_desc");
+
+        if use_keyset {
+            let pin = before_pinned.unwrap_or(0);
+            let ts = before_updated_at.unwrap().to_string();
+            let id = before_id.unwrap();
+            // ORDER BY is_pinned DESC, updated_at DESC, id DESC → next page
+            sql.push_str(
+                " AND (
+                    is_pinned < ?
+                    OR (is_pinned = ? AND updated_at < ?)
+                    OR (is_pinned = ? AND updated_at = ? AND id < ?)
+                )",
+            );
+            params.push(Box::new(pin));
+            params.push(Box::new(pin));
+            params.push(Box::new(ts.clone()));
+            params.push(Box::new(pin));
+            params.push(Box::new(ts));
+            params.push(Box::new(id));
+            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
+            params.push(Box::new(limit.max(1)));
+        } else {
+            sql.push_str(" ORDER BY ");
+            sql.push_str(Self::order_by_clause(trashed, sort));
+            sql.push_str(" LIMIT ? OFFSET ?");
+            params.push(Box::new(limit.max(1)));
+            params.push(Box::new(offset.max(0)));
+        }
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();
@@ -718,6 +774,8 @@ impl ClipboardDb {
     ) -> SqlResult<(i64, bool)> {
         let conn = self.conn.lock();
 
+        // Hash check + insert/update under the same write lock (no TOCTOU between
+        // workers; single writer Mutex serializes capture + UI mutations).
         let existing: Option<i64> = conn
             .query_row(
                 "SELECT id FROM records WHERE hash = ? AND is_trashed = 0
@@ -845,26 +903,12 @@ impl ClipboardDb {
         );
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
-        // ≥3 chars: FTS5 trigram (substring). Shorter: escaped LIKE across fields + tags.
+        // ≥3 chars: FTS5 trigram. Shorter: single-pass instr (no LIKE '%…%').
         if let Some(fts_match) = Self::build_fts_match(query) {
             sql.push_str("id IN (SELECT rowid FROM records_fts WHERE records_fts MATCH ?)");
             params.push(Box::new(fts_match));
         } else {
-            let pattern = format!("%{}%", Self::escape_like(query));
-            sql.push_str(
-                "content LIKE ? ESCAPE '\\'
-                 OR source_app LIKE ? ESCAPE '\\'
-                 OR source_window LIKE ? ESCAPE '\\'
-                 OR id IN (
-                    SELECT rt.record_id FROM record_tags rt
-                    INNER JOIN tags t ON t.id = rt.tag_id
-                    WHERE t.name LIKE ? ESCAPE '\\'
-                 )",
-            );
-            params.push(Box::new(pattern.clone()));
-            params.push(Box::new(pattern.clone()));
-            params.push(Box::new(pattern.clone()));
-            params.push(Box::new(pattern));
+            Self::push_short_query_predicate(&mut sql, &mut params, query);
         }
         sql.push(')');
 
@@ -1468,31 +1512,73 @@ impl ClipboardDb {
     pub fn get_stats(&self) -> SqlResult<StatsData> {
         let conn = self.lock_read();
 
-        // Single-pass aggregation: one lock, one scan instead of 6 separate queries.
-        let (total_records, total_copies, favorites_count, pinned_count, sensitive_count, content_bytes): (i64, i64, i64, i64, i64, i64) = conn.query_row(
+        // One table scan: aggregates + per-type counts (known content_type values).
+        let row: (
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+        ) = conn.query_row(
             "SELECT COUNT(*),
                     COALESCE(SUM(copy_count), 0),
                     SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END),
                     SUM(CASE WHEN is_pinned = 1 THEN 1 ELSE 0 END),
                     SUM(CASE WHEN is_sensitive = 1 THEN 1 ELSE 0 END),
-                    COALESCE(SUM(COALESCE(NULLIF(content_len, 0), length(content))), 0)
-                      + COALESCE(SUM(length(COALESCE(content_html, ''))), 0)
+                    COALESCE(SUM(content_len), 0)
+                      + COALESCE(SUM(length(COALESCE(content_html, ''))), 0),
+                    SUM(CASE WHEN content_type = 'text' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN content_type = 'code' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN content_type = 'link' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN content_type = 'image' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN content_type = 'file' THEN 1 ELSE 0 END)
              FROM records WHERE is_trashed = 0",
             [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                    row.get(8)?,
+                    row.get(9)?,
+                    row.get(10)?,
+                ))
+            },
         )?;
 
+        let (
+            total_records,
+            total_copies,
+            favorites_count,
+            pinned_count,
+            sensitive_count,
+            content_bytes,
+            n_text,
+            n_code,
+            n_link,
+            n_image,
+            n_file,
+        ) = row;
+
         let mut type_distribution = std::collections::HashMap::new();
-        let mut stmt = conn.prepare("SELECT content_type, COUNT(*) FROM records WHERE is_trashed = 0 GROUP BY content_type")?;
-        let rows = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?;
-        for row in rows {
-            let (content_type, count) = row?;
-            type_distribution.insert(content_type, count);
-        }
-        drop(stmt);
+        type_distribution.insert("text".into(), n_text);
+        type_distribution.insert("code".into(), n_code);
+        type_distribution.insert("link".into(), n_link);
+        type_distribution.insert("image".into(), n_image);
+        type_distribution.insert("file".into(), n_file);
         drop(conn);
 
-        // Media size: TTL walk of media/, adjusted on write/delete (see media.rs).
         let media_bytes = media::cached_media_dir_size(&self.media_root);
         let storage_bytes = content_bytes.saturating_add(media_bytes);
 

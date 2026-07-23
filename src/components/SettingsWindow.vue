@@ -531,12 +531,12 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="paste" :size="14" /> 粘贴到当前应用</div>
-                <div class="guide-text">双击条目、按 <span class="guide-kbd">Enter</span> 或右键菜单选“粘贴”，会把内容写回系统剪贴板，并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
+                <div class="guide-text">双击条目、按 <span class="guide-kbd">Enter</span> 或右键菜单选“粘贴”，会把内容写回系统剪贴板（图片优先以 PNG 格式写入），并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
               </div>
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="search" :size="14" /> 搜索与筛选</div>
-                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框；左侧导航可按类型、收藏、标签筛选。独立窗口模式下，列表工具栏可切换排序（最新 / 最早 / 最近创建 / 使用最多；置顶仍优先）。</div>
+                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框（支持正文、来源与标签；短关键词也可搜）。左侧导航可按类型、收藏、标签筛选。独立窗口模式下，列表工具栏可切换排序（最新 / 最早 / 最近创建 / 使用最多；置顶仍优先）。</div>
               </div>
 
               <div class="guide-block">

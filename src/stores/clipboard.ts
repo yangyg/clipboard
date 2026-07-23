@@ -113,7 +113,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
     };
   });
 
-  function listQueryArgs(offset: number) {
+  function listQueryArgs(
+    offset: number,
+    cursor?: { before_pinned: number; before_updated_at: string; before_id: number } | null
+  ) {
     const favoritesOnly = !trashFilter.value && activeFilter.value === "favorites";
     // Must match #[tauri::command(rename_all = "snake_case")] on get_records.
     return {
@@ -127,6 +130,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
       favorites_only: favoritesOnly,
       tag: !trashFilter.value ? activeTag.value : null,
       sort: listSort.value,
+      before_pinned: cursor?.before_pinned ?? null,
+      before_updated_at: cursor?.before_updated_at ?? null,
+      before_id: cursor?.before_id ?? null,
     };
   }
 
@@ -201,8 +207,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     const seq = loadSeq;
     isLoadingMore.value = true;
     try {
-      const offset = listFetchOffset;
       if (searchQuery.value.trim()) {
+        const offset = listFetchOffset;
         const result = await invoke<SearchResult>("search_records", {
           query: searchQuery.value,
           limit: PAGE_SIZE,
@@ -215,7 +221,24 @@ export const useClipboardStore = defineStore("clipboard", () => {
         if (!listWindowDirty) {
           hasMore.value = result.has_more;
         }
+      } else if (listSort.value === "updated_desc" && records.value.length > 0) {
+        // Keyset cursor — stable when new rows are prepended during scroll.
+        const last = records.value[records.value.length - 1];
+        const page = await invoke<RecordsPage>(
+          "get_records",
+          listQueryArgs(0, {
+            before_pinned: last.is_pinned ? 1 : 0,
+            before_updated_at: last.updated_at,
+            before_id: last.id,
+          })
+        );
+        if (seq !== loadSeq) return;
+        appendRecords(page.records);
+        if (!listWindowDirty) {
+          hasMore.value = page.has_more;
+        }
       } else {
+        const offset = listFetchOffset;
         const page = await invoke<RecordsPage>("get_records", listQueryArgs(offset));
         if (seq !== loadSeq) return;
         appendRecords(page.records);
@@ -589,13 +612,31 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   );
 
-  let statsTimer: ReturnType<typeof setTimeout> | null = null;
+  let statsDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let statsMaxWaitTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Debounce 800ms while idle; max-wait 5s so continuous copy still refreshes stats. */
   function scheduleLoadStats() {
-    if (statsTimer) clearTimeout(statsTimer);
-    statsTimer = setTimeout(() => {
-      statsTimer = null;
+    if (statsDebounceTimer) clearTimeout(statsDebounceTimer);
+    statsDebounceTimer = setTimeout(() => {
+      statsDebounceTimer = null;
+      if (statsMaxWaitTimer) {
+        clearTimeout(statsMaxWaitTimer);
+        statsMaxWaitTimer = null;
+      }
       void loadStats();
     }, 800);
+
+    if (!statsMaxWaitTimer) {
+      statsMaxWaitTimer = setTimeout(() => {
+        statsMaxWaitTimer = null;
+        if (statsDebounceTimer) {
+          clearTimeout(statsDebounceTimer);
+          statsDebounceTimer = null;
+        }
+        void loadStats();
+      }, 5000);
+    }
   }
 
   async function emptyTrash() {

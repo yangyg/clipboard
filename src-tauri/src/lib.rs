@@ -731,7 +731,7 @@ fn list_ipc_payload(mut r: ClipboardRecord) -> ClipboardRecord {
         .unwrap_or_else(|| r.content.chars().count() as i32);
     r.content_len = Some(full_len);
     const MAX: usize = 400;
-    if r.content.chars().count() > MAX {
+    if (full_len as usize) > MAX {
         r.content = r.content.chars().take(MAX).collect();
     }
     r

@@ -92,9 +92,14 @@ fn show_tray_menu(app: &tauri::AppHandle, position: tauri::PhysicalPosition<f64>
         })
         .or_else(|| window.current_monitor().ok().flatten())
         .map(|m| {
-            let pos = m.position();
-            let size = m.size();
-            (pos.x as f64, pos.y as f64, size.width as f64, size.height as f64)
+            // Use work area (excludes taskbar) per design spec.
+            let area = m.work_area();
+            (
+                area.position.x as f64,
+                area.position.y as f64,
+                area.size.width as f64,
+                area.size.height as f64,
+            )
         })
         .unwrap_or((0.0, 0.0, 1920.0 * scale, 1080.0 * scale));
 

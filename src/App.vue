@@ -19,6 +19,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import FloatingPanel from "./components/FloatingPanel.vue";
 import WindowApp from "./components/WindowApp.vue";
@@ -179,12 +180,21 @@ onMounted(async () => {
 
   // Auto-close panel when window loses focus (click outside).
   // When we lose focus the other app is already FG — snapshot it for paste.
+  // Skip when custom tray-menu took focus (right-click tray while panel open).
   unlisteners.push(
     await appWindow.onFocusChanged(({ payload: focused }) => {
       if (isPasteFocusLock()) return;
       if (!focused && !isWindowMode.value) {
-        void invoke("capture_paste_target").catch(() => {});
-        hidePanel();
+        void (async () => {
+          try {
+            const tray = await WebviewWindow.getByLabel("tray-menu");
+            if (tray && (await tray.isFocused())) return;
+          } catch {
+            /* ignore */
+          }
+          void invoke("capture_paste_target").catch(() => {});
+          hidePanel();
+        })();
       }
     })
   );

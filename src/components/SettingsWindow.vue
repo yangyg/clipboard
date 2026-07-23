@@ -4,15 +4,19 @@
       <!-- Header -->
       <div class="settings-header" :class="{ 'with-chrome': isWindowMode }" data-tauri-drag-region>
         <span class="settings-title"><AppIcon name="settings" :size="15" /> 设置</span>
-        <div class="settings-header-right">
-          <button class="icon-btn" title="返回" @click="emit('close')"><AppIcon name="back" :size="15" /></button>
-          <WindowControls v-if="isWindowMode" />
+        <div v-if="isWindowMode" class="settings-header-right">
+          <WindowControls />
         </div>
       </div>
 
       <div class="settings-main">
         <!-- Nav -->
         <nav class="settings-nav">
+          <button type="button" class="nav-item nav-back" @click="emit('close')">
+            <span class="nav-icon"><AppIcon name="back" :size="15" /></span>
+            <span class="nav-label">返回</span>
+          </button>
+          <div class="nav-divider" aria-hidden="true"></div>
           <button
             v-for="section in SECTIONS"
             :key="section.key"
@@ -984,26 +988,6 @@ onUnmounted(() => {
   gap: 6px;
 }
 
-.settings-header .icon-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: 14px;
-  transition: all var(--transition-fast);
-}
-
-.settings-header .icon-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
 .settings-main {
   display: flex;
   flex: 1;
@@ -1015,12 +999,28 @@ onUnmounted(() => {
   width: 180px;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-subtle);
-  padding: 16px 0;
+  padding: 12px 0 16px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   overflow-y: auto;
   transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+
+.nav-back {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.nav-back:hover {
+  color: var(--text-primary);
+}
+
+.nav-divider {
+  height: 1px;
+  margin: 8px 16px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
 }
 
 .nav-item {

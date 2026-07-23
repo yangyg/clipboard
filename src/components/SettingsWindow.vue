@@ -220,7 +220,7 @@
               <div class="setting-row">
                 <div>
                   <div class="setting-label">根据内容自动打标签</div>
-                  <div class="setting-desc">新记录按规则匹配标签（默认规则可改）</div>
+                  <div class="setting-desc">新记录匹配规则时自动附加标签；类型或关键词命中其一即可</div>
                 </div>
                 <div
                   class="toggle"
@@ -233,55 +233,96 @@
                   @keydown.space.prevent="update('enable_auto_tag', !settings.enable_auto_tag)"
                 ></div>
               </div>
-              <div v-if="settings.enable_auto_tag" class="auto-tag-rules">
-                <div
-                  v-for="(rule, index) in settings.auto_tag_rules"
-                  :key="index"
-                  class="auto-tag-rule"
-                >
-                  <div class="auto-tag-rule-header">
-                    <input
-                      class="auto-tag-name"
-                      :value="rule.tag_name"
-                      placeholder="标签名"
-                      @input="updateRuleField(index, 'tag_name', (($event.target as HTMLInputElement).value))"
-                    />
-                    <button
-                      type="button"
-                      class="auto-tag-remove"
-                      title="删除规则"
-                      @click="removeAutoTagRule(index)"
-                    >
-                      <AppIcon name="close" :size="12" />
-                    </button>
-                  </div>
-                  <input
-                    class="auto-tag-keywords"
-                    :value="rule.keywords.join(', ')"
-                    placeholder="关键词，逗号分隔"
-                    @change="updateRuleKeywords(index, ($event.target as HTMLInputElement).value)"
-                  />
-                  <div class="auto-tag-types">
-                    <label
-                      v-for="ct in CONTENT_TYPE_OPTIONS"
-                      :key="ct.value"
-                      class="auto-tag-type"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="rule.content_types.includes(ct.value)"
-                        @change="toggleRuleContentType(index, ct.value)"
-                      />
-                      {{ ct.label }}
-                    </label>
-                  </div>
+
+              <div v-if="settings.enable_auto_tag" class="auto-tag-panel">
+                <div class="auto-tag-panel-head">
+                  <div class="auto-tag-panel-title">匹配规则</div>
+                  <div class="auto-tag-panel-meta">{{ settings.auto_tag_rules.length }} 条</div>
                 </div>
+
+                <div v-if="settings.auto_tag_rules.length === 0" class="auto-tag-empty">
+                  <AppIcon name="tag" :size="18" />
+                  <p>暂无规则。添加后，新复制的内容会按规则自动打标。</p>
+                </div>
+
+                <div v-else class="auto-tag-rules">
+                  <article
+                    v-for="(rule, index) in settings.auto_tag_rules"
+                    :key="index"
+                    class="auto-tag-rule"
+                  >
+                    <header class="auto-tag-rule-top">
+                      <span
+                        class="auto-tag-rule-dot"
+                        :style="{ background: ruleAccentColor(rule.tag_name, index) }"
+                        aria-hidden="true"
+                      ></span>
+                      <span class="auto-tag-rule-index">规则 {{ index + 1 }}</span>
+                      <button
+                        type="button"
+                        class="auto-tag-remove"
+                        title="删除规则"
+                        aria-label="删除规则"
+                        @click="removeAutoTagRule(index)"
+                      >
+                        <AppIcon name="close" :size="12" />
+                      </button>
+                    </header>
+
+                    <label class="auto-tag-field">
+                      <span class="auto-tag-field-label">标签名</span>
+                      <input
+                        class="auto-tag-input"
+                        :value="rule.tag_name"
+                        placeholder="例如：部署"
+                        @input="updateRuleField(index, 'tag_name', (($event.target as HTMLInputElement).value))"
+                      />
+                    </label>
+
+                    <label class="auto-tag-field">
+                      <span class="auto-tag-field-label">关键词</span>
+                      <input
+                        class="auto-tag-input auto-tag-input-mono"
+                        :value="rule.keywords.join(', ')"
+                        placeholder="逗号分隔，如 deploy, docker"
+                        @change="updateRuleKeywords(index, ($event.target as HTMLInputElement).value)"
+                      />
+                      <div v-if="rule.keywords.length" class="auto-tag-keyword-chips" aria-hidden="true">
+                        <span
+                          v-for="kw in rule.keywords"
+                          :key="kw"
+                          class="auto-tag-chip auto-tag-chip-kw"
+                        >{{ kw }}</span>
+                      </div>
+                    </label>
+
+                    <div class="auto-tag-field">
+                      <span class="auto-tag-field-label">内容类型</span>
+                      <div class="auto-tag-type-chips" role="group" aria-label="内容类型">
+                        <button
+                          v-for="ct in CONTENT_TYPE_OPTIONS"
+                          :key="ct.value"
+                          type="button"
+                          class="auto-tag-type-chip"
+                          :class="{ active: rule.content_types.includes(ct.value) }"
+                          :style="rule.content_types.includes(ct.value) ? { '--chip-accent': ct.color } : undefined"
+                          :aria-pressed="rule.content_types.includes(ct.value)"
+                          @click="toggleRuleContentType(index, ct.value)"
+                        >
+                          <AppIcon :name="ct.icon" :size="12" />
+                          {{ ct.label }}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+
                 <div class="auto-tag-actions">
                   <button type="button" class="btn btn-secondary" @click="addAutoTagRule">
                     <AppIcon name="plus" :size="13" /> 添加规则
                   </button>
                   <button type="button" class="btn btn-secondary" @click="restoreDefaultAutoTagRules">
-                    恢复默认规则
+                    <AppIcon name="restore" :size="13" /> 恢复默认
                   </button>
                 </div>
               </div>
@@ -573,12 +614,22 @@ const isImporting = ref(false);
 const isRecordingShortcut = ref(false);
 
 const CONTENT_TYPE_OPTIONS = [
-  { value: "text", label: "文本" },
-  { value: "code", label: "代码" },
-  { value: "link", label: "链接" },
-  { value: "image", label: "图片" },
-  { value: "file", label: "文件" },
+  { value: "text", label: "文本", icon: "type" as AppIconName, color: "var(--type-text)" },
+  { value: "code", label: "代码", icon: "code" as AppIconName, color: "var(--type-code)" },
+  { value: "link", label: "链接", icon: "link" as AppIconName, color: "var(--type-link)" },
+  { value: "image", label: "图片", icon: "image" as AppIconName, color: "var(--type-image)" },
+  { value: "file", label: "文件", icon: "file" as AppIconName, color: "var(--type-file)" },
 ] as const;
+
+const RULE_ACCENT_FALLBACKS = ["#6366f1", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#38bdf8"];
+
+const KNOWN_TAG_COLORS: Record<string, string> = {
+  部署: "#34d399",
+  前端: "#6366f1",
+  链接: "#fbbf24",
+  重要: "#f87171",
+  设计: "#a78bfa",
+};
 
 const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
   { key: "appearance", icon: "palette", label: "外观" },
@@ -686,6 +737,14 @@ function removeAutoTagRule(index: number) {
 
 function restoreDefaultAutoTagRules() {
   commitAutoTagRules(DEFAULT_AUTO_TAG_RULES);
+}
+
+function ruleAccentColor(tagName: string, index: number): string {
+  const name = tagName.trim();
+  if (name && KNOWN_TAG_COLORS[name]) return KNOWN_TAG_COLORS[name];
+  const fromStore = clipboardStore.tags.find((t) => t.name === name)?.color;
+  if (fromStore) return fromStore;
+  return RULE_ACCENT_FALLBACKS[index % RULE_ACCENT_FALLBACKS.length];
 }
 
 function addIgnoredApp() {
@@ -1290,60 +1349,115 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* Auto-tag rules */
-.auto-tag-rules {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 4px 0 8px;
-}
-
-.auto-tag-rule {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px;
+.auto-tag-panel {
+  margin-top: 4px;
+  padding: 12px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 
-.auto-tag-rule-header {
+.auto-tag-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.auto-tag-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.auto-tag-panel-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.auto-tag-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--accent-softer);
+}
+
+.auto-tag-empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.auto-tag-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auto-tag-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.auto-tag-rule:hover {
+  border-color: var(--border-default);
+}
+
+.auto-tag-rule:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border-default));
+  box-shadow: 0 0 0 3px var(--accent-softer);
+}
+
+.auto-tag-rule-top {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.auto-tag-name,
-.auto-tag-keywords {
-  flex: 1;
-  min-width: 0;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  font-size: 12px;
+.auto-tag-rule-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.auto-tag-name:focus,
-.auto-tag-keywords:focus {
-  outline: none;
-  border-color: var(--accent);
+.auto-tag-rule-index {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
 }
 
 .auto-tag-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
   flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .auto-tag-remove:hover {
@@ -1351,30 +1465,121 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--danger);
 }
 
-.auto-tag-types {
+.auto-tag-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auto-tag-field-label {
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.auto-tag-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.auto-tag-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.auto-tag-input:hover {
+  border-color: var(--border-default);
+}
+
+.auto-tag-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-base);
+}
+
+.auto-tag-input-mono {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.auto-tag-keyword-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 4px;
 }
 
-.auto-tag-type {
+.auto-tag-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  user-select: none;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.auto-tag-type input {
-  accent-color: var(--accent);
+.auto-tag-chip-kw {
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.auto-tag-type-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.auto-tag-type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.auto-tag-type-chip:hover {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.auto-tag-type-chip.active {
+  --chip-accent: var(--accent);
+  background: color-mix(in srgb, var(--chip-accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--chip-accent) 45%, transparent);
+  color: var(--chip-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-accent) 20%, transparent);
 }
 
 .auto-tag-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 /* Ignore apps */

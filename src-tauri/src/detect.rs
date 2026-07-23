@@ -131,8 +131,12 @@ pub fn detect_sensitive(content: &str) -> bool {
 }
 
 pub fn sha256_hash(content: &str) -> String {
+    sha256_hash_bytes(content.as_bytes())
+}
+
+pub fn sha256_hash_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(content.as_bytes());
+    hasher.update(bytes);
     hex::encode(hasher.finalize())
 }
 

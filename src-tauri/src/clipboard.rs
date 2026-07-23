@@ -145,6 +145,13 @@ impl ClipboardMonitor {
                             if let Some(captured) = text {
                                 maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                             }
+                        } else if suppressed {
+                            // Same rule as text: do not advance fingerprints while
+                            // suppressing, or a real copy in the window is lost forever.
+                            debug!(
+                                "Suppressed self-write image capture {}x{}",
+                                img.width, img.height
+                            );
                         } else {
                             let width = img.width as u32;
                             let height = img.height as u32;
@@ -153,27 +160,16 @@ impl ClipboardMonitor {
                                 std::borrow::Cow::Owned(v) => v,
                                 std::borrow::Cow::Borrowed(b) => b.to_vec(),
                             };
-                            let hash = {
-                                use sha2::{Digest, Sha256};
-                                let mut hasher = Sha256::new();
-                                hasher.update(&raw);
-                                hex::encode(hasher.finalize())
-                            };
+                            // SHA-256 of full RGBA is done on the capture worker —
+                            // poll only needs the cheap quick fingerprint for change detection.
                             *last_image_hash.lock() = Some(quick);
-                            if let Some(captured) = text {
-                                *last_text_fp.lock() = Some(captured.fingerprint());
-                            }
-                            if !suppressed {
-                                debug!("Clipboard changed (image): {}x{}", width, height);
-                                on_change(ClipboardEvent::Image(CapturedImage {
-                                    rgba: raw,
-                                    width,
-                                    height,
-                                    hash,
-                                }));
-                            } else {
-                                debug!("Suppressed self-write image capture {}x{}", width, height);
-                            }
+                            debug!("Clipboard changed (image): {}x{}", width, height);
+                            on_change(ClipboardEvent::Image(CapturedImage {
+                                rgba: raw,
+                                width,
+                                height,
+                                hash: String::new(),
+                            }));
                         }
                     } else if let Some(captured) = text {
                         maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
@@ -316,15 +312,16 @@ fn maybe_emit_text(
 ) {
     let fp = captured.fingerprint();
     let should_notify = {
-        let mut last = last_text_fp.lock();
+        let last = last_text_fp.lock();
         match &*last {
             Some(prev) if prev == &fp => false,
-            _ => {
-                *last = Some(fp);
-                !captured.text.trim().is_empty()
-            }
+            _ => !captured.text.trim().is_empty(),
         }
     };
+    // During paste suppress: skip emit but do NOT advance last_text_fp.
+    // Advancing it would permanently drop a real copy that lands in the window
+    // (fingerprint already matches "seen", so it never emits after suppress ends).
+    // Re-capture of our own paste after the window is fine — DB hash dedupes it.
     if should_notify && suppressed {
         debug!(
             "Suppressed self-write text capture: {} chars, html={}",
@@ -334,6 +331,7 @@ fn maybe_emit_text(
         return;
     }
     if should_notify {
+        *last_text_fp.lock() = Some(fp);
         debug!(
             "Clipboard changed (text): {} chars, html={}",
             captured.text.len(),

@@ -58,17 +58,17 @@ pub struct ImageMeta {
     pub height: i32,
 }
 
-/// Full row including rich HTML (detail / paste / emit).
+/// Full row including rich HTML (detail / paste / export).
 const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, content_html,
-               length(content) as content_len";
+               COALESCE(NULLIF(content_len, 0), length(content)) as content_len";
 
-/// List/search: omit HTML, truncate content for IPC/memory; content_len is full length.
+/// List/search: omit HTML, truncate content for IPC/memory; content_len from column (no full TEXT scan).
 const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, NULL as content_html,
-               length(content) as content_len";
+               COALESCE(NULLIF(content_len, 0), length(content)) as content_len";
 
 pub struct ClipboardDb {
     /// Writer connection (schema, inserts, updates, deletes).
@@ -84,7 +84,10 @@ pub struct ClipboardDb {
 impl ClipboardDb {
     fn configure_connection(conn: &Connection, query_only: bool) -> SqlResult<()> {
         conn.execute_batch(
-            "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;",
+            "PRAGMA journal_mode=WAL;
+             PRAGMA synchronous=NORMAL;
+             PRAGMA foreign_keys=ON;
+             PRAGMA busy_timeout=5000;",
         )?;
         if query_only {
             // Fail loudly if a "read" path accidentally tries to mutate.
@@ -118,7 +121,8 @@ impl ClipboardDb {
                 thumb_path TEXT,
                 width INTEGER,
                 height INTEGER,
-                content_html TEXT
+                content_html TEXT,
+                content_len INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
@@ -127,6 +131,10 @@ impl ClipboardDb {
             CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);
             CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
                 ON records(is_trashed, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
+                ON records(is_trashed, is_pinned, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_records_hash_active
+                ON records(hash, is_trashed);
             CREATE INDEX IF NOT EXISTS idx_records_auto_expire
                 ON records(auto_expire_at) WHERE auto_expire_at IS NOT NULL;"#,
         )?;
@@ -141,8 +149,22 @@ impl ClipboardDb {
         conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
         conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
         conn.execute_batch(
+            "ALTER TABLE records ADD COLUMN content_len INTEGER NOT NULL DEFAULT 0;",
+        )
+        .ok();
+        conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
              ON records(is_trashed, updated_at DESC);",
+        )
+        .ok();
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
+             ON records(is_trashed, is_pinned, updated_at DESC);",
+        )
+        .ok();
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_records_hash_active
+             ON records(hash, is_trashed);",
         )
         .ok();
 
@@ -176,6 +198,25 @@ impl ClipboardDb {
                 ('设计', '#a78bfa', 0);
             "#,
         )?;
+
+        // One-time backfill of content_len (avoids length(content) on every list query).
+        let backfilled: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'content_len_backfill'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if backfilled.as_deref() != Some("1") {
+            let _ = conn.execute(
+                "UPDATE records SET content_len = length(content) WHERE content_len = 0",
+                [],
+            );
+            let _ = conn.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('content_len_backfill', '1')",
+                [],
+            );
+        }
 
         Self::ensure_fts(&conn)?;
 
@@ -242,7 +283,9 @@ impl ClipboardDb {
     fn ensure_fts(conn: &Connection) -> SqlResult<()> {
         // v2: FTS5 'delete' command fails with "SQL logic error" on some SQLite
         // builds (incl. Windows); use DELETE FROM fts WHERE rowid=... instead.
-        const FTS_VERSION: &str = "2";
+        // v3: FTS au only on content (dedup source updates must not rebuild FTS);
+        //     tag→FTS refresh is application-driven (batch auto-tag once).
+        const FTS_VERSION: &str = "3";
         let current: Option<String> = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = 'fts_version'",
@@ -307,7 +350,9 @@ impl ClipboardDb {
                 DELETE FROM records_fts WHERE rowid = old.id;
             END;
 
-            CREATE TRIGGER records_fts_au AFTER UPDATE OF content, source_app, source_window ON records BEGIN
+            -- Only content changes rebuild FTS. Dedup updates of source_app/window
+            -- must not rewrite the full content into FTS on every re-copy.
+            CREATE TRIGGER records_fts_au AFTER UPDATE OF content ON records BEGIN
                 DELETE FROM records_fts WHERE rowid = old.id;
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
                 VALUES (
@@ -322,40 +367,6 @@ impl ClipboardDb {
                         WHERE rt.record_id = new.id
                     ), '')
                 );
-            END;
-
-            CREATE TRIGGER record_tags_fts_ai AFTER INSERT ON record_tags BEGIN
-                DELETE FROM records_fts WHERE rowid = new.record_id;
-                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
-                SELECT
-                    r.id,
-                    r.content,
-                    r.source_app,
-                    r.source_window,
-                    COALESCE((
-                        SELECT group_concat(t.name, ' ')
-                        FROM record_tags rt
-                        INNER JOIN tags t ON t.id = rt.tag_id
-                        WHERE rt.record_id = r.id
-                    ), '')
-                FROM records r WHERE r.id = new.record_id;
-            END;
-
-            CREATE TRIGGER record_tags_fts_ad AFTER DELETE ON record_tags BEGIN
-                DELETE FROM records_fts WHERE rowid = old.record_id;
-                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
-                SELECT
-                    r.id,
-                    r.content,
-                    r.source_app,
-                    r.source_window,
-                    COALESCE((
-                        SELECT group_concat(t.name, ' ')
-                        FROM record_tags rt
-                        INNER JOIN tags t ON t.id = rt.tag_id
-                        WHERE rt.record_id = r.id
-                    ), '')
-                FROM records r WHERE r.id = old.record_id;
             END;
 
             CREATE TRIGGER tags_fts_au AFTER UPDATE OF name ON tags BEGIN
@@ -401,6 +412,30 @@ impl ClipboardDb {
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('fts_version', ?)",
             [FTS_VERSION],
+        )?;
+        Ok(())
+    }
+
+    /// Rebuild one FTS row (tags / source) without per-tag triggers.
+    fn refresh_record_fts(conn: &Connection, record_id: i64) -> SqlResult<()> {
+        conn.execute("DELETE FROM records_fts WHERE rowid = ?", [record_id])?;
+        conn.execute(
+            r#"
+            INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+            SELECT
+                r.id,
+                r.content,
+                r.source_app,
+                r.source_window,
+                COALESCE((
+                    SELECT group_concat(t.name, ' ')
+                    FROM record_tags rt
+                    INNER JOIN tags t ON t.id = rt.tag_id
+                    WHERE rt.record_id = r.id
+                ), '')
+            FROM records r WHERE r.id = ?
+            "#,
+            [record_id],
         )?;
         Ok(())
     }
@@ -700,8 +735,8 @@ impl ClipboardDb {
         };
 
         conn.execute(
-            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 content,
                 content_type.as_str(),
@@ -717,6 +752,7 @@ impl ClipboardDb {
                 width,
                 height,
                 content_html,
+                content.chars().count() as i64,
             ],
         )?;
 
@@ -1367,6 +1403,8 @@ impl ClipboardDb {
                 params![record_id, tag_id],
             )?;
         }
+        // Single FTS rebuild after all tags (no per-INSERT triggers).
+        Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
         Ok(())
     }
@@ -1392,6 +1430,7 @@ impl ClipboardDb {
             "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
             params![record_id, tag_id],
         )?;
+        Self::refresh_record_fts(&conn, record_id)?;
         Ok(())
     }
 
@@ -1401,6 +1440,7 @@ impl ClipboardDb {
             "DELETE FROM record_tags WHERE record_id = ? AND tag_id = ?",
             params![record_id, tag_id],
         )?;
+        Self::refresh_record_fts(&conn, record_id)?;
         Ok(())
     }
 
@@ -1416,7 +1456,8 @@ impl ClipboardDb {
                     SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END),
                     SUM(CASE WHEN is_pinned = 1 THEN 1 ELSE 0 END),
                     SUM(CASE WHEN is_sensitive = 1 THEN 1 ELSE 0 END),
-                    COALESCE(SUM(length(content)), 0) + COALESCE(SUM(length(COALESCE(content_html, ''))), 0)
+                    COALESCE(SUM(COALESCE(NULLIF(content_len, 0), length(content))), 0)
+                      + COALESCE(SUM(length(COALESCE(content_html, ''))), 0)
              FROM records WHERE is_trashed = 0",
             [],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
@@ -1459,8 +1500,34 @@ impl ClipboardDb {
                 params![record_id, tag_id],
             )?;
         }
+        Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
         Ok(())
+    }
+
+    /// Full-content page for export/backup (never use list truncation columns).
+    pub fn get_records_for_export(
+        &self,
+        limit: i32,
+        offset: i32,
+    ) -> SqlResult<Vec<ClipboardRecord>> {
+        let conn = self.lock_read();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {} FROM records WHERE is_trashed = 0
+             ORDER BY is_pinned DESC, updated_at DESC LIMIT ? OFFSET ?",
+            RECORD_COLS
+        ))?;
+        let mut records: Vec<ClipboardRecord> = stmt
+            .query_map(params![limit, offset], |row| self.map_record_row(row))?
+            .collect::<SqlResult<Vec<_>>>()?;
+        let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
+        let tags_map = self.load_tags_batch(&conn, &ids)?;
+        for record in &mut records {
+            if let Some(tags) = tags_map.get(&record.id) {
+                record.tags = tags.clone();
+            }
+        }
+        Ok(records)
     }
 }
 

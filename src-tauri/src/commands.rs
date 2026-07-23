@@ -70,6 +70,7 @@ pub async fn search_records(
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
+    // `total` is this page's length (not a global hit count) — kept for API compat.
     let total = records.len();
     let elapsed_ms = start.elapsed().as_millis() as u64;
     Ok(SearchResult {
@@ -408,7 +409,7 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
     loop {
         let batch = state
             .db
-            .get_records(page_size, offset, false, None, false, None, None)
+            .get_records_for_export(page_size, offset)
             .map_err(|e| e.to_string())?;
         let len = batch.len();
         for rec in &batch {

@@ -8,7 +8,7 @@ mod tray;
 
 use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
-use detect::{detect_content_type, detect_sensitive, sha256_hash};
+use detect::{detect_content_type, detect_sensitive, sha256_hash, sha256_hash_bytes};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
@@ -450,8 +450,16 @@ pub fn run() {
                             source_window,
                         },
                     };
-                    if let Err(e) = capture_tx.send(job) {
-                        warn!("Capture worker stopped accepting jobs: {}", e);
+                    // Non-blocking: a full queue must not stall the poll thread
+                    // (otherwise GetClipboardSequenceNumber shortcuts stop working).
+                    match capture_tx.try_send(job) {
+                        Ok(()) => {}
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            warn!("Capture queue full; dropping clipboard event");
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            warn!("Capture worker stopped accepting jobs");
+                        }
                     }
                 });
             });
@@ -528,7 +536,8 @@ fn process_capture_job(
             let content_type = detect_content_type(&captured.text);
             let is_sensitive =
                 settings.enable_sensitive_detection && detect_sensitive(&captured.text);
-            // Fingerprint is already a hex SHA-256 of text+html; wrap once for DB hash.
+            // Keep wrapping fingerprint for DB hash so existing rows still dedupe
+            // (historical inserts stored sha256(fingerprint), not fingerprint itself).
             let hash = sha256_hash(&captured.fingerprint());
 
             if let Ok(ids) = maybe_run_cleanup(db) {
@@ -589,12 +598,17 @@ fn process_capture_job(
                 }
             }
 
+            let hash = if captured.hash.is_empty() {
+                sha256_hash_bytes(&captured.rgba)
+            } else {
+                captured.hash
+            };
             match media::store_clipboard_image(
                 media_root,
                 captured.rgba,
                 captured.width,
                 captured.height,
-                &captured.hash,
+                &hash,
             ) {
                 Ok(stored) => {
                     let image_meta = ImageMeta {
@@ -607,7 +621,7 @@ fn process_capture_job(
                     match db.insert_record(
                         &label,
                         &ContentType::Image,
-                        &captured.hash,
+                        &hash,
                         false,
                         settings.max_records,
                         settings.sensitive_auto_expire_seconds,

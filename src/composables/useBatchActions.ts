@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
 
@@ -36,16 +37,29 @@ export function useBatchActions() {
     if (images.length > 0) {
       toast("已跳过图片，仅复制文本内容", "warning");
     }
-    const text = selected
+    const textIds = selected
       .filter((r) => r.content_type !== "image")
-      .map((r) => r.content)
-      .join("\n\n");
+      .map((r) => r.id);
+    // List rows truncate content to 400 chars — fetch full bodies for copy.
+    const fullTexts: string[] = [];
+    try {
+      const results = await Promise.all(
+        textIds.map((id) => invoke<{ content: string } | null>("get_record", { id }))
+      );
+      for (const full of results) {
+        if (full?.content) fullTexts.push(full.content);
+      }
+    } catch {
+      toast("读取全文失败", "error");
+      return;
+    }
+    const text = fullTexts.join("\n\n");
     if (!text.trim()) {
       toast("没有可复制的文本", "warning");
       return;
     }
     await navigator.clipboard.writeText(text);
-    toast(`已复制 ${selected.length - images.length} 项到剪贴板`, "success");
+    toast(`已复制 ${fullTexts.length} 项到剪贴板`, "success");
   }
 
   async function batchFavorite() {

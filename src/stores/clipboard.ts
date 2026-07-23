@@ -49,6 +49,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   /** Soft cap for in-memory list (onNewRecord prepend without bound was a leak). */
   const LIST_SOFT_CAP = PAGE_SIZE * 2;
+  /** Server-side offset for the next loadMore (not records.length — soft-cap may trim). */
+  let listFetchOffset = 0;
+  /** Soft-cap dropped rows → offset window has holes; next loadMore reloads. */
+  let listWindowDirty = false;
   const DETAIL_CACHE_MAX = 6;
 
   // === Getters ===
@@ -166,14 +170,20 @@ export const useClipboardStore = defineStore("clipboard", () => {
     isLoading.value = true;
     isLoadingMore.value = false;
     hasMore.value = true;
+    listWindowDirty = false;
     try {
       const page = await invoke<RecordsPage>("get_records", listQueryArgs(0));
       if (seq !== loadSeq) return;
       records.value = page.records;
       hasMore.value = page.has_more;
+      listFetchOffset = page.records.length;
       recordDetails.value = new Map();
       scheduleLoadStats();
       await loadTrashCount();
+      // Preserve selection: re-fetch full detail after list truncated rows replaced cache.
+      if (selectedId.value !== null) {
+        void ensureRecordDetail(selectedId.value);
+      }
     } catch (e) {
       console.error("Failed to load records:", e);
     } finally {
@@ -183,10 +193,15 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   async function loadMore() {
     if (!hasMore.value || isLoading.value || isLoadingMore.value) return;
+    // Soft-cap trimmed the local window; offset pagination would skip rows.
+    if (listWindowDirty) {
+      await reloadList();
+      return;
+    }
     const seq = loadSeq;
     isLoadingMore.value = true;
     try {
-      const offset = records.value.length;
+      const offset = listFetchOffset;
       if (searchQuery.value.trim()) {
         const result = await invoke<SearchResult>("search_records", {
           query: searchQuery.value,
@@ -196,12 +211,18 @@ export const useClipboardStore = defineStore("clipboard", () => {
         });
         if (seq !== loadSeq || trashFilter.value) return;
         appendRecords(result.records);
-        hasMore.value = result.has_more;
+        listFetchOffset = offset + result.records.length;
+        if (!listWindowDirty) {
+          hasMore.value = result.has_more;
+        }
       } else {
         const page = await invoke<RecordsPage>("get_records", listQueryArgs(offset));
         if (seq !== loadSeq) return;
         appendRecords(page.records);
-        hasMore.value = page.has_more;
+        listFetchOffset = offset + page.records.length;
+        if (!listWindowDirty) {
+          hasMore.value = page.has_more;
+        }
       }
     } catch (e) {
       console.error("Failed to load more records:", e);
@@ -224,6 +245,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     isLoading.value = true;
     searchQuery.value = query;
     hasMore.value = true;
+    listWindowDirty = false;
     try {
       const result = await invoke<SearchResult>("search_records", {
         query,
@@ -238,7 +260,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
       }
       records.value = result.records;
       hasMore.value = result.has_more;
+      listFetchOffset = result.records.length;
       recordDetails.value = new Map();
+      if (selectedId.value !== null) {
+        void ensureRecordDetail(selectedId.value);
+      }
     } catch (e) {
       console.error("Search failed:", e);
     } finally {
@@ -286,6 +312,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     const rest = records.value.filter((r) => !r.is_pinned);
     const restKeep = Math.max(0, LIST_SOFT_CAP - pinned.length);
     records.value = [...pinned, ...rest.slice(0, restKeep)];
+    // Local window no longer matches contiguous server offsets.
+    listWindowDirty = true;
     hasMore.value = true;
     if (selectedId.value !== null && !records.value.some((r) => r.id === selectedId.value)) {
       selectedId.value = null;

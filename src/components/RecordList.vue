@@ -55,7 +55,7 @@
               <span class="record-badge" :class="badgeClass(item.record!)">
                 {{ TYPE_LABELS[item.record!.content_type] || '文本' }}
               </span>
-              <span class="record-chars" v-if="isTextLike(item.record!.content_type)">· {{ item.record!.content.length }} 字符</span>
+              <span class="record-chars" v-if="isTextLike(item.record!.content_type)">· {{ item.record!.content_len ?? item.record!.content.length }} 字符</span>
               <span class="record-chars" v-else-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height">
                 · {{ item.record!.width }}×{{ item.record!.height }}
               </span>
@@ -136,6 +136,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
@@ -145,14 +146,21 @@ import { useToast } from "../composables/useToast";
 import { recordThumbSrc } from "../utils/mediaUrl";
 
 const clipboardStore = useClipboardStore();
+const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const listRef = ref<HTMLElement | null>(null);
 
-/** Fixed row estimates for windowing (list items are similarly sized). */
-const ROW_HEIGHT = 58;
-const LABEL_HEIGHT = 26;
+/** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
+const BASE_ROW_HEIGHT = 58;
+const BASE_LABEL_HEIGHT = 26;
 const OVERSCAN = 6;
+const rowHeight = computed(() =>
+  Math.round(BASE_ROW_HEIGHT * (settingsStore.settings.font_size / 16))
+);
+const labelHeight = computed(() =>
+  Math.round(BASE_LABEL_HEIGHT * (settingsStore.settings.font_size / 16))
+);
 
 const scrollTop = ref(0);
 const viewportHeight = ref(480);
@@ -229,20 +237,22 @@ const flatItems = computed<FlatItem[]>(() => {
   const records = clipboardStore.filteredRecords;
   const items: FlatItem[] = [];
   let offset = 0;
+  const rh = rowHeight.value;
+  const lh = labelHeight.value;
   const hasPinned = records.some((r) => r.is_pinned);
   if (hasPinned) {
-    items.push({ key: "pinned-label", type: "label", height: LABEL_HEIGHT, offset });
-    offset += LABEL_HEIGHT;
+    items.push({ key: "pinned-label", type: "label", height: lh, offset });
+    offset += lh;
   }
   for (const r of records) {
     items.push({
       key: `r-${r.id}`,
       type: "record",
       record: r,
-      height: ROW_HEIGHT,
+      height: rh,
       offset,
     });
-    offset += ROW_HEIGHT;
+    offset += rh;
   }
   return items;
 });

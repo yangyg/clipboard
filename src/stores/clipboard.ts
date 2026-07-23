@@ -53,6 +53,12 @@ export const useClipboardStore = defineStore("clipboard", () => {
   let listFetchOffset = 0;
   /** Soft-cap dropped rows → offset window has holes; next loadMore reloads. */
   let listWindowDirty = false;
+  /** Bumped after first-page load/search so RecordList can fill a short viewport (no isLoading watch). */
+  const viewportFillToken = ref(0);
+
+  function requestViewportFill() {
+    viewportFillToken.value += 1;
+  }
   const DETAIL_CACHE_MAX = 6;
 
   // === Getters ===
@@ -190,6 +196,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (selectedId.value !== null) {
         void ensureRecordDetail(selectedId.value);
       }
+      if (hasMore.value) requestViewportFill();
     } catch (e) {
       console.error("Failed to load records:", e);
     } finally {
@@ -288,6 +295,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (selectedId.value !== null) {
         void ensureRecordDetail(selectedId.value);
       }
+      if (hasMore.value) requestViewportFill();
     } catch (e) {
       console.error("Search failed:", e);
     } finally {
@@ -925,6 +933,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     pauseCapture,
     stats,
     tags,
+    viewportFillToken,
     // Getters
     selectedRecord,
     filteredRecords,

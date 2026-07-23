@@ -77,7 +77,7 @@ App.vue                          # Events; FloatingPanel v-show (warm); ToastHos
 - `tray.rs` — system tray menu / click
 - `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**)
 - `media.rs` — encode/store/load/delete; media dir size cache
-- `db.rs` — CRUD, FTS5, trash, tags, stats, settings, list/search. **WAL:** write `conn` + **read pool** (3× `query_only`, round-robin `try_lock`). `content_len` column. Export: `get_records_for_export`.
+- `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers
 - `main.rs` — `clipvault_lib::run()`
 

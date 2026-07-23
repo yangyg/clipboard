@@ -3,7 +3,10 @@ use parking_lot::{Mutex, RwLock};
 use std::path::{Path, PathBuf};
 use std::fmt;
 use crate::media;
-use crate::{ClipboardRecord, Settings, StatsData, TagInfo};
+use crate::{ClipboardRecord, Settings};
+
+mod tags;
+mod stats;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContentType {
@@ -244,7 +247,7 @@ impl ClipboardDb {
     }
 
     #[inline]
-    fn lock_read(&self) -> parking_lot::MutexGuard<'_, Connection> {
+    pub(super) fn lock_read(&self) -> parking_lot::MutexGuard<'_, Connection> {
         let n = self.read_conns.len();
         let start = self
             .read_rr
@@ -460,7 +463,7 @@ impl ClipboardDb {
     }
 
     /// Rebuild one FTS row (tags / source) without per-tag triggers.
-    fn refresh_record_fts(conn: &Connection, record_id: i64) -> SqlResult<()> {
+    pub(super) fn refresh_record_fts(conn: &Connection, record_id: i64) -> SqlResult<()> {
         conn.execute("DELETE FROM records_fts WHERE rowid = ?", [record_id])?;
         conn.execute(
             r#"
@@ -1341,273 +1344,6 @@ impl ClipboardDb {
             tx.commit()?;
         }
         Ok(imported)
-    }
-
-    // === Tag CRUD ===
-
-    /// Tag counts respect the current list facet (type / favorites), exclude trash.
-    pub fn get_all_tags(
-        &self,
-        content_type: Option<&str>,
-        favorites_only: bool,
-    ) -> SqlResult<Vec<TagInfo>> {
-        let conn = self.lock_read();
-        let mut sql = String::from(
-            "SELECT t.id, t.name, t.color, t.is_auto, COUNT(r.id) as cnt
-             FROM tags t
-             LEFT JOIN record_tags rt ON rt.tag_id = t.id
-             LEFT JOIN records r ON r.id = rt.record_id AND r.is_trashed = 0",
-        );
-        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-
-        if favorites_only {
-            sql.push_str(" AND r.is_favorite = 1");
-        } else if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
-            sql.push_str(" AND r.content_type = ?");
-            params.push(Box::new(ct.to_string()));
-        }
-
-        sql.push_str(" GROUP BY t.id ORDER BY t.name");
-
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-            params.iter().map(|p| p.as_ref()).collect();
-        let mut stmt = conn.prepare(&sql)?;
-        let tags = stmt
-            .query_map(param_refs.as_slice(), |row| {
-                Ok(TagInfo {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    color: row.get(2)?,
-                    is_auto: row.get::<_, i32>(3)? != 0,
-                    count: row.get(4)?,
-                })
-            })?
-            .filter_map(|r| r.ok())
-            .collect();
-        Ok(tags)
-    }
-
-    pub fn create_tag(&self, name: &str, color: &str) -> SqlResult<i64> {
-        let conn = self.conn.lock();
-        conn.execute(
-            "INSERT INTO tags (name, color) VALUES (?, ?)",
-            params![name, color],
-        )?;
-        Ok(conn.last_insert_rowid())
-    }
-
-    fn auto_tag_color(name: &str) -> &'static str {
-        match name {
-            "部署" => "#34d399",
-            "前端" => "#6366f1",
-            "链接" => "#fbbf24",
-            _ => "#6366f1",
-        }
-    }
-
-    /// Find a tag by name, or create one with `is_auto = 1`.
-    pub fn ensure_auto_tag(&self, name: &str) -> SqlResult<i64> {
-        let conn = self.conn.lock();
-        Self::ensure_auto_tag_conn(&conn, name)
-    }
-
-    fn ensure_auto_tag_conn(conn: &Connection, name: &str) -> SqlResult<i64> {
-        if let Ok(id) = conn.query_row(
-            "SELECT id FROM tags WHERE name = ?",
-            [name],
-            |row| row.get(0),
-        ) {
-            return Ok(id);
-        }
-        conn.execute(
-            "INSERT INTO tags (name, color, is_auto) VALUES (?, ?, 1)",
-            params![name, Self::auto_tag_color(name)],
-        )?;
-        Ok(conn.last_insert_rowid())
-    }
-
-    /// Apply auto-tag rules to a newly inserted record (OR within each rule).
-    /// Single lock + transaction so multiple rules don't re-acquire the DB mutex.
-    pub fn apply_auto_tags(
-        &self,
-        record_id: i64,
-        content: &str,
-        content_type: &ContentType,
-        rules: &[crate::AutoTagRule],
-    ) -> SqlResult<()> {
-        let ct = content_type.as_str();
-        let content_lower = content.to_lowercase();
-
-        let mut matched: Vec<&str> = Vec::new();
-        for rule in rules {
-            let tag_name = rule.tag_name.trim();
-            if tag_name.is_empty() {
-                continue;
-            }
-            let type_hit = rule.content_types.iter().any(|t| t.as_str() == ct);
-            let keyword_hit = rule.keywords.iter().any(|kw| {
-                let k = kw.trim();
-                !k.is_empty() && content_lower.contains(&k.to_lowercase())
-            });
-            if (type_hit || keyword_hit) && !matched.contains(&tag_name) {
-                matched.push(tag_name);
-            }
-        }
-        if matched.is_empty() {
-            return Ok(());
-        }
-
-        let conn = self.conn.lock();
-        let tx = conn.unchecked_transaction()?;
-        for tag_name in matched {
-            let tag_id = Self::ensure_auto_tag_conn(&tx, tag_name)?;
-            tx.execute(
-                "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
-                params![record_id, tag_id],
-            )?;
-        }
-        // Single FTS rebuild after all tags (no per-INSERT triggers).
-        Self::refresh_record_fts(&tx, record_id)?;
-        tx.commit()?;
-        Ok(())
-    }
-
-    pub fn delete_tag(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        conn.execute("DELETE FROM tags WHERE id = ?", [id])?;
-        Ok(())
-    }
-
-    pub fn update_tag(&self, id: i64, name: &str, color: &str) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        conn.execute(
-            "UPDATE tags SET name = ?, color = ? WHERE id = ?",
-            params![name, color, id],
-        )?;
-        Ok(())
-    }
-
-    pub fn add_tag_to_record(&self, record_id: i64, tag_id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        conn.execute(
-            "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
-            params![record_id, tag_id],
-        )?;
-        Self::refresh_record_fts(&conn, record_id)?;
-        Ok(())
-    }
-
-    pub fn remove_tag_from_record(&self, record_id: i64, tag_id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        conn.execute(
-            "DELETE FROM record_tags WHERE record_id = ? AND tag_id = ?",
-            params![record_id, tag_id],
-        )?;
-        Self::refresh_record_fts(&conn, record_id)?;
-        Ok(())
-    }
-
-    // === Stats ===
-
-    pub fn get_stats(&self) -> SqlResult<StatsData> {
-        let conn = self.lock_read();
-
-        // One table scan: aggregates + per-type counts (known content_type values).
-        let row: (
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-        ) = conn.query_row(
-            "SELECT COUNT(*),
-                    COALESCE(SUM(copy_count), 0),
-                    SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN is_pinned = 1 THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN is_sensitive = 1 THEN 1 ELSE 0 END),
-                    COALESCE(SUM(content_len), 0)
-                      + COALESCE(SUM(length(COALESCE(content_html, ''))), 0),
-                    SUM(CASE WHEN content_type = 'text' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN content_type = 'code' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN content_type = 'link' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN content_type = 'image' THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN content_type = 'file' THEN 1 ELSE 0 END)
-             FROM records WHERE is_trashed = 0",
-            [],
-            |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    row.get(4)?,
-                    row.get(5)?,
-                    row.get(6)?,
-                    row.get(7)?,
-                    row.get(8)?,
-                    row.get(9)?,
-                    row.get(10)?,
-                ))
-            },
-        )?;
-
-        let (
-            total_records,
-            total_copies,
-            favorites_count,
-            pinned_count,
-            sensitive_count,
-            content_bytes,
-            n_text,
-            n_code,
-            n_link,
-            n_image,
-            n_file,
-        ) = row;
-
-        let mut type_distribution = std::collections::HashMap::new();
-        type_distribution.insert("text".into(), n_text);
-        type_distribution.insert("code".into(), n_code);
-        type_distribution.insert("link".into(), n_link);
-        type_distribution.insert("image".into(), n_image);
-        type_distribution.insert("file".into(), n_file);
-        drop(conn);
-
-        let media_bytes = media::cached_media_dir_size(&self.media_root);
-        let storage_bytes = content_bytes.saturating_add(media_bytes);
-
-        Ok(StatsData {
-            total_records,
-            total_copies,
-            favorites_count,
-            pinned_count,
-            sensitive_count,
-            storage_bytes,
-            data_path: self.media_root.display().to_string(),
-            type_distribution,
-        })
-    }
-
-    /// Replace a record's tags in one transaction (avoids N round-trips from the UI).
-    pub fn set_record_tags(&self, record_id: i64, tag_ids: &[i64]) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        let tx = conn.unchecked_transaction()?;
-        tx.execute("DELETE FROM record_tags WHERE record_id = ?", [record_id])?;
-        for tag_id in tag_ids {
-            tx.execute(
-                "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
-                params![record_id, tag_id],
-            )?;
-        }
-        Self::refresh_record_fts(&tx, record_id)?;
-        tx.commit()?;
-        Ok(())
     }
 
     /// Full-content page for export/backup (never use list truncation columns).

@@ -134,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted, shallowRef } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
@@ -186,7 +186,6 @@ async function fillViewportIfNeeded() {
   const el = listRef.value;
   if (!el || !clipboardStore.hasMore || clipboardStore.isLoadingMore) return;
   viewportHeight.value = el.clientHeight;
-  // Cap recursive fills so a short first page doesn't spam IPC.
   let rounds = 0;
   while (
     rounds < 3 &&
@@ -200,13 +199,17 @@ async function fillViewportIfNeeded() {
   }
 }
 
+// Explicit token from store after first-page load/search — not tied to isLoading churn.
 watch(
-  () => clipboardStore.isLoading,
-  (loading, wasLoading) => {
-    // Only fill after a load finishes — avoids re-entry on hasMore / length churn.
-    if (wasLoading && !loading) void fillViewportIfNeeded();
+  () => clipboardStore.viewportFillToken,
+  () => {
+    void fillViewportIfNeeded();
   }
 );
+
+onMounted(() => {
+  void fillViewportIfNeeded();
+});
 
 const TYPE_LABELS: Record<string, string> = {
   text: '文本',
@@ -220,20 +223,33 @@ function isTextLike(type: string): boolean {
   return type === 'text' || type === 'code';
 }
 
+/** Layout-only row (no record payload — avoids rebuild on content/copy_count churn). */
 interface FlatItem {
   key: string;
   type: "label" | "record";
-  record?: ClipboardRecord;
+  id?: number;
   height: number;
   offset: number;
 }
 
 interface WindowItem extends FlatItem {
+  record?: ClipboardRecord;
   thumb?: string | null;
 }
 
-/** Full list layout offsets (cheap; no thumb URL work). */
-const flatItems = computed<FlatItem[]>(() => {
+/** Id order + pin flags + row heights — not content fields. */
+const layoutSig = computed(() => {
+  const records = clipboardStore.filteredRecords;
+  const rh = rowHeight.value;
+  const lh = labelHeight.value;
+  let sig = `${rh}|${lh}|`;
+  for (const r of records) {
+    sig += `${r.id}:${r.is_pinned ? 1 : 0},`;
+  }
+  return sig;
+});
+
+function buildFlatItems(): FlatItem[] {
   const records = clipboardStore.filteredRecords;
   const items: FlatItem[] = [];
   let offset = 0;
@@ -248,14 +264,23 @@ const flatItems = computed<FlatItem[]>(() => {
     items.push({
       key: `r-${r.id}`,
       type: "record",
-      record: r,
+      id: r.id,
       height: rh,
       offset,
     });
     offset += rh;
   }
   return items;
-});
+}
+
+const flatItems = shallowRef<FlatItem[]>(buildFlatItems());
+
+watch(
+  layoutSig,
+  () => {
+    flatItems.value = buildFlatItems();
+  }
+);
 
 const contentHeight = computed(() => {
   const items = flatItems.value;
@@ -279,14 +304,23 @@ const virtualRange = computed(() => {
   return { start, end };
 });
 
+/** Resolve live records for the visible window only (O(visible) lookups). */
+const recordsById = computed(() => {
+  const m = new Map<number, ClipboardRecord>();
+  for (const r of clipboardStore.filteredRecords) m.set(r.id, r);
+  return m;
+});
+
 const windowItems = computed<WindowItem[]>(() => {
   const { start, end } = virtualRange.value;
   const slice = flatItems.value.slice(start, end);
-  return slice.map((item) =>
-    item.type === "record" && item.record
-      ? { ...item, thumb: recordThumbSrc(item.record) }
-      : item,
-  );
+  const byId = recordsById.value;
+  return slice.map((item) => {
+    if (item.type !== "record" || item.id == null) return item;
+    const record = byId.get(item.id);
+    if (!record) return item;
+    return { ...item, record, thumb: recordThumbSrc(record) };
+  });
 });
 
 const virtualPadTop = computed(() => {
@@ -353,7 +387,7 @@ watch(
       return;
     }
     // Selected row may be outside the virtual window — jump by layout offset.
-    const target = flatItems.value.find((it) => it.record?.id === id);
+    const target = flatItems.value.find((it) => it.id === id);
     if (!target) return;
     const viewH = list.clientHeight;
     const top = target.offset;

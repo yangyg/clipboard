@@ -100,12 +100,9 @@ onMounted(async () => {
   await settingsStore.loadSettings();
   await applyAppMode();
 
-  // Load initial records
-  await clipboardStore.loadRecords();
+  // showPanel() loads records once (avoid a duplicate get_records on cold start)
   await clipboardStore.loadTags();
-
-  // Show the panel when the window becomes visible
-  showPanel();
+  await showPanel();
 
   // Listen for new clipboard records from Rust backend
   await listen<any>("clipboard-changed", (event) => {
@@ -117,7 +114,7 @@ onMounted(async () => {
   // Sensitive auto-expire deleted in Rust (throttled cleanup) → sync list
   await listen<number[]>("records-expired", (event) => {
     clipboardStore.removeExpiredFromList(event.payload ?? []);
-    void clipboardStore.loadStats();
+    clipboardStore.scheduleLoadStats();
   });
 
   // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)

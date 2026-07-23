@@ -115,7 +115,9 @@ impl ClipboardDb {
             CREATE INDEX IF NOT EXISTS idx_records_content_type ON records(content_type);
             CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);
             CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
-                ON records(is_trashed, updated_at DESC);"#,
+                ON records(is_trashed, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_records_auto_expire
+                ON records(auto_expire_at) WHERE auto_expire_at IS NOT NULL;"#,
         )?;
 
         // Migrations for databases created before these columns existed
@@ -657,17 +659,22 @@ impl ClipboardDb {
 
         let id = conn.last_insert_rowid();
 
-        // Only run the (more expensive) eviction scan when we're actually over
-        // the cap. Steady state is at/under the cap, so this skips the two
-        // ORDER-BY-scan statements on the vast majority of inserts.
-        let active_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM records WHERE is_trashed = 0",
-            [],
-            |row| row.get(0),
-        )?;
+        // Cheap over-cap probe (scan ≤ max+1 rows). Only then pay for a full COUNT.
         let max = max_records.max(1) as i64;
-        if active_count > max {
-            let overflow_count = (active_count - max) as i64;
+        let over_cap: bool = conn.query_row(
+            "SELECT COUNT(*) FROM (
+                SELECT 1 FROM records WHERE is_trashed = 0 LIMIT ?
+             )",
+            [max + 1],
+            |row| row.get::<_, i64>(0),
+        )? > max;
+        if over_cap {
+            let active_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM records WHERE is_trashed = 0",
+                [],
+                |row| row.get(0),
+            )?;
+            let overflow_count = (active_count - max).max(0);
             // Collect media of records about to be evicted by max_records
             let overflow_ids: Vec<i64> = {
                 let mut stmt = conn.prepare(
@@ -1227,9 +1234,22 @@ impl ClipboardDb {
         Ok(conn.last_insert_rowid())
     }
 
+    fn auto_tag_color(name: &str) -> &'static str {
+        match name {
+            "部署" => "#34d399",
+            "前端" => "#6366f1",
+            "链接" => "#fbbf24",
+            _ => "#6366f1",
+        }
+    }
+
     /// Find a tag by name, or create one with `is_auto = 1`.
     pub fn ensure_auto_tag(&self, name: &str) -> SqlResult<i64> {
         let conn = self.conn.lock();
+        Self::ensure_auto_tag_conn(&conn, name)
+    }
+
+    fn ensure_auto_tag_conn(conn: &Connection, name: &str) -> SqlResult<i64> {
         if let Ok(id) = conn.query_row(
             "SELECT id FROM tags WHERE name = ?",
             [name],
@@ -1237,20 +1257,15 @@ impl ClipboardDb {
         ) {
             return Ok(id);
         }
-        let color = match name {
-            "部署" => "#34d399",
-            "前端" => "#6366f1",
-            "链接" => "#fbbf24",
-            _ => "#6366f1",
-        };
         conn.execute(
             "INSERT INTO tags (name, color, is_auto) VALUES (?, ?, 1)",
-            params![name, color],
+            params![name, Self::auto_tag_color(name)],
         )?;
         Ok(conn.last_insert_rowid())
     }
 
     /// Apply auto-tag rules to a newly inserted record (OR within each rule).
+    /// Single lock + transaction so multiple rules don't re-acquire the DB mutex.
     pub fn apply_auto_tags(
         &self,
         record_id: i64,
@@ -1261,6 +1276,7 @@ impl ClipboardDb {
         let ct = content_type.as_str();
         let content_lower = content.to_lowercase();
 
+        let mut matched: Vec<&str> = Vec::new();
         for rule in rules {
             let tag_name = rule.tag_name.trim();
             if tag_name.is_empty() {
@@ -1271,11 +1287,24 @@ impl ClipboardDb {
                 let k = kw.trim();
                 !k.is_empty() && content_lower.contains(&k.to_lowercase())
             });
-            if type_hit || keyword_hit {
-                let tag_id = self.ensure_auto_tag(tag_name)?;
-                self.add_tag_to_record(record_id, tag_id)?;
+            if (type_hit || keyword_hit) && !matched.contains(&tag_name) {
+                matched.push(tag_name);
             }
         }
+        if matched.is_empty() {
+            return Ok(());
+        }
+
+        let conn = self.conn.lock();
+        let tx = conn.unchecked_transaction()?;
+        for tag_name in matched {
+            let tag_id = Self::ensure_auto_tag_conn(&tx, tag_name)?;
+            tx.execute(
+                "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
+                params![record_id, tag_id],
+            )?;
+        }
+        tx.commit()?;
         Ok(())
     }
 

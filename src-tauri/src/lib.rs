@@ -7,10 +7,12 @@ mod window;
 mod tray;
 
 use db::{ClipboardDb, ContentType, ImageMeta};
-use clipboard::{ClipboardMonitor, ClipboardEvent};
+use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
 use detect::{detect_content_type, detect_sensitive, sha256_hash};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::mpsc;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use tauri::{Emitter, Manager};
@@ -416,155 +418,39 @@ pub fn run() {
                 }
             }
 
-            // Start clipboard monitoring
-            let app_handle_clone = app_handle.clone();
+            // Clipboard monitor only enqueues; a worker does media encode / DB / emit
+            // so the poll thread is not blocked on PNG compression or SQLite.
             let media_root = db.media_root().to_path_buf();
+            let (capture_tx, capture_rx) = mpsc::sync_channel::<CaptureJob>(4);
+            let db_worker = db.clone();
+            let app_worker = app_handle.clone();
+            let media_root_worker = media_root.clone();
+            std::thread::spawn(move || {
+                while let Ok(job) = capture_rx.recv() {
+                    process_capture_job(job, &db_worker, &media_root_worker, &app_worker);
+                }
+            });
+
             std::thread::spawn(move || {
                 monitor.write().start(move |event| {
                     if *capture_paused_thread.read() {
                         return;
                     }
-
-                    // Capture foreground window info
                     let (source_window, source_app) = clipboard::get_foreground_window_info();
-
-                    match event {
-                        ClipboardEvent::Text(captured) => {
-                            let settings = db.get_settings().unwrap_or_default();
-                            if is_ignored_app(&source_app, &settings.ignored_apps) {
-                                return;
-                            }
-
-                            let content_type = detect_content_type(&captured.text);
-                            let is_sensitive =
-                                settings.enable_sensitive_detection && detect_sensitive(&captured.text);
-                            // Include HTML in hash so same plain text with different format is distinct
-                            let hash = sha256_hash(&captured.fingerprint());
-
-                            if let Ok(ids) = maybe_run_cleanup(&db) {
-                                if !ids.is_empty() {
-                                    app_handle_clone.emit("records-expired", &ids).ok();
-                                }
-                            }
-                            match db.insert_record(
-                                &captured.text,
-                                &content_type,
-                                &hash,
-                                is_sensitive,
-                                settings.max_records,
-                                settings.sensitive_auto_expire_seconds,
-                                &source_app,
-                                &source_window,
-                                None,
-                                captured.html.as_deref(),
-                            ) {
-                                Ok((id, is_new)) => {
-                                    if is_new && settings.enable_auto_tag {
-                                        if let Err(e) = db.apply_auto_tags(
-                                            id,
-                                            &captured.text,
-                                            &content_type,
-                                            &settings.auto_tag_rules,
-                                        ) {
-                                            warn!("Failed to apply auto tags: {}", e);
-                                        }
-                                    }
-                                    info!(
-                                        "New clipboard record: id={}, type={}, formatted={}, is_new={}",
-                                        id,
-                                        content_type,
-                                        captured.html.is_some(),
-                                        is_new
-                                    );
-                                    if let Ok(record) = db.get_record(id) {
-                                        if let Some(r) = record {
-                                            app_handle_clone
-                                                .emit("clipboard-changed", list_ipc_payload(r))
-                                                .ok();
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!("Failed to insert text record: {}", e);
-                                }
-                            }
-                        }
-                        ClipboardEvent::Image(captured) => {
-                            let settings = db.get_settings().unwrap_or_default();
-                            if is_ignored_app(&source_app, &settings.ignored_apps) {
-                                return;
-                            }
-
-                            if let Ok(ids) = maybe_run_cleanup(&db) {
-                                if !ids.is_empty() {
-                                    app_handle_clone.emit("records-expired", &ids).ok();
-                                }
-                            }
-
-                            match media::store_clipboard_image(
-                                &media_root,
-                                captured.rgba,
-                                captured.width,
-                                captured.height,
-                                &captured.hash,
-                            ) {
-                                Ok(stored) => {
-                                    let image_meta = ImageMeta {
-                                        media_path: stored.media_path,
-                                        thumb_path: stored.thumb_path,
-                                        width: stored.width as i32,
-                                        height: stored.height as i32,
-                                    };
-                                    // content holds a short label for search/list; binary lives on disk
-                                    let label = format!(
-                                        "[image {}x{}]",
-                                        stored.width, stored.height
-                                    );
-                                    match db.insert_record(
-                                        &label,
-                                        &ContentType::Image,
-                                        &captured.hash,
-                                        false,
-                                        settings.max_records,
-                                        settings.sensitive_auto_expire_seconds,
-                                        &source_app,
-                                        &source_window,
-                                        Some(&image_meta),
-                                        None,
-                                    ) {
-                                        Ok((id, is_new)) => {
-                                            if is_new && settings.enable_auto_tag {
-                                                if let Err(e) = db.apply_auto_tags(
-                                                    id,
-                                                    &label,
-                                                    &ContentType::Image,
-                                                    &settings.auto_tag_rules,
-                                                ) {
-                                                    warn!("Failed to apply auto tags: {}", e);
-                                                }
-                                            }
-                                            info!(
-                                                "New clipboard record: id={}, type=image, is_new={}",
-                                                id, is_new
-                                            );
-                                            if let Ok(record) = db.get_record(id) {
-                                                if let Some(r) = record {
-                                                    app_handle_clone
-                                                        .emit("clipboard-changed", list_ipc_payload(r))
-                                                        .ok();
-                                                }
-                                            }
-                                        }
-                                        Err(e) => {
-                                            warn!("Failed to insert image record: {}", e);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!("Failed to store clipboard image: {}", e);
-                                }
-                            }
-                        }
+                    let job = match event {
+                        ClipboardEvent::Text(captured) => CaptureJob::Text {
+                            captured,
+                            source_app,
+                            source_window,
+                        },
+                        ClipboardEvent::Image(captured) => CaptureJob::Image {
+                            captured,
+                            source_app,
+                            source_window,
+                        },
+                    };
+                    if let Err(e) = capture_tx.send(job) {
+                        warn!("Capture worker stopped accepting jobs: {}", e);
                     }
                 });
             });
@@ -607,6 +493,155 @@ pub fn run() {
 // ============================================================
 // Helper Functions
 // ============================================================
+
+enum CaptureJob {
+    Text {
+        captured: CapturedText,
+        source_app: String,
+        source_window: String,
+    },
+    Image {
+        captured: CapturedImage,
+        source_app: String,
+        source_window: String,
+    },
+}
+
+fn process_capture_job(
+    job: CaptureJob,
+    db: &ClipboardDb,
+    media_root: &PathBuf,
+    app: &tauri::AppHandle,
+) {
+    match job {
+        CaptureJob::Text {
+            captured,
+            source_app,
+            source_window,
+        } => {
+            let settings = db.get_settings().unwrap_or_default();
+            if is_ignored_app(&source_app, &settings.ignored_apps) {
+                return;
+            }
+
+            let content_type = detect_content_type(&captured.text);
+            let is_sensitive =
+                settings.enable_sensitive_detection && detect_sensitive(&captured.text);
+            // Fingerprint is already a hex SHA-256 of text+html; wrap once for DB hash.
+            let hash = sha256_hash(&captured.fingerprint());
+
+            if let Ok(ids) = maybe_run_cleanup(db) {
+                if !ids.is_empty() {
+                    app.emit("records-expired", &ids).ok();
+                }
+            }
+            match db.insert_record(
+                &captured.text,
+                &content_type,
+                &hash,
+                is_sensitive,
+                settings.max_records,
+                settings.sensitive_auto_expire_seconds,
+                &source_app,
+                &source_window,
+                None,
+                captured.html.as_deref(),
+            ) {
+                Ok((id, is_new)) => {
+                    if is_new && settings.enable_auto_tag {
+                        if let Err(e) = db.apply_auto_tags(
+                            id,
+                            &captured.text,
+                            &content_type,
+                            &settings.auto_tag_rules,
+                        ) {
+                            warn!("Failed to apply auto tags: {}", e);
+                        }
+                    }
+                    info!(
+                        "New clipboard record: id={}, type={}, formatted={}, is_new={}",
+                        id,
+                        content_type,
+                        captured.html.is_some(),
+                        is_new
+                    );
+                    if let Ok(Some(r)) = db.get_record(id) {
+                        app.emit("clipboard-changed", list_ipc_payload(r)).ok();
+                    }
+                }
+                Err(e) => warn!("Failed to insert text record: {}", e),
+            }
+        }
+        CaptureJob::Image {
+            captured,
+            source_app,
+            source_window,
+        } => {
+            let settings = db.get_settings().unwrap_or_default();
+            if is_ignored_app(&source_app, &settings.ignored_apps) {
+                return;
+            }
+
+            if let Ok(ids) = maybe_run_cleanup(db) {
+                if !ids.is_empty() {
+                    app.emit("records-expired", &ids).ok();
+                }
+            }
+
+            match media::store_clipboard_image(
+                media_root,
+                captured.rgba,
+                captured.width,
+                captured.height,
+                &captured.hash,
+            ) {
+                Ok(stored) => {
+                    let image_meta = ImageMeta {
+                        media_path: stored.media_path,
+                        thumb_path: stored.thumb_path,
+                        width: stored.width as i32,
+                        height: stored.height as i32,
+                    };
+                    let label = format!("[image {}x{}]", stored.width, stored.height);
+                    match db.insert_record(
+                        &label,
+                        &ContentType::Image,
+                        &captured.hash,
+                        false,
+                        settings.max_records,
+                        settings.sensitive_auto_expire_seconds,
+                        &source_app,
+                        &source_window,
+                        Some(&image_meta),
+                        None,
+                    ) {
+                        Ok((id, is_new)) => {
+                            if is_new && settings.enable_auto_tag {
+                                if let Err(e) = db.apply_auto_tags(
+                                    id,
+                                    &label,
+                                    &ContentType::Image,
+                                    &settings.auto_tag_rules,
+                                ) {
+                                    warn!("Failed to apply auto tags: {}", e);
+                                }
+                            }
+                            info!(
+                                "New clipboard record: id={}, type=image, is_new={}",
+                                id, is_new
+                            );
+                            if let Ok(Some(r)) = db.get_record(id) {
+                                app.emit("clipboard-changed", list_ipc_payload(r)).ok();
+                            }
+                        }
+                        Err(e) => warn!("Failed to insert image record: {}", e),
+                    }
+                }
+                Err(e) => warn!("Failed to store clipboard image: {}", e),
+            }
+        }
+    }
+}
 
 static LAST_CLEANUP_UNIX: AtomicU64 = AtomicU64::new(0);
 const CLEANUP_INTERVAL_SECS: u64 = 60;

@@ -111,67 +111,72 @@ impl ClipboardMonitor {
 
                 let suppressed = is_capture_suppressed(&suppress_until);
 
-                // Windows often puts BOTH a bitmap and text on the clipboard:
-                // - Screenshots: image + empty/stub text → keep image
-                // - Douyin/WeChat shares: thumb image + long share text → prefer text
-                let image = clipboard.get_image().ok();
+                // Read text first. Skip get_image() (full RGBA copy) when:
+                // - meaningful share text wins over a co-existing thumb, or
+                // - the clipboard has no bitmap/DIB formats at all.
                 let text = read_clipboard_text(clipboard);
-
                 let prefer_text = text
                     .as_ref()
                     .map(|t| is_meaningful_share_text(&t.text))
                     .unwrap_or(false);
 
-                if let Some(img) = image {
-                    // Cheap fingerprint first — avoid full SHA-256 when bitmap unchanged
-                    let quick = image_quick_fingerprint(&img);
-                    let unchanged = {
-                        let last = last_image_hash.lock();
-                        matches!(&*last, Some(prev) if prev == &quick)
-                    };
+                if prefer_text {
+                    if let Some(captured) = text {
+                        maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
+                    }
+                    thread::sleep(poll_interval);
+                    continue;
+                }
 
-                    if unchanged {
-                        if prefer_text {
+                if clipboard_has_bitmap_format() {
+                    // Windows often keeps BOTH a bitmap and text:
+                    // - Screenshots: image + empty/stub text → keep image
+                    // - Browser "Copy image": image + URL-only text → keep image
+                    if let Some(img) = clipboard.get_image().ok() {
+                        // Cheap fingerprint first — avoid full SHA-256 when bitmap unchanged
+                        let quick = image_quick_fingerprint(&img);
+                        let unchanged = {
+                            let last = last_image_hash.lock();
+                            matches!(&*last, Some(prev) if prev == &quick)
+                        };
+
+                        if unchanged {
+                            // Stale bitmap + new text (common on Windows) → still emit text.
                             if let Some(captured) = text {
                                 maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                             }
-                        } else if let Some(captured) = text {
-                            *last_text_fp.lock() = Some(captured.fingerprint());
-                        }
-                    } else if prefer_text {
-                        *last_image_hash.lock() = Some(quick);
-                        if let Some(captured) = text {
-                            maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
-                        }
-                    } else {
-                        let width = img.width as u32;
-                        let height = img.height as u32;
-                        // Prefer moving owned buffer; only copy when Cow is borrowed
-                        let raw = match img.bytes {
-                            std::borrow::Cow::Owned(v) => v,
-                            std::borrow::Cow::Borrowed(b) => b.to_vec(),
-                        };
-                        let hash = {
-                            use sha2::{Digest, Sha256};
-                            let mut hasher = Sha256::new();
-                            hasher.update(&raw);
-                            hex::encode(hasher.finalize())
-                        };
-                        *last_image_hash.lock() = Some(quick);
-                        if let Some(captured) = text {
-                            *last_text_fp.lock() = Some(captured.fingerprint());
-                        }
-                        if !suppressed {
-                            debug!("Clipboard changed (image): {}x{}", width, height);
-                            on_change(ClipboardEvent::Image(CapturedImage {
-                                rgba: raw,
-                                width,
-                                height,
-                                hash,
-                            }));
                         } else {
-                            debug!("Suppressed self-write image capture {}x{}", width, height);
+                            let width = img.width as u32;
+                            let height = img.height as u32;
+                            // Prefer moving owned buffer; only copy when Cow is borrowed
+                            let raw = match img.bytes {
+                                std::borrow::Cow::Owned(v) => v,
+                                std::borrow::Cow::Borrowed(b) => b.to_vec(),
+                            };
+                            let hash = {
+                                use sha2::{Digest, Sha256};
+                                let mut hasher = Sha256::new();
+                                hasher.update(&raw);
+                                hex::encode(hasher.finalize())
+                            };
+                            *last_image_hash.lock() = Some(quick);
+                            if let Some(captured) = text {
+                                *last_text_fp.lock() = Some(captured.fingerprint());
+                            }
+                            if !suppressed {
+                                debug!("Clipboard changed (image): {}x{}", width, height);
+                                on_change(ClipboardEvent::Image(CapturedImage {
+                                    rgba: raw,
+                                    width,
+                                    height,
+                                    hash,
+                                }));
+                            } else {
+                                debug!("Suppressed self-write image capture {}x{}", width, height);
+                            }
                         }
+                    } else if let Some(captured) = text {
+                        maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                     }
                 } else if let Some(captured) = text {
                     maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
@@ -214,6 +219,27 @@ fn clipboard_sequence_number() -> u32 {
     #[cfg(not(windows))]
     {
         0
+    }
+}
+
+/// True when the clipboard advertises a bitmap/DIB format (cheap; no pixel copy).
+fn clipboard_has_bitmap_format() -> bool {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::DataExchange::IsClipboardFormatAvailable;
+        // CF_BITMAP=2, CF_DIB=8, CF_DIBV5=17 — any one means get_image() may succeed.
+        const CF_BITMAP: u32 = 2;
+        const CF_DIB: u32 = 8;
+        const CF_DIBV5: u32 = 17;
+        unsafe {
+            IsClipboardFormatAvailable(CF_BITMAP) != 0
+                || IsClipboardFormatAvailable(CF_DIB) != 0
+                || IsClipboardFormatAvailable(CF_DIBV5) != 0
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        true
     }
 }
 

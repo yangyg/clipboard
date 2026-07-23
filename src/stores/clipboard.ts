@@ -44,6 +44,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
   let loadSeq = 0;
   let expireSweepTimer: ReturnType<typeof setTimeout> | null = null;
   let expireSweepRunning = false;
+  let tagsLoadTimer: ReturnType<typeof setTimeout> | null = null;
+  const TAGS_DEBOUNCE_MS = 350;
 
   /** Soft cap for in-memory list (onNewRecord prepend without bound was a leak). */
   const LIST_SOFT_CAP = PAGE_SIZE * 2;
@@ -131,6 +133,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
         seen.add(r.id);
       }
     }
+    // loadMore previously bypassed the soft cap used by onNewRecord.
+    trimRecordsSoftCap();
   }
 
   // === Actions ===
@@ -288,7 +292,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     // Keep activeTag — type/favorites and tag combine with AND.
     selectedId.value = null;
     reloadList();
-    void loadTags();
+    scheduleLoadTags();
   }
 
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
@@ -567,7 +571,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       isSearching.value = false;
     }
     selectedId.value = null;
-    void loadTags();
+    scheduleLoadTags();
   }
 
   function toggleBatchMode() {
@@ -601,7 +605,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   function onNewRecord(record: ClipboardRecord) {
     scheduleLoadStats();
     if (record.tags.length > 0) {
-      void loadTags();
+      scheduleLoadTags();
     }
     if (trashFilter.value || searchQuery.value) return;
     if (activeTag.value && !record.tags.includes(activeTag.value)) return;
@@ -651,6 +655,15 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   // === Tag Actions ===
 
+  /** Coalesce rapid get_all_tags calls (filter flips, auto-tag bursts, assign dialog). */
+  function scheduleLoadTags() {
+    if (tagsLoadTimer) clearTimeout(tagsLoadTimer);
+    tagsLoadTimer = setTimeout(() => {
+      tagsLoadTimer = null;
+      void loadTags();
+    }, TAGS_DEBOUNCE_MS);
+  }
+
   async function loadTags() {
     try {
       const favoritesOnly = !trashFilter.value && activeFilter.value === "favorites";
@@ -670,7 +683,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   async function createTag(name: string, color: string) {
     try {
       await invoke<Tag>("create_tag", { name, color });
-      await loadTags();
+      scheduleLoadTags();
     } catch (e) {
       console.error("Failed to create tag:", e);
     }
@@ -690,7 +703,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
           activeTag.value = null;
         }
       }
-      await loadTags();
+      scheduleLoadTags();
     } catch (e) {
       console.error("Failed to delete tag:", e);
       throw e;
@@ -715,7 +728,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
           activeTag.value = name;
         }
       }
-      await loadTags();
+      scheduleLoadTags();
     } catch (e) {
       console.error("Failed to update tag:", e);
       throw e;
@@ -729,7 +742,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (record && !record.tags.includes(tagName)) {
         record.tags = [...record.tags, tagName];
       }
-      await loadTags();
+      scheduleLoadTags();
     } catch (e) {
       console.error("Failed to add tag to record:", e);
     }
@@ -742,7 +755,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (record) {
         record.tags = record.tags.filter((t) => t !== tagName);
       }
-      await loadTags();
+      scheduleLoadTags();
     } catch (e) {
       console.error("Failed to remove tag from record:", e);
     }
@@ -812,8 +825,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
     ensureRecordDetail,
     onNewRecord,
     loadStats,
+    scheduleLoadStats,
     importRecords,
     loadTags,
+    scheduleLoadTags,
     createTag,
     deleteTag,
     updateTag,

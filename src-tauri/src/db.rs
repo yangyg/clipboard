@@ -665,30 +665,32 @@ impl ClipboardDb {
             [],
             |row| row.get(0),
         )?;
-        if active_count > max_records.max(1) as i64 {
+        let max = max_records.max(1) as i64;
+        if active_count > max {
+            let overflow_count = (active_count - max) as i64;
             // Collect media of records about to be evicted by max_records
             let overflow_ids: Vec<i64> = {
                 let mut stmt = conn.prepare(
                     "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                     ORDER BY updated_at ASC
-                     LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)",
+                     ORDER BY updated_at ASC LIMIT ?",
                 )?;
                 let ids = stmt
-                    .query_map([max_records.max(1)], |row| row.get(0))?
+                    .query_map([overflow_count], |row| row.get(0))?
                     .filter_map(|r| r.ok())
                     .collect();
                 ids
             };
             let overflow_media = self.fetch_media_paths_by_ids(&conn, &overflow_ids)?;
 
-            conn.execute(
-                "DELETE FROM records WHERE id IN (
-                    SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                    ORDER BY updated_at ASC
-                    LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)
-                )",
-                [max_records.max(1)],
-            )?;
+            if !overflow_ids.is_empty() {
+                let placeholders = Self::id_placeholders(overflow_ids.len());
+                let params: Vec<&dyn rusqlite::types::ToSql> =
+                    overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+                conn.execute(
+                    &format!("DELETE FROM records WHERE id IN ({placeholders})"),
+                    params.as_slice(),
+                )?;
+            }
             drop(conn);
             self.purge_media_pairs(&overflow_media);
         }
@@ -1067,6 +1069,15 @@ impl ClipboardDb {
         let tx = conn.transaction()?;
         let mut imported = 0;
 
+        // Batch-load existing hashes in one query instead of per-record lookups.
+        let existing_hashes: std::collections::HashSet<String> = {
+            let mut stmt = tx.prepare("SELECT hash FROM records")?;
+            let hashes: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            hashes.into_iter().collect()
+        };
+
         for record in records {
             // Skip empty text records; image records may have empty content with media_path
             let is_image = record.content_type == "image";
@@ -1074,13 +1085,7 @@ impl ClipboardDb {
                 continue;
             }
 
-            let exists: i64 = tx.query_row(
-                "SELECT COUNT(*) FROM records WHERE hash = ?",
-                [&record.hash],
-                |row| row.get(0),
-            )?;
-
-            if exists > 0 {
+            if existing_hashes.contains(&record.hash) {
                 continue;
             }
 
@@ -1114,49 +1119,58 @@ impl ClipboardDb {
             imported += 1;
         }
 
-        let overflow_ids: Vec<i64> = {
-            let mut stmt = tx.prepare(
-                "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                 ORDER BY updated_at ASC
-                 LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)",
-            )?;
-            let ids = stmt
-                .query_map([max_records.max(1)], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
-            ids
-        };
-        let overflow_media: Vec<(Option<String>, Option<String>)> = {
-            if overflow_ids.is_empty() {
-                Vec::new()
-            } else {
-                let placeholders = Self::id_placeholders(overflow_ids.len());
-                let sql = format!(
-                    "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
-                    placeholders
-                );
-                let params: Vec<&dyn rusqlite::types::ToSql> =
-                    overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
-                let mut stmt = tx.prepare(&sql)?;
-                let pairs = stmt
-                    .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+        let active_count: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM records WHERE is_trashed = 0", [], |row| row.get(0),
+        )?;
+        let max = max_records.max(1) as i64;
+        if active_count > max {
+            let overflow_count = active_count - max;
+            let overflow_ids: Vec<i64> = {
+                let mut stmt = tx.prepare(
+                    "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
+                     ORDER BY updated_at ASC LIMIT ?",
+                )?;
+                let ids: Vec<i64> = stmt
+                    .query_map([overflow_count], |row| row.get(0))?
                     .filter_map(|r| r.ok())
                     .collect();
-                pairs
-            }
-        };
+                ids
+            };
+            let overflow_media: Vec<(Option<String>, Option<String>)> = {
+                if overflow_ids.is_empty() {
+                    Vec::new()
+                } else {
+                    let placeholders = Self::id_placeholders(overflow_ids.len());
+                    let sql = format!(
+                        "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
+                        placeholders
+                    );
+                    let params: Vec<&dyn rusqlite::types::ToSql> =
+                        overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+                    let mut stmt = tx.prepare(&sql)?;
+                    let pairs: Vec<(Option<String>, Option<String>)> = stmt
+                        .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
+                        .filter_map(|r| r.ok())
+                        .collect();
+                    pairs
+                }
+            };
 
-        tx.execute(
-            "DELETE FROM records WHERE id IN (
-                SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                ORDER BY updated_at ASC
-                LIMIT MAX(0, (SELECT COUNT(*) FROM records WHERE is_trashed = 0) - ?)
-            )",
-            [max_records.max(1)],
-        )?;
-        tx.commit()?;
-        drop(conn);
-        self.purge_media_pairs(&overflow_media);
+            if !overflow_ids.is_empty() {
+                let placeholders = Self::id_placeholders(overflow_ids.len());
+                let params: Vec<&dyn rusqlite::types::ToSql> =
+                    overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+                tx.execute(
+                    &format!("DELETE FROM records WHERE id IN ({placeholders})"),
+                    params.as_slice(),
+                )?;
+            }
+            tx.commit()?;
+            drop(conn);
+            self.purge_media_pairs(&overflow_media);
+        } else {
+            tx.commit()?;
+        }
         Ok(imported)
     }
 
@@ -1302,16 +1316,18 @@ impl ClipboardDb {
 
     pub fn get_stats(&self) -> SqlResult<StatsData> {
         let conn = self.conn.lock();
-        let total_records = conn.query_row("SELECT COUNT(*) FROM records WHERE is_trashed = 0", [], |row| row.get(0))?;
-        let total_copies = conn.query_row("SELECT COALESCE(SUM(copy_count), 0) FROM records WHERE is_trashed = 0", [], |row| row.get(0))?;
-        let favorites_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_favorite = 1 AND is_trashed = 0", [], |row| row.get(0))?;
-        let pinned_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_pinned = 1 AND is_trashed = 0", [], |row| row.get(0))?;
-        let sensitive_count = conn.query_row("SELECT COUNT(*) FROM records WHERE is_sensitive = 1 AND is_trashed = 0", [], |row| row.get(0))?;
-        let content_bytes: i64 = conn.query_row(
-            "SELECT COALESCE(SUM(length(content)), 0) + COALESCE(SUM(length(COALESCE(content_html, ''))), 0)
+
+        // Single-pass aggregation: one lock, one scan instead of 6 separate queries.
+        let (total_records, total_copies, favorites_count, pinned_count, sensitive_count, content_bytes): (i64, i64, i64, i64, i64, i64) = conn.query_row(
+            "SELECT COUNT(*),
+                    COALESCE(SUM(copy_count), 0),
+                    SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN is_pinned = 1 THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN is_sensitive = 1 THEN 1 ELSE 0 END),
+                    COALESCE(SUM(length(content)), 0) + COALESCE(SUM(length(COALESCE(content_html, ''))), 0)
              FROM records WHERE is_trashed = 0",
             [],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
         )?;
 
         let mut type_distribution = std::collections::HashMap::new();
@@ -1351,7 +1367,7 @@ struct MediaSizeCache {
 }
 
 static MEDIA_SIZE_CACHE: StdMutex<Option<MediaSizeCache>> = StdMutex::new(None);
-const MEDIA_SIZE_TTL: Duration = Duration::from_secs(30);
+const MEDIA_SIZE_TTL: Duration = Duration::from_secs(120);
 
 fn cached_media_dir_size(root: &std::path::Path) -> i64 {
     if let Ok(guard) = MEDIA_SIZE_CACHE.lock() {

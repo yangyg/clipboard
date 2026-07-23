@@ -385,11 +385,23 @@ pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Res
 
 #[tauri::command]
 pub async fn export_data(state: State<'_, AppState>) -> Result<String, String> {
-    let records = state
-        .db
-        .get_records(10000, 0, false, None, false, None, None)
-        .map_err(|e| e.to_string())?;
-    serde_json::to_string_pretty(&records).map_err(|e| e.to_string())
+    // Stream in pages to avoid loading all records into memory at once.
+    let page_size = 500;
+    let mut offset = 0;
+    let mut all: Vec<crate::ClipboardRecord> = Vec::new();
+    loop {
+        let batch = state
+            .db
+            .get_records(page_size, offset, false, None, false, None, None)
+            .map_err(|e| e.to_string())?;
+        let len = batch.len();
+        all.extend(batch);
+        if len < page_size as usize {
+            break;
+        }
+        offset += page_size;
+    }
+    serde_json::to_string_pretty(&all).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

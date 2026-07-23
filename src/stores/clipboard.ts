@@ -122,7 +122,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   function appendRecords(batch: ClipboardRecord[]) {
-    const seen = new Set(records.value.map((r) => r.id));
+    // Build a persistent-style Set once per call; batch is small (PAGE_SIZE).
+    const seen = new Set<number>();
+    for (const r of records.value) seen.add(r.id);
     for (const r of batch) {
       if (!seen.has(r.id)) {
         records.value.push(r);
@@ -143,7 +145,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       records.value = page.records;
       hasMore.value = page.has_more;
       recordDetails.value = new Map();
-      await loadStats();
+      scheduleLoadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Failed to load records:", e);
@@ -319,7 +321,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
         const record = records.value.find((r) => r.id === id);
         if (record) record.is_favorite = true;
       }
-      await loadStats();
+      scheduleLoadStats();
     } catch (e) {
       console.error("Batch favorite failed:", e);
     }
@@ -335,7 +337,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
         recordDetails.value = next;
       }
       if (selectedId.value === id) selectedId.value = null;
-      await loadStats();
+      scheduleLoadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Delete failed:", e);
@@ -348,7 +350,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       const newVal = await invoke<boolean>("toggle_favorite", { id });
       record.is_favorite = newVal;
-      await loadStats();
+      scheduleLoadStats();
       return newVal;
     } catch (e) {
       console.error("Toggle favorite failed:", e);
@@ -363,20 +365,16 @@ export const useClipboardStore = defineStore("clipboard", () => {
       const newVal = await invoke<boolean>("toggle_pin", { id });
       record.is_pinned = newVal;
       if (listSort.value === "updated_desc") {
-        // Re-sort to bring pinned to top. Parse each updated_at once (cached by id)
-        // instead of twice per comparison inside the sort.
-        const tsById = new Map<number, number>();
-        for (const r of records.value) {
-          tsById.set(r.id, new Date(r.updated_at).getTime());
-        }
+        // Re-sort: pinned first, then by updated_at desc.
+        // Use string comparison on ISO timestamps (lexicographic = chronological).
         records.value.sort((a, b) => {
           if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
-          return (tsById.get(b.id) ?? 0) - (tsById.get(a.id) ?? 0);
+          return b.updated_at.localeCompare(a.updated_at);
         });
       } else {
         reloadList();
       }
-      await loadStats();
+      scheduleLoadStats();
       return newVal;
     } catch (e) {
       console.error("Toggle pin failed:", e);
@@ -387,13 +385,14 @@ export const useClipboardStore = defineStore("clipboard", () => {
   async function deleteBatch(ids: number[]) {
     try {
       await invoke("delete_records_batch", { ids });
-      records.value = records.value.filter((r) => !ids.includes(r.id));
+      const idSet = new Set(ids);
+      records.value = records.value.filter((r) => !idSet.has(r.id));
       if (selectedId.value !== null && selectedIds.value.has(selectedId.value)) {
         selectedId.value = null;
       }
       selectedIds.value = new Set();
       batchMode.value = false;
-      await loadStats();
+      scheduleLoadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Batch delete failed:", e);
@@ -407,7 +406,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await invoke("restore_record", { id });
       records.value = records.value.filter((r) => r.id !== id);
       if (selectedId.value === id) selectedId.value = null;
-      await loadStats();
+      scheduleLoadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Restore failed:", e);
@@ -417,13 +416,14 @@ export const useClipboardStore = defineStore("clipboard", () => {
   async function restoreRecordsBatch(ids: number[]) {
     try {
       await invoke("restore_records_batch", { ids });
-      records.value = records.value.filter((r) => !ids.includes(r.id));
+      const idSet = new Set(ids);
+      records.value = records.value.filter((r) => !idSet.has(r.id));
       if (selectedId.value !== null && selectedIds.value.has(selectedId.value)) {
         selectedId.value = null;
       }
       selectedIds.value = new Set();
       batchMode.value = false;
-      await loadStats();
+      scheduleLoadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Batch restore failed:", e);
@@ -480,7 +480,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
         removeExpiredFromList(stale);
       }
       if (ids.length > 0 || stale.length > 0) {
-        await loadStats();
+        scheduleLoadStats();
       }
     } catch (e) {
       console.error("Purge expired failed:", e);
@@ -517,7 +517,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   watch(
-    () => records.value.map((r) => r.auto_expire_at),
+    () => records.value.length,
     () => {
       scheduleExpireSweep();
     }
@@ -542,7 +542,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       batchMode.value = false;
       trashCount.value = 0;
       recordDetails.value = new Map();
-      await loadStats();
+      scheduleLoadStats();
       await loadTrashCount();
     } catch (e) {
       console.error("Empty trash failed:", e);

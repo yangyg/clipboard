@@ -284,10 +284,24 @@ function badgeClass(record: ClipboardRecord): string {
   return `badge-${record.content_type}`;
 }
 
+let cachedNow = Date.now();
+let cachedNowTimer: ReturnType<typeof setTimeout> | null = null;
+
+function getNow(): number {
+  // Refresh the cached "now" at most once per 30s to avoid creating a Date
+  // object per row on every render.
+  if (!cachedNowTimer) {
+    cachedNowTimer = setTimeout(() => {
+      cachedNow = Date.now();
+      cachedNowTimer = null;
+    }, 30_000);
+  }
+  return cachedNow;
+}
+
 function formatTime(iso: string): string {
   const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
+  const diffMs = getNow() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "刚刚";
   if (diffMin < 60) return `${diffMin} 分钟前`;

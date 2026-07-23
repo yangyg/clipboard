@@ -1,9 +1,9 @@
 <template>
   <div class="app-root">
-    <!-- Floating mode: swap between panel and settings -->
+    <!-- Floating mode: keep panel mounted (v-show) to avoid full remount cost -->
     <template v-if="!isWindowMode">
-      <FloatingPanel v-if="panelVisible" @close="hidePanel" @openSettings="openSettings" />
-      <SettingsWindow v-else-if="settingsVisible" @close="closeSettings" />
+      <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
+      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
     </template>
     <!-- Window mode: panel always visible, settings replaces panel -->
     <template v-else>
@@ -40,6 +40,9 @@ const { settings } = storeToRefs(settingsStore);
 
 const panelVisible = ref(false);
 const settingsVisible = ref(false);
+/** Avoid full get_records on every focus if list is fresh enough. */
+let lastPanelReloadAt = 0;
+const PANEL_RELOAD_TTL_MS = 30_000;
 
 const appWindow = getCurrentWindow();
 const isWindowMode = computed(() => settings.value.app_mode === "window");
@@ -58,10 +61,19 @@ async function applyAppMode() {
   }
 }
 
+async function reloadPanelIfNeeded(force = false) {
+  const now = Date.now();
+  const stale = now - lastPanelReloadAt > PANEL_RELOAD_TTL_MS;
+  if (force || stale || clipboardStore.records.length === 0) {
+    lastPanelReloadAt = now;
+    await clipboardStore.loadRecords();
+  }
+}
+
 async function showPanel() {
   panelVisible.value = true;
   settingsVisible.value = false;
-  await clipboardStore.loadRecords();
+  await reloadPanelIfNeeded(false);
   await appWindow.show();
   await appWindow.setFocus();
 }
@@ -88,7 +100,8 @@ async function openSettings() {
     panelVisible.value = true;
     settingsVisible.value = true;
   } else {
-    panelVisible.value = false;
+    // Keep FloatingPanel mounted (v-show); only swap visibility with settings.
+    panelVisible.value = true;
     settingsVisible.value = true;
   }
   await appWindow.show();
@@ -102,6 +115,7 @@ onMounted(async () => {
 
   // showPanel() loads records once (avoid a duplicate get_records on cold start)
   await clipboardStore.loadTags();
+  lastPanelReloadAt = 0; // force first load
   await showPanel();
 
   // Listen for new clipboard records from Rust backend
@@ -120,8 +134,11 @@ onMounted(async () => {
   // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
   await listen<boolean>("toggle-panel", (event) => {
     if (event.payload) {
-      if (!panelVisible.value) {
+      if (!panelVisible.value || settingsVisible.value) {
         showPanel();
+      } else {
+        // Already visible — still show/focus window without forcing reload
+        void appWindow.show().then(() => appWindow.setFocus());
       }
     } else {
       if (panelVisible.value) {

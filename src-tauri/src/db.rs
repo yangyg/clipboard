@@ -73,13 +73,17 @@ const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_
 pub struct ClipboardDb {
     /// Writer connection (schema, inserts, updates, deletes).
     conn: Mutex<Connection>,
-    /// Separate reader connection — WAL allows UI reads while capture writes.
-    read_conn: Mutex<Connection>,
+    /// Small pool of query_only readers — WAL allows concurrent reads with the writer
+    /// and with each other (unlike a single Mutex around one read conn).
+    read_conns: Vec<Mutex<Connection>>,
+    read_rr: std::sync::atomic::AtomicUsize,
     media_root: PathBuf,
     /// In-memory copy of `app_settings`, populated lazily. Avoids re-parsing the
     /// settings JSON on every clipboard event (the monitor reads it 2-3x/event).
     settings_cache: RwLock<Option<Settings>>,
 }
+
+const READ_POOL_SIZE: usize = 3;
 
 impl ClipboardDb {
     fn configure_connection(conn: &Connection, query_only: bool) -> SqlResult<()> {
@@ -222,13 +226,18 @@ impl ClipboardDb {
 
         media::ensure_dirs(&media_root).ok();
 
-        // Second connection for reads (same DB file, WAL). Open after schema is ready.
-        let read_conn = Connection::open(db_path)?;
-        Self::configure_connection(&read_conn, true)?;
+        // Reader pool: open after schema is ready (same DB file, WAL).
+        let mut read_conns = Vec::with_capacity(READ_POOL_SIZE);
+        for _ in 0..READ_POOL_SIZE {
+            let c = Connection::open(db_path)?;
+            Self::configure_connection(&c, true)?;
+            read_conns.push(Mutex::new(c));
+        }
 
         Ok(Self {
             conn: Mutex::new(conn),
-            read_conn: Mutex::new(read_conn),
+            read_conns,
+            read_rr: std::sync::atomic::AtomicUsize::new(0),
             media_root,
             settings_cache: RwLock::new(None),
         })
@@ -236,7 +245,17 @@ impl ClipboardDb {
 
     #[inline]
     fn lock_read(&self) -> parking_lot::MutexGuard<'_, Connection> {
-        self.read_conn.lock()
+        let n = self.read_conns.len();
+        let start = self
+            .read_rr
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            % n;
+        for o in 0..n {
+            if let Some(g) = self.read_conns[(start + o) % n].try_lock() {
+                return g;
+            }
+        }
+        self.read_conns[start].lock()
     }
 
     /// Escape `%`, `_`, `\` for use with `LIKE … ESCAPE '\'`.

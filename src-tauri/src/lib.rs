@@ -11,7 +11,6 @@ use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
 use detect::{detect_content_type, detect_sensitive, sha256_hash, sha256_hash_bytes};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::mpsc;
 use std::sync::Arc;
 use parking_lot::RwLock;
@@ -432,6 +431,22 @@ pub fn run() {
                 }
             });
 
+            // Periodic cleanup off the capture path — stamp only after success.
+            let db_cleanup = db.clone();
+            let app_cleanup = app_handle.clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
+                    match run_periodic_cleanup(&db_cleanup) {
+                        Ok(ids) if !ids.is_empty() => {
+                            let _ = app_cleanup.emit("records-expired", &ids);
+                        }
+                        Ok(_) => {}
+                        Err(e) => warn!("Periodic cleanup failed: {}", e),
+                    }
+                }
+            });
+
             std::thread::spawn(move || {
                 monitor.write().start(move |event| {
                     if *capture_paused_thread.read() {
@@ -540,11 +555,6 @@ fn process_capture_job(
             // (historical inserts stored sha256(fingerprint), not fingerprint itself).
             let hash = sha256_hash(&captured.fingerprint());
 
-            if let Ok(ids) = maybe_run_cleanup(db) {
-                if !ids.is_empty() {
-                    app.emit("records-expired", &ids).ok();
-                }
-            }
             match db.insert_record(
                 &captured.text,
                 &content_type,
@@ -590,12 +600,6 @@ fn process_capture_job(
             let settings = db.get_settings().unwrap_or_default();
             if is_ignored_app(&source_app, &settings.ignored_apps) {
                 return;
-            }
-
-            if let Ok(ids) = maybe_run_cleanup(db) {
-                if !ids.is_empty() {
-                    app.emit("records-expired", &ids).ok();
-                }
             }
 
             let hash = if captured.hash.is_empty() {
@@ -658,19 +662,10 @@ fn process_capture_job(
     }
 }
 
-static LAST_CLEANUP_UNIX: AtomicU64 = AtomicU64::new(0);
 const CLEANUP_INTERVAL_SECS: u64 = 60;
 
-pub(crate) fn maybe_run_cleanup(db: &ClipboardDb) -> Result<Vec<i64>, String> {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let last = LAST_CLEANUP_UNIX.load(AtomicOrdering::Relaxed);
-    if now.saturating_sub(last) < CLEANUP_INTERVAL_SECS {
-        return Ok(Vec::new());
-    }
-    LAST_CLEANUP_UNIX.store(now, AtomicOrdering::Relaxed);
+/// Background cleanup: expire sensitive rows + retention. Does not run on capture.
+fn run_periodic_cleanup(db: &ClipboardDb) -> Result<Vec<i64>, String> {
     let expired = db.cleanup_expired().map_err(|e| e.to_string())?;
     if let Ok(settings) = db.get_settings() {
         db.cleanup_retention(settings.retention_days)

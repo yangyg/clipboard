@@ -10,10 +10,6 @@
       <WindowApp v-if="panelVisible && !settingsVisible" @openSettings="openSettings" />
       <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
     </template>
-    <TrayMenu
-      @open-panel="showPanel"
-      @open-settings="openSettings"
-    />
     <ToastHost />
     <ConfirmDialog />
   </div>
@@ -27,7 +23,6 @@ import { invoke } from "@tauri-apps/api/core";
 import FloatingPanel from "./components/FloatingPanel.vue";
 import WindowApp from "./components/WindowApp.vue";
 import SettingsWindow from "./components/SettingsWindow.vue";
-import TrayMenu from "./components/TrayMenu.vue";
 import ToastHost from "./components/ToastHost.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import { useClipboardStore } from "./stores/clipboard";

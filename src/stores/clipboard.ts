@@ -543,8 +543,19 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  // Only reschedule when expire-relevant rows change (not every list append/dedup).
   watch(
-    () => records.value.length,
+    () => {
+      let count = 0;
+      let nearest = 0;
+      for (const r of records.value) {
+        if (!r.auto_expire_at) continue;
+        count++;
+        const t = new Date(r.auto_expire_at).getTime();
+        if (!Number.isNaN(t) && (nearest === 0 || t < nearest)) nearest = t;
+      }
+      return count === 0 ? "0" : `${count}:${nearest}`;
+    },
     () => {
       scheduleExpireSweep();
     }

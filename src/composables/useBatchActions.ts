@@ -11,12 +11,12 @@ export function useBatchActions() {
   }
 
   async function batchCopy() {
-    const ids = Array.from(clipboardStore.selectedIds);
-    if (!ids.length) {
+    const idSet = clipboardStore.selectedIds;
+    if (!idSet.size) {
       toast("请先选择条目", "warning");
       return;
     }
-    const selected = clipboardStore.records.filter((r) => ids.includes(r.id));
+    const selected = clipboardStore.records.filter((r) => idSet.has(r.id));
     if (!selected.length) return;
 
     const images = selected.filter((r) => r.content_type === "image");

@@ -24,7 +24,7 @@ pub async fn get_records(
     tag: Option<String>,
     sort: Option<String>,
 ) -> Result<RecordsPage, String> {
-    crate::maybe_run_cleanup(&state.db)?;
+    // Cleanup runs on capture / expire sweep — keep list reads off the hot path.
     let limit = limit.unwrap_or(60).max(1);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
@@ -165,8 +165,15 @@ pub async fn paste_record(
 
     let wrote = if r.content_type == "image" {
         if let Some(media_path) = r.media_path.as_deref() {
-            let (rgba, w, h) = media::load_image_rgba(state.db.media_root(), media_path)?;
-            clipboard::write_clipboard_image(&rgba, w, h)
+            // Prefer raw PNG clipboard format (no decode). Fall back to RGBA/DIB
+            // for targets that don't accept the registered "PNG" format.
+            let abs = media::absolute(state.db.media_root(), media_path);
+            if clipboard::write_clipboard_png_file(&abs) {
+                true
+            } else {
+                let (rgba, w, h) = media::load_image_rgba(state.db.media_root(), media_path)?;
+                clipboard::write_clipboard_image(&rgba, w, h)
+            }
         } else {
             return Err("Image file missing for this record".into());
         }

@@ -77,7 +77,7 @@ App.vue                          # Events (clipboard-changed, capture-paused, to
 - `tray.rs` — system tray menu / click
 - `clipboard.rs` — monitor, paste-target HWND, write clipboard, focus restore + `keybd_event` Ctrl+V, suppress self-write
 - `media.rs` — encode/store/load/delete
-- `db.rs` — CRUD, FTS5, trash, tags (`ensure_auto_tag` / `apply_auto_tags`), `insert_record` → `(id, is_new)`, stats (`data_path`), settings, list/search `ORDER BY` whitelist
+- `db.rs` — CRUD, FTS5, trash, tags (`ensure_auto_tag` / `apply_auto_tags`), `insert_record` → `(id, is_new)`, stats (`data_path`), settings, list/search `ORDER BY` whitelist. **WAL dual connections:** `conn` (write) + `read_conn` (`query_only`) so list/search/stats/get_record do not block on capture inserts.
 - `detect.rs` — content type + sensitive detection + SHA-256 helper
 - `main.rs` — `clipvault_lib::run()`
 

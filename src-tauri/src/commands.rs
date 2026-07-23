@@ -433,7 +433,7 @@ pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
-    crate::maybe_run_cleanup(&state.db)?;
+    // Cleanup stays on capture / list paths (60s throttle) — stats is a hot UI poll.
     state.db.get_stats().map_err(|e| e.to_string())
 }
 

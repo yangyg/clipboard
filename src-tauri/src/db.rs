@@ -71,7 +71,10 @@ const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_
                length(content) as content_len";
 
 pub struct ClipboardDb {
+    /// Writer connection (schema, inserts, updates, deletes).
     conn: Mutex<Connection>,
+    /// Separate reader connection — WAL allows UI reads while capture writes.
+    read_conn: Mutex<Connection>,
     media_root: PathBuf,
     /// In-memory copy of `app_settings`, populated lazily. Avoids re-parsing the
     /// settings JSON on every clipboard event (the monitor reads it 2-3x/event).
@@ -79,12 +82,20 @@ pub struct ClipboardDb {
 }
 
 impl ClipboardDb {
-    pub fn new(db_path: &Path, media_root: PathBuf) -> SqlResult<Self> {
-        let conn = Connection::open(db_path)?;
-
+    fn configure_connection(conn: &Connection, query_only: bool) -> SqlResult<()> {
         conn.execute_batch(
             "PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;",
         )?;
+        if query_only {
+            // Fail loudly if a "read" path accidentally tries to mutate.
+            conn.execute_batch("PRAGMA query_only=ON;")?;
+        }
+        Ok(())
+    }
+
+    pub fn new(db_path: &Path, media_root: PathBuf) -> SqlResult<Self> {
+        let conn = Connection::open(db_path)?;
+        Self::configure_connection(&conn, false)?;
 
         conn.execute_batch(
             r#"
@@ -170,11 +181,21 @@ impl ClipboardDb {
 
         media::ensure_dirs(&media_root).ok();
 
+        // Second connection for reads (same DB file, WAL). Open after schema is ready.
+        let read_conn = Connection::open(db_path)?;
+        Self::configure_connection(&read_conn, true)?;
+
         Ok(Self {
             conn: Mutex::new(conn),
+            read_conn: Mutex::new(read_conn),
             media_root,
             settings_cache: RwLock::new(None),
         })
+    }
+
+    #[inline]
+    fn lock_read(&self) -> parking_lot::MutexGuard<'_, Connection> {
+        self.read_conn.lock()
     }
 
     /// Escape `%`, `_`, `\` for use with `LIKE … ESCAPE '\'`.
@@ -505,7 +526,7 @@ impl ClipboardDb {
         tag_name: Option<&str>,
         sort: Option<&str>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
         let mut sql = format!(
             "SELECT {} FROM records WHERE is_trashed = ?",
             RECORD_COLS_LIST
@@ -557,7 +578,7 @@ impl ClipboardDb {
     }
 
     pub fn get_record(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
         let mut stmt = conn.prepare(&format!(
             "SELECT {} FROM records WHERE id = ?",
             RECORD_COLS
@@ -720,7 +741,7 @@ impl ClipboardDb {
             return Ok(Vec::new());
         }
 
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
         let mut sql = format!(
             "SELECT {} FROM records WHERE is_trashed = 0 AND (",
             RECORD_COLS_LIST
@@ -899,7 +920,7 @@ impl ClipboardDb {
     }
 
     pub fn get_trash_count(&self) -> SqlResult<i64> {
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
         conn.query_row("SELECT COUNT(*) FROM records WHERE is_trashed = 1", [], |row| row.get(0))
     }
 
@@ -971,7 +992,7 @@ impl ClipboardDb {
 
         let mut settings = Settings::default();
         {
-            let conn = self.conn.lock();
+            let conn = self.lock_read();
             if let Ok(json) = conn.query_row::<String, _, _>(
                 "SELECT value FROM settings WHERE key = 'app_settings'",
                 [],
@@ -1189,7 +1210,7 @@ impl ClipboardDb {
         content_type: Option<&str>,
         favorites_only: bool,
     ) -> SqlResult<Vec<TagInfo>> {
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
         let mut sql = String::from(
             "SELECT t.id, t.name, t.color, t.is_auto, COUNT(r.id) as cnt
              FROM tags t
@@ -1344,7 +1365,7 @@ impl ClipboardDb {
     // === Stats ===
 
     pub fn get_stats(&self) -> SqlResult<StatsData> {
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
 
         // Single-pass aggregation: one lock, one scan instead of 6 separate queries.
         let (total_records, total_copies, favorites_count, pinned_count, sensitive_count, content_bytes): (i64, i64, i64, i64, i64, i64) = conn.query_row(

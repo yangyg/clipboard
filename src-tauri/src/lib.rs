@@ -354,6 +354,8 @@ pub fn run() {
             commands::get_settings,
             commands::save_settings,
             commands::set_capture_paused,
+            commands::get_tray_menu_state,
+            commands::tray_menu_action,
             commands::export_data,
             commands::import_data,
             commands::clear_history,

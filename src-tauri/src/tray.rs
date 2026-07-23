@@ -1,80 +1,128 @@
-//! System tray icon, menu and event wiring. Extracted from `lib.rs`;
-//! behaviour unchanged.
+//! System tray icon and event wiring. Right-click shows the custom
+//! `tray-menu` window near the cursor; left-click toggles the main panel.
 
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
-use tracing::info;
 
-/// Build the system tray icon + menu and register its event handlers.
+/// Clamp menu top-left so the menu stays inside the work area (physical px).
+pub(crate) fn clamp_menu_position(
+    click: (f64, f64),
+    menu_size: (f64, f64),
+    work: (f64, f64, f64, f64), // x, y, w, h
+) -> (f64, f64) {
+    let (cx, cy) = click;
+    let (mw, mh) = menu_size;
+    let (wx, wy, ww, wh) = work;
+    let pad = 8.0;
+    let max_x = wx + ww - mw - pad;
+    let max_y = wy + wh - mh - pad;
+    let x = cx.min(max_x).max(wx + pad);
+    let y = cy.min(max_y).max(wy + pad);
+    (x, y)
+}
+
+/// Build the system tray icon (no native menu) and register click handlers.
 pub(crate) fn build_tray(
     app: &tauri::App,
     capture_paused: Arc<RwLock<bool>>,
 ) -> tauri::Result<()> {
-    let capture_paused_menu = capture_paused;
-
-    let show_item = MenuItemBuilder::with_id("show", "📋 打开面板").build(app)?;
-    let pause_item = MenuItemBuilder::with_id("pause", "⏸ 暂停捕获").build(app)?;
-    let settings_item = MenuItemBuilder::with_id("settings", "⚙ 设置").build(app)?;
-    let quit_item = MenuItemBuilder::with_id("quit", "❌ 退出").build(app)?;
-
-    let menu = MenuBuilder::new(app)
-        .item(&show_item)
-        .item(&pause_item)
-        .separator()
-        .item(&settings_item)
-        .separator()
-        .item(&quit_item)
-        .build()?;
+    let _capture_paused = capture_paused;
 
     let _tray = TrayIconBuilder::with_id("main-tray")
         .icon(app.default_window_icon().unwrap().clone())
         .tooltip("剪贴板管理")
-        .menu(&menu)
-        .on_menu_event(move |app, event| {
-            match event.id().as_ref() {
-                "show" => {
-                    crate::show_main_panel(app);
-                    info!("Tray menu: show panel");
-                }
-                "pause" => {
-                    let next = !*capture_paused_menu.read();
-                    *capture_paused_menu.write() = next;
-                    app.emit("capture-paused", next).ok();
-                    info!("Tray menu: capture paused = {}", next);
-                }
-                "settings" => {
+        .on_tray_icon_event(|tray, event| {
+            let app = tray.app_handle();
+            match event {
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } => {
                     if let Some(window) = app.get_webview_window("main") {
-                        let our = window.hwnd().ok().map(|h| h.0 as isize);
-                        crate::clipboard::remember_paste_target(our);
-                        window.show().ok();
-                        window.set_focus().ok();
-                        app.emit("open-settings", ()).ok();
+                        if window.is_visible().unwrap_or(false) {
+                            window.hide().ok();
+                            app.emit("toggle-panel", false).ok();
+                        } else {
+                            crate::show_main_panel(app);
+                        }
                     }
                 }
-                "quit" => {
-                    app.exit(0);
+                TrayIconEvent::Click {
+                    button: MouseButton::Right,
+                    button_state: MouseButtonState::Up,
+                    position,
+                    ..
+                } => {
+                    show_tray_menu(app, position);
                 }
                 _ => {}
             }
         })
-        .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
-                let app = tray.app_handle();
-                if let Some(window) = app.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
-                        window.hide().ok();
-                        app.emit("toggle-panel", false).ok();
-                    } else {
-                        crate::show_main_panel(app);
-                    }
-                }
-            }
-        })
         .build(app)?;
-
     Ok(())
+}
+
+fn show_tray_menu(app: &tauri::AppHandle, position: tauri::PhysicalPosition<f64>) {
+    let Some(window) = app.get_webview_window("tray-menu") else {
+        return;
+    };
+
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let (mw, mh) = (260.0 * scale, 220.0 * scale);
+
+    // Prefer monitor containing the click (hidden window's current_monitor may be wrong)
+    let work = app
+        .available_monitors()
+        .ok()
+        .into_iter()
+        .flatten()
+        .find(|m| {
+            let pos = m.position();
+            let size = m.size();
+            let x = position.x;
+            let y = position.y;
+            x >= pos.x as f64
+                && y >= pos.y as f64
+                && x < pos.x as f64 + size.width as f64
+                && y < pos.y as f64 + size.height as f64
+        })
+        .or_else(|| window.current_monitor().ok().flatten())
+        .map(|m| {
+            let pos = m.position();
+            let size = m.size();
+            (pos.x as f64, pos.y as f64, size.width as f64, size.height as f64)
+        })
+        .unwrap_or((0.0, 0.0, 1920.0 * scale, 1080.0 * scale));
+
+    let (x, y) = clamp_menu_position((position.x, position.y), (mw, mh), work);
+    let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition::new(
+        x.round() as i32,
+        y.round() as i32,
+    )));
+    let _ = window.show();
+    let _ = window.set_focus();
+    let _ = app.emit("tray-menu-opened", ());
+}
+
+#[cfg(test)]
+mod clamp_menu_position_tests {
+    use super::clamp_menu_position;
+
+    #[test]
+    fn clamps_to_bottom_right_when_near_edge() {
+        let (x, y) =
+            clamp_menu_position((1900.0, 1000.0), (260.0, 220.0), (0.0, 0.0, 1920.0, 1080.0));
+        assert!(x <= 1920.0 - 260.0 - 8.0);
+        assert!(y <= 1080.0 - 220.0 - 8.0);
+    }
+
+    #[test]
+    fn keeps_pad_from_origin() {
+        let (x, y) = clamp_menu_position((0.0, 0.0), (260.0, 220.0), (0.0, 0.0, 1920.0, 1080.0));
+        assert_eq!((x, y), (8.0, 8.0));
+    }
 }

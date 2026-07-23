@@ -444,6 +444,7 @@ pub async fn save_settings(
             let _ = crate::window::apply_window_round_corners(&window, settings.panel_radius);
         }
     }
+    let _ = app.emit("settings-updated", ());
     Ok(())
 }
 
@@ -495,6 +496,61 @@ fn is_autostart_already_cleared(err: &impl std::fmt::Display) -> bool {
 pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Result<(), String> {
     *state.capture_paused.write() = paused;
     info!("Capture paused: {}", paused);
+    Ok(())
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct TrayMenuState {
+    pub paused: bool,
+    pub theme: String,
+    pub enable_blur: bool,
+    pub panel_opacity: i32,
+}
+
+#[tauri::command]
+pub async fn get_tray_menu_state(state: State<'_, AppState>) -> Result<TrayMenuState, String> {
+    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    Ok(TrayMenuState {
+        paused: *state.capture_paused.read(),
+        theme: settings.theme,
+        enable_blur: settings.enable_blur,
+        panel_opacity: settings.panel_opacity,
+    })
+}
+
+#[tauri::command]
+pub async fn tray_menu_action(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    action: String,
+) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("tray-menu") {
+        let _ = w.hide();
+    }
+
+    match action.as_str() {
+        "show" => {
+            crate::show_main_panel(&app);
+        }
+        "pause" => {
+            let next = !*state.capture_paused.read();
+            *state.capture_paused.write() = next;
+            let _ = app.emit("capture-paused", next);
+        }
+        "settings" => {
+            if let Some(window) = app.get_webview_window("main") {
+                let our = window.hwnd().ok().map(|h| h.0 as isize);
+                clipboard::remember_paste_target(our);
+                window.show().ok();
+                window.set_focus().ok();
+                let _ = app.emit("open-settings", ());
+            }
+        }
+        "quit" => {
+            app.exit(0);
+        }
+        _ => return Err(format!("unknown tray action: {action}")),
+    }
     Ok(())
 }
 

@@ -14,7 +14,7 @@
   --border-focus: #6366f1;
   --text-primary: #e2e4ed;
   --text-secondary: #8b8fa6;
-  --text-tertiary: #7a7f96;
+  --text-tertiary: #868ba6;
   --text-inverse: #0f1117;
   --accent: #6366f1;
   --accent-hover: #7577f5;
@@ -118,7 +118,7 @@ body.oled-theme,
   --border-default: rgba(255, 255, 255, 0.07);
   --text-primary: #e8e8f0;
   --text-secondary: #7878a0;
-  --text-tertiary: #6a6a88;
+  --text-tertiary: #8484a8;
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.8);
   --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.9);
 }

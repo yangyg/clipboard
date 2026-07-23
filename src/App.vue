@@ -33,6 +33,7 @@ import ConfirmDialog from "./components/ConfirmDialog.vue";
 import { useClipboardStore } from "./stores/clipboard";
 import { useSettingsStore } from "./stores/settings";
 import { storeToRefs } from "pinia";
+import { isPasteFocusLock, setPasteFocusLock } from "./composables/pasteFocusLock";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -73,6 +74,12 @@ async function reloadPanelIfNeeded(force = false) {
 async function showPanel() {
   panelVisible.value = true;
   settingsVisible.value = false;
+  // Snapshot previous FG before we steal focus (backup for non-Rust show paths).
+  try {
+    await invoke("capture_paste_target");
+  } catch (e) {
+    console.warn("[App] capture_paste_target failed:", e);
+  }
   await reloadPanelIfNeeded(false);
   await appWindow.show();
   await appWindow.setFocus();
@@ -133,6 +140,11 @@ onMounted(async () => {
 
   // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
   await listen<boolean>("toggle-panel", (event) => {
+    if (isPasteFocusLock() && event.payload) {
+      // Mid-paste / keep-open: sync flag only — never setFocus (would steal from target).
+      panelVisible.value = true;
+      return;
+    }
     if (event.payload) {
       if (!panelVisible.value || settingsVisible.value) {
         showPanel();
@@ -147,9 +159,16 @@ onMounted(async () => {
     }
   });
 
-  // Auto-close panel when window loses focus (click outside)
+  await listen<boolean>("paste-focus-lock", (event) => {
+    setPasteFocusLock(!!event.payload);
+  });
+
+  // Auto-close panel when window loses focus (click outside).
+  // When we lose focus the other app is already FG — snapshot it for paste.
   appWindow.onFocusChanged(({ payload: focused }) => {
+    if (isPasteFocusLock()) return;
     if (!focused && !isWindowMode.value) {
+      void invoke("capture_paste_target").catch(() => {});
       hidePanel();
     }
   });

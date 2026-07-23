@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from "../types";
+import { setPasteFocusLock } from "../composables/pasteFocusLock";
 
 export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
 export type ListSort =
@@ -378,6 +379,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
+    setPasteFocusLock(true);
     try {
       await invoke("paste_record", { id, mode });
       const row = records.value.find((r) => r.id === id);
@@ -391,6 +393,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     } catch (e) {
       console.error("Paste failed:", e);
       throw e;
+    } finally {
+      setPasteFocusLock(false);
     }
   }
 

@@ -338,6 +338,7 @@ pub fn run() {
             commands::search_records,
             commands::get_record,
             commands::open_record_media,
+            commands::capture_paste_target,
             commands::paste_record,
             commands::delete_record,
             commands::delete_records_batch,
@@ -689,6 +690,7 @@ fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {
 pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let our = window.hwnd().ok().map(|h| h.0 as isize);
+        clipboard::set_our_main_hwnd(our);
         clipboard::remember_paste_target(our);
         let _ = window.show();
         let _ = window.set_focus();

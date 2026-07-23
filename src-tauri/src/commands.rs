@@ -146,6 +146,31 @@ fn open_path_with_default_app(path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Remember the current foreground app as paste destination (safe no-op if FG is us).
+#[tauri::command]
+pub async fn capture_paste_target(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let our = window.hwnd().ok().map(|h| h.0 as isize);
+        clipboard::set_our_main_hwnd(our);
+        clipboard::remember_paste_target(our);
+    }
+    Ok(())
+}
+
+async fn focus_paste_target_on_main_thread(app: &tauri::AppHandle, hwnd: isize) -> bool {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    if app
+        .run_on_main_thread(move || {
+            let ok = clipboard::focus_window(hwnd);
+            let _ = tx.send(ok);
+        })
+        .is_err()
+    {
+        return clipboard::focus_window(hwnd);
+    }
+    rx.await.unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn paste_record(
     app: tauri::AppHandle,
@@ -160,22 +185,33 @@ pub async fn paste_record(
     let _paste_guard = PASTE_GATE.lock().await;
 
     let settings = state.db.get_settings().unwrap_or_default();
-    let is_floating = settings.app_mode != "window";
     let auto_close = settings.auto_close_on_paste;
+    // Prefer live chrome over DB — matches what the user actually sees.
+    let is_floating = app
+        .get_webview_window("main")
+        .and_then(|w| w.is_always_on_top().ok())
+        .unwrap_or(settings.app_mode != "window");
 
-    // Hide first so focus can move to the paste target before key simulation.
-    if is_floating {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.hide();
+    let our_hwnd = app
+        .get_webview_window("main")
+        .and_then(|w| w.hwnd().ok())
+        .map(|h| h.0 as isize);
+    clipboard::set_our_main_hwnd(our_hwnd);
+
+    let _ = app.emit("paste-focus-lock", true);
+    struct PasteFocusUnlock<'a>(&'a tauri::AppHandle);
+    impl Drop for PasteFocusUnlock<'_> {
+        fn drop(&mut self) {
+            let _ = self.0.emit("paste-focus-lock", false);
         }
-        let _ = app.emit("toggle-panel", false);
     }
+    let _paste_focus_unlock = PasteFocusUnlock(&app);
 
     let db = state.db.clone();
     let monitor = state.monitor.clone();
     let media_root = state.db.media_root().to_path_buf();
 
-    // DB + disk + clipboard + focus — no thread::sleep inside spawn_blocking.
+    // 1) Write clipboard while we still own the foreground (focus rights intact).
     let outcome = tokio::task::spawn_blocking(move || {
         let record = db.take_record_for_paste(id).map_err(|e| e.to_string())?;
         let Some(r) = record else {
@@ -207,40 +243,82 @@ pub async fn paste_record(
         if !wrote {
             return Err("Failed to set clipboard".into());
         }
-
-        let target = clipboard::paste_target_hwnd();
-        let focused = target.map(clipboard::focus_window).unwrap_or(false);
-        if !focused {
-            warn!(
-                "Paste target unavailable (hwnd={:?}); clipboard updated, skipped Ctrl+V",
-                target
-            );
-        }
-        Ok(PasteOutcome::Ready { focused })
+        Ok(PasteOutcome::Ready)
     })
     .await
     .map_err(|e| format!("paste task join error: {e}"))??;
 
-    match outcome {
-        PasteOutcome::Missing => return Ok(()),
-        PasteOutcome::Ready { focused } => {
-            if focused {
-                // Async delay — does not occupy a blocking-pool worker.
-                tokio::time::sleep(std::time::Duration::from_millis(80)).await;
-                clipboard::simulate_paste_keys();
+    if matches!(outcome, PasteOutcome::Missing) {
+        return Ok(());
+    }
+
+    // 2) Focus the previous app FIRST (we still have FG privilege as the active window).
+    clipboard::track_last_foreign_foreground();
+    let mut target = clipboard::resolve_paste_target(our_hwnd);
+    if target.is_none() {
+        warn!(
+            "No paste target yet (panel may have opened before any other app was focused); \
+             will retry after hide"
+        );
+    }
+    let mut focused = false;
+    if let Some(hwnd) = target {
+        focused = focus_paste_target_on_main_thread(&app, hwnd).await;
+    }
+
+    // 3) Then hide ourselves — do NOT hide before focus (that drops FG rights).
+    if let Some(hwnd) = our_hwnd {
+        clipboard::hide_hwnd(hwnd);
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+    if is_floating {
+        let _ = app.emit("toggle-panel", false);
+    }
+
+    // After hide, Windows may activate the previous app — pick it up if we had no target.
+    for _ in 0..5 {
+        if target.is_some() && focused {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+        clipboard::track_last_foreign_foreground();
+        if target.is_none() {
+            target = clipboard::resolve_paste_target(our_hwnd);
+        }
+        if let Some(hwnd) = target {
+            if !focused {
+                focused = focus_paste_target_on_main_thread(&app, hwnd).await;
             }
+        }
+        if focused || clipboard::foreground_is_pasteable(our_hwnd) {
+            break;
         }
     }
 
-    // Floating + keep panel open: bring ourselves back after pasting into the target.
+    let can_paste = focused || clipboard::foreground_is_pasteable(our_hwnd);
+    if can_paste {
+        tokio::time::sleep(std::time::Duration::from_millis(40)).await;
+        clipboard::simulate_paste_keys();
+    } else {
+        warn!(
+            "Paste target unavailable (hwnd={:?}); clipboard updated, skipped Ctrl+V",
+            target
+        );
+    }
+
+    // 5) Re-show only when keep-open; never steal focus back after a successful paste.
     if is_floating && !auto_close {
         if let Some(window) = app.get_webview_window("main") {
-            let our = window.hwnd().ok().map(|h| h.0 as isize);
-            clipboard::remember_paste_target(our);
             let _ = window.show();
-            let _ = window.set_focus();
+            // Deliberately no set_focus — leave the target app active.
         }
         let _ = app.emit("toggle-panel", true);
+    } else if !is_floating && !auto_close {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.show();
+        }
     }
 
     Ok(())
@@ -248,7 +326,7 @@ pub async fn paste_record(
 
 enum PasteOutcome {
     Missing,
-    Ready { focused: bool },
+    Ready,
 }
 
 #[tauri::command]

@@ -618,6 +618,7 @@ import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
 import appIconUrl from "../assets/app-icon-128.png";
+import { resolveKnownTagColors, resolveTagPalette } from "../utils/themeColors";
 
 const emit = defineEmits<{ close: [] }>();
 const settingsStore = useSettingsStore();
@@ -645,16 +646,6 @@ const CONTENT_TYPE_OPTIONS = [
   { value: "image", label: "图片", icon: "image" as AppIconName, color: "var(--type-image)" },
   { value: "file", label: "文件", icon: "file" as AppIconName, color: "var(--type-file)" },
 ] as const;
-
-const RULE_ACCENT_FALLBACKS = ["#6366f1", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#38bdf8"];
-
-const KNOWN_TAG_COLORS: Record<string, string> = {
-  部署: "#34d399",
-  前端: "#6366f1",
-  链接: "#fbbf24",
-  重要: "#f87171",
-  设计: "#a78bfa",
-};
 
 const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
   { key: "appearance", icon: "palette", label: "外观" },
@@ -813,10 +804,16 @@ function restoreDefaultAutoTagRules() {
 
 function ruleAccentColor(tagName: string, index: number): string {
   const name = tagName.trim();
-  if (name && KNOWN_TAG_COLORS[name]) return KNOWN_TAG_COLORS[name];
+  const known = resolveKnownTagColors();
+  if (name && known[name]) return known[name];
   const fromStore = clipboardStore.tags.find((t) => t.name === name)?.color;
   if (fromStore) return fromStore;
-  return RULE_ACCENT_FALLBACKS[index % RULE_ACCENT_FALLBACKS.length];
+  const palette = resolveTagPalette();
+  return palette[index % palette.length] ?? cssFallbackAccent();
+}
+
+function cssFallbackAccent(): string {
+  return resolveTagPalette()[0] ?? "#6366f1";
 }
 
 function addIgnoredApp() {

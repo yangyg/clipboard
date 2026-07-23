@@ -84,6 +84,7 @@
 import { ref, computed, watch, nextTick } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "../composables/useToast";
+import { resolveTagPalette } from "../utils/themeColors";
 import AppIcon from "./icons/AppIcon.vue";
 import BaseDialog from "./BaseDialog.vue";
 import type { Tag } from "../types";
@@ -106,14 +107,9 @@ const emit = defineEmits<{
 const clipboardStore = useClipboardStore();
 const { toast } = useToast();
 
-const presetColors = [
-  "#6366f1", "#7c5cfc", "#a78bfa", "#ec4899",
-  "#f43f5e", "#f97316", "#eab308", "#22c55e",
-  "#14b8a6", "#06b6d4", "#3b82f6", "#71717a",
-];
-
+const presetColors = ref(resolveTagPalette());
 const tagName = ref("");
-const selectedColor = ref(presetColors[0]);
+const selectedColor = ref(presetColors.value[0] ?? "#6366f1");
 const assignedIds = ref<Set<number>>(new Set());
 const nameInput = ref<HTMLInputElement | null>(null);
 
@@ -127,13 +123,14 @@ const dialogTitle = computed(() => {
 watch(() => props.visible, async (v) => {
   if (v) {
     assignedIds.value = new Set();
+    presetColors.value = resolveTagPalette();
     await clipboardStore.loadTags();
     if (props.mode === "edit" && props.editTag) {
       tagName.value = props.editTag.name;
       selectedColor.value = props.editTag.color;
     } else {
       tagName.value = "";
-      selectedColor.value = presetColors[0];
+      selectedColor.value = presetColors.value[0] ?? "#6366f1";
     }
     if (props.mode === "assign" && props.recordId) {
       const record = clipboardStore.records.find((r) => r.id === props.recordId);

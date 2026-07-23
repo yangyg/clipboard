@@ -19,9 +19,10 @@
       </div>
     </div>
 
-    <!-- Record List -->
+    <!-- Record List (windowed: only mount rows near the viewport) -->
     <div v-else class="record-list" ref="listRef" @scroll="onListScroll">
-      <template v-for="item in visibleItems" :key="item.type === 'label' ? 'pinned-label' : item.record!.id">
+      <div class="virtual-spacer" :style="{ height: `${virtualPadTop}px` }" aria-hidden="true"></div>
+      <template v-for="item in windowItems" :key="item.key">
         <div v-if="item.type === 'label'" class="section-label"><AppIcon name="pin" :size="11" /> 置顶</div>
         <div
           v-else
@@ -76,6 +77,7 @@
           </div>
         </div>
       </template>
+      <div class="virtual-spacer" :style="{ height: `${virtualPadBottom}px` }" aria-hidden="true"></div>
 
       <!-- Footer: load-more status only -->
       <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
@@ -147,12 +149,27 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const listRef = ref<HTMLElement | null>(null);
 
+/** Fixed row estimates for windowing (list items are similarly sized). */
+const ROW_HEIGHT = 58;
+const LABEL_HEIGHT = 26;
+const OVERSCAN = 6;
+
+const scrollTop = ref(0);
+const viewportHeight = ref(480);
+let scrollRaf = 0;
+
 function onListScroll() {
   const el = listRef.value;
   if (!el) return;
-  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
-    clipboardStore.loadMore();
-  }
+  if (scrollRaf) cancelAnimationFrame(scrollRaf);
+  scrollRaf = requestAnimationFrame(() => {
+    scrollRaf = 0;
+    scrollTop.value = el.scrollTop;
+    viewportHeight.value = el.clientHeight;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+      void clipboardStore.loadMore();
+    }
+  });
 }
 
 /** If list shorter than viewport, keep fetching until filled or exhausted. */
@@ -160,8 +177,18 @@ async function fillViewportIfNeeded() {
   await nextTick();
   const el = listRef.value;
   if (!el || !clipboardStore.hasMore || clipboardStore.isLoadingMore) return;
-  if (el.scrollHeight <= el.clientHeight + 40) {
+  viewportHeight.value = el.clientHeight;
+  // Cap recursive fills so a short first page doesn't spam IPC.
+  let rounds = 0;
+  while (
+    rounds < 3 &&
+    clipboardStore.hasMore &&
+    !clipboardStore.isLoadingMore &&
+    el.scrollHeight <= el.clientHeight + 40
+  ) {
+    rounds += 1;
     await clipboardStore.loadMore();
+    await nextTick();
   }
 }
 
@@ -185,30 +212,83 @@ function isTextLike(type: string): boolean {
   return type === 'text' || type === 'code';
 }
 
-interface VisibleItem {
+interface FlatItem {
+  key: string;
   type: "label" | "record";
   record?: ClipboardRecord;
+  height: number;
+  offset: number;
+}
+
+interface WindowItem extends FlatItem {
   thumb?: string | null;
 }
 
-const visibleItems = computed<VisibleItem[]>(() => {
-  const items: VisibleItem[] = [];
+/** Full list layout offsets (cheap; no thumb URL work). */
+const flatItems = computed<FlatItem[]>(() => {
   const records = clipboardStore.filteredRecords;
-  const pinned: ClipboardRecord[] = [];
-  const regular: ClipboardRecord[] = [];
+  const items: FlatItem[] = [];
+  let offset = 0;
+  const hasPinned = records.some((r) => r.is_pinned);
+  if (hasPinned) {
+    items.push({ key: "pinned-label", type: "label", height: LABEL_HEIGHT, offset });
+    offset += LABEL_HEIGHT;
+  }
   for (const r of records) {
-    if (r.is_pinned) pinned.push(r);
-    else regular.push(r);
+    items.push({
+      key: `r-${r.id}`,
+      type: "record",
+      record: r,
+      height: ROW_HEIGHT,
+      offset,
+    });
+    offset += ROW_HEIGHT;
   }
-  const pushRecord = (r: ClipboardRecord) => {
-    items.push({ type: "record", record: r, thumb: recordThumbSrc(r) });
-  };
-  if (pinned.length > 0) {
-    items.push({ type: "label" });
-    for (const r of pinned) pushRecord(r);
-  }
-  for (const r of regular) pushRecord(r);
   return items;
+});
+
+const contentHeight = computed(() => {
+  const items = flatItems.value;
+  if (items.length === 0) return 0;
+  const last = items[items.length - 1];
+  return last.offset + last.height;
+});
+
+const virtualRange = computed(() => {
+  const items = flatItems.value;
+  const n = items.length;
+  if (n === 0) return { start: 0, end: 0 };
+  const top = scrollTop.value;
+  const bottom = top + viewportHeight.value;
+  let start = 0;
+  while (start < n && items[start].offset + items[start].height < top) start += 1;
+  let end = start;
+  while (end < n && items[end].offset < bottom) end += 1;
+  start = Math.max(0, start - OVERSCAN);
+  end = Math.min(n, end + OVERSCAN);
+  return { start, end };
+});
+
+const windowItems = computed<WindowItem[]>(() => {
+  const { start, end } = virtualRange.value;
+  const slice = flatItems.value.slice(start, end);
+  return slice.map((item) =>
+    item.type === "record" && item.record
+      ? { ...item, thumb: recordThumbSrc(item.record) }
+      : item,
+  );
+});
+
+const virtualPadTop = computed(() => {
+  const { start } = virtualRange.value;
+  return start > 0 ? flatItems.value[start].offset : 0;
+});
+
+const virtualPadBottom = computed(() => {
+  const { end } = virtualRange.value;
+  const items = flatItems.value;
+  if (end >= items.length) return 0;
+  return Math.max(0, contentHeight.value - items[end].offset);
 });
 
 const emptyState = computed(() => {
@@ -255,8 +335,22 @@ watch(
   async (id) => {
     if (id == null) return;
     await nextTick();
-    const el = listRef.value?.querySelector(`[data-record-id="${id}"]`) as HTMLElement | null;
-    el?.scrollIntoView({ block: "nearest" });
+    const list = listRef.value;
+    if (!list) return;
+    const mounted = list.querySelector(`[data-record-id="${id}"]`) as HTMLElement | null;
+    if (mounted) {
+      mounted.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    // Selected row may be outside the virtual window — jump by layout offset.
+    const target = flatItems.value.find((it) => it.record?.id === id);
+    if (!target) return;
+    const viewH = list.clientHeight;
+    const top = target.offset;
+    const bottom = top + target.height;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + viewH) list.scrollTop = bottom - viewH;
+    scrollTop.value = list.scrollTop;
   }
 );
 
@@ -415,10 +509,16 @@ function closeContextMenu() {
 
 onMounted(() => {
   window.addEventListener("click", closeContextMenu);
+  const el = listRef.value;
+  if (el) {
+    viewportHeight.value = el.clientHeight;
+    scrollTop.value = el.scrollTop;
+  }
 });
 
 onUnmounted(() => {
   window.removeEventListener("click", closeContextMenu);
+  if (scrollRaf) cancelAnimationFrame(scrollRaf);
 });
 </script>
 
@@ -435,6 +535,12 @@ onUnmounted(() => {
   min-width: 240px;
   max-width: 400px;
   overflow-y: auto;
+}
+
+.virtual-spacer {
+  width: 100%;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .section-label {

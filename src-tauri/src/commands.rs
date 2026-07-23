@@ -383,25 +383,41 @@ pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Res
     Ok(())
 }
 
+/// Stream records as a JSON array directly to `path` (no full in-memory buffer).
 #[tauri::command]
-pub async fn export_data(state: State<'_, AppState>) -> Result<String, String> {
-    // Stream in pages to avoid loading all records into memory at once.
-    let page_size = 500;
+pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(), String> {
+    use std::fs::File;
+    use std::io::{BufWriter, Write};
+
+    let file = File::create(&path).map_err(|e| format!("无法创建导出文件: {e}"))?;
+    let mut w = BufWriter::new(file);
+    w.write_all(b"[\n").map_err(|e| e.to_string())?;
+
+    let page_size = 200;
     let mut offset = 0;
-    let mut all: Vec<crate::ClipboardRecord> = Vec::new();
+    let mut first = true;
     loop {
         let batch = state
             .db
             .get_records(page_size, offset, false, None, false, None, None)
             .map_err(|e| e.to_string())?;
         let len = batch.len();
-        all.extend(batch);
+        for rec in &batch {
+            if !first {
+                w.write_all(b",\n").map_err(|e| e.to_string())?;
+            }
+            first = false;
+            serde_json::to_writer(&mut w, rec).map_err(|e| e.to_string())?;
+        }
         if len < page_size as usize {
             break;
         }
         offset += page_size;
     }
-    serde_json::to_string_pretty(&all).map_err(|e| e.to_string())
+
+    w.write_all(b"\n]\n").map_err(|e| e.to_string())?;
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 #[tauri::command]

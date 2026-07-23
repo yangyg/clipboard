@@ -241,17 +241,17 @@
               <div v-if="settings.enable_auto_tag" class="auto-tag-panel">
                 <div class="auto-tag-panel-head">
                   <div class="auto-tag-panel-title">匹配规则</div>
-                  <div class="auto-tag-panel-meta">{{ settings.auto_tag_rules.length }} 条</div>
+                  <div class="auto-tag-panel-meta">{{ rulesDraft.length }} 条</div>
                 </div>
 
-                <div v-if="settings.auto_tag_rules.length === 0" class="auto-tag-empty">
+                <div v-if="rulesDraft.length === 0" class="auto-tag-empty">
                   <AppIcon name="tag" :size="18" />
                   <p>暂无规则。添加后，新复制的内容会按规则自动打标。</p>
                 </div>
 
                 <div v-else class="auto-tag-rules">
                   <article
-                    v-for="(rule, index) in settings.auto_tag_rules"
+                    v-for="(rule, index) in rulesDraft"
                     :key="index"
                     class="auto-tag-rule"
                   >
@@ -586,14 +586,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useSettingsStore } from "../stores/settings";
 import { useClipboardStore } from "../stores/clipboard";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import type { ClipboardRecord } from "../types";
 import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
@@ -696,51 +696,87 @@ function cloneRules(rules: AutoTagRule[]): AutoTagRule[] {
   }));
 }
 
-function commitAutoTagRules(next: AutoTagRule[]) {
-  update("auto_tag_rules", cloneRules(next));
+/** Local draft so typing rules doesn't deep-watch/save settings on every keystroke. */
+const rulesDraft = ref<AutoTagRule[]>(cloneRules(settings.auto_tag_rules));
+let rulesCommitTimer: ReturnType<typeof setTimeout> | null = null;
+let ignoreRulesSettingsEcho = false;
+
+watch(
+  () => settings.auto_tag_rules,
+  (rules) => {
+    if (ignoreRulesSettingsEcho) return;
+    rulesDraft.value = cloneRules(rules);
+  },
+  { deep: true },
+);
+
+function flushAutoTagRules() {
+  if (rulesCommitTimer) {
+    clearTimeout(rulesCommitTimer);
+    rulesCommitTimer = null;
+  }
+  ignoreRulesSettingsEcho = true;
+  update("auto_tag_rules", cloneRules(rulesDraft.value));
+  void nextTick(() => {
+    ignoreRulesSettingsEcho = false;
+  });
+}
+
+function scheduleCommitRules() {
+  if (rulesCommitTimer) clearTimeout(rulesCommitTimer);
+  rulesCommitTimer = setTimeout(() => {
+    rulesCommitTimer = null;
+    flushAutoTagRules();
+  }, 400);
 }
 
 function updateRuleField(index: number, field: "tag_name", value: string) {
-  const next = cloneRules(settings.auto_tag_rules);
+  const next = cloneRules(rulesDraft.value);
   if (!next[index]) return;
   next[index][field] = value;
-  commitAutoTagRules(next);
+  rulesDraft.value = next;
+  scheduleCommitRules();
 }
 
 function updateRuleKeywords(index: number, raw: string) {
-  const next = cloneRules(settings.auto_tag_rules);
+  const next = cloneRules(rulesDraft.value);
   if (!next[index]) return;
   next[index].keywords = raw
     .split(/[,，]/)
     .map((s) => s.trim())
     .filter(Boolean);
-  commitAutoTagRules(next);
+  rulesDraft.value = next;
+  scheduleCommitRules();
 }
 
 function toggleRuleContentType(index: number, contentType: string) {
-  const next = cloneRules(settings.auto_tag_rules);
+  const next = cloneRules(rulesDraft.value);
   if (!next[index]) return;
   const types = next[index].content_types;
   const i = types.indexOf(contentType);
   if (i >= 0) types.splice(i, 1);
   else types.push(contentType);
-  commitAutoTagRules(next);
+  rulesDraft.value = next;
+  flushAutoTagRules();
 }
 
 function addAutoTagRule() {
-  const next = cloneRules(settings.auto_tag_rules);
+  const next = cloneRules(rulesDraft.value);
   next.push({ tag_name: "", keywords: [], content_types: [] });
-  commitAutoTagRules(next);
+  rulesDraft.value = next;
+  flushAutoTagRules();
 }
 
 function removeAutoTagRule(index: number) {
-  const next = cloneRules(settings.auto_tag_rules);
+  const next = cloneRules(rulesDraft.value);
   next.splice(index, 1);
-  commitAutoTagRules(next);
+  rulesDraft.value = next;
+  flushAutoTagRules();
 }
 
 function restoreDefaultAutoTagRules() {
-  commitAutoTagRules(DEFAULT_AUTO_TAG_RULES);
+  rulesDraft.value = cloneRules(DEFAULT_AUTO_TAG_RULES);
+  flushAutoTagRules();
 }
 
 function ruleAccentColor(tagName: string, index: number): string {
@@ -860,8 +896,8 @@ async function exportData() {
       filters: [{ name: "ClipVault JSON", extensions: ["json"] }],
     });
     if (!path) return;
-    const json = await invoke<string>("export_data");
-    await writeTextFile(path, json);
+    // Backend streams JSON to disk — avoids holding the full export in JS/Rust heap.
+    await invoke("export_data", { path });
     exportStatus.value = "导出完成，备份文件已保存。";
   } catch (e) {
     console.error("Export failed:", e);
@@ -932,6 +968,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onWindowKeydown, true);
+  if (rulesCommitTimer) flushAutoTagRules();
 });
 </script>
 

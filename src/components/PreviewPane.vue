@@ -260,8 +260,14 @@ const typeLabel = computed(() => {
   return TYPE_LABELS[record.value.content_type] ?? "文本片段";
 });
 
+const tagsByName = computed(() => {
+  const map = new Map<string, (typeof clipboardStore.tags)[number]>();
+  for (const t of clipboardStore.tags) map.set(t.name, t);
+  return map;
+});
+
 function getTagBg(tagName: string): string {
-  const tag = clipboardStore.tags.find((t) => t.name === tagName);
+  const tag = tagsByName.value.get(tagName);
   if (!tag) return "var(--bg-surface)";
   // Normalize hex color for CSS color-mix
   const hex = normalizeHex(tag.color);
@@ -280,8 +286,7 @@ function normalizeHex(color: string): string {
 }
 
 function getTagColor(tagName: string): string {
-  const tag = clipboardStore.tags.find((t) => t.name === tagName);
-  return tag?.color ?? "var(--text-secondary)";
+  return tagsByName.value.get(tagName)?.color ?? "var(--text-secondary)";
 }
 
 function openTagAssign() {
@@ -291,7 +296,7 @@ function openTagAssign() {
 
 async function removeTag(tagName: string) {
   if (!record.value) return;
-  const tag = clipboardStore.tags.find((t) => t.name === tagName);
+  const tag = tagsByName.value.get(tagName);
   if (tag) {
     await clipboardStore.removeTagFromRecord(record.value.id, tag.id, tagName);
   }

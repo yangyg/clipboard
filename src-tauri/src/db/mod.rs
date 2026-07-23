@@ -262,6 +262,8 @@ impl ClipboardDb {
     }
 
     /// Escape `%`, `_`, `\` for use with `LIKE … ESCAPE '\'`.
+    /// Kept for unit tests; production short search uses `instr` (no LIKE wildcards).
+    #[cfg(test)]
     fn escape_like(s: &str) -> String {
         s.replace('\\', "\\\\")
             .replace('%', "\\%")

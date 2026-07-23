@@ -14,7 +14,7 @@ export const LIST_SORT_OPTIONS: { value: ListSort; label: string }[] = [
   { value: "updated_desc", label: "最新在前" },
   { value: "updated_asc", label: "最早在前" },
   { value: "created_desc", label: "最近创建" },
-  { value: "copies_desc", label: "使用最多" },
+  { value: "copies_desc", label: "粘贴最多" },
 ];
 
 const PAGE_SIZE = 60;

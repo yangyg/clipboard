@@ -25,7 +25,7 @@
               <span title="格式：保留富文本">富文本</span>
             </template>
             <span class="meta-sep" aria-hidden="true">·</span>
-            <span :title="`使用次数：${record.copy_count}`">使用 {{ record.copy_count }} 次</span>
+            <span :title="`从本应用粘贴次数：${record.copy_count}`">粘贴 {{ record.copy_count }} 次</span>
           </div>
         </div>
         <button

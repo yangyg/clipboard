@@ -116,7 +116,7 @@ impl ClipboardDb {
                 source_app TEXT NOT NULL DEFAULT '',
                 source_window TEXT NOT NULL DEFAULT '',
                 hash TEXT NOT NULL,
-                copy_count INTEGER NOT NULL DEFAULT 1,
+                copy_count INTEGER NOT NULL DEFAULT 0,
                 is_favorite INTEGER NOT NULL DEFAULT 0,
                 is_pinned INTEGER NOT NULL DEFAULT 0,
                 is_sensitive INTEGER NOT NULL DEFAULT 0,
@@ -792,8 +792,9 @@ impl ClipboardDb {
 
         if let Some(id) = existing {
             let now = chrono::Utc::now().to_rfc3339();
+            // Re-copy only refreshes source/timestamp — paste count is separate.
             conn.execute(
-                "UPDATE records SET updated_at = ?, copy_count = copy_count + 1, source_app = ?, source_window = ? WHERE id = ?",
+                "UPDATE records SET updated_at = ?, source_app = ?, source_window = ? WHERE id = ?",
                 params![now, source_app, source_window, id],
             )?;
             return Ok((id, false));
@@ -817,8 +818,8 @@ impl ClipboardDb {
         };
 
         conn.execute(
-            "INSERT INTO records (content, content_type, source_app, source_window, hash, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO records (content, content_type, source_app, source_window, hash, copy_count, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 content,
                 content_type.as_str(),

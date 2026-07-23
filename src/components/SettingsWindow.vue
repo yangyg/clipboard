@@ -555,7 +555,7 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="search" :size="14" /> 搜索与筛选</div>
-                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框（支持正文、来源与标签；短关键词也可搜）。左侧导航可按类型、收藏、标签筛选。独立窗口模式下，列表工具栏可切换排序（最新 / 最早 / 最近创建 / 使用最多；置顶仍优先）。</div>
+                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框（支持正文、来源与标签；短关键词也可搜）。左侧导航可按类型、收藏、标签筛选。独立窗口模式下，列表工具栏可切换排序（最新 / 最早 / 最近创建 / 粘贴最多；置顶仍优先）。</div>
               </div>
 
               <div class="guide-block">

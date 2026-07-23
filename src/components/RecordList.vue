@@ -1,37 +1,108 @@
 <template>
   <div class="record-list-wrapper">
-    <!-- Loading (initial only) -->
-    <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state">
-      <div class="loading-spinner"></div>
-      <span>加载中…</span>
-    </div>
+    <div class="list-column">
+      <!-- Middle-column chrome (window mode): matches design list toolbar -->
+      <template v-if="showListChrome">
+        <div class="list-toolbar">
+          <div class="list-toolbar-left">
+            <span class="list-title">{{ categoryTitle }}</span>
+            <span class="list-count">{{ listCountLabel }}</span>
+          </div>
+          <div class="list-toolbar-right">
+            <button
+              v-if="clipboardStore.trashFilter && clipboardStore.trashCount > 0"
+              type="button"
+              class="empty-trash-btn"
+              @click="onEmptyTrash"
+            >清空回收站</button>
+            <select
+              class="list-sort"
+              :value="clipboardStore.listSort"
+              title="列表排序"
+              aria-label="列表排序"
+              @change="onSortChange"
+            >
+              <option
+                v-for="opt in LIST_SORT_OPTIONS"
+                :key="opt.value"
+                :value="opt.value"
+              >{{ opt.label }}</option>
+            </select>
+            <div class="view-toggle" role="group" aria-label="视图切换">
+              <button
+                type="button"
+                class="view-toggle-btn"
+                :class="{ active: listLayout === 'list' }"
+                title="列表视图"
+                aria-label="列表视图"
+                :aria-pressed="listLayout === 'list'"
+                @click="setListLayout('list')"
+              ><AppIcon name="list" :size="14" /></button>
+              <button
+                type="button"
+                class="view-toggle-btn"
+                :class="{ active: listLayout === 'grid' }"
+                title="网格视图"
+                aria-label="网格视图"
+                :aria-pressed="listLayout === 'grid'"
+                @click="setListLayout('grid')"
+              ><AppIcon name="grid" :size="14" /></button>
+            </div>
+            <button
+              type="button"
+              class="list-tool-btn"
+              :class="{ active: clipboardStore.batchMode }"
+              title="批量操作"
+              aria-label="批量操作"
+              :aria-pressed="clipboardStore.batchMode"
+              @click="toggleBatchMode"
+            ><AppIcon name="batch" :size="14" /></button>
+          </div>
+        </div>
 
-    <!-- Empty -->
-    <div v-else-if="clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading" class="empty-state">
-      <div class="empty-icon"><AppIcon :name="emptyState.icon" :size="36" :stroke-width="1.5" /></div>
-      <div class="empty-text">{{ emptyState.title }}</div>
-      <div v-if="emptyState.hint" class="empty-hint">
-        <template v-if="emptyState.clearSearch">
-          试试其他关键词，或
-          <button class="clear-link" @click="clipboardStore.search('')">清除搜索</button>
-        </template>
-        <template v-else>{{ emptyState.hint }}</template>
+        <Transition name="fade">
+          <BatchBar v-if="clipboardStore.batchMode" />
+        </Transition>
+      </template>
+
+      <!-- Loading (initial only) -->
+      <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state">
+        <div class="loading-spinner"></div>
+        <span>加载中…</span>
       </div>
-    </div>
 
-    <!-- Record List (windowed: only mount rows near the viewport) -->
-    <div
-      v-else
-      class="record-list"
-      ref="listRef"
-      role="listbox"
-      aria-label="剪贴板记录"
-      :aria-activedescendant="activeDescendantId"
-      tabindex="-1"
-      @scroll="onListScroll"
-    >
-      <div class="virtual-spacer" :style="{ height: `${virtualPadTop}px` }" aria-hidden="true"></div>
-      <template v-for="item in windowItems" :key="item.key">
+      <!-- Empty -->
+      <div v-else-if="clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading" class="empty-state">
+        <div class="empty-icon"><AppIcon :name="emptyState.icon" :size="36" :stroke-width="1.5" /></div>
+        <div class="empty-text">{{ emptyState.title }}</div>
+        <div v-if="emptyState.hint" class="empty-hint">
+          <template v-if="emptyState.clearSearch">
+            试试其他关键词，或
+            <button class="clear-link" @click="clipboardStore.search('')">清除搜索</button>
+          </template>
+          <template v-else>{{ emptyState.hint }}</template>
+        </div>
+      </div>
+
+      <!-- Record List (windowed: only mount rows near the viewport) -->
+      <div
+        v-else
+        class="record-list"
+        :class="{ 'view-grid': listLayout === 'grid' }"
+        ref="listRef"
+        role="listbox"
+        aria-label="剪贴板记录"
+        :aria-activedescendant="activeDescendantId"
+        tabindex="-1"
+        @scroll="onListScroll"
+      >
+      <div
+        v-if="listLayout === 'list'"
+        class="virtual-spacer"
+        :style="{ height: `${virtualPadTop}px` }"
+        aria-hidden="true"
+      />
+      <template v-for="item in displayItems" :key="item.key">
         <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> 置顶</div>
         <div
           v-else
@@ -40,7 +111,14 @@
           role="option"
           :aria-selected="clipboardStore.selectedId === item.record!.id"
           :tabindex="isOptionTabbable(item.record!.id) ? 0 : -1"
-          :class="{ selected: clipboardStore.selectedId === item.record!.id, 'batch-mode': clipboardStore.batchMode }"
+          :class="{
+            selected: clipboardStore.selectedId === item.record!.id && !clipboardStore.batchMode,
+            'batch-mode': clipboardStore.batchMode,
+            'batch-checked': clipboardStore.batchMode && clipboardStore.selectedIds.has(item.record!.id),
+            'is-link': item.record!.content_type === 'link',
+            'is-code': item.record!.content_type === 'code',
+            'is-image': item.record!.content_type === 'image',
+          }"
           :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
           @dblclick="onItemDoubleClick(item.record!.id)"
@@ -56,58 +134,93 @@
           >
             <span v-if="clipboardStore.selectedIds.has(item.record!.id)">✓</span>
           </div>
+
+          <!-- Type color chip (always); image thumb lives in the body like the design -->
           <div
             class="record-type-icon"
-            :class="[item.record!.content_type, { 'has-thumb': !!item.thumb }]"
+            :class="item.record!.content_type"
             aria-hidden="true"
           >
-            <img
-              v-if="item.thumb"
-              class="record-thumb"
-              :src="item.thumb"
-              alt=""
-            />
-            <TypeIcon v-else :type="item.record!.content_type" :size="13" />
+            <TypeIcon :type="item.record!.content_type" :size="14" />
           </div>
+
           <div class="record-body">
-            <div class="record-title">{{ getPreview(item.record!) }}</div>
+            <div
+              v-if="item.record!.content_type === 'image' && item.thumb"
+              class="record-image-tile"
+              aria-hidden="true"
+            >
+              <img class="record-thumb" :src="item.thumb" alt="" />
+            </div>
+            <div
+              v-else
+              class="record-title"
+            >{{ getPreview(item.record!) }}</div>
             <div class="record-meta">
               <span class="record-time">{{ formatTime(item.record!.created_at) }}</span>
-              <span class="record-badge" :class="badgeClass(item.record!)">
-                {{ TYPE_LABELS[item.record!.content_type] || '文本' }}
+              <span class="record-source">
+                <span
+                  class="source-dot"
+                  :style="{ background: sourceDotColor(item.record!.source_app) }"
+                  aria-hidden="true"
+                />
+                {{ sourceLabel(item.record!) }}
               </span>
-              <span class="record-chars" v-if="isTextLike(item.record!.content_type)">· {{ item.record!.content_len ?? item.record!.content.length }} 字符</span>
-              <span class="record-chars" v-else-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height">
-                · {{ item.record!.width }}×{{ item.record!.height }}
-              </span>
+              <span
+                v-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height"
+                class="record-dims"
+              >{{ item.record!.width }}×{{ item.record!.height }}</span>
+              <span v-if="item.record!.is_sensitive" class="record-sensitive">敏感</span>
             </div>
           </div>
-          <div class="record-actions">
+
+          <div class="record-actions" @click.stop>
+            <button
+              v-if="!clipboardStore.trashFilter"
+              type="button"
+              class="record-action-btn"
+              aria-label="粘贴"
+              title="粘贴"
+              @click="quickPaste(item.record!.id)"
+            ><AppIcon name="paste" :size="13" /></button>
             <button
               type="button"
-              class="record-pin"
-              :class="{ pinned: item.record!.is_pinned }"
+              class="record-action-btn"
+              :class="{ active: item.record!.is_pinned }"
               :aria-label="item.record!.is_pinned ? '取消置顶' : '置顶'"
               :title="item.record!.is_pinned ? '取消置顶' : '置顶'"
-              @click.stop="clipboardStore.togglePin(item.record!.id)"
+              @click="clipboardStore.togglePin(item.record!.id)"
             ><AppIcon name="pin" :size="13" :fill="item.record!.is_pinned ? 'currentColor' : 'none'" /></button>
             <button
               type="button"
-              class="record-star"
+              class="record-action-btn"
               :class="{ starred: item.record!.is_favorite }"
               :aria-label="item.record!.is_favorite ? '取消收藏' : '收藏'"
               :title="item.record!.is_favorite ? '取消收藏' : '收藏'"
-              @click.stop="clipboardStore.toggleFavorite(item.record!.id)"
+              @click="clipboardStore.toggleFavorite(item.record!.id)"
             ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
+            <button
+              type="button"
+              class="record-action-btn danger"
+              :aria-label="clipboardStore.trashFilter ? '永久删除' : '删除'"
+              :title="clipboardStore.trashFilter ? '永久删除' : '删除'"
+              @click="quickDelete(item.record!)"
+            ><AppIcon name="trash" :size="13" /></button>
           </div>
         </div>
       </template>
-      <div class="virtual-spacer" :style="{ height: `${virtualPadBottom}px` }" aria-hidden="true"></div>
+      <div
+        v-if="listLayout === 'list'"
+        class="virtual-spacer"
+        :style="{ height: `${virtualPadBottom}px` }"
+        aria-hidden="true"
+      />
 
       <!-- Footer: load-more status only -->
       <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
         <span v-if="clipboardStore.isLoadingMore">加载更多…</span>
         <span v-else>继续滚动加载更多</span>
+      </div>
       </div>
     </div>
 
@@ -128,22 +241,119 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted, shallowRef } from "vue";
-import { useClipboardStore } from "../stores/clipboard";
+import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
+import BatchBar from "./BatchBar.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import type { ClipboardRecord } from "../types";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
+import { useBatchActions } from "../composables/useBatchActions";
 import { recordThumbSrc } from "../utils/mediaUrl";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const { toggleBatchMode } = useBatchActions();
 const listRef = ref<HTMLElement | null>(null);
+
+type ListLayout = "list" | "grid";
+const LAYOUT_KEY = "clipvault-list-layout";
+
+function readStoredLayout(): ListLayout {
+  try {
+    const v = localStorage.getItem(LAYOUT_KEY);
+    if (v === "grid" || v === "list") return v;
+  } catch {
+    /* ignore */
+  }
+  return "list";
+}
+
+const listLayout = ref<ListLayout>(readStoredLayout());
+
+function setListLayout(mode: ListLayout) {
+  listLayout.value = mode;
+  try {
+    localStorage.setItem(LAYOUT_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+  void nextTick(() => fillViewportIfNeeded());
+}
+
+/** Window mode: toolbar lives in the list column (not spanning the preview). */
+const showListChrome = computed(() => settingsStore.settings.app_mode === "window");
+
+const CATEGORY_TITLES: Record<string, string> = {
+  all: "全部",
+  text: "文本",
+  image: "图片",
+  file: "文件",
+  link: "链接",
+  code: "代码",
+  favorites: "收藏",
+  trash: "回收站",
+};
+
+const categoryTitle = computed(() => {
+  if (clipboardStore.trashFilter) return "回收站";
+  const typeKey = clipboardStore.activeFilter;
+  const typePart =
+    typeKey !== "all" ? CATEGORY_TITLES[typeKey] ?? typeKey : null;
+  const tagPart = clipboardStore.activeTag;
+  if (typePart && tagPart) return `${typePart} · ${tagPart}`;
+  if (tagPart) return tagPart;
+  if (typePart) return typePart;
+  return "全部剪贴板";
+});
+
+const listCountLabel = computed(() => {
+  if (clipboardStore.searchQuery) {
+    const n = clipboardStore.filteredRecords.length;
+    return clipboardStore.hasMore ? `已找到 ${n}+ 条` : `共 ${n} 条`;
+  }
+  if (clipboardStore.trashFilter) {
+    return `共 ${clipboardStore.trashCount} 条`;
+  }
+  if (clipboardStore.activeTag) {
+    const n = clipboardStore.filteredRecords.length;
+    return clipboardStore.hasMore ? `已加载 ${n}+ 条` : `共 ${n} 条`;
+  }
+  if (clipboardStore.activeFilter === "favorites") {
+    return `共 ${clipboardStore.filterCounts.favorites} 条`;
+  }
+  if (clipboardStore.activeFilter !== "all") {
+    return `共 ${clipboardStore.filterCounts[clipboardStore.activeFilter]} 条`;
+  }
+  return `共 ${clipboardStore.filterCounts.all} 条`;
+});
+
+function onSortChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value as ListSort;
+  clipboardStore.setListSort(value);
+}
+
+async function onEmptyTrash() {
+  const ok = await confirm({
+    title: "清空回收站",
+    message: "确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。",
+    confirmText: "清空",
+    danger: true,
+  });
+  if (ok) {
+    try {
+      await clipboardStore.emptyTrash();
+      toast("回收站已清空", "success");
+    } catch {
+      toast("清空失败", "error");
+    }
+  }
+}
 
 const activeDescendantId = computed(() =>
   clipboardStore.selectedId != null ? `record-option-${clipboardStore.selectedId}` : undefined
@@ -163,8 +373,8 @@ function isOptionTabbable(id: number): boolean {
 }
 
 /** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
-const BASE_ROW_HEIGHT = 58;
-const BASE_LABEL_HEIGHT = 26;
+const BASE_ROW_HEIGHT = 76;
+const BASE_LABEL_HEIGHT = 28;
 const OVERSCAN = 6;
 const rowHeight = computed(() =>
   Math.round(BASE_ROW_HEIGHT * (settingsStore.settings.font_size / 16))
@@ -230,8 +440,31 @@ const TYPE_LABELS: Record<string, string> = {
   file: '文件',
 };
 
-function isTextLike(type: string): boolean {
-  return type === 'text' || type === 'code';
+function sourceLabel(record: ClipboardRecord): string {
+  const raw = (record.source_app || "").trim();
+  if (!raw) return "系统剪贴板";
+  // Strip path / exe extension for a short label
+  const base = raw.replace(/^.*[/\\]/, "").replace(/\.exe$/i, "");
+  return base || raw;
+}
+
+const SOURCE_DOT_PALETTE = [
+  "#6366f1",
+  "#34d399",
+  "#fbbf24",
+  "#f87171",
+  "#38bdf8",
+  "#a78bfa",
+  "#fb923c",
+  "#94a3b8",
+];
+
+function sourceDotColor(sourceApp: string | undefined): string {
+  const s = (sourceApp || "").trim();
+  if (!s) return "var(--text-tertiary)";
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return SOURCE_DOT_PALETTE[h % SOURCE_DOT_PALETTE.length];
 }
 
 /** Layout-only row (no record payload — avoids rebuild on content/copy_count churn). */
@@ -334,12 +567,26 @@ const windowItems = computed<WindowItem[]>(() => {
   });
 });
 
+/** Grid: render all loaded rows (page size is small); list: virtual window. */
+const displayItems = computed<WindowItem[]>(() => {
+  if (listLayout.value !== "grid") return windowItems.value;
+  const byId = recordsById.value;
+  return flatItems.value.map((item) => {
+    if (item.type !== "record" || item.id == null) return item;
+    const record = byId.get(item.id);
+    if (!record) return item;
+    return { ...item, record, thumb: recordThumbSrc(record) };
+  });
+});
+
 const virtualPadTop = computed(() => {
+  if (listLayout.value === "grid") return 0;
   const { start } = virtualRange.value;
   return start > 0 ? flatItems.value[start].offset : 0;
 });
 
 const virtualPadBottom = computed(() => {
+  if (listLayout.value === "grid") return 0;
   const { end } = virtualRange.value;
   const items = flatItems.value;
   if (end >= items.length) return 0;
@@ -456,9 +703,31 @@ function getPreview(record: ClipboardRecord): string {
   return record.content.slice(0, maxLen) + "…";
 }
 
-function badgeClass(record: ClipboardRecord): string {
-  if (record.is_sensitive) return "badge-sensitive";
-  return `badge-${record.content_type}`;
+async function quickPaste(id: number) {
+  try {
+    await clipboardStore.pasteRecord(id);
+    toast("已粘贴", "success");
+  } catch {
+    toast("粘贴失败", "error");
+  }
+}
+
+async function quickDelete(record: ClipboardRecord) {
+  if (clipboardStore.trashFilter) {
+    const ok = await confirm({
+      title: "永久删除",
+      message: "确定要永久删除这条记录吗？此操作不可恢复。",
+      confirmText: "永久删除",
+      danger: true,
+    });
+    if (ok) {
+      await clipboardStore.permanentlyDeleteRecord(record.id);
+      toast("已永久删除", "success");
+    }
+    return;
+  }
+  await clipboardStore.deleteRecord(record.id);
+  toast("已移到回收站", "success");
 }
 
 let cachedNow = Date.now();
@@ -603,11 +872,359 @@ onUnmounted(() => {
   min-height: 0;
 }
 
+.list-column {
+  flex: 1.35;
+  min-width: 280px;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-base) 55%, var(--bg-surface));
+  border-right: 1px solid var(--border-subtle);
+}
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 44px;
+  padding: 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-default) 60%, transparent);
+}
+
+.list-toolbar-left {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.list-title {
+  font-size: var(--text-sm, 0.6875rem);
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 7rem;
+}
+
+.list-count {
+  font-size: var(--text-sm, 0.6875rem);
+  font-weight: 500;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.list-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.empty-trash-btn {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs, 0.625rem);
+  font-weight: 500;
+  background: var(--danger-soft);
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  font-family: inherit;
+}
+
+.empty-trash-btn:hover {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+
+.list-sort {
+  height: 26px;
+  max-width: 7rem;
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 0.6875rem);
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.list-sort:hover,
+.list-sort:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.list-tool-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.list-tool-btn:hover,
+.list-tool-btn.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--accent);
+}
+
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+
+.view-toggle-btn {
+  width: 28px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.view-toggle-btn + .view-toggle-btn {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.view-toggle-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.view-toggle-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.view-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
 .record-list {
   flex: 1;
-  min-width: 240px;
-  max-width: 400px;
+  min-height: 0;
   overflow-y: auto;
+  padding: 8px 0 4px;
+}
+
+/* —— Grid view: vertical cards (original structure) —— */
+.record-list.view-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  align-content: start;
+}
+
+.view-grid .section-label {
+  grid-column: 1 / -1;
+  padding: 4px 2px 0;
+}
+
+.view-grid .record-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 10px;
+  gap: 6px;
+  /* Cap height so long text cannot blow out the grid track */
+  height: 132px;
+  max-height: 132px;
+  box-sizing: border-box;
+}
+
+.view-grid .record-item.is-image {
+  height: 140px;
+  max-height: 140px;
+}
+
+.view-grid .record-item.batch-mode {
+  padding: 10px;
+}
+
+.view-grid .record-checkbox {
+  left: auto;
+  right: 8px;
+  top: 8px;
+  z-index: 3;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-sm);
+}
+
+.view-grid .record-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.view-grid .record-item.batch-mode .record-type-icon {
+  margin-left: 0;
+}
+
+.view-grid .record-item.batch-checked {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface));
+  box-shadow: var(--shadow-sm);
+}
+
+.view-grid .record-item.batch-mode .record-actions {
+  display: none;
+}
+
+/* Image cards: thumb on top (original); hide side type chip */
+.view-grid .record-item.is-image .record-type-icon {
+  display: none;
+}
+
+.view-grid .record-type-icon {
+  width: 28px;
+  height: 28px;
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.view-grid .record-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.view-grid .record-image-tile {
+  order: -1;
+  width: 100%;
+  height: 72px;
+  max-height: 72px;
+  flex: 0 0 72px;
+  overflow: hidden;
+}
+
+.view-grid .record-title {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(1.35em * 2);
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.35;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.view-grid .record-meta {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  margin-top: auto;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.view-grid .record-time {
+  flex-shrink: 0;
+}
+
+.view-grid .record-source {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-grid .record-dims {
+  display: none; /* keep meta to a single tight line in grid */
+}
+
+.view-grid .record-sensitive {
+  flex-shrink: 0;
+  max-width: 3.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-grid .record-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  margin: 0;
+  z-index: 2;
+  max-width: calc(100% - 12px);
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  border-radius: 6px;
+  padding: 1px;
+  box-shadow: var(--shadow-sm);
+}
+
+.view-grid .record-action-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.view-grid .list-footer {
+  grid-column: 1 / -1;
+  margin-top: 0;
+  border-top: none;
+  padding: 4px 0 8px;
 }
 
 .virtual-spacer {
@@ -617,63 +1234,55 @@ onUnmounted(() => {
 }
 
 .section-label {
-  font-size: 0.625rem;
+  font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--text-tertiary);
-  padding: 8px 16px 2px;
+  padding: 10px 14px 4px;
 }
 
 .record-item {
-  padding: 10px 12px;
-  margin: 0 8px 2px;
+  padding: 12px 12px;
+  margin: 0 8px 8px;
   cursor: pointer;
-  border-radius: var(--radius-md, 10px);
-  transition: background var(--transition-fast), border-color var(--transition-fast);
+  border-radius: var(--radius-lg, 14px);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
   display: flex;
   align-items: flex-start;
   gap: 10px;
   position: relative;
-  border: 1px solid transparent;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
 }
 
 .record-item:hover {
-  background: var(--bg-hover);
-}
-
-.record-item:hover .record-star {
-  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-default));
+  box-shadow: var(--shadow-sm);
 }
 
 .record-item.selected {
-  background: var(--bg-selected, var(--accent-soft));
-  border-color: color-mix(in srgb, var(--accent) 20%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
+  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .record-item:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.record-item.selected::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 8px;
-  bottom: 8px;
-  width: 2px;
-  background: var(--accent);
-  border-radius: 0 2px 2px 0;
+  outline-offset: 1px;
 }
 
 .record-item.batch-mode {
-  padding-left: 30px;
+  padding-left: 32px;
 }
 
 .record-checkbox {
   position: absolute;
-  left: 8px;
-  top: 13px;
+  left: 10px;
+  top: 16px;
   width: 14px;
   height: 14px;
   border: 1.5px solid var(--text-tertiary);
@@ -693,24 +1302,51 @@ onUnmounted(() => {
   color: white;
 }
 
-/* Type Icon */
+/* Type color chip */
 .record-type-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 6px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.813rem;
-  font-weight: 600;
   flex-shrink: 0;
   margin-top: 1px;
-  overflow: hidden;
 }
 
-.record-type-icon.has-thumb {
-  background: var(--bg-surface);
-  padding: 0;
+.record-type-icon.text {
+  background: color-mix(in srgb, var(--type-text) 16%, transparent);
+  color: var(--type-text);
+}
+
+.record-type-icon.code {
+  background: color-mix(in srgb, var(--type-code) 16%, transparent);
+  color: var(--type-code);
+}
+
+.record-type-icon.link {
+  background: color-mix(in srgb, var(--type-link) 16%, transparent);
+  color: var(--type-link);
+}
+
+.record-type-icon.image {
+  background: color-mix(in srgb, var(--type-image) 16%, transparent);
+  color: var(--type-image);
+}
+
+.record-type-icon.file {
+  background: color-mix(in srgb, var(--type-file) 16%, transparent);
+  color: var(--type-file);
+}
+
+/* Image thumb in body (design: type icon left, preview right) */
+.record-image-tile {
+  width: 64px;
+  height: 48px;
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
 }
 
 .record-thumb {
@@ -720,54 +1356,41 @@ onUnmounted(() => {
   display: block;
 }
 
-.record-type-icon.text {
-  background: color-mix(in srgb, var(--type-text) 15%, transparent);
-  color: var(--type-text);
-}
-
-.record-type-icon.code {
-  background: color-mix(in srgb, var(--type-code) 15%, transparent);
-  color: var(--type-code);
-}
-
-.record-type-icon.link {
-  background: color-mix(in srgb, var(--type-link) 15%, transparent);
-  color: var(--type-link);
-}
-
-.record-type-icon.image {
-  background: color-mix(in srgb, var(--type-image) 15%, transparent);
-  color: var(--type-image);
-}
-
-.record-type-icon.file {
-  background: color-mix(in srgb, var(--type-file) 15%, transparent);
-  color: var(--type-file);
-}
-
 .record-body {
   flex: 1;
   min-width: 0;
 }
 
 .record-title {
-  font-size: 0.813rem;
-  font-weight: 600;
+  font-size: var(--text-base, 0.8125rem);
+  font-weight: 500;
   color: var(--text-primary);
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  line-height: 1.4;
+  white-space: nowrap;
   overflow: hidden;
-  word-break: break-word;
+  text-overflow: ellipsis;
+}
+
+.record-item.is-link .record-title {
+  color: var(--accent-light, var(--accent));
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset: 2px;
+}
+
+.record-item.is-code .record-title {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: var(--text-md, 0.75rem);
 }
 
 .record-meta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 5px;
-  font-size: 0.719rem;
+  margin-top: 6px;
+  font-size: var(--text-sm, 0.6875rem);
   color: var(--text-tertiary);
 }
 
@@ -775,81 +1398,105 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.record-chars {
+.record-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 140px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.record-badge {
-  font-size: 0.656rem;
+.source-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.record-dims {
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.record-sensitive {
+  font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
-  padding: 1px 7px;
+  color: var(--sensitive);
+  background: var(--sensitive-soft);
+  padding: 1px 6px;
   border-radius: 4px;
 }
 
-/* Pin + Star buttons - hidden by default, shows on row hover */
+/* Hover quick actions — design: copy / star / trash (+ pin) */
 .record-actions {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   flex-shrink: 0;
-  margin-top: 1px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+  margin-top: -2px;
 }
 
-.record-pin,
-.record-star {
-  font-size: 0.875rem;
-  background: none;
+.record-item:hover .record-actions,
+.record-item:focus-within .record-actions,
+.record-item.selected .record-actions,
+.record-actions:has(.active),
+.record-actions:has(.starred) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* When collapsed to status-only, hide inert buttons */
+.record-item:not(:hover):not(:focus-within):not(.selected) .record-action-btn:not(.active):not(.starred) {
+  display: none;
+}
+
+.record-action-btn {
+  width: 28px;
+  height: 28px;
   border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
   cursor: pointer;
-  opacity: 0.35;
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
-  line-height: 1;
-  padding: 1px 2px;
-  color: var(--text-muted, var(--text-tertiary));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.record-pin:focus-visible,
-.record-star:focus-visible {
-  opacity: 1;
-  outline: 1px solid var(--accent);
-  border-radius: 4px;
+.record-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
-.record-star {
-  font-size: 1.063rem;
+.record-action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
 }
 
-.record-pin.pinned {
-  opacity: 1;
+.record-action-btn.active {
+  color: var(--accent-light, var(--accent));
 }
 
-.record-star.starred {
-  opacity: 1;
+.record-action-btn.starred {
   color: var(--warning);
 }
 
-.record-pin:hover,
-.record-star:hover {
-  transform: scale(1.2);
+.record-action-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
-.record-item:hover .record-pin,
-.record-item:hover .record-star {
-  opacity: 0.6;
-}
-
-.record-item:hover .record-pin.pinned {
+/* Always show active pin/star even when row not hovered */
+.record-action-btn.active,
+.record-action-btn.starred {
   opacity: 1;
-}
-
-.record-pin:hover {
-  opacity: 1 !important;
-}
-
-.record-star:hover {
-  opacity: 1 !important;
-  color: var(--warning);
 }
 
 /* Footer */

@@ -40,6 +40,8 @@ import {
   Pencil,
   ArrowLeft,
   HelpCircle,
+  List,
+  LayoutGrid,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -81,6 +83,8 @@ const ICONS = {
   circle: Circle,
   edit: Pencil,
   help: HelpCircle,
+  list: List,
+  grid: LayoutGrid,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;

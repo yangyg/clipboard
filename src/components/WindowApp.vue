@@ -29,49 +29,6 @@
       />
 
       <div class="center-column">
-        <div class="list-header">
-          <span class="list-title">{{ categoryTitle }}</span>
-          <div class="list-header-right">
-            <button
-              v-if="clipboardStore.trashFilter && clipboardStore.trashCount > 0"
-              class="empty-trash-btn"
-              @click="onEmptyTrash"
-            >清空回收站</button>
-          </div>
-        </div>
-
-        <div class="list-toolbar">
-          <div class="list-count">{{ listCountLabel }}</div>
-          <div class="list-toolbar-right">
-            <select
-              class="list-sort"
-              :value="clipboardStore.listSort"
-              title="列表排序"
-              aria-label="列表排序"
-              @change="onSortChange"
-            >
-              <option
-                v-for="opt in LIST_SORT_OPTIONS"
-                :key="opt.value"
-                :value="opt.value"
-              >{{ opt.label }}</option>
-            </select>
-            <button
-              type="button"
-              class="list-header-btn"
-              :class="{ active: clipboardStore.batchMode }"
-              title="批量操作"
-              aria-label="批量操作"
-              :aria-pressed="clipboardStore.batchMode"
-              @click="toggleBatchMode"
-            ><AppIcon name="batch" :size="14" /></button>
-          </div>
-        </div>
-
-        <Transition name="fade">
-          <BatchBar v-if="clipboardStore.batchMode" />
-        </Transition>
-
         <RecordList />
       </div>
     </div>
@@ -92,12 +49,9 @@ import SideBar from "./SideBar.vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
 import TagDialog from "./TagDialog.vue";
-import BatchBar from "./BatchBar.vue";
-import AppIcon from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
-import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/clipboard";
+import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
-import { useBatchActions } from "../composables/useBatchActions";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -106,7 +60,6 @@ import type { Tag } from "../types";
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
-const { toggleBatchMode } = useBatchActions();
 const appWindow = getCurrentWindow();
 
 defineEmits<{
@@ -119,64 +72,14 @@ const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"create" | "assign" | "edit">("create");
 const editingTag = ref<Tag | null>(null);
 
-function onSortChange(e: Event) {
-  const value = (e.target as HTMLSelectElement).value as ListSort;
-  clipboardStore.setListSort(value);
-}
-
 async function onTitlebarDblClick() {
   await appWindow.toggleMaximize();
 }
-
-const CATEGORY_TITLES: Record<string, string> = {
-  all: "全部剪贴板",
-  text: "文本",
-  image: "图片",
-  file: "文件",
-  link: "链接",
-  code: "代码",
-  favorites: "收藏夹",
-  trash: "回收站",
-};
 
 /** Single source of truth: sidebar highlight follows store, not a separate ref. */
 const activeCategory = computed(() =>
   clipboardStore.trashFilter ? "trash" : clipboardStore.activeFilter
 );
-
-const categoryTitle = computed(() => {
-  if (clipboardStore.trashFilter) return "回收站";
-  const typeKey = clipboardStore.activeFilter;
-  const typePart =
-    typeKey !== "all" ? CATEGORY_TITLES[typeKey] ?? typeKey : null;
-  const tagPart = clipboardStore.activeTag;
-  if (typePart && tagPart) return `${typePart} · ${tagPart}`;
-  if (tagPart) return tagPart;
-  if (typePart) return typePart;
-  return "全部剪贴板";
-});
-
-const listCountLabel = computed(() => {
-  if (clipboardStore.searchQuery) {
-    const n = clipboardStore.filteredRecords.length;
-    return clipboardStore.hasMore ? `已找到 ${n}+ 项` : `共 ${n} 项`;
-  }
-  if (clipboardStore.trashFilter) {
-    return `共 ${clipboardStore.trashCount} 项`;
-  }
-  // Combined or tag-only: stats are not intersection-aware — use loaded page size.
-  if (clipboardStore.activeTag) {
-    const n = clipboardStore.filteredRecords.length;
-    return clipboardStore.hasMore ? `已加载 ${n}+ 项` : `共 ${n} 项`;
-  }
-  if (clipboardStore.activeFilter === "favorites") {
-    return `共 ${clipboardStore.filterCounts.favorites} 项`;
-  }
-  if (clipboardStore.activeFilter !== "all") {
-    return `共 ${clipboardStore.filterCounts[clipboardStore.activeFilter]} 项`;
-  }
-  return `共 ${clipboardStore.filterCounts.all} 项`;
-});
 
 function onCategoryChange(key: string) {
   if (key === "trash") {
@@ -241,23 +144,6 @@ async function onDeleteTag(tag: Tag) {
     await clipboardStore.deleteTag(tag.id);
   } catch {
     toast("删除失败", "error");
-  }
-}
-
-async function onEmptyTrash() {
-  const ok = await confirm({
-    title: "清空回收站",
-    message: "确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。",
-    confirmText: "清空",
-    danger: true,
-  });
-  if (ok) {
-    try {
-      await clipboardStore.emptyTrash();
-      toast("回收站已清空", "success");
-    } catch {
-      toast("清空失败", "error");
-    }
   }
 }
 
@@ -330,108 +216,5 @@ async function onEmptyTrash() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px 2px;
-  flex-shrink: 0;
-}
-
-.list-title {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.list-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 2px 12px 8px 16px;
-  border-bottom: 1px solid var(--border-light);
-  flex-shrink: 0;
-}
-
-.list-count {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.list-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.empty-trash-btn {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.69rem;
-  font-weight: 500;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  font-family: inherit;
-}
-
-.empty-trash-btn:hover {
-  background: color-mix(in srgb, var(--danger) 20%, transparent);
-}
-
-.list-sort {
-  height: 26px;
-  max-width: 7.5rem;
-  padding: 0 6px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-family: inherit;
-  cursor: pointer;
-  outline: none;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.list-sort:hover,
-.list-sort:focus {
-  border-color: var(--accent);
-  color: var(--text-primary);
-}
-
-.list-header-btn {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: none;
-  color: var(--text-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.list-header-btn:hover,
-.list-header-btn.active {
-  background: var(--accent-soft);
-  color: var(--accent);
 }
 </style>

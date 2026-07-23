@@ -422,8 +422,8 @@ async function permanentDel() {
 
 <style scoped>
 .preview-pane {
-  flex: 1.5;
-  min-width: 300px;
+  flex: 1.15;
+  min-width: 280px;
   width: auto;
   background: var(--bg-card, var(--bg-surface));
   border-left: 1px solid var(--border-subtle);

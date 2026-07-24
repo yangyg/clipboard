@@ -1,11 +1,6 @@
 <template>
   <div class="tray-shell" ref="root" tabindex="0" @keydown="onKeydown">
-    <div
-      class="tray-menu"
-      :class="{ entering: menuEntering }"
-      ref="menuEl"
-      role="menu"
-    >
+    <div class="tray-menu" ref="menuEl" role="menu">
       <template v-for="(item, index) in items" :key="item.id">
         <div v-if="item.separatorBefore" class="sep" role="separator" />
         <button
@@ -47,7 +42,6 @@ const root = ref<HTMLElement | null>(null);
 const menuEl = ref<HTMLElement | null>(null);
 const items = ref<TrayMenuItemDef[]>([]);
 const focusIndex = ref(0);
-const menuEntering = ref(false);
 const appWindow = getCurrentWindow();
 
 const unlisteners: UnlistenFn[] = [];
@@ -80,13 +74,6 @@ async function refreshState() {
   const state = await invoke<TrayMenuState>("get_tray_menu_state");
   applyChrome(state);
   applyPaused(state.paused);
-}
-
-async function playEnterAnimation() {
-  menuEntering.value = false;
-  await nextTick();
-  void menuEl.value?.offsetWidth;
-  menuEntering.value = true;
 }
 
 async function fitWindowToContent() {
@@ -143,6 +130,17 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+async function onOpened() {
+  try {
+    await refreshState();
+  } catch (e) {
+    console.error("get_tray_menu_state failed:", e);
+  }
+  focusIndex.value = 0;
+  await fitWindowToContent();
+  await focusRoot();
+}
+
 onMounted(async () => {
   try {
     await refreshState();
@@ -152,22 +150,9 @@ onMounted(async () => {
   }
   focusIndex.value = 0;
   await fitWindowToContent();
-  await playEnterAnimation();
   await focusRoot();
 
-  unlisteners.push(
-    await listen("tray-menu-opened", async () => {
-      try {
-        await refreshState();
-      } catch (e) {
-        console.error("get_tray_menu_state failed:", e);
-      }
-      focusIndex.value = 0;
-      await fitWindowToContent();
-      await playEnterAnimation();
-      await focusRoot();
-    }),
-  );
+  unlisteners.push(await listen("tray-menu-opened", () => void onOpened()));
 
   unlisteners.push(
     await listen<boolean>("capture-paused", async (event) => {
@@ -229,22 +214,6 @@ onUnmounted(() => {
   border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  transform-origin: bottom center;
-}
-
-.tray-menu.entering {
-  animation: tray-pop var(--transition-smooth) both;
-}
-
-@keyframes tray-pop {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 :global(body.blur-enabled) .tray-menu {

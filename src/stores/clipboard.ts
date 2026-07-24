@@ -340,17 +340,27 @@ export const useClipboardStore = defineStore("clipboard", () => {
   /** Drop oldest non-pinned rows so in-memory list cannot grow without bound. */
   function trimRecordsSoftCap() {
     if (records.value.length <= LIST_SOFT_CAP) return;
-    const pinned = records.value.filter((r) => r.is_pinned);
-    const rest = records.value.filter((r) => !r.is_pinned);
+    records.value = applySoftCap(records.value);
+  }
+
+  function applySoftCap(list: ClipboardRecord[]): ClipboardRecord[] {
+    if (list.length <= LIST_SOFT_CAP) return list;
+    const pinned: ClipboardRecord[] = [];
+    const rest: ClipboardRecord[] = [];
+    for (const r of list) {
+      if (r.is_pinned) pinned.push(r);
+      else rest.push(r);
+    }
     const restKeep = Math.max(0, LIST_SOFT_CAP - pinned.length);
-    records.value = [...pinned, ...rest.slice(0, restKeep)];
+    const next = pinned.concat(rest.slice(0, restKeep));
     // Local window no longer matches contiguous server offsets.
     listWindowDirty = true;
     hasMore.value = true;
-    if (selectedId.value !== null && !records.value.some((r) => r.id === selectedId.value)) {
+    if (selectedId.value !== null && !next.some((r) => r.id === selectedId.value)) {
       selectedId.value = null;
     }
     pruneRecordDetails(selectedId.value);
+    return next;
   }
 
   /** Lazy-load full content / HTML into a separate detail cache (not list rows). */
@@ -747,15 +757,21 @@ export const useClipboardStore = defineStore("clipboard", () => {
       scheduleReloadList();
       return;
     }
-    // Remove existing record with same id (backend dedup returns same id on hash match)
-    const existing = records.value.findIndex((r) => r.id === record.id);
-    if (existing !== -1) {
-      records.value.splice(existing, 1);
+    const list = records.value;
+    let pinCount = 0;
+    let existingIdx = -1;
+    for (let i = 0; i < list.length; i++) {
+      const r = list[i];
+      if (r.id === record.id) {
+        existingIdx = i;
+        continue;
+      }
+      if (r.is_pinned) pinCount += 1;
     }
-    // Insert at top, after pinned items
-    const pinCount = records.value.filter((r) => r.is_pinned).length;
-    records.value.splice(pinCount, 0, record);
-    trimRecordsSoftCap();
+    const next = list.slice();
+    if (existingIdx !== -1) next.splice(existingIdx, 1);
+    next.splice(pinCount, 0, record);
+    records.value = applySoftCap(next);
   }
 
   function setListSort(sort: ListSort) {

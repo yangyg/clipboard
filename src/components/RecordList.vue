@@ -523,14 +523,20 @@ function buildFlatItems(): FlatItem[] {
   return items;
 }
 
-const flatItems = shallowRef<FlatItem[]>(buildFlatItems());
+function buildRecordIndex(): Map<number, number> {
+  const m = new Map<number, number>();
+  clipboardStore.filteredRecords.forEach((r, i) => m.set(r.id, i));
+  return m;
+}
 
-watch(
-  layoutSig,
-  () => {
-    flatItems.value = buildFlatItems();
-  }
-);
+const flatItems = shallowRef<FlatItem[]>(buildFlatItems());
+/** id → index in filteredRecords; rebuilt with layout only (not on content churn). */
+const recordIndexById = shallowRef(buildRecordIndex());
+
+watch(layoutSig, () => {
+  flatItems.value = buildFlatItems();
+  recordIndexById.value = buildRecordIndex();
+});
 
 const contentHeight = computed(() => {
   const items = flatItems.value;
@@ -539,50 +545,69 @@ const contentHeight = computed(() => {
   return last.offset + last.height;
 });
 
+/** First index where item.offset + item.height >= target (item not fully above target). */
+function lowerBoundPastTop(items: FlatItem[], target: number): number {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (items[mid].offset + items[mid].height < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** First index where item.offset >= target. */
+function lowerBoundByOffset(items: FlatItem[], target: number): number {
+  let lo = 0;
+  let hi = items.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (items[mid].offset < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 const virtualRange = computed(() => {
   const items = flatItems.value;
   const n = items.length;
   if (n === 0) return { start: 0, end: 0 };
   const top = scrollTop.value;
   const bottom = top + viewportHeight.value;
-  let start = 0;
-  while (start < n && items[start].offset + items[start].height < top) start += 1;
-  let end = start;
-  while (end < n && items[end].offset < bottom) end += 1;
+  let start = lowerBoundPastTop(items, top);
+  let end = lowerBoundByOffset(items, bottom);
   start = Math.max(0, start - OVERSCAN);
   end = Math.min(n, end + OVERSCAN);
   return { start, end };
 });
 
-/** Resolve live records for the visible window only (O(visible) lookups). */
-const recordsById = computed(() => {
-  const m = new Map<number, ClipboardRecord>();
-  for (const r of clipboardStore.filteredRecords) m.set(r.id, r);
-  return m;
-});
+function resolveWindowItem(
+  item: FlatItem,
+  records: ClipboardRecord[],
+  indexById: Map<number, number>
+): WindowItem {
+  if (item.type !== "record" || item.id == null) return item;
+  const idx = indexById.get(item.id);
+  const record = idx !== undefined ? records[idx] : undefined;
+  if (!record) return item;
+  return { ...item, record, thumb: recordThumbSrc(record) };
+}
 
 const windowItems = computed<WindowItem[]>(() => {
   const { start, end } = virtualRange.value;
   const slice = flatItems.value.slice(start, end);
-  const byId = recordsById.value;
-  return slice.map((item) => {
-    if (item.type !== "record" || item.id == null) return item;
-    const record = byId.get(item.id);
-    if (!record) return item;
-    return { ...item, record, thumb: recordThumbSrc(record) };
-  });
+  const records = clipboardStore.filteredRecords;
+  const indexById = recordIndexById.value;
+  return slice.map((item) => resolveWindowItem(item, records, indexById));
 });
 
 /** Grid: render all loaded rows (page size is small); list: virtual window. */
 const displayItems = computed<WindowItem[]>(() => {
   if (listLayout.value !== "grid") return windowItems.value;
-  const byId = recordsById.value;
-  return flatItems.value.map((item) => {
-    if (item.type !== "record" || item.id == null) return item;
-    const record = byId.get(item.id);
-    if (!record) return item;
-    return { ...item, record, thumb: recordThumbSrc(record) };
-  });
+  const records = clipboardStore.filteredRecords;
+  const indexById = recordIndexById.value;
+  return flatItems.value.map((item) => resolveWindowItem(item, records, indexById));
 });
 
 const virtualPadTop = computed(() => {

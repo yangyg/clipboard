@@ -712,6 +712,14 @@ impl ClipboardDb {
     /// List-shaped row (truncated content, no HTML) — cheaper emit after capture.
     pub fn get_record_list(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
         let conn = self.lock_read();
+        self.get_record_list_locked(&conn, id)
+    }
+
+    fn get_record_list_locked(
+        &self,
+        conn: &Connection,
+        id: i64,
+    ) -> SqlResult<Option<ClipboardRecord>> {
         let mut stmt = conn.prepare(&format!(
             "SELECT {} FROM records WHERE id = ?",
             RECORD_COLS_LIST
@@ -719,11 +727,17 @@ impl ClipboardDb {
         let mut rows = stmt.query([id])?;
         if let Some(row) = rows.next()? {
             let mut record = self.map_record_row(row)?;
-            record.tags = self.get_record_tags_locked(&conn, record.id)?;
+            record.tags = self.get_record_tags_locked(conn, record.id)?;
             Ok(Some(record))
         } else {
             Ok(None)
         }
+    }
+
+    /// Tag names for a record (read lock). Used after auto-tag without reloading the row.
+    pub fn get_record_tag_names(&self, record_id: i64) -> SqlResult<Vec<String>> {
+        let conn = self.lock_read();
+        self.get_record_tags_locked(&conn, record_id)
     }
 
     /// Full record + bump copy_count in one write lock (paste hot path).
@@ -776,7 +790,7 @@ impl ClipboardDb {
         source_window: &str,
         image: Option<&ImageMeta>,
         content_html: Option<&str>,
-    ) -> SqlResult<(i64, bool)> {
+    ) -> SqlResult<(i64, bool, ClipboardRecord)> {
         let conn = self.conn.lock();
 
         // Hash check + insert/update under the same write lock (no TOCTOU between
@@ -797,7 +811,10 @@ impl ClipboardDb {
                 "UPDATE records SET updated_at = ?, source_app = ?, source_window = ? WHERE id = ?",
                 params![now, source_app, source_window, id],
             )?;
-            return Ok((id, false));
+            let record = self
+                .get_record_list_locked(&conn, id)?
+                .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+            return Ok((id, false, record));
         }
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -880,11 +897,18 @@ impl ClipboardDb {
                     params.as_slice(),
                 )?;
             }
+            let record = self
+                .get_record_list_locked(&conn, id)?
+                .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
             drop(conn);
             self.purge_media_pairs(&overflow_media);
+            return Ok((id, true, record));
         }
 
-        Ok((id, true))
+        let record = self
+            .get_record_list_locked(&conn, id)?
+            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+        Ok((id, true, record))
     }
 
     pub fn search_records(

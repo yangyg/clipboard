@@ -593,7 +593,7 @@ fn process_capture_job(
                 None,
                 captured.html.as_deref(),
             ) {
-                Ok((id, is_new)) => {
+                Ok((id, is_new, mut record)) => {
                     if is_new && settings.enable_auto_tag {
                         if let Err(e) = db.apply_auto_tags(
                             id,
@@ -602,6 +602,8 @@ fn process_capture_job(
                             &settings.auto_tag_rules,
                         ) {
                             warn!("Failed to apply auto tags: {}", e);
+                        } else if let Ok(tags) = db.get_record_tag_names(id) {
+                            record.tags = tags;
                         }
                     }
                     info!(
@@ -611,9 +613,7 @@ fn process_capture_job(
                         captured.html.is_some(),
                         is_new
                     );
-                    if let Ok(Some(r)) = db.get_record_list(id) {
-                        app.emit("clipboard-changed", list_ipc_payload(r)).ok();
-                    }
+                    app.emit("clipboard-changed", list_ipc_payload(record)).ok();
                 }
                 Err(e) => warn!("Failed to insert text record: {}", e),
             }
@@ -660,7 +660,7 @@ fn process_capture_job(
                         Some(&image_meta),
                         None,
                     ) {
-                        Ok((id, is_new)) => {
+                        Ok((id, is_new, mut record)) => {
                             if is_new && settings.enable_auto_tag {
                                 if let Err(e) = db.apply_auto_tags(
                                     id,
@@ -669,15 +669,15 @@ fn process_capture_job(
                                     &settings.auto_tag_rules,
                                 ) {
                                     warn!("Failed to apply auto tags: {}", e);
+                                } else if let Ok(tags) = db.get_record_tag_names(id) {
+                                    record.tags = tags;
                                 }
                             }
                             info!(
                                 "New clipboard record: id={}, type=image, is_new={}",
                                 id, is_new
                             );
-                            if let Ok(Some(r)) = db.get_record_list(id) {
-                                app.emit("clipboard-changed", list_ipc_payload(r)).ok();
-                            }
+                            app.emit("clipboard-changed", list_ipc_payload(record)).ok();
                         }
                         Err(e) => warn!("Failed to insert image record: {}", e),
                     }

@@ -429,3 +429,14 @@ body.anim-disabled *::after {
   opacity: 0;
   transform: translateY(4px) scale(0.98);
 }
+
+/* Search keyword highlight (list + preview) */
+mark.search-hit {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 0.1em;
+  font-weight: 650;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}

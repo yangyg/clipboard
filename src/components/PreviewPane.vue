@@ -67,12 +67,12 @@
           class="content-box html-preview"
           v-html="sanitizedHtml"
         />
-        <div v-else class="content-box">{{ record.content }}</div>
+        <div v-else class="content-box" v-html="plainContentHtml"></div>
       </template>
 
       <!-- Code -->
       <template v-else-if="record.content_type === 'code'">
-        <pre class="content-box code-box">{{ record.content }}</pre>
+        <pre class="content-box code-box" v-html="plainContentHtml"></pre>
       </template>
 
       <!-- Link -->
@@ -80,7 +80,7 @@
         <div class="link-card">
           <div class="link-icon"><AppIcon name="link" :size="22" /></div>
           <div class="link-title">网页链接</div>
-          <a class="link-url" :href="record.content" target="_blank" rel="noopener noreferrer">{{ record.content }}</a>
+          <a class="link-url" :href="record.content" target="_blank" rel="noopener noreferrer" v-html="plainContentHtml"></a>
         </div>
       </template>
 
@@ -88,7 +88,7 @@
       <template v-else-if="record.content_type === 'file'">
         <div class="file-card">
           <div class="file-icon"><AppIcon name="file" :size="22" /></div>
-          <div class="file-path">{{ record.content }}</div>
+          <div class="file-path" v-html="plainContentHtml"></div>
         </div>
       </template>
 
@@ -198,6 +198,7 @@ import { useSettingsStore } from "../stores/settings";
 import { invoke } from "@tauri-apps/api/core";
 import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
+import { escapeHtml, highlightSearchHtml } from "../utils/highlightSearch";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -248,6 +249,14 @@ const sanitizedHtml = computed(() => {
   const html = record.value?.content_html;
   if (!html || !showHtmlPreview.value) return "";
   return sanitizeClipboardHtml(html);
+});
+
+/** Plain content with optional search-term highlighting (escaped). */
+const plainContentHtml = computed(() => {
+  const text = record.value?.content ?? "";
+  const q = clipboardStore.searchQuery.trim();
+  if (!q) return escapeHtml(text);
+  return highlightSearchHtml(text, q);
 });
 
 const tagDialogVisible = ref(false);

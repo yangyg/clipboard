@@ -162,17 +162,11 @@
             <div
               v-else
               class="record-title"
-            >{{ getPreview(item.record!) }}</div>
+              v-html="previewHtml(item.record!)"
+            ></div>
             <div class="record-meta">
               <span class="record-time">{{ formatTime(item.record!.created_at) }}</span>
-              <span class="record-source">
-                <span
-                  class="source-dot"
-                  :style="{ background: sourceDotColor(item.record!.source_app) }"
-                  aria-hidden="true"
-                />
-                {{ sourceLabel(item.record!) }}
-              </span>
+              <span class="record-source" v-html="sourceHtml(item.record!)"></span>
               <span
                 v-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height"
                 class="record-dims"
@@ -262,6 +256,11 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useBatchActions } from "../composables/useBatchActions";
 import { recordThumbSrc } from "../utils/mediaUrl";
+import {
+  escapeHtml,
+  highlightSearchHtml,
+  highlightedPreview,
+} from "../utils/highlightSearch";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -735,6 +734,24 @@ function getPreview(record: ClipboardRecord): string {
   const maxLen = 80;
   if (record.content.length <= maxLen) return record.content;
   return record.content.slice(0, maxLen) + "…";
+}
+
+/** Safe HTML for list title — highlights search hits when querying. */
+function previewHtml(record: ClipboardRecord): string {
+  if (record.content_type === "image") {
+    return escapeHtml(getPreview(record));
+  }
+  const q = clipboardStore.searchQuery.trim();
+  if (!q) return escapeHtml(getPreview(record));
+  return highlightedPreview(record.content, q, 80);
+}
+
+function sourceHtml(record: ClipboardRecord): string {
+  const label = sourceLabel(record);
+  const q = clipboardStore.searchQuery.trim();
+  const dot = `<span class="source-dot" style="background:${sourceDotColor(record.source_app)}" aria-hidden="true"></span>`;
+  if (!q) return `${dot}${escapeHtml(label)}`;
+  return `${dot}${highlightSearchHtml(label, q)}`;
 }
 
 async function quickPaste(id: number) {

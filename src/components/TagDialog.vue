@@ -123,8 +123,12 @@ const dialogTitle = computed(() => {
 watch(() => props.visible, async (v) => {
   if (v) {
     assignedIds.value = new Set();
-    presetColors.value = resolveTagPalette();
     await clipboardStore.loadTags();
+    const existingColors = clipboardStore.tags.map((t) => t.color);
+    if (props.mode === "edit" && props.editTag?.color) {
+      existingColors.unshift(props.editTag.color);
+    }
+    presetColors.value = resolveTagPalette(existingColors);
     if (props.mode === "edit" && props.editTag) {
       tagName.value = props.editTag.name;
       selectedColor.value = props.editTag.color;

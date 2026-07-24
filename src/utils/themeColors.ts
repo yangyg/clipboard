@@ -5,44 +5,82 @@ export function cssColorVar(name: string, fallback: string): string {
   return raw || fallback;
 }
 
+/** Tag color picker is a 6×2 grid — always this many swatches. */
+export const TAG_PALETTE_SIZE = 12;
+
 /**
- * Tag / auto-tag rule swatches resolved from theme tokens at call time.
- * Stored tag colors remain hex in SQLite; this only drives the picker defaults
- * and UI fallbacks so they track dark/light/OLED accent & type tokens.
- * Historical purple `#7c5cfc` is intentionally omitted.
+ * Tag / auto-tag rule swatches (12 slots).
+ * Stored tag colors remain hex in SQLite; picker resolves theme tokens at call time.
+ * Dropped unused `--type-text` (aliased `--text-secondary`).
+ * When a live token collides with an earlier slot, that slot's distinct fallback is used.
  */
 export const TAG_PALETTE_TOKEN_KEYS = [
   "--accent",
   "--accent-light",
+  "--accent-hover",
   "--type-code",
+  "--success",
   "--type-image",
+  "--warning",
   "--danger",
   "--sensitive",
-  "--success",
   "--type-link",
   "--type-file",
-  "--warning",
   "--text-secondary",
-  "--text-tertiary",
 ] as const;
 
+/** Distinct fallbacks — one per slot so the picker stays 12 unique colors. */
 const TAG_PALETTE_FALLBACKS: Record<(typeof TAG_PALETTE_TOKEN_KEYS)[number], string> = {
   "--accent": "#6366f1",
   "--accent-light": "#818cf8",
+  "--accent-hover": "#7577f5",
   "--type-code": "#34d399",
+  "--success": "#2dd4bf",
   "--type-image": "#fbbf24",
+  "--warning": "#f59e0b",
   "--danger": "#f87171",
   "--sensitive": "#fb923c",
-  "--success": "#34d399",
-  "--type-link": "#6366f1",
+  "--type-link": "#60a5fa",
   "--type-file": "#94a3b8",
-  "--warning": "#fbbf24",
   "--text-secondary": "#8b8fa6",
-  "--text-tertiary": "#868ba6",
 };
 
-export function resolveTagPalette(): string[] {
-  return TAG_PALETTE_TOKEN_KEYS.map((key) => cssColorVar(key, TAG_PALETTE_FALLBACKS[key]));
+/** Normalize for equality (hex case / whitespace). */
+export function normalizeColorKey(color: string): string {
+  return color.trim().toLowerCase();
+}
+
+/** Keep first occurrence of each distinct color. */
+export function uniqueColors(colors: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of colors) {
+    const key = normalizeColorKey(c);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(c.trim());
+  }
+  return out;
+}
+
+/**
+ * Build exactly {@link TAG_PALETTE_SIZE} swatches.
+ * `extraColors` (editing / existing tags) take priority, still capped at 12.
+ */
+export function resolveTagPalette(extraColors: string[] = []): string[] {
+  const seen = new Set<string>();
+  const fromTheme: string[] = [];
+  for (const key of TAG_PALETTE_TOKEN_KEYS) {
+    const fallback = TAG_PALETTE_FALLBACKS[key];
+    const live = cssColorVar(key, fallback).trim();
+    const liveKey = normalizeColorKey(live);
+    const pick = liveKey && !seen.has(liveKey) ? live : fallback;
+    const pickKey = normalizeColorKey(pick);
+    if (!pickKey || seen.has(pickKey)) continue;
+    seen.add(pickKey);
+    fromTheme.push(pick.trim());
+  }
+  return uniqueColors([...extraColors, ...fromTheme]).slice(0, TAG_PALETTE_SIZE);
 }
 
 /** Named default-tag accents (also token-backed). */

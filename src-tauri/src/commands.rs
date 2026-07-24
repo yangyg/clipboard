@@ -524,15 +524,21 @@ pub async fn tray_menu_action(
     state: State<'_, AppState>,
     action: String,
 ) -> Result<(), String> {
-    if let Some(w) = app.get_webview_window("tray-menu") {
-        let _ = w.hide();
-    }
+    // Hide tray-menu after activating main when possible — hiding first drops
+    // Windows foreground rights and set_focus on main often fails.
+    let hide_tray = || {
+        if let Some(w) = app.get_webview_window("tray-menu") {
+            let _ = w.hide();
+        }
+    };
 
     match action.as_str() {
         "show" => {
             crate::show_main_panel(&app);
+            hide_tray();
         }
         "pause" => {
+            hide_tray();
             let next = !*state.capture_paused.read();
             *state.capture_paused.write() = next;
             let _ = app.emit("capture-paused", next);
@@ -540,16 +546,31 @@ pub async fn tray_menu_action(
         "settings" => {
             if let Some(window) = app.get_webview_window("main") {
                 let our = window.hwnd().ok().map(|h| h.0 as isize);
+                clipboard::set_our_main_hwnd(our);
                 clipboard::remember_paste_target(our);
-                window.show().ok();
-                window.set_focus().ok();
+                let _ = window.unminimize();
+                let _ = window.show();
+                // Focus while tray-menu still owns foreground.
+                if let Some(hwnd) = our {
+                    let _ = clipboard::focus_window(hwnd);
+                } else {
+                    let _ = window.set_focus();
+                }
+                hide_tray();
+                let _ = app.emit("toggle-panel", true);
                 let _ = app.emit("open-settings", ());
+            } else {
+                hide_tray();
             }
         }
         "quit" => {
+            hide_tray();
             app.exit(0);
         }
-        _ => return Err(format!("unknown tray action: {action}")),
+        _ => {
+            hide_tray();
+            return Err(format!("unknown tray action: {action}"));
+        }
     }
     Ok(())
 }

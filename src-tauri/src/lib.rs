@@ -407,7 +407,8 @@ pub fn run() {
             }
 
             // Setup system tray
-            tray::build_tray(app, capture_paused_for_setup.clone())?;
+            tray::build_tray(app.handle(), capture_paused_for_setup.clone())?;
+            tray::start_resume_watcher(app.handle().clone());
 
             // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
             if let Some(window) = app.get_webview_window("main") {
@@ -517,8 +518,15 @@ pub fn run() {
                 _ => {}
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Extra safety net — on some platforms the event loop resumes after sleep.
+            // Windows sleep/wake is primarily handled by tray::start_resume_watcher.
+            if let tauri::RunEvent::Resumed = event {
+                tray::recover_after_resume(app_handle);
+            }
+        });
 }
 
 // ============================================================
@@ -698,8 +706,13 @@ pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
         let our = window.hwnd().ok().map(|h| h.0 as isize);
         clipboard::set_our_main_hwnd(our);
         clipboard::remember_paste_target(our);
+        let _ = window.unminimize();
         let _ = window.show();
-        let _ = window.set_focus();
+        if let Some(hwnd) = our {
+            let _ = clipboard::focus_window(hwnd);
+        } else {
+            let _ = window.set_focus();
+        }
         let _ = app.emit("toggle-panel", true);
     }
 }

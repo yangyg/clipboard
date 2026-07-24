@@ -400,3 +400,25 @@ body.anim-disabled *::after {
   opacity: 0;
   transform: translateY(-8px);
 }
+
+/* Panel / settings: enter only (leave is instant so tray hide stays snappy) */
+.panel-pop-enter-active {
+  transition: opacity var(--transition-smooth), transform var(--transition-smooth);
+}
+.panel-pop-leave-active {
+  transition: none;
+}
+.panel-pop-enter-from {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.menu-pop-enter-active,
+.menu-pop-leave-active {
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.menu-pop-enter-from,
+.menu-pop-leave-to {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}

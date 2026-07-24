@@ -1,33 +1,35 @@
 <template>
   <Teleport to="body">
-    <div
-      v-if="visible"
-      ref="menuRef"
-      class="context-menu"
-      role="menu"
-      :style="{ left: pos.x + 'px', top: pos.y + 'px', width: width + 'px' }"
-      @click.stop
-      @keydown="onKeydown"
-    >
-      <template v-for="(item, index) in items" :key="item.id">
-        <div v-if="item.separatorBefore" class="ctx-sep" role="separator" />
-        <button
-          type="button"
-          class="ctx-item"
-          :class="{ danger: item.danger, focused: index === focusIndex }"
-          role="menuitem"
-          :tabindex="index === focusIndex ? 0 : -1"
-          @click="select(item.id)"
-          @mouseenter="focusIndex = index"
-        >
-          <span v-if="item.icon" class="ctx-icon">
-            <AppIcon :name="item.icon" :size="14" />
-          </span>
-          {{ item.label }}
-          <span v-if="item.shortcut" class="ctx-shortcut">{{ item.shortcut }}</span>
-        </button>
-      </template>
-    </div>
+    <Transition name="menu-pop">
+      <div
+        v-if="visible"
+        ref="menuRef"
+        class="context-menu"
+        role="menu"
+        :style="{ left: pos.x + 'px', top: pos.y + 'px', width: width + 'px' }"
+        @click.stop
+        @keydown="onKeydown"
+      >
+        <template v-for="(item, index) in items" :key="item.id">
+          <div v-if="item.separatorBefore" class="ctx-sep" role="separator" />
+          <button
+            type="button"
+            class="ctx-item"
+            :class="{ danger: item.danger, focused: index === focusIndex }"
+            role="menuitem"
+            :tabindex="index === focusIndex ? 0 : -1"
+            @click="select(item.id)"
+            @mouseenter="focusIndex = index"
+          >
+            <span v-if="item.icon" class="ctx-icon">
+              <AppIcon :name="item.icon" :size="14" />
+            </span>
+            {{ item.label }}
+            <span v-if="item.shortcut" class="ctx-shortcut">{{ item.shortcut }}</span>
+          </button>
+        </template>
+      </div>
+    </Transition>
   </Teleport>
 </template>
 

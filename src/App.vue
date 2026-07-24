@@ -2,13 +2,19 @@
   <div class="app-root">
     <!-- Floating mode: keep panel mounted (v-show) to avoid full remount cost -->
     <template v-if="!isWindowMode">
-      <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
-      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
+      <Transition name="panel-pop">
+        <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
+      </Transition>
+      <Transition name="fade">
+        <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
+      </Transition>
     </template>
     <!-- Window mode: panel always visible, settings replaces panel -->
     <template v-else>
-      <WindowApp v-if="panelVisible && !settingsVisible" @openSettings="openSettings" />
-      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
+      <Transition name="fade" mode="out-in">
+        <SettingsWindow v-if="settingsVisible" key="settings" @close="closeSettings" />
+        <WindowApp v-else-if="panelVisible" key="window" @openSettings="openSettings" />
+      </Transition>
     </template>
     <ToastHost />
     <ConfirmDialog />

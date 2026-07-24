@@ -73,13 +73,15 @@ const { toasts, dismiss } = useToast()
 
 .toast-enter-active,
 .toast-leave-active {
-  transition: all var(--transition-smooth);
+  transition:
+    opacity var(--transition-smooth),
+    transform var(--transition-smooth);
 }
 
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(-10px) scale(0.98);
 }
 
 .toast-move {

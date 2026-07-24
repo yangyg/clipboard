@@ -504,6 +504,7 @@ pub struct TrayMenuState {
     pub paused: bool,
     pub theme: String,
     pub enable_blur: bool,
+    pub enable_animation: bool,
     pub panel_opacity: i32,
 }
 
@@ -514,6 +515,7 @@ pub async fn get_tray_menu_state(state: State<'_, AppState>) -> Result<TrayMenuS
         paused: *state.capture_paused.read(),
         theme: settings.theme,
         enable_blur: settings.enable_blur,
+        enable_animation: settings.enable_animation,
         panel_opacity: settings.panel_opacity,
     })
 }

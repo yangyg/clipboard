@@ -235,12 +235,12 @@ button.btn-confirm.danger:hover {
 
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-smooth);
 }
 
 .modal-enter-active .dialog-card,
 .modal-leave-active .dialog-card {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition: transform var(--transition-smooth), opacity var(--transition-smooth);
 }
 
 .modal-enter-from,
@@ -250,7 +250,7 @@ button.btn-confirm.danger:hover {
 
 .modal-enter-from .dialog-card,
 .modal-leave-to .dialog-card {
-  transform: scale(0.95);
+  transform: translateY(10px) scale(0.98);
   opacity: 0;
 }
 </style>

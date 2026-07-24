@@ -168,7 +168,7 @@ impl ClipboardMonitor {
                         // poll only needs the cheap quick fingerprint for change detection.
                         *last_image_hash.lock() = Some(quick);
                         // Cap very large bitmaps BEFORE they enter the bounded channel:
-                        // raw RGBA at 8K ≈ 660MB. We only need a 4096px-max edge for
+                        // raw RGBA at 8K ≈ 660MB. We only need a 2560px-max edge for
                         // preview + paste; store_clipboard_image() also targets MAX_EDGE.
                         let (rgba, width, height) =
                             downscale_captured_rgba_if_large(raw, width, height);
@@ -271,7 +271,7 @@ fn image_quick_fingerprint(img: &arboard::ImageData<'_>) -> String {
 
 /// Maximum edge (px) for a captured bitmap entering the process pipeline.
 /// Mirrors `media::MAX_EDGE` so the on-disk file and in-memory buffer match.
-const CAPTURE_MAX_EDGE: u32 = 4096;
+const CAPTURE_MAX_EDGE: u32 = 2560;
 
 /// Downscale an RGBA clipboard bitmap to at most `CAPTURE_MAX_EDGE` on its
 /// longest side before it is moved into the bounded capture channel.

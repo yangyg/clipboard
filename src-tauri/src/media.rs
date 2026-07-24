@@ -7,8 +7,8 @@ use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
 
-const THUMB_MAX_EDGE: u32 = 240;
-const MAX_EDGE: u32 = 4096;
+const THUMB_MAX_EDGE: u32 = 160;
+const MAX_EDGE: u32 = 2560;
 
 pub struct StoredImage {
     /// Relative path e.g. `media/{hash}.png`

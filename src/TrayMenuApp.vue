@@ -215,8 +215,8 @@ onUnmounted(() => {
 }
 
 :global(body.blur-enabled) .tray-menu {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .item {

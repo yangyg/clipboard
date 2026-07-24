@@ -190,7 +190,7 @@ impl Default for Settings {
             theme: "dark".to_string(),
             panel_opacity: 94,
             panel_radius: 20,
-            enable_blur: true,
+            enable_blur: false,
             enable_animation: true,
             font_size: 16,
             app_mode: "floating".to_string(),

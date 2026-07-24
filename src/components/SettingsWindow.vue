@@ -173,7 +173,7 @@
               <div class="setting-row">
                 <div>
                   <div class="setting-label">毛玻璃效果</div>
-                  <div class="setting-desc">仅悬浮模式生效；窗口模式为降低合成开销自动关闭</div>
+                  <div class="setting-desc">默认关闭以降低开销；仅悬浮模式生效，窗口模式始终关闭</div>
                 </div>
                 <div
                   class="toggle"

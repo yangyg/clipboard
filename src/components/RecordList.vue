@@ -150,7 +150,13 @@
               class="record-image-tile"
               aria-hidden="true"
             >
-              <img class="record-thumb" :src="item.thumb" alt="" />
+              <img
+                class="record-thumb"
+                :src="item.thumb"
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
             </div>
             <div
               v-else

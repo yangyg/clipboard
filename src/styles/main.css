@@ -229,8 +229,8 @@ input {
 }
 
 body.blur-enabled .panel-surface {
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Window mode: never pay full-viewport blur cost even if setting is on */

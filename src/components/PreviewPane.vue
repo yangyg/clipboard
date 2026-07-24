@@ -101,6 +101,8 @@
             alt="剪贴板图片"
             class="image-thumb"
             title="点击用系统查看器打开"
+            loading="lazy"
+            decoding="async"
             @click.stop="openImageExternally"
           />
           <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> 暂无图片数据</div>

@@ -271,7 +271,7 @@ body.anim-disabled *::after {
 }
 .icon-btn:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  color: var(--accent);
 }
 .icon-btn.active {
   background: var(--accent-soft);
@@ -409,18 +409,6 @@ body.anim-disabled *::after {
   transform: translateY(-8px);
 }
 
-/* Panel / settings: enter only (leave is instant so tray hide stays snappy) */
-.panel-pop-enter-active {
-  transition: opacity var(--transition-smooth), transform var(--transition-smooth);
-}
-.panel-pop-leave-active {
-  transition: none;
-}
-.panel-pop-enter-from {
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
-}
-
 .menu-pop-enter-active,
 .menu-pop-leave-active {
   transition: opacity var(--transition-fast), transform var(--transition-fast);
@@ -429,18 +417,6 @@ body.anim-disabled *::after {
 .menu-pop-leave-to {
   opacity: 0;
   transform: translateY(4px) scale(0.98);
-}
-
-/* Preview pane: selection change — slight rise + fade (spec §四) */
-.preview-swap-enter-active {
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
-}
-.preview-swap-leave-active {
-  transition: none;
-}
-.preview-swap-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
 }
 
 /* Search clear: instant fade */

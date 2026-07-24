@@ -1,6 +1,5 @@
 <template>
-  <Transition name="preview-swap" mode="out-in">
-    <div class="preview-pane" v-if="record" :key="record.id">
+  <div class="preview-pane" v-if="record">
     <!-- Header -->
     <div class="preview-header">
       <div class="preview-type-row">
@@ -185,7 +184,6 @@
       </button>
     </div>
   </div>
-  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -562,12 +560,11 @@ async function permanentDel() {
   cursor: pointer;
   padding: 0 3px;
   line-height: 1;
-  transition: color var(--transition-fast), transform var(--transition-fast);
+  transition: color var(--transition-fast);
 }
 
 .preview-action-btn:hover {
-  transform: scale(1.15);
-  color: var(--text-primary);
+  color: var(--accent);
 }
 
 .preview-action-btn.active {
@@ -871,7 +868,8 @@ async function permanentDel() {
   transform: scale(0.96);
 }
 
-.action-btn:hover .action-label {
+.action-btn:hover .action-label,
+.action-btn:hover .action-icon {
   color: var(--accent);
 }
 
@@ -881,7 +879,8 @@ async function permanentDel() {
   color: #fff;
 }
 
-.action-btn.action-primary .action-label {
+.action-btn.action-primary .action-label,
+.action-btn.action-primary .action-icon {
   color: #fff;
 }
 
@@ -890,7 +889,8 @@ async function permanentDel() {
   border-color: var(--accent-hover);
 }
 
-.action-btn.action-primary:hover .action-label {
+.action-btn.action-primary:hover .action-label,
+.action-btn.action-primary:hover .action-icon {
   color: #fff;
 }
 
@@ -899,7 +899,13 @@ async function permanentDel() {
   border-color: color-mix(in srgb, var(--warning) 20%, transparent);
 }
 
-.action-btn.action-active .action-label {
+.action-btn.action-active .action-label,
+.action-btn.action-active .action-icon {
+  color: var(--warning);
+}
+
+.action-btn.action-active:hover .action-label,
+.action-btn.action-active:hover .action-icon {
   color: var(--warning);
 }
 
@@ -912,12 +918,17 @@ async function permanentDel() {
   color: var(--danger);
 }
 
+.action-btn.danger .action-icon {
+  color: var(--danger);
+}
+
 .action-btn.danger:hover {
   background: var(--danger-soft);
   border-color: color-mix(in srgb, var(--danger) 20%, transparent);
 }
 
-.action-btn.danger:hover .action-label {
+.action-btn.danger:hover .action-label,
+.action-btn.danger:hover .action-icon {
   color: var(--danger);
 }
 
@@ -930,6 +941,8 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-secondary);
+  transition: color var(--transition-fast);
 }
 
 .action-label {

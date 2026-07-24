@@ -2,19 +2,13 @@
   <div class="app-root">
     <!-- Floating mode: keep panel mounted (v-show) to avoid full remount cost -->
     <template v-if="!isWindowMode">
-      <Transition name="panel-pop">
-        <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
-      </Transition>
-      <Transition name="fade">
-        <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
-      </Transition>
+      <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
+      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
     </template>
-    <!-- Window mode: panel always visible, settings replaces panel (parallel cross-fade, no out-in gap) -->
+    <!-- Window mode: panel always visible, settings replaces panel -->
     <template v-else>
-      <Transition name="fade">
-        <SettingsWindow v-if="settingsVisible" key="settings" @close="closeSettings" />
-        <WindowApp v-else-if="panelVisible" key="window" @openSettings="openSettings" />
-      </Transition>
+      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
+      <WindowApp v-else-if="panelVisible" @openSettings="openSettings" />
     </template>
     <ToastHost />
     <ConfirmDialog />
@@ -254,8 +248,7 @@ onMounted(async () => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  /* Stack direct children so parallel fade transitions (settings <-> panel)
-     cross-fade in place instead of reflowing the layout mid-transition. */
+  /* Stack floating panel + settings so swaps don't reflow layout. */
   display: grid;
 }
 .app-root > * {

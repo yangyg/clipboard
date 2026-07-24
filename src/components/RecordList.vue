@@ -1582,7 +1582,7 @@ onUnmounted(() => {
 
 .record-action-btn:hover {
   background: var(--bg-hover);
-  color: var(--text-primary);
+  color: var(--accent);
 }
 
 .record-action-btn:focus-visible {

@@ -76,7 +76,7 @@
 
 | 编号 | 原问题 | 严重度 | 复核结论 |
 |------|--------|--------|----------|
-| P6-1 | 毛玻璃常开 | 🟡 | ✅ **已修复**。main.css L237-240：`body.mode-window.blur-enabled .panel-surface { backdrop-filter: none }` — 窗口模式自动关闭毛玻璃，仅悬浮模式保留。 |
+| P6-1 | 毛玻璃常开 | 🟡 | ✅ **已修复**。窗口模式强制无毛玻璃；新装 `enable_blur` 默认 **false**；开启时悬浮模式 `blur(8px)`。 |
 | P6-2 | 敏感内容倒计时重渲 | 🟡 | ✅ **可接受**。PreviewPane `expireTimer` 仅在选中含 `auto_expire_at` 的敏感记录时启动，`setInterval` 1s 更新 `expireNow` ref 触发倒计时文本重算。因 PreviewPane 本身不依赖 `expireNow` 做布局，重渲范围有限。 |
 | P6-3 | 资源 | 🔵 | ✅ **OK**。`app-icon-128.png` 14.5KB 已压缩。构建产物 JS 247KB（gzip 84KB）/ CSS 60KB（gzip 10KB），体积健康。 |
 | P6-4 | html-preview 全子树重算 | 🔵 | ✅ **可接受**。`:deep(*)` 样式仅在含富文本（Word 等粘贴）时渲染，且有 `showHtmlPreview` 守卫过滤简单链接包装，实际触发场景有限。 |

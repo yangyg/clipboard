@@ -10,12 +10,14 @@ Windows 桌面剪贴板管理器。自动记录复制历史，支持文本 / 富
 - 类型：文本、代码、链接、图片、文件路径（敏感是标记字段，不是独立类型）
 - 图片落盘（PNG + 列表缩略图）；列表只带截断正文，富文本 HTML 预览按需拉取；导出为全文+HTML
 - 富文本：保留 HTML；预览经消毒后渲染；可「原格式」或「纯文本」粘贴
-- 粘贴：写回系统剪贴板（图片优先 PNG 格式）后，把焦点还给唤出前的应用并模拟 Ctrl+V
+- 粘贴：写回系统剪贴板（图片优先 PNG 格式）后，把焦点还给唤出前的应用并模拟 Ctrl+V；开启「粘贴后自动关闭」时，悬浮模式隐藏、窗口模式最小化
 - 搜索（≥3 字走 FTS5；1–2 字走轻量匹配）、可叠加类型 / 收藏 / 标签；收藏、置顶、标签、回收站、批量操作
 - 自动打标：新记录按规则匹配（内容类型 / 关键词）；内置默认规则可改，设置里可关（默认开）
 - 窗口模式列表可排序：最新 / 最早 / 最近创建 / 粘贴最多（置顶仍优先）；列表虚拟滚动
 - 敏感内容检测与自动过期；忽略应用列表
-- 悬浮面板 / 窗口两种界面；记住上次窗口尺寸；圆角 / 不透明度可调；毛玻璃仅悬浮模式生效（窗口模式为性能自动关闭）；关闭默认进托盘
+- 悬浮面板 / 窗口两种界面；记住上次窗口尺寸；圆角 / 不透明度可调；毛玻璃默认关，仅悬浮模式可开（窗口模式始终关闭）；关闭默认进托盘
+- 自定义托盘右键菜单（主题一致）；休眠唤醒后自动恢复托盘与 WebView
+- 首次安装显示轻量欢迎引导（快捷键 / 粘贴 / 托盘）；升级老用户不弹
 - 单实例；可选开机自启；快捷键可在设置中修改并立即生效
 
 默认唤出快捷键：`Ctrl+Shift+V`。
@@ -44,7 +46,7 @@ npm test                 # 前端 Vitest（Pinia store 冒烟测试）
 npm run lint             # ESLint 检查 src（.ts + .vue）
 npx tauri icon app-icon.png -o src-tauri/icons   # 从源图生成全套图标
 
-cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试（17 个）
+cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试
 ```
 
 修改 Rust 代码（`src-tauri/src/*.rs`）后，运行 `cargo test --manifest-path src-tauri/Cargo.toml` 验证后端测试仍全部通过。
@@ -65,8 +67,9 @@ cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试（17 个）
 - **回收站保留天数**：只清理回收站中的过期条目
 - **最大记录数**：超出时淘汰未收藏、未置顶的最旧记录
 - **自动打标**：设置 → 标签；新复制内容按规则打标签（默认规则含「链接 / 部署 / 前端」）；可增删改规则或关闭；同内容再次复制（hash 去重）不会重打标
-- **粘贴后自动关闭面板**：悬浮模式下粘贴后是否保持关闭（关闭则粘贴后重新打开）
-- **毛玻璃效果**：仅悬浮模式生效；切换到独立窗口时自动关闭以降低合成开销
+- **粘贴后自动关闭面板**：开启时悬浮模式粘贴后隐藏、窗口模式最小化；关闭则粘贴后恢复面板（不抢焦点）
+- **毛玻璃效果**：默认关闭；开启后仅悬浮模式生效，独立窗口始终关闭以降低合成开销
+- **首次引导**：新安装弹出欢迎页；设置项 `onboarding_completed`；升级用户缺字段视为已完成
 - **导出记录**：流式写出全文与 HTML（与列表截断无关），可作备份再导入
 
 ## 技术栈
@@ -78,7 +81,7 @@ cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试（17 个）
 | 后端 | Rust、arboard、rusqlite |
 | 存储 | SQLite（WAL + FTS5 + 读写分离连接池）+ 本地 media 目录 |
 
-实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴在 `spawn_blocking` + 异步延时上完成。完整架构说明见 [CLAUDE.md](./CLAUDE.md)。前端 UI 审查与落地状态见 [docs/ui-design-review.md](./docs/ui-design-review.md)。
+实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。完整架构说明见 [CLAUDE.md](./CLAUDE.md)。前端 UI 审查见 [docs/ui-design-review.md](./docs/ui-design-review.md)；托盘菜单与首次引导设计见 [docs/superpowers/specs/](./docs/superpowers/specs/)。
 
 ## 许可
 

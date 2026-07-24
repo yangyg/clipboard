@@ -1,5 +1,7 @@
 # First-run Onboarding Implementation Plan
 
+> **Status:** Implemented on `feat/first-run-onboarding` (commit `7cfa954`). Spec: `docs/superpowers/specs/2026-07-24-onboarding-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Show a one-page welcome dialog on first install that explains shortcut → paste → tray, then persist `onboarding_completed` so it never shows again (upgrades skip via serde default).

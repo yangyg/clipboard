@@ -12,7 +12,7 @@ npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
 npm test             # Run Vitest once (Pinia store smoke tests, jsdom)
 npm run lint         # Run ESLint over src (.ts + .vue)
 
-cargo test --manifest-path src-tauri/Cargo.toml   # Run Rust backend tests (17 tests)
+cargo test --manifest-path src-tauri/Cargo.toml   # Run Rust backend tests
 ```
 
 The full Tauri dev command is `npm run tauri dev` (starts both Vite + Rust backend).
@@ -33,8 +33,8 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia; Lucide icons; DOMPurify for rich-text preview
 - **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
 - **Database:** SQLite via rusqlite (WAL + `busy_timeout=5000`), `%LOCALAPPDATA%/ClipVault/clipvault.db`
-- **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only; column `content_len` stores text length at insert (backfilled once)
-- **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged. **Text-first:** meaningful share text skips `get_image()`; otherwise only call it when `IsClipboardFormatAvailable` reports bitmap/DIB. Monitor **`try_send`s** to a bounded worker (`sync_channel(4)`); full queue drops the event (never blocks the poll thread). Image SHA-256 runs on the worker; poll only uses a cheap edge-sample fingerprint.
+- **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only; column `content_len` stores text length at insert (backfilled once). Capture/store max edge **2560**; list thumb max edge **160**.
+- **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged. **Text-first:** meaningful share text skips `get_image()`; otherwise only call it when `IsClipboardFormatAvailable` reports bitmap/DIB. Monitor **`try_send`s** to a bounded worker (`sync_channel(2)`); full queue drops the event (never blocks the poll thread). Large images are downscaled on the poll thread before enqueue. Image SHA-256 runs on the worker; poll only uses a cheap edge-sample fingerprint.
 - **List IPC:** `substr(content,1,400)` + `content_len` column; `content_html` omitted. `clipboard-changed` emits the same light payload. Detail/`get_record` still full. **Export** uses `get_records_for_export` (full `content` + `content_html` + tags) — never reuse list columns.
 - **List UI:** `RecordList` window-virtualizes rows (row height scales with `font_size`); soft-cap bounds in-memory pages; soft-cap dirty → next `loadMore` reloads. Default sort `loadMore` uses **keyset** (`before_pinned` / `before_updated_at` / `before_id`) to avoid OFFSET drift when new rows prepend. Floating panel stays mounted (`v-show`); `showPanel` reloads at most every ~30s unless empty.
 - **Stats:** one SQL scan (aggregates + per-type CASE counts) + `SUM(content_len)`; `media/` size cached 120s and **incrementally adjusted** on image store/delete. Frontend `scheduleLoadStats`: 800ms debounce + 5s max-wait. Tag assign uses `set_record_tags` (one transaction + single FTS refresh).
@@ -50,51 +50,54 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 4. Persist: text (+ optional `content_html`) → SQLite; image → `media/` + thumb + metadata label `[image WxH]`
 5. On **new** insert only: if `enable_auto_tag`, `apply_auto_tags` matches `auto_tag_rules` (content type OR keyword, case-insensitive) → `ensure_auto_tag` + `record_tags` in one transaction, then **one** FTS refresh. Hash-dedup updates skip retagging.
 6. Emit `clipboard-changed` (list-shaped payload); Vue store updates list (refreshes tag counts when the record has tags)
-7. Paste: hide floating panel → `spawn_blocking` (`take_record_for_paste` + write clipboard + focus) → async 80ms sleep → `simulate_paste_keys`. Image paste prefers registered `"PNG"` clipboard format (file bytes); RGBA/`set_image` is fallback. Serialized via `tokio::sync::Mutex`. Target HWND remembered when panel opens. If no valid target, only updates clipboard.
+7. Paste: write clipboard → focus previous app → floating **hide** / window **minimize** when auto-close → Ctrl+V. Image paste prefers registered `"PNG"` clipboard format (file bytes); RGBA/`set_image` is fallback. Serialized via `tokio::sync::Mutex`. Target HWND remembered when panel opens / foreign FG tracked. If no valid target, only updates clipboard.
 
 ### Frontend Component Tree
 ```
-App.vue                          # Events; FloatingPanel v-show (warm); ToastHost, ConfirmDialog
+App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; ToastHost, ConfirmDialog
 ├── FloatingPanel.vue            # Floating UI; filters; BatchBar; useBatchActions + useClipboardHotkeys
 ├── WindowApp.vue                # Window UI; SideBar; list-toolbar sort; BatchBar; hotkeys
 │   ├── SearchBar.vue            # aria-label; / or Ctrl+K focus
-│   ├── RecordList.vue           # Virtual listbox (role=listbox/option); ContextMenu; PreviewPane
+│   ├── RecordList.vue           # Virtual listbox; cards/grid; ContextMenu; PreviewPane
 │   │   └── PreviewPane.vue      # Paste primary CTA; icon-only delete; tags; trash
 │   └── SideBar.vue              # Categories; trash; tags; ContextMenu; ≤720px icon rail
 ├── SettingsWindow.vue           # Nav: 外观 → … → 关于；theme radiogroup; ≤720px icon nav
+├── WelcomeDialog.vue            # First-run welcome (BaseDialog); onboarding_completed
 ├── BatchBar.vue                 # Shared batch actions (floating + window)
 ├── BaseDialog.vue               # Teleport + Esc + focus trap; shared dialog chrome
 ├── ConfirmDialog.vue / TagDialog.vue  # Content slots on BaseDialog
 ├── ContextMenu.vue              # Fixed + clamp; Arrow/Enter/Esc; role=menu
 ├── WindowControls.vue
 ├── ToastHost.vue
+├── TrayMenuApp.vue              # Custom tray-menu window entry (Vite multi-page)
 ├── composables/useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts
-├── utils/mediaUrl.ts · sanitizeHtml.ts
-└── TrayMenu.vue                 # Placeholder (native tray is Rust)
+└── utils/mediaUrl.ts · sanitizeHtml.ts · trayMenuItems.ts
 ```
 
 ### Backend (Rust) Module Layout
-- `lib.rs` — setup, command registration, capture worker + **periodic cleanup thread** (~60s), `Settings` / `AutoTagRule`, `show_main_panel`, shortcuts, ignore-list helpers, `list_ipc_payload`
-- `commands.rs` — Tauri commands (CRUD, paste on `spawn_blocking`, settings, import/export, stats, mode switch)
+- `lib.rs` — setup, command registration, capture worker + **periodic cleanup thread** (~60s), `Settings` / `AutoTagRule` / `onboarding_completed`, `show_main_panel`, shortcuts, ignore-list helpers, `list_ipc_payload`
+- `commands.rs` — Tauri commands (CRUD, paste, settings, import/export, stats, mode switch, `tray_menu_action` / `get_tray_menu_state`)
 - `window.rs` — adaptive / remembered size, round corners, resize persistence. **Window mode** min width **760** (SideBar+List+Preview ≥740); floating stays compact.
-- `tray.rs` — system tray menu / click
-- `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**)
-- `media.rs` — encode/store/load/delete; media dir size cache
+- `tray.rs` — tray icon (no native menu); right-click shows `tray-menu` window; left-click toggles panel; **Windows power-resume** rebuilds tray + reloads webviews
+- `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**); capture downscale ≤2560 edge
+- `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
 - `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers
 - `main.rs` — `clipvault_lib::run()`
 
 ### State Management (Pinia)
 - `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection
-- `settingsStore` — debounced auto-save (200ms); theme / appearance; `enable_auto_tag` + `auto_tag_rules`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
+- `settingsStore` — debounced auto-save (200ms); theme / appearance; `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
 
 ### Key Design Decisions
 - **Brand:** Product name **ClipVault** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.
+- **First-run onboarding:** `WelcomeDialog` when `onboarding_completed` is false. New install Default=`false`; **upgrade** JSON missing the field deserializes to `true` (skip). Dismiss / Esc sets true and saves. Spec: `docs/superpowers/specs/2026-07-24-onboarding-design.md`.
 - **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur; panel kept mounted with `v-show`. Window: SideBar + `WindowControls` + list-toolbar; `mode_size_bounds` min width **760**. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size`. Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields (`SIZE_SAVE_GEN`).
 - **List sort (window mode):** Toolbar `<select>` → `clipboardStore.listSort` → `get_records` / `search_records` `sort` param. Whitelist: `updated_desc` (default), `updated_asc`, `created_desc`, `copies_desc`. Non-trash: `is_pinned DESC` first. Session-only. `onNewRecord` prepends only for `updated_desc`; other sorts reload (debounced ~400ms).
 - **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
 - **Theming / tokens:** CSS vars on `:root` (incl. `--type-*`, `--text-xs`…`--text-xl`, `--space-*`, `--win-close-hover`). Themes: `.light-theme` / `.oled-theme`. Type badges use global `.badge-*` + `--type-*` only (no per-component hardcodes). SideBar can toggle dark↔light.
-- **Blur:** Setting `enable_blur` applies `backdrop-filter` **only in floating mode**. Window mode always skips blur (`body.mode-window`) to avoid full-viewport compositing cost; setting remains for when the user returns to floating.
+- **Blur:** Setting `enable_blur` defaults **false**. When on, `backdrop-filter: blur(8px)` **only in floating mode**. Window mode always skips blur (`body.mode-window`).
+- **Custom tray menu:** Separate `tray-menu` WebView (Vite multi-page). Right-click anchors above tray icon; theme/blur follow settings. Left-click toggles main panel. After sleep/wake, power watcher rebuilds tray + reloads webviews.
 - **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Prefer `rem` / `--text-*` so Settings / dialogs scale with the user preference. Virtual list row height scales with `font_size`.
 - **Responsive (window):** `@media (max-width: 720px)` — SideBar / settings nav → icon rail; preview actions denser grid; theme cards 2×2.
 - **A11y (baseline):** Record list `role="listbox"` / `option` + roving tabindex; dialogs via `BaseDialog` (Esc + focus trap); `ContextMenu` keyboard + clamp; global `:focus-visible`; theme cards `role="radio"`; form `aria-label`s on search / ranges / ignore-app input. Tertiary text colors raised for WCAG-ish contrast.
@@ -119,10 +122,11 @@ App.vue                          # Events; FloatingPanel v-show (warm); ToastHos
 - **Dedup:** SHA-256 of text fingerprint (plain+html) or full image bytes. Check + update/insert under the **same write Mutex**. Hash match updates `updated_at` / source (active rows only) — does **not** bump `copy_count`. `copy_count` starts at **0** and increments only on paste from ClipVault.
 - **Source app:** Foreground process via `QueryFullProcessImageNameW` + `PROCESS_QUERY_LIMITED_INFORMATION` (not `GetModuleFileNameW`, which only works for the current process). Empty `source_app` falls back to UI label「系统剪贴板」.
 - **Paste self-write:** `paste_record` suppresses monitor emits ~1.5s. While suppressed, **do not advance** `last_text_fp` / `last_image_hash` — otherwise a real copy in that window is permanently lost. Re-capture of our own paste after the window is OK (DB hash dedupes).
-- **Paste focus:** On panel show, remember previous foreground HWND. Paste writes clipboard (PNG bytes preferred for images), hides floating panel, focuses target, async delay, Ctrl+V. No valid target → clipboard only. `auto_close_on_paste` false → floating panel reopens.
+- **Paste focus:** On panel show, remember previous foreground HWND. Paste writes clipboard (PNG bytes preferred for images), focuses target while still holding FG, then floating hide / window minimize when auto-close, Ctrl+V. No valid target → clipboard only. `auto_close_on_paste` false → restore panel (unminimize/show) without stealing focus.
 - **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.
 - **UI review:** Historical findings + batch status in [`docs/ui-design-review.md`](docs/ui-design-review.md).
+- **Tray / onboarding specs:** [`docs/superpowers/specs/`](docs/superpowers/specs/).
 
 ## Agent skills
 

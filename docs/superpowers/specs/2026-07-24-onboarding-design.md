@@ -1,7 +1,7 @@
 # 首次启动轻量引导设计
 
 日期：2026-07-24  
-状态：已确认（待实现）
+状态：已实现（分支 `feat/first-run-onboarding`）
 
 ## 目标
 
@@ -73,6 +73,8 @@ onboarding_completed: false, // brand-new install
 | `src/App.vue` | 加载后展示；完成回调写设置 |
 
 ## 测试要点
+
+实现已完成。人工验收清单：
 
 - [ ] 新库（或清掉 settings）首次启动弹出引导  
 - [ ] 点「开始使用」后关闭，重启不再弹  

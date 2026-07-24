@@ -166,6 +166,8 @@ onUnmounted(() => {
   box-shadow: var(--shadow-lg);
   padding: 6px;
   z-index: 1100;
+  /* Menu grows from the click point, matching the menu-pop scale animation. */
+  transform-origin: top left;
 }
 
 .ctx-item {

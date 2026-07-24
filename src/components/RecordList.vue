@@ -118,6 +118,7 @@
             'is-link': item.record!.content_type === 'link',
             'is-code': item.record!.content_type === 'code',
             'is-image': item.record!.content_type === 'image',
+            'is-new': item.record!.id === clipboardStore.lastIncomingId,
           }"
           :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
@@ -224,7 +225,9 @@
 
       <!-- Footer: load-more status only -->
       <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
-        <span v-if="clipboardStore.isLoadingMore">加载更多…</span>
+        <span v-if="clipboardStore.isLoadingMore" class="footer-loading">
+          <span class="loading-spinner small" aria-hidden="true"></span>加载更多…
+        </span>
         <span v-else>继续滚动加载更多</span>
       </div>
       </div>
@@ -1059,15 +1062,6 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
 .record-list {
   flex: 1;
   min-height: 0;
@@ -1299,6 +1293,22 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
   border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
   box-shadow: var(--shadow-sm);
+}
+
+/* Freshly captured row: brief accent flash as capture confirmation. */
+.record-item.is-new {
+  animation: row-flash 900ms ease-out;
+}
+
+@keyframes row-flash {
+  from {
+    background: color-mix(in srgb, var(--accent) 22%, var(--bg-surface));
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  to {
+    background: var(--bg-surface);
+    border-color: var(--border-subtle);
+  }
 }
 
 .record-item:focus-visible {
@@ -1562,6 +1572,18 @@ onUnmounted(() => {
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
+}
+
+.loading-spinner.small {
+  width: 13px;
+  height: 13px;
+  border-width: 1.5px;
+}
+
+.footer-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 @keyframes spin {

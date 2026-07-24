@@ -834,6 +834,10 @@ async function permanentDel() {
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
+.action-btn:active {
+  transform: scale(0.96);
+}
+
 .action-btn:hover .action-label {
   color: var(--accent);
 }

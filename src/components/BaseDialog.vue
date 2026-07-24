@@ -202,6 +202,12 @@ button.btn-cancel:hover {
   background: var(--bg-hover);
 }
 
+button.btn-cancel:active,
+button.btn-confirm:active {
+  transform: scale(0.97);
+  filter: brightness(0.94);
+}
+
 button.btn-confirm {
   height: 32px;
   padding: 0 0.875rem;

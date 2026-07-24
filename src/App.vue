@@ -9,9 +9,9 @@
         <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
       </Transition>
     </template>
-    <!-- Window mode: panel always visible, settings replaces panel -->
+    <!-- Window mode: panel always visible, settings replaces panel (parallel cross-fade, no out-in gap) -->
     <template v-else>
-      <Transition name="fade" mode="out-in">
+      <Transition name="fade">
         <SettingsWindow v-if="settingsVisible" key="settings" @close="closeSettings" />
         <WindowApp v-else-if="panelVisible" key="window" @openSettings="openSettings" />
       </Transition>
@@ -252,5 +252,13 @@ onMounted(async () => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  /* Stack direct children so parallel fade transitions (settings <-> panel)
+     cross-fade in place instead of reflowing the layout mid-transition. */
+  display: grid;
+}
+.app-root > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
 }
 </style>

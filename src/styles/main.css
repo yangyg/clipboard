@@ -276,6 +276,9 @@ body.anim-disabled *::after {
   background: var(--accent-soft);
   color: var(--accent);
 }
+.icon-btn:active {
+  transform: scale(0.9);
+}
 
 .toggle {
   width: 36px;
@@ -389,6 +392,10 @@ body.anim-disabled *::after {
   background: var(--danger-soft);
   color: var(--danger);
   border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.btn:active {
+  transform: scale(0.97);
+  filter: brightness(0.94);
 }
 
 .fade-enter-active,

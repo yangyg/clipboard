@@ -41,6 +41,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const tags = ref<Tag[]>([]);
   /** Full content/HTML for preview only — never merge back into list rows. */
   const recordDetails = ref<Map<number, ClipboardRecord>>(new Map());
+  /** Freshly captured record id — drives the row-flash highlight in the list. */
+  const lastIncomingId = ref<number | null>(null);
+  let incomingFlashTimer: ReturnType<typeof setTimeout> | null = null;
   let searchSeq = 0;
   let loadSeq = 0;
   let expireSweepTimer: ReturnType<typeof setTimeout> | null = null;
@@ -363,6 +366,20 @@ export const useClipboardStore = defineStore("clipboard", () => {
     return next;
   }
 
+  /**
+   * Replace (not mutate) a list row. selectedRecord caches its merged view by
+   * object-reference equality, so in-place mutation (record.x = v) leaves the
+   * cached snapshot stale and PreviewPane never reflects the change. Swapping
+   * in a new object invalidates that cache and re-renders dependents.
+   */
+  function patchRecord(id: number, patch: Partial<ClipboardRecord>) {
+    const idx = records.value.findIndex((r) => r.id === id);
+    if (idx === -1) return;
+    const next = records.value.slice();
+    next[idx] = { ...next[idx], ...patch };
+    records.value = next;
+  }
+
   /** Lazy-load full content / HTML into a separate detail cache (not list rows). */
   async function ensureRecordDetail(id: number) {
     if (recordDetails.value.has(id)) return;
@@ -418,8 +435,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       await invoke("batch_set_favorite", { ids: toFav, favorite: true });
       for (const id of toFav) {
-        const record = records.value.find((r) => r.id === id);
-        if (record) record.is_favorite = true;
+        patchRecord(id, { is_favorite: true });
       }
       scheduleLoadStats();
     } catch (e) {
@@ -449,7 +465,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     if (!record) return null;
     try {
       const newVal = await invoke<boolean>("toggle_favorite", { id });
-      record.is_favorite = newVal;
+      patchRecord(id, { is_favorite: newVal });
       scheduleLoadStats();
       return newVal;
     } catch (e) {
@@ -463,7 +479,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     if (!record) return null;
     try {
       const newVal = await invoke<boolean>("toggle_pin", { id });
-      record.is_pinned = newVal;
+      patchRecord(id, { is_pinned: newVal });
       if (listSort.value === "updated_desc") {
         // Re-sort: pinned first, then by updated_at desc.
         // Use string comparison on ISO timestamps (lexicographic = chronological).
@@ -737,6 +753,16 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   // Called by event listener when clipboard changes
+  /** Mark a record id briefly so the list can flash its row (capture feedback). */
+  function flashIncoming(id: number) {
+    lastIncomingId.value = id;
+    if (incomingFlashTimer) clearTimeout(incomingFlashTimer);
+    incomingFlashTimer = setTimeout(() => {
+      incomingFlashTimer = null;
+      lastIncomingId.value = null;
+    }, 1000);
+  }
+
   function onNewRecord(record: ClipboardRecord) {
     scheduleLoadStats();
     if (record.tags.length > 0) {
@@ -772,6 +798,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     if (existingIdx !== -1) next.splice(existingIdx, 1);
     next.splice(pinCount, 0, record);
     records.value = applySoftCap(next);
+    flashIncoming(record.id);
   }
 
   function setListSort(sort: ListSort) {
@@ -837,7 +864,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
       if (existing) {
         for (const record of records.value) {
           if (record.tags.includes(existing.name)) {
-            record.tags = record.tags.filter((t) => t !== existing.name);
+            patchRecord(record.id, {
+              tags: record.tags.filter((t) => t !== existing.name),
+            });
           }
         }
         if (activeTag.value === existing.name) {
@@ -860,9 +889,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
         for (const record of records.value) {
           const idx = record.tags.indexOf(oldName);
           if (idx !== -1) {
-            const next = [...record.tags];
-            next[idx] = name;
-            record.tags = next;
+            const nextTags = [...record.tags];
+            nextTags[idx] = name;
+            patchRecord(record.id, { tags: nextTags });
           }
         }
         if (activeTag.value === oldName) {
@@ -881,7 +910,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await invoke("add_tag_to_record", { recordId, tagId });
       const record = records.value.find((r) => r.id === recordId);
       if (record && !record.tags.includes(tagName)) {
-        record.tags = [...record.tags, tagName];
+        patchRecord(recordId, { tags: [...record.tags, tagName] });
       }
       scheduleLoadTags();
     } catch (e) {
@@ -894,7 +923,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await invoke("remove_tag_from_record", { recordId, tagId });
       const record = records.value.find((r) => r.id === recordId);
       if (record) {
-        record.tags = record.tags.filter((t) => t !== tagName);
+        patchRecord(recordId, {
+          tags: record.tags.filter((t) => t !== tagName),
+        });
       }
       scheduleLoadTags();
     } catch (e) {
@@ -908,7 +939,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await invoke("set_record_tags", { record_id: recordId, tag_ids: tagIds });
       const record = records.value.find((r) => r.id === recordId);
       if (record) {
-        record.tags = [...tagNames];
+        patchRecord(recordId, { tags: [...tagNames] });
       }
       const detail = recordDetails.value.get(recordId);
       if (detail) {
@@ -937,6 +968,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   return {
     // State
     records,
+    lastIncomingId,
     selectedId,
     isLoading,
     isLoadingMore,

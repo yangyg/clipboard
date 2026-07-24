@@ -14,6 +14,7 @@ describe("settingsStore (smoke)", () => {
     expect(store.settings.app_mode).toBe("floating");
     expect(store.settings.font_size).toBe(16);
     expect(store.settings.max_records).toBe(1000);
+    expect(store.settings.onboarding_completed).toBe(false);
     expect(store.isLoaded).toBe(false);
   });
 

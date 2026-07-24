@@ -33,6 +33,7 @@ const DEFAULT_SETTINGS: Settings = {
     keywords: [...r.keywords],
     content_types: [...r.content_types],
   })),
+  onboarding_completed: false,
 };
 
 const SAVE_DEBOUNCE_MS = 200;

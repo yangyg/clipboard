@@ -88,6 +88,8 @@ export interface Settings {
   /** Auto-tag new records from rules (default on). */
   enable_auto_tag: boolean;
   auto_tag_rules: AutoTagRule[];
+  /** False until first-run welcome is dismissed. */
+  onboarding_completed: boolean;
 }
 
 export const DEFAULT_AUTO_TAG_RULES: AutoTagRule[] = [

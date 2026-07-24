@@ -92,6 +92,11 @@ fn default_enable_auto_tag() -> bool {
     true
 }
 
+/// Missing field in saved JSON → treat as already onboarded (upgrades).
+fn default_onboarding_completed() -> bool {
+    true
+}
+
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
     vec![
         AutoTagRule {
@@ -179,6 +184,11 @@ pub struct Settings {
     pub enable_auto_tag: bool,
     #[serde(default = "default_auto_tag_rules", rename = "auto_tag_rules")]
     pub auto_tag_rules: Vec<AutoTagRule>,
+    #[serde(
+        default = "default_onboarding_completed",
+        rename = "onboarding_completed"
+    )]
+    pub onboarding_completed: bool,
 }
 
 impl Default for Settings {
@@ -211,6 +221,7 @@ impl Default for Settings {
             window_height: 0,
             enable_auto_tag: true,
             auto_tag_rules: default_auto_tag_rules(),
+            onboarding_completed: false,
         }
     }
 }
@@ -756,4 +767,21 @@ fn list_ipc_payload(mut r: ClipboardRecord) -> ClipboardRecord {
         r.content = r.content.chars().take(MAX).collect();
     }
     r
+}
+
+#[cfg(test)]
+mod settings_onboarding_tests {
+    use super::Settings;
+
+    #[test]
+    fn default_settings_needs_onboarding() {
+        assert!(!Settings::default().onboarding_completed);
+    }
+
+    #[test]
+    fn missing_json_field_skips_onboarding_for_upgrades() {
+        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"data_path":"","auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
+        let s: Settings = serde_json::from_str(json).expect("parse");
+        assert!(s.onboarding_completed);
+    }
 }

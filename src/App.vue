@@ -12,6 +12,11 @@
     </template>
     <ToastHost />
     <ConfirmDialog />
+    <WelcomeDialog
+      :open="welcomeOpen"
+      :shortcut="settings.global_shortcut"
+      @complete="completeOnboarding"
+    />
   </div>
 </template>
 
@@ -26,6 +31,7 @@ import WindowApp from "./components/WindowApp.vue";
 import SettingsWindow from "./components/SettingsWindow.vue";
 import ToastHost from "./components/ToastHost.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
+import WelcomeDialog from "./components/WelcomeDialog.vue";
 import { useClipboardStore } from "./stores/clipboard";
 import { useSettingsStore } from "./stores/settings";
 import { storeToRefs } from "pinia";
@@ -37,6 +43,7 @@ const { settings } = storeToRefs(settingsStore);
 
 const panelVisible = ref(false);
 const settingsVisible = ref(false);
+const welcomeOpen = ref(false);
 /** Avoid full get_records on every focus if list is fresh enough. */
 let lastPanelReloadAt = 0;
 const PANEL_RELOAD_TTL_MS = 30_000;
@@ -98,6 +105,12 @@ function closeSettings() {
   panelVisible.value = true;
 }
 
+function completeOnboarding() {
+  if (!welcomeOpen.value) return;
+  welcomeOpen.value = false;
+  settingsStore.updateSetting("onboarding_completed", true);
+}
+
 async function openSettings() {
   if (isWindowMode.value) {
     panelVisible.value = true;
@@ -128,6 +141,10 @@ onMounted(async () => {
   await clipboardStore.loadTags();
   lastPanelReloadAt = 0; // force first load
   await showPanel();
+
+  if (!settings.value.onboarding_completed) {
+    welcomeOpen.value = true;
+  }
 
   // Reset (dev HMR re-runs onMounted); collected listeners are torn down by onUnmounted.
   unlisteners = [];

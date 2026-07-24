@@ -27,9 +27,11 @@ pub fn ensure_dirs(app_data_dir: &Path) -> std::io::Result<()> {
 
 pub fn absolute(app_data_dir: &Path, relative: &str) -> PathBuf {
     // Join segment-by-segment so Windows paths don't keep mixed `/` from relative keys.
+    // Reject `..` defensively — all current callers use SHA-256 hex paths, but this
+    // guards against future misuse that could traverse outside the media root.
     relative
         .split(['/', '\\'])
-        .filter(|s| !s.is_empty())
+        .filter(|&s| !s.is_empty() && s != "." && s != "..")
         .fold(app_data_dir.to_path_buf(), |acc, part| acc.join(part))
 }
 

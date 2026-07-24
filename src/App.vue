@@ -215,7 +215,9 @@ onMounted(async () => {
           } catch {
             /* ignore */
           }
-          void invoke("capture_paste_target").catch(() => {});
+          void invoke("capture_paste_target").catch((e) =>
+            console.debug("[App] capture_paste_target (non-blocking):", e)
+          );
           hidePanel();
         })();
       }

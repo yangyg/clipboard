@@ -613,7 +613,7 @@ import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import type { ClipboardRecord } from "../types";
+import type { ClipboardRecord, Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
@@ -660,7 +660,7 @@ const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
   { key: "about", icon: "info", label: "关于" },
 ];
 
-const THEMES: { key: string; icon: AppIconName; label: string }[] = [
+const THEMES: { key: Settings["theme"]; icon: AppIconName; label: string }[] = [
   { key: "dark", icon: "moon", label: "暗色" },
   { key: "light", icon: "sun", label: "亮色" },
   { key: "oled", icon: "circle", label: "深黑" },
@@ -707,8 +707,8 @@ const KEY_ALIASES: Record<string, string> = {
   Escape: "Esc",
 };
 
-function update(key: string, value: any) {
-  settingsStore.updateSetting(key as any, value);
+function update<K extends keyof Settings>(key: K, value: Settings[K]) {
+  settingsStore.updateSetting(key, value);
 }
 
 function cloneRules(rules: AutoTagRule[]): AutoTagRule[] {

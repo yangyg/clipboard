@@ -119,6 +119,7 @@
             'is-code': item.record!.content_type === 'code',
             'is-image': item.record!.content_type === 'image',
             'is-new': item.record!.id === clipboardStore.lastIncomingId,
+            'is-leaving': leavingIds.has(item.record!.id),
           }"
           :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
@@ -187,11 +188,11 @@
             <button
               type="button"
               class="record-action-btn"
-              :class="{ active: item.record!.is_pinned }"
-              :aria-label="item.record!.is_pinned ? '取消置顶' : '置顶'"
-              :title="item.record!.is_pinned ? '取消置顶' : '置顶'"
-              @click="clipboardStore.togglePin(item.record!.id)"
-            ><AppIcon name="pin" :size="13" :fill="item.record!.is_pinned ? 'currentColor' : 'none'" /></button>
+              :class="{ active: isPinned(item.record!) }"
+              :aria-label="isPinned(item.record!) ? '取消置顶' : '置顶'"
+              :title="isPinned(item.record!) ? '取消置顶' : '置顶'"
+              @click="scheduleTogglePin(item.record!)"
+            ><AppIcon name="pin" :size="13" :fill="isPinned(item.record!) ? 'currentColor' : 'none'" /></button>
             <button
               type="button"
               class="record-action-btn"
@@ -268,6 +269,33 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const { toggleBatchMode } = useBatchActions();
 const listRef = ref<HTMLElement | null>(null);
+
+/** Optimistic pin icon before list reorders (spec §3.3). */
+const pinOverride = shallowRef(new Map<number, boolean>());
+/** Rows fading out before soft-delete (spec §3.4, restrained). */
+const leavingIds = shallowRef(new Set<number>());
+
+function isPinned(record: ClipboardRecord): boolean {
+  return pinOverride.value.get(record.id) ?? record.is_pinned;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function scheduleTogglePin(record: ClipboardRecord) {
+  if (leavingIds.value.has(record.id)) return;
+  const next = !isPinned(record);
+  const pending = new Map(pinOverride.value);
+  pending.set(record.id, next);
+  pinOverride.value = pending;
+  await sleep(150);
+  const result = await clipboardStore.togglePin(record.id);
+  const cleared = new Map(pinOverride.value);
+  cleared.delete(record.id);
+  pinOverride.value = cleared;
+  if (result == null) toast("操作失败", "error");
+}
 
 type ListLayout = "list" | "grid";
 const LAYOUT_KEY = "clipvault-list-layout";
@@ -777,7 +805,15 @@ async function quickDelete(record: ClipboardRecord) {
     }
     return;
   }
+  if (leavingIds.value.has(record.id)) return;
+  const nextLeave = new Set(leavingIds.value);
+  nextLeave.add(record.id);
+  leavingIds.value = nextLeave;
+  await sleep(160);
   await clipboardStore.deleteRecord(record.id);
+  const cleared = new Set(leavingIds.value);
+  cleared.delete(record.id);
+  leavingIds.value = cleared;
   toast("已移到回收站", "success");
 }
 
@@ -871,8 +907,7 @@ async function onContextSelect(id: string) {
     return;
   }
   if (id === "pin") {
-    const next = await clipboardStore.togglePin(record.id);
-    if (next == null) toast("操作失败", "error");
+    await scheduleTogglePin(record);
     return;
   }
   if (id === "restore") {
@@ -880,8 +915,7 @@ async function onContextSelect(id: string) {
     return;
   }
   if (id === "delete") {
-    await clipboardStore.deleteRecord(record.id);
-    toast("已移到回收站", "success");
+    await quickDelete(record);
     return;
   }
   if (id === "permanentDelete") {
@@ -1292,7 +1326,9 @@ onUnmounted(() => {
   transition:
     background var(--transition-fast),
     border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow var(--transition-fast),
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -1310,6 +1346,22 @@ onUnmounted(() => {
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
   border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
   box-shadow: var(--shadow-sm);
+  animation: select-pop var(--transition-fast) ease-out;
+}
+
+@keyframes select-pop {
+  from {
+    transform: scale(0.98);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.record-item.is-leaving {
+  opacity: 0;
+  transform: translateX(-4px);
+  pointer-events: none;
 }
 
 /* Freshly captured row: brief accent flash as capture confirmation. */

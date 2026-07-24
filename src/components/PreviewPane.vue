@@ -1,5 +1,6 @@
 <template>
-  <div class="preview-pane" v-if="record">
+  <Transition name="preview-swap" mode="out-in">
+    <div class="preview-pane" v-if="record" :key="record.id">
     <!-- Header -->
     <div class="preview-header">
       <div class="preview-type-row">
@@ -29,7 +30,7 @@
           </div>
         </div>
         <button
-          v-if="record.is_pinned"
+          v-if="pinnedDisplay"
           type="button"
           class="preview-action-btn preview-pin-btn active"
           @click="pin"
@@ -164,11 +165,11 @@
       <button
         type="button"
         class="action-btn"
-        :class="{ 'action-active': record.is_pinned }"
+        :class="{ 'action-active': pinnedDisplay }"
         @click="pin"
       >
-        <span class="action-icon"><AppIcon name="pin" :size="15" :fill="record.is_pinned ? 'currentColor' : 'none'" /></span>
-        <span class="action-label">{{ record.is_pinned ? '已置顶' : '置顶' }}</span>
+        <span class="action-icon"><AppIcon name="pin" :size="15" :fill="pinnedDisplay ? 'currentColor' : 'none'" /></span>
+        <span class="action-label">{{ pinnedDisplay ? '已置顶' : '置顶' }}</span>
       </button>
       <button type="button" class="action-btn action-icon-only danger" aria-label="删除" title="删除" @click="del">
         <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
@@ -184,6 +185,7 @@
       </button>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -206,6 +208,20 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const record = computed(() => clipboardStore.selectedRecord);
 const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
+
+/** Optimistic pin label/icon before list reorders. */
+const pinOverride = ref<boolean | null>(null);
+watch(
+  () => record.value?.id,
+  () => {
+    pinOverride.value = null;
+  },
+);
+
+const pinnedDisplay = computed(() => {
+  if (pinOverride.value !== null) return pinOverride.value;
+  return !!record.value?.is_pinned;
+});
 
 async function openImageExternally() {
   const id = record.value?.id;
@@ -401,7 +417,15 @@ async function favorite() {
 
 async function pin() {
   if (!record.value) return;
-  const next = await clipboardStore.togglePin(record.value.id);
+  const id = record.value.id;
+  pinOverride.value = !pinnedDisplay.value;
+  await new Promise((r) => setTimeout(r, 150));
+  if (clipboardStore.selectedId !== id) {
+    pinOverride.value = null;
+    return;
+  }
+  const next = await clipboardStore.togglePin(id);
+  pinOverride.value = null;
   if (next == null) toast("操作失败", "error");
 }
 

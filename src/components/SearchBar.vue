@@ -13,9 +13,22 @@
       @input="onInput"
       @keydown.escape.stop.prevent="onEscapeInSearch"
     />
-    <span v-if="!query && !isFocused" class="search-kbd" aria-hidden="true">{{ searchHint }}</span>
+    <span
+      v-if="!query"
+      class="search-kbd"
+      :class="{ dimmed: isFocused }"
+      aria-hidden="true"
+    >{{ searchHint }}</span>
     <span v-if="clipboardStore.isSearching" class="search-spinner" aria-label="搜索中"></span>
-    <button v-if="query" type="button" class="clear-btn" aria-label="清除搜索" @click="clearSearch"><AppIcon name="close" :size="11" /></button>
+    <Transition name="fade-instant">
+      <button
+        v-if="query"
+        type="button"
+        class="clear-btn"
+        aria-label="清除搜索"
+        @click="clearSearch"
+      ><AppIcon name="close" :size="11" /></button>
+    </Transition>
   </div>
 </template>
 
@@ -193,6 +206,11 @@ onUnmounted(() => {
   border-radius: 4px;
   padding: 1px 6px;
   pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.search-kbd.dimmed {
+  opacity: 0.4;
 }
 
 @keyframes spin {

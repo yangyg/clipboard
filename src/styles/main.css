@@ -62,6 +62,7 @@
   --radius-xl: 20px;
   --font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", "Consolas", monospace;
+  --transition-instant: 50ms cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-fast: 100ms cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-normal: 180ms cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-smooth: 280ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -428,6 +429,28 @@ body.anim-disabled *::after {
 .menu-pop-leave-to {
   opacity: 0;
   transform: translateY(4px) scale(0.98);
+}
+
+/* Preview pane: selection change — slight rise + fade (spec §四) */
+.preview-swap-enter-active {
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.preview-swap-leave-active {
+  transition: none;
+}
+.preview-swap-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+/* Search clear: instant fade */
+.fade-instant-enter-active,
+.fade-instant-leave-active {
+  transition: opacity var(--transition-instant);
+}
+.fade-instant-enter-from,
+.fade-instant-leave-to {
+  opacity: 0;
 }
 
 /* Search keyword highlight (list + preview) */

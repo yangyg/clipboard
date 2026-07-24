@@ -18,7 +18,7 @@ function dismiss(id: number) {
 function toast(message: string, kind: ToastKind = 'info') {
   const id = nextId++
   toasts.value = [...toasts.value, { id, message, kind }]
-  window.setTimeout(() => dismiss(id), 2800)
+  window.setTimeout(() => dismiss(id), 1500)
 }
 
 export function useToast() {

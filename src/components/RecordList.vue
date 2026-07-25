@@ -209,19 +209,19 @@
             <button
               type="button"
               class="record-action-btn"
-              :class="{ active: isPinned(item.record!) }"
-              :aria-label="isPinned(item.record!) ? '取消置顶' : '置顶'"
-              :title="isPinned(item.record!) ? '取消置顶' : '置顶'"
-              @click="scheduleTogglePin(item.record!)"
-            ><AppIcon name="pin" :size="13" :fill="isPinned(item.record!) ? 'currentColor' : 'none'" /></button>
-            <button
-              type="button"
-              class="record-action-btn"
               :class="{ starred: item.record!.is_favorite }"
               :aria-label="item.record!.is_favorite ? '取消收藏' : '收藏'"
               :title="item.record!.is_favorite ? '取消收藏' : '收藏'"
               @click="clipboardStore.toggleFavorite(item.record!.id)"
             ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
+            <button
+              type="button"
+              class="record-action-btn"
+              :class="{ active: isPinned(item.record!) }"
+              :aria-label="isPinned(item.record!) ? '取消置顶' : '置顶'"
+              :title="isPinned(item.record!) ? '取消置顶' : '置顶'"
+              @click="scheduleTogglePin(item.record!)"
+            ><AppIcon name="pin" :size="13" :fill="isPinned(item.record!) ? 'currentColor' : 'none'" /></button>
             <button
               type="button"
               class="record-action-btn danger"
@@ -1593,7 +1593,7 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
-/* Hover quick actions — design: copy / star / trash (+ pin) */
+/* Hover quick actions — paste / star / pin / trash */
 .record-actions {
   display: flex;
   align-items: center;

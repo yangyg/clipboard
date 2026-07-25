@@ -29,15 +29,6 @@
           </div>
         </div>
         <button
-          v-if="pinnedDisplay"
-          type="button"
-          class="preview-action-btn preview-pin-btn active"
-          @click="pin"
-          title="取消置顶"
-          aria-label="取消置顶"
-          :aria-pressed="true"
-        ><AppIcon name="pin" :size="13" fill="currentColor" /></button>
-        <button
           v-if="record.is_favorite"
           type="button"
           class="preview-action-btn active"
@@ -612,14 +603,6 @@ async function permanentDel() {
 
 .preview-action-btn.active:hover {
   color: color-mix(in srgb, var(--warning) 75%, var(--text-primary));
-}
-
-.preview-pin-btn.active {
-  color: var(--pin);
-}
-
-.preview-pin-btn.active:hover {
-  color: color-mix(in srgb, var(--pin) 75%, var(--text-primary));
 }
 
 .preview-more {

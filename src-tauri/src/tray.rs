@@ -81,14 +81,7 @@ pub(crate) fn build_tray(
                     button_state: MouseButtonState::Up,
                     ..
                 } => {
-                    if let Some(window) = app.get_webview_window("main") {
-                        if window.is_visible().unwrap_or(false) {
-                            window.hide().ok();
-                            app.emit("toggle-panel", false).ok();
-                        } else {
-                            crate::show_main_panel(app);
-                        }
-                    }
+                    crate::toggle_main_panel(app);
                 }
                 TrayIconEvent::Click {
                     button: MouseButton::Right,

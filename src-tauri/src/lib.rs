@@ -728,6 +728,25 @@ pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
     }
 }
 
+/// Toggle main panel. Minimized windows count as "hidden" — restore + focus
+/// instead of hide (Windows keeps WS_VISIBLE while minimized).
+pub(crate) fn toggle_main_panel(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let minimized = window.is_minimized().unwrap_or(false);
+    if minimized {
+        show_main_panel(app);
+        return;
+    }
+    if window.is_visible().unwrap_or(false) {
+        let _ = window.hide();
+        let _ = app.emit("toggle-panel", false);
+    } else {
+        show_main_panel(app);
+    }
+}
+
 pub(crate) fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     let shortcut = shortcut.trim();
     if shortcut.is_empty() {
@@ -740,14 +759,7 @@ pub(crate) fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> R
     app.global_shortcut()
         .on_shortcut(shortcut, |app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                if let Some(window) = app.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
-                        window.hide().ok();
-                        app.emit("toggle-panel", false).ok();
-                    } else {
-                        crate::show_main_panel(app);
-                    }
-                }
+                crate::toggle_main_panel(app);
             }
         })
         .map_err(|e| e.to_string())?;

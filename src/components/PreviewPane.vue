@@ -480,8 +480,8 @@ async function permanentDel() {
   flex: 1.15;
   min-width: 280px;
   width: auto;
-  background: var(--bg-card, var(--bg-surface));
-  border-left: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  border-left: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;

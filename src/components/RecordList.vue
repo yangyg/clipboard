@@ -963,7 +963,8 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: color-mix(in srgb, var(--bg-base) 55%, var(--bg-surface));
+  /* Same surface as preview — sidebar stays elevated for nav hierarchy. */
+  background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
 }
 

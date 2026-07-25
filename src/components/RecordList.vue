@@ -145,8 +145,16 @@
             <span v-if="clipboardStore.selectedIds.has(item.record!.id)">✓</span>
           </div>
 
-          <!-- Type color chip (always); image thumb lives in the body like the design -->
+          <!-- Type color chip; standalone CSS color shows a swatch instead -->
           <div
+            v-if="rowColor(item.record!)"
+            class="record-color-swatch"
+            :style="{ background: rowColor(item.record!)! }"
+            :title="rowColor(item.record!)!"
+            aria-hidden="true"
+          />
+          <div
+            v-else
             class="record-type-icon"
             :class="item.record!.content_type"
             aria-hidden="true"
@@ -267,6 +275,7 @@ import SourceBadge from "./SourceBadge.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import { sourceShortName } from "../utils/sourceBadge";
+import { parseClipboardColor } from "../utils/clipboardColor";
 import type { ClipboardRecord } from "../types";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
@@ -499,6 +508,12 @@ function sourceLabelHtml(record: ClipboardRecord): string | undefined {
   const q = clipboardStore.searchQuery.trim();
   if (!q) return undefined;
   return highlightSearchHtml(sourceShortName(record.source_app), q);
+}
+
+/** Text that is only a CSS color → list swatch instead of type icon. */
+function rowColor(record: ClipboardRecord): string | null {
+  if (record.content_type !== "text") return null;
+  return parseClipboardColor(record.content);
 }
 
 /** Layout-only row (no record payload — avoids rebuild on content/copy_count churn). */
@@ -1224,6 +1239,12 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.view-grid .record-color-swatch {
+  width: 28px;
+  height: 28px;
+  margin-top: 0;
+}
+
 .view-grid .record-body {
   display: flex;
   flex-direction: column;
@@ -1455,6 +1476,16 @@ onUnmounted(() => {
   justify-content: center;
   flex-shrink: 0;
   margin-top: 1px;
+}
+
+.record-color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 6px);
+  flex-shrink: 0;
+  margin-top: 1px;
+  border: 1px solid var(--border-default);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 10%, transparent);
 }
 
 .record-type-icon.text {

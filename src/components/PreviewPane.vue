@@ -67,6 +67,15 @@
           class="content-box html-preview"
           v-html="sanitizedHtml"
         />
+        <div v-else-if="clipboardColor" class="color-preview-card">
+          <div
+            class="color-swatch-lg"
+            :style="{ background: clipboardColor }"
+            :title="clipboardColor"
+            aria-hidden="true"
+          />
+          <div class="content-box color-value" v-html="plainContentHtml"></div>
+        </div>
         <div v-else class="content-box" v-html="plainContentHtml"></div>
       </template>
 
@@ -208,6 +217,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 import { escapeHtml, highlightSearchHtml } from "../utils/highlightSearch";
+import { parseClipboardColor } from "../utils/clipboardColor";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -293,6 +303,13 @@ const plainContentHtml = computed(() => {
   const q = clipboardStore.searchQuery.trim();
   if (!q) return escapeHtml(text);
   return highlightSearchHtml(text, q);
+});
+
+/** Standalone CSS color in text → preview swatch (not a content_type). */
+const clipboardColor = computed(() => {
+  if (!record.value || record.value.content_type !== "text") return null;
+  if (showHtmlPreview.value) return null;
+  return parseClipboardColor(record.value.content);
 });
 
 const tagDialogVisible = ref(false);
@@ -692,6 +709,28 @@ async function permanentDel() {
   word-break: break-word;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.color-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.color-swatch-lg {
+  width: 100%;
+  height: 96px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--border-default);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 12%, transparent);
+  flex-shrink: 0;
+}
+
+.color-value {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  letter-spacing: 0.02em;
 }
 
 .code-box {

@@ -111,6 +111,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **A11y (baseline):** Record list `role="listbox"` / `option` + roving tabindex; dialogs via `BaseDialog` (Esc + focus trap); `ContextMenu` keyboard + clamp; global `:focus-visible`; theme cards `role="radio"`; form `aria-label`s on search / ranges / ignore-app input. Tertiary text colors raised for WCAG-ish contrast.
 - **Preview actions:** 「粘贴」is `action-primary` (solid accent); delete is icon-only. Pin available via header / hotkey / context menu when the narrow grid hides it.
 - **Sensitive detection** (text only): `password|passwd|pwd`; 4–8 digits + `验证码|code|Code`; `sk-`+≥20 alnum; 16–19 digits with len≤25. Default expire 600s. `is_sensitive` is a **bool**, not a `content_type` (ContentType = text|code|link|image|file only).
+- **Color swatch (not a type):** If plain `text` content is a standalone CSS color (`#rgb` / `#rrggbb` / `rgb()` / `hsl()`, whole string), list shows a swatch chip and preview shows a large swatch — still `content_type: text`.
 - **Soft delete:** Delete → trash (toast, no confirm). Permanent delete / empty trash still confirm.
 - **Memory (frontend):** List soft-capped (`PAGE_SIZE * 2`) on `onNewRecord` / `loadMore`. Full content/HTML in `recordDetails` (max ~6). Batch copy fetches full text via `get_record` (list rows are truncated).
 - **Clipboard fingerprint:** SHA-256 of text+html (not retaining full HTML string in `last_text_fp`). Image poll: quick-fp only; worker computes full hash.

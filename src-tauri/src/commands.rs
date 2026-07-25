@@ -94,7 +94,6 @@ pub async fn get_record(state: State<'_, AppState>, id: i64) -> Result<Option<Cl
 }
 
 /// Open a record's media file with the OS default app (Photos, etc.).
-/// Prefer this over `shell.open`: shell's allow-open only scopes http(s)/mailto/tel.
 #[tauri::command]
 pub async fn open_record_media(state: State<'_, AppState>, id: i64) -> Result<(), String> {
     let record = state.db.get_record(id).map_err(|e| e.to_string())?;
@@ -105,35 +104,32 @@ pub async fn open_record_media(state: State<'_, AppState>, id: i64) -> Result<()
         return Err("没有可打开的本地图片文件".into());
     };
 
-    let abs = media::absolute(state.db.media_root(), rel);
-    let root = state
-        .db
-        .media_root()
-        .canonicalize()
-        .unwrap_or_else(|_| state.db.media_root().to_path_buf());
-    let canon = abs
-        .canonicalize()
-        .map_err(|_| format!("图片文件不存在: {}", abs.display()))?;
-    if !canon.starts_with(&root) {
-        return Err("路径不在媒体目录内".into());
-    }
-    if !canon.is_file() {
-        return Err(format!("图片文件不存在: {}", canon.display()));
-    }
-
+    let canon = crate::security::resolve_media_file(state.db.media_root(), rel)?;
     open_path_with_default_app(&canon)
 }
 
 #[cfg(windows)]
 fn open_path_with_default_app(path: &std::path::Path) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    // `start` requires an empty window-title arg when the path may contain spaces.
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &path.to_string_lossy()])
-        .creation_flags(CREATE_NO_WINDOW)
-        .spawn()
-        .map_err(|e| format!("打开失败: {e}"))?;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    let file: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let operation: Vec<u16> = "open\0".encode_utf16().collect();
+    // ShellExecuteW avoids cmd.exe metacharacter injection from `cmd /C start`.
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            operation.as_ptr(),
+            file.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if (result as isize) <= 32 {
+        return Err(format!("打开失败 (ShellExecute={})", result as isize));
+    }
     Ok(())
 }
 
@@ -224,7 +220,7 @@ pub async fn paste_record(
 
         let wrote = if r.content_type == "image" {
             if let Some(media_path) = r.media_path.as_deref() {
-                let abs = media::absolute(&media_root, media_path);
+                let abs = crate::security::resolve_media_file(&media_root, media_path)?;
                 if clipboard::write_clipboard_png_file(&abs) {
                     true
                 } else {
@@ -583,6 +579,7 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
     use std::fs::File;
     use std::io::{BufWriter, Write};
 
+    let path = crate::security::validate_json_io_path(&path, true)?;
     let file = File::create(&path).map_err(|e| format!("无法创建导出文件: {e}"))?;
     let mut w = BufWriter::new(file);
     w.write_all(b"[\n").map_err(|e| e.to_string())?;
@@ -618,6 +615,25 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
 pub async fn import_data(state: State<'_, AppState>, records: Vec<ClipboardRecord>) -> Result<i32, String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
     state.db.import_records(&records, settings.max_records).map_err(|e| e.to_string())
+}
+
+/// Read a JSON backup from disk (path from native dialog) and import with sanitization.
+#[tauri::command]
+pub async fn import_data_from_path(state: State<'_, AppState>, path: String) -> Result<i32, String> {
+    let path = crate::security::validate_json_io_path(&path, false)?;
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("无法读取备份文件: {e}"))?;
+    // Cap import size to limit memory DoS from huge malicious files.
+    const MAX_IMPORT_BYTES: usize = 64 * 1024 * 1024;
+    if text.len() > MAX_IMPORT_BYTES {
+        return Err("备份文件过大（上限 64MB）".into());
+    }
+    let records: Vec<ClipboardRecord> =
+        serde_json::from_str(&text).map_err(|e| format!("备份文件格式不正确: {e}"))?;
+    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    state
+        .db
+        .import_records(&records, settings.max_records)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

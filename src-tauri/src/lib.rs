@@ -5,6 +5,7 @@ mod detect;
 mod commands;
 mod window;
 mod tray;
+mod security;
 
 use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
@@ -339,9 +340,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None::<Vec<&'static str>>))
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
@@ -369,6 +368,7 @@ pub fn run() {
             commands::tray_menu_action,
             commands::export_data,
             commands::import_data,
+            commands::import_data_from_path,
             commands::clear_history,
             commands::get_stats,
             commands::switch_app_mode,

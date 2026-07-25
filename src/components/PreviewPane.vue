@@ -80,7 +80,15 @@
         <div class="link-card">
           <div class="link-icon"><AppIcon name="link" :size="22" /></div>
           <div class="link-title">网页链接</div>
-          <a class="link-url" :href="record.content" target="_blank" rel="noopener noreferrer" v-html="plainContentHtml"></a>
+          <a
+            v-if="safeLinkHref"
+            class="link-url"
+            :href="safeLinkHref"
+            target="_blank"
+            rel="noopener noreferrer"
+            v-html="plainContentHtml"
+          ></a>
+          <div v-else class="link-url" v-html="plainContentHtml"></div>
         </div>
       </template>
 
@@ -263,6 +271,19 @@ const sanitizedHtml = computed(() => {
   const html = record.value?.content_html;
   if (!html || !showHtmlPreview.value) return "";
   return sanitizeClipboardHtml(html);
+});
+
+/** Only http(s) — blocks javascript:/data: from malicious imports. */
+const safeLinkHref = computed(() => {
+  const raw = (record.value?.content ?? "").trim();
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol === "http:" || u.protocol === "https:") return raw;
+  } catch {
+    /* ignore */
+  }
+  return null;
 });
 
 /** Plain content with optional search-term highlighting (escaped). */

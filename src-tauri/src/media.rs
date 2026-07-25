@@ -210,7 +210,7 @@ fn media_dir_size(root: &Path) -> i64 {
 
 /// Load PNG from disk into RGBA bytes for arboard set_image.
 pub fn load_image_rgba(app_data_dir: &Path, media_path: &str) -> Result<(Vec<u8>, usize, usize), String> {
-    let path = absolute(app_data_dir, media_path);
+    let path = crate::security::resolve_media_file(app_data_dir, media_path)?;
     let dyn_img = image::open(&path).map_err(|e| format!("Failed to open image: {e}"))?;
     let rgba = dyn_img.to_rgba8();
     let w = rgba.width() as usize;

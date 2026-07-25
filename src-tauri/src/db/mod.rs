@@ -1278,6 +1278,32 @@ impl ClipboardDb {
         };
 
         for record in records {
+            let mut record = record.clone();
+            record.content_type = crate::security::normalize_content_type(&record.content_type);
+            if record.content_type == "link" && !crate::security::is_safe_http_url(&record.content) {
+                record.content_type = "text".into();
+            }
+            if let Some(ref mp) = record.media_path {
+                if !crate::security::is_allowed_media_rel(mp) {
+                    record.media_path = None;
+                    record.thumb_path = None;
+                    record.media_abs = None;
+                    record.thumb_abs = None;
+                }
+            }
+            if let Some(ref tp) = record.thumb_path {
+                if !crate::security::is_allowed_media_rel(tp) {
+                    record.thumb_path = None;
+                    record.thumb_abs = None;
+                }
+            }
+            // Cap HTML blob size from malicious imports
+            if let Some(ref html) = record.content_html {
+                if html.len() > 512 * 1024 {
+                    record.content_html = None;
+                }
+            }
+
             // Skip empty text records; image records may have empty content with media_path
             let is_image = record.content_type == "image";
             if (!is_image && record.content.trim().is_empty()) || record.hash.trim().is_empty() {

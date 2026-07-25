@@ -42,7 +42,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420",
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost https://asset.localhost blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost ws://localhost:1420 http://localhost:1420",
       "assetProtocol": {
         "enable": true,
         "scope": [
@@ -65,11 +65,6 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper"
       }
-    }
-  },
-  "plugins": {
-    "sql": {
-      "preload": ["sqlite:clipvault.db"]
     }
   }
 }

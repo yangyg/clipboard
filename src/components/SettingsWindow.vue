@@ -612,8 +612,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
-import type { ClipboardRecord, Settings } from "../types";
+import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
@@ -949,12 +948,8 @@ async function importData() {
       filters: [{ name: "ClipVault JSON", extensions: ["json"] }],
     });
     if (!path || Array.isArray(path)) return;
-    const text = await readTextFile(path);
-    const records = JSON.parse(text) as ClipboardRecord[];
-    if (!Array.isArray(records)) {
-      throw new Error("备份文件格式不正确");
-    }
-    const imported = await clipboardStore.importRecords(records);
+    const imported = await invoke<number>("import_data_from_path", { path });
+    await clipboardStore.loadRecords();
     importStatus.value = `导入完成：新增 ${imported} 条记录。`;
     importStatusKind.value = "success";
   } catch (e) {

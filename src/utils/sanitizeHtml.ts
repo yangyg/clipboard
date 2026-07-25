@@ -26,6 +26,8 @@ export function sanitizeClipboardHtml(html: string): string {
     FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "link", "meta", "base"],
     FORBID_ATTR: ["srcset"],
     ALLOW_DATA_ATTR: false,
+    // Block javascript:/data:/vbscript: in href/src
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):)/i,
   });
 
   sanitizeCache.set(key, cleaned);

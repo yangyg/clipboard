@@ -31,7 +31,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Stack
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia; Lucide icons; DOMPurify for rich-text preview
-- **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard, dialog, FS, global-shortcut, shell, SQL, autostart)
+- **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard-manager, dialog, global-shortcut, autostart). No fs/shell/sql plugins — filesystem & SQLite stay in Rust commands/`rusqlite`; media open uses `ShellExecuteW`
 - **Database:** SQLite via rusqlite (WAL + `busy_timeout=5000`), `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only; column `content_len` stores text length at insert (backfilled once). Capture/store max edge **2560**; list thumb max edge **160**.
 - **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged. **Text-first:** meaningful share text skips `get_image()`; otherwise only call it when `IsClipboardFormatAvailable` reports bitmap/DIB. Monitor **`try_send`s** to a bounded worker (`sync_channel(2)`); full queue drops the event (never blocks the poll thread). Large images are downscaled on the poll thread before enqueue. Image SHA-256 runs on the worker; poll only uses a cheap edge-sample fingerprint.
@@ -83,6 +83,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
 - `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers
+- `security.rs` — media path must resolve under media root; export/import JSON path checks; import normalizes `content_type` and allows only http(s) links + safe media rel-paths
 - `main.rs` — `clipvault_lib::run()`
 
 ### State Management (Pinia)
@@ -95,7 +96,12 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur; panel kept mounted with `v-show`. Window: SideBar + `WindowControls` + list-toolbar; `mode_size_bounds` min width **760**. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size`. Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields (`SIZE_SAVE_GEN`).
 - **List sort (window mode):** Toolbar `<select>` → `clipboardStore.listSort` → `get_records` / `search_records` `sort` param. Whitelist: `updated_desc` (default), `updated_asc`, `created_desc`, `copies_desc`. Non-trash: `is_pinned DESC` first. Session-only. `onNewRecord` prepends only for `updated_desc`; other sorts reload (debounced ~400ms).
 - **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
-- **Theming / tokens:** CSS vars on `:root` (incl. `--type-*`, `--text-xs`…`--text-xl`, `--space-*`, `--win-close-hover`). Themes: `.light-theme` / `.oled-theme`. Type badges use global `.badge-*` + `--type-*` only (no per-component hardcodes). SideBar can toggle dark↔light.
+- **Theming / tokens:** CSS vars on `:root` (incl. `--type-*`, `--pin` / `--pin-soft`, `--text-xs`…`--text-xl`, `--space-*`, `--win-close-hover`). Themes: `.light-theme` / `.oled-theme`. SideBar can toggle dark↔light.
+  - **Accent:** cool blue (dark `--accent: #3b82f6`; light `#1d4ed8`) — not purple/indigo. Focus rings / primary CTA /「全部」nav use accent.
+  - **Type colors (`--type-*`):** text sky `#7dd3fc` · code green `#34d399` · link deep blue `#2563eb` · image cyan `#0ea5e9` · file amber `#eab308`. Badges (`.badge-*`), SideBar category active (`--cat-color`), and list row hover/selected/focus (`--row-accent`) follow these — not a single accent for every type.
+  - **Pin vs favorite:** `--pin` rose (dark `#f43f5e` / light `#e11d48`) for pinned UI; `--warning` gold for favorites. Preview bottom bar uses `action-pinned` vs `action-active` — do not share one “active” style for both.
+  - **Pinned list chrome:** 「置顶」section label (pin color) + hairline divider before the first unpinned row when both groups exist (virtual-list `divider` item).
+  - **Tag palette:** `themeColors.ts` resolves 12 presets from `--accent` / `--type-*` / status tokens at runtime; no free-form color picker. Existing SQLite hex values are left as-is.
 - **Blur:** Setting `enable_blur` defaults **false**. When on, `backdrop-filter: blur(8px)` **only in floating mode**. Window mode always skips blur (`body.mode-window`).
 - **Custom tray menu:** Separate `tray-menu` WebView (Vite multi-page). Right-click anchors above tray icon; theme/blur follow settings. Left-click toggles main panel. After sleep/wake, power watcher rebuilds tray + reloads webviews.
 - **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Prefer `rem` / `--text-*` so Settings / dialogs scale with the user preference. Virtual list row height scales with `font_size`.
@@ -107,9 +113,9 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Memory (frontend):** List soft-capped (`PAGE_SIZE * 2`) on `onNewRecord` / `loadMore`. Full content/HTML in `recordDetails` (max ~6). Batch copy fetches full text via `get_record` (list rows are truncated).
 - **Clipboard fingerprint:** SHA-256 of text+html (not retaining full HTML string in `last_text_fp`). Image poll: quick-fp only; worker computes full hash.
 - **Retention “回收站保留天数”:** Only purges trashed rows. **最大记录数** evicts oldest non-favorite / non-pinned when inserting (write lock).
-- **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles. Failed tag create/assign must toast error.
+- **Toast policy:** Actions without clear UI state (paste, trash, errors). Not for pin/favorite/settings toggles. Failed tag create/assign must toast error. Host: top-right (`top: 60px`) so toasts clear the title-bar controls.
 - **Rich text:** Capture CF_HTML → `content_html`. List/search omit HTML; preview loads via `get_record` / detail. Preview uses **DOMPurify + `v-html`**. Paste writes original HTML back.
-- **Preview chrome:** Type + actions in header; source / time / size-or-chars / 富文本 / 粘贴次数 as one meta line. Image preview: click → `open_record_media` (`cmd /c start` under media root). Do not use `shell.open` for local files.
+- **Preview chrome:** Type + actions in header; source / time / size-or-chars / 富文本 / 粘贴次数 as one meta line. Image preview: click → `open_record_media` (canonicalize under media root; Windows `ShellExecuteW` — not `cmd /c start` / `shell.open`). Preview links only allow `http:` / `https:`.
 - **Filters:** Type/favorites **AND** tag combine; trash is exclusive. IPC: `get_records` / `search_records` / `get_all_tags` use `rename_all = "snake_case"`. Tag counts follow active category. SideBar 「自动」 badge for `is_auto` tags.
 - **Auto-tag:** Settings `enable_auto_tag` (default **true**) + `auto_tag_rules`. Per-rule match is OR. No per-tag FTS triggers — refresh FTS once after batch tag writes (**FTS v3**). Defaults: 链接←`link`; 部署 / 前端←keywords. UI: Settings → 标签 (local draft + 400ms commit). `scheduleLoadTags` 350ms.
 - **Search:** FTS5 trigram (**≥3 chars**) on content / source_app / source_window / tags. **1–2 chars:** single-pass `instr(...)` + tag `EXISTS` (no `LIKE '%X%'`). FTS update trigger is **`OF content` only** so hash-dedup source updates do not rebuild FTS. Tag changes call `refresh_record_fts`. **FTS delete:** `DELETE FROM records_fts WHERE rowid=…` (not FTS5 `'delete'` command — broken on Windows SQLite).

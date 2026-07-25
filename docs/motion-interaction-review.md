@@ -228,7 +228,7 @@
 | 项 | 改动 | 文件 |
 |----|------|------|
 | P0-1 按压反馈 | `.icon-btn:active { scale(0.9) }`；`.btn:active { scale(0.97) + brightness(0.94) }`；对话框 `btn-cancel/btn-confirm:active`；预览操作 `.action-btn:active { scale(0.96) }` | main.css、BaseDialog.vue、PreviewPane.vue |
-| P0-2 新记录高亮 | store 新增 `lastIncomingId` + `flashIncoming()`（1s 自动清除，复用定时器 clear-重置模式）；`onNewRecord` 插入分支打标；列表行 `.is-new` → `row-flash 900ms ease-out`（accent 22% → 透明），重复复制已有记录同样闪烁 | clipboard.ts、RecordList.vue |
+| P0-2 新记录高亮 | store 新增 `lastIncomingId` + `flashIncoming()`（1s 自动清除，复用定时器 clear-重置模式）；`onNewRecord` 插入分支打标；列表行 `.is-new` → `row-flash 900ms ease-out`（`--row-accent` / 类型色 22% → 透明），重复复制已有记录同样闪烁 | clipboard.ts、RecordList.vue |
 | P2-6 加载更多 spinner | footer 复用 `.loading-spinner.small`（13px/1.5px）+ `.footer-loading` 布局 | RecordList.vue |
 | P1-3 fade 统一 | 删除 RecordList scoped `.fade-*`（150ms 纯 opacity），BatchBar 两处统一走全局 fade（280ms + 位移） | RecordList.vue |
 | P1-4 菜单原点 | `.context-menu { transform-origin: top left }` | ContextMenu.vue |

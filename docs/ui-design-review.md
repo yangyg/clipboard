@@ -145,3 +145,20 @@ FloatingPanel / WindowApp / PreviewPane 头部操作按钮已补 `aria-label`，
 | 7. 视觉层次 | ⚠️ 有改进空间 | ✅ 良好 | ↑ |
 
 **综合**：从 ⚠️ 有较多问题 → ✅ 良好，可投入生产使用。S-1（tertiary 提亮）与 S-2（标签色板 token 化）已落地；剩余主要为 P1-5 字号收敛与 N-4 刻意保留项。
+
+---
+
+## 后续视觉 token 对齐（2026-07-25）
+
+与 `fe49fdf` 同期落地，审查项本身不回退；此处只记录语义色约定，避免再写回紫色强调色或混用置顶/收藏态。
+
+| 项 | 约定 |
+|----|------|
+| 强调色 | 冷蓝：暗色 `#3b82f6`，浅色 `#1d4ed8`（替代历史 indigo `#6366f1` / `#5b52e8`） |
+| 类型色 | text `#7dd3fc` · code `#34d399` · link `#2563eb` · image `#0ea5e9` · file `#eab308`；侧栏激活与列表行 `--row-accent` 跟类型色 |
+| 置顶 / 收藏 | `--pin` 图钉红 vs `--warning` 金；预览底栏 `action-pinned` ≠ `action-active` |
+| 置顶分组 | 「置顶」标签 + 与普通列表之间的细分割线（两组都有时） |
+| Toast | 右上角，`top: 60px`，避开标题栏按钮 |
+| 标签色板 | 仍 12 色预设，fallback 跟新 accent / type token（`themeColors.ts`） |
+
+权威摘要：[`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」；动效侧同步见 [`ClipVault-交互动效规范.md`](./ClipVault-交互动效规范.md)。

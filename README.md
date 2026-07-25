@@ -81,7 +81,7 @@ cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试
 | 后端 | Rust、arboard、rusqlite |
 | 存储 | SQLite（WAL + FTS5 + 读写分离连接池）+ 本地 media 目录 |
 
-实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。完整架构说明见 [CLAUDE.md](./CLAUDE.md)。前端 UI 审查见 [docs/ui-design-review.md](./docs/ui-design-review.md)；托盘菜单与首次引导设计见 [docs/superpowers/specs/](./docs/superpowers/specs/)。
+实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。完整架构与视觉 token 约定见 [CLAUDE.md](./CLAUDE.md)。前端 UI 审查见 [docs/ui-design-review.md](./docs/ui-design-review.md)；交互动效见 [docs/ClipVault-交互动效规范.md](./docs/ClipVault-交互动效规范.md)；托盘菜单与首次引导设计见 [docs/superpowers/specs/](./docs/superpowers/specs/)。
 
 ## 许可
 

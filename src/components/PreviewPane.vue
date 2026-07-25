@@ -696,10 +696,10 @@ async function permanentDel() {
 }
 
 .content-box {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-light, var(--border-subtle));
-  border-radius: var(--radius-md, 10px);
-  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 4px 0;
   font-size: 0.813rem;
   line-height: 1.65;
   color: var(--text-primary);
@@ -722,7 +722,7 @@ async function permanentDel() {
   width: 100%;
   height: 96px;
   border-radius: var(--radius-md, 10px);
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-subtle);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 12%, transparent);
   flex-shrink: 0;
 }
@@ -731,6 +731,7 @@ async function permanentDel() {
   font-family: var(--font-mono);
   font-size: 0.875rem;
   letter-spacing: 0.02em;
+  padding: 0;
 }
 
 .code-box {
@@ -740,6 +741,8 @@ async function permanentDel() {
   background: var(--code-bg);
   color: var(--text-primary);
   border: none;
+  border-radius: var(--radius-md, 10px);
+  padding: 14px 16px;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -750,10 +753,10 @@ async function permanentDel() {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--border-light, var(--border-subtle));
+  padding: 14px 16px;
+  border: none;
   border-radius: var(--radius-md, 10px);
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
 }
 
 .link-icon {
@@ -782,10 +785,10 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
+  padding: 12px 14px;
   border-radius: var(--radius-md, 10px);
-  border: 1px solid var(--border-light, var(--border-subtle));
-  background: var(--bg-surface);
+  border: none;
+  background: var(--bg-elevated);
 }
 
 .file-icon {
@@ -815,7 +818,7 @@ async function permanentDel() {
 
 .image-placeholder {
   padding: 20px;
-  background: var(--bg-surface);
+  background: var(--bg-elevated);
   border-radius: var(--radius-md, 10px);
   font-size: 2rem;
   opacity: 0.5;
@@ -825,7 +828,8 @@ async function permanentDel() {
 .image-thumb {
   max-width: 100%;
   border-radius: var(--radius-md, 10px);
-  border: 1px solid var(--border-default);
+  border: none;
+  box-shadow: 0 0 0 1px var(--border-subtle);
   cursor: zoom-in;
 }
 

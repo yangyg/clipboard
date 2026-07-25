@@ -9,7 +9,7 @@
         <div class="preview-heading">
           <div class="preview-name" :title="`内容类型：${typeLabel}`">{{ typeLabel }}</div>
           <div class="preview-meta-line">
-            <span :title="`来源：${record.source_app || '系统剪贴板'}`">{{ record.source_app || '系统剪贴板' }}</span>
+            <SourceBadge :source-app="record.source_app" />
             <span class="meta-sep" aria-hidden="true">·</span>
             <span :title="`创建时间：${formatDateTime(record.created_at)}`">{{ formatDateTime(record.created_at) }}</span>
             <template v-if="record.content_type === 'image' && record.width && record.height">
@@ -198,6 +198,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import TagDialog from "./TagDialog.vue";
+import SourceBadge from "./SourceBadge.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import { useConfirm } from "../composables/useConfirm";

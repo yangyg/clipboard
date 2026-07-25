@@ -175,7 +175,12 @@
             ></div>
             <div class="record-meta">
               <span class="record-time">{{ formatTime(item.record!.created_at) }}</span>
-              <span class="record-source" v-html="sourceHtml(item.record!)"></span>
+              <span class="record-source">
+                <SourceBadge
+                  :source-app="item.record!.source_app"
+                  :label-html="sourceLabelHtml(item.record!)"
+                />
+              </span>
               <span
                 v-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height"
                 class="record-dims"
@@ -258,8 +263,10 @@ import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import BatchBar from "./BatchBar.vue";
+import SourceBadge from "./SourceBadge.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
+import { sourceShortName } from "../utils/sourceBadge";
 import type { ClipboardRecord } from "../types";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
@@ -488,31 +495,10 @@ const TYPE_LABELS: Record<string, string> = {
   file: '文件',
 };
 
-function sourceLabel(record: ClipboardRecord): string {
-  const raw = (record.source_app || "").trim();
-  if (!raw) return "系统剪贴板";
-  // Strip path / exe extension for a short label
-  const base = raw.replace(/^.*[/\\]/, "").replace(/\.exe$/i, "");
-  return base || raw;
-}
-
-const SOURCE_DOT_PALETTE = [
-  "#3b82f6",
-  "#34d399",
-  "#fbbf24",
-  "#f87171",
-  "#38bdf8",
-  "#a78bfa",
-  "#fb923c",
-  "#94a3b8",
-];
-
-function sourceDotColor(sourceApp: string | undefined): string {
-  const s = (sourceApp || "").trim();
-  if (!s) return "var(--text-tertiary)";
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return SOURCE_DOT_PALETTE[h % SOURCE_DOT_PALETTE.length];
+function sourceLabelHtml(record: ClipboardRecord): string | undefined {
+  const q = clipboardStore.searchQuery.trim();
+  if (!q) return undefined;
+  return highlightSearchHtml(sourceShortName(record.source_app), q);
 }
 
 /** Layout-only row (no record payload — avoids rebuild on content/copy_count churn). */
@@ -793,14 +779,6 @@ function previewHtml(record: ClipboardRecord): string {
   const q = clipboardStore.searchQuery.trim();
   if (!q) return escapeHtml(getPreview(record));
   return highlightedPreview(record.content, q, 80);
-}
-
-function sourceHtml(record: ClipboardRecord): string {
-  const label = sourceLabel(record);
-  const q = clipboardStore.searchQuery.trim();
-  const dot = `<span class="source-dot" style="background:${sourceDotColor(record.source_app)}" aria-hidden="true"></span>`;
-  if (!q) return `${dot}${escapeHtml(label)}`;
-  return `${dot}${highlightSearchHtml(label, q)}`;
 }
 
 async function quickPaste(id: number) {
@@ -1566,19 +1544,8 @@ onUnmounted(() => {
 .record-source {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   min-width: 0;
-  max-width: 140px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.source-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  max-width: 160px;
 }
 
 .record-dims {

@@ -27,8 +27,9 @@ const { toasts, dismiss } = useToast()
 <style scoped>
 .toast-host {
   position: fixed;
-  right: 20px;
-  top: 20px;
+  /* Below 38px titlebar; leave room for enter translateY(-8px) */
+  right: 16px;
+  top: 60px;
   left: auto;
   transform: none;
   z-index: 1100;

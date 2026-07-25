@@ -27,16 +27,17 @@ const { toasts, dismiss } = useToast()
 <style scoped>
 .toast-host {
   position: fixed;
-  left: 50%;
+  right: 20px;
   top: 20px;
-  transform: translateX(-50%);
+  left: auto;
+  transform: none;
   z-index: 1100;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   pointer-events: none;
-  max-width: min(420px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 40px));
 }
 
 .toast-item {
@@ -51,7 +52,7 @@ const { toasts, dismiss } = useToast()
   line-height: 1.4;
   cursor: pointer;
   transition: all var(--transition-smooth);
-  text-align: center;
+  text-align: left;
   word-break: break-word;
 }
 
@@ -81,7 +82,7 @@ const { toasts, dismiss } = useToast()
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(-10px) scale(0.98);
+  transform: translateY(-8px);
 }
 
 .toast-move {

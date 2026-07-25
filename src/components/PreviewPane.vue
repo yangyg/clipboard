@@ -592,8 +592,16 @@ async function permanentDel() {
   color: var(--warning);
 }
 
+.preview-action-btn.active:hover {
+  color: color-mix(in srgb, var(--warning) 75%, var(--text-primary));
+}
+
 .preview-pin-btn.active {
   color: var(--accent);
+}
+
+.preview-pin-btn.active:hover {
+  color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
 }
 
 .preview-more {
@@ -923,6 +931,11 @@ async function permanentDel() {
 .action-btn.action-active .action-label,
 .action-btn.action-active .action-icon {
   color: var(--warning);
+}
+
+.action-btn.action-active:hover {
+  background: color-mix(in srgb, var(--warning) 28%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
 }
 
 .action-btn.action-active:hover .action-label,

@@ -8,7 +8,11 @@
         :key="item.key"
         type="button"
         class="nav-item"
-        :class="{ active: props.activeCategory === item.key }"
+        :class="{
+          active: props.activeCategory === item.key,
+          'has-cat-color': !!item.color,
+        }"
+        :style="item.color ? { '--cat-color': item.color } : undefined"
         :aria-current="props.activeCategory === item.key ? 'page' : undefined"
         :title="item.label"
         :aria-label="item.label"
@@ -164,12 +168,12 @@ const tagMenuItems: ContextMenuItem[] = [
 
 const categoryItems = computed(() => [
   { key: "all", icon: "clipboard" as AppIconName, label: "全部剪贴板", count: clipboardStore.filterCounts.all },
-  { key: "text", icon: "type" as AppIconName, label: "文本", count: clipboardStore.filterCounts.text },
-  { key: "image", icon: "image" as AppIconName, label: "图片", count: clipboardStore.filterCounts.image },
-  { key: "file", icon: "file" as AppIconName, label: "文件", count: clipboardStore.filterCounts.file },
-  { key: "link", icon: "link" as AppIconName, label: "链接", count: clipboardStore.filterCounts.link },
-  { key: "code", icon: "code" as AppIconName, label: "代码", count: clipboardStore.filterCounts.code },
-  { key: "favorites", icon: "star" as AppIconName, label: "收藏夹", count: clipboardStore.filterCounts.favorites },
+  { key: "text", icon: "type" as AppIconName, label: "文本", count: clipboardStore.filterCounts.text, color: "var(--type-text)" },
+  { key: "image", icon: "image" as AppIconName, label: "图片", count: clipboardStore.filterCounts.image, color: "var(--type-image)" },
+  { key: "file", icon: "file" as AppIconName, label: "文件", count: clipboardStore.filterCounts.file, color: "var(--type-file)" },
+  { key: "link", icon: "link" as AppIconName, label: "链接", count: clipboardStore.filterCounts.link, color: "var(--type-link)" },
+  { key: "code", icon: "code" as AppIconName, label: "代码", count: clipboardStore.filterCounts.code, color: "var(--type-code)" },
+  { key: "favorites", icon: "star" as AppIconName, label: "收藏夹", count: clipboardStore.filterCounts.favorites, color: "var(--warning)" },
 ]);
 
 function selectCategory(key: string) {
@@ -265,12 +269,23 @@ function onTagMenuSelect(id: string) {
   color: var(--accent);
 }
 
+/* Type / favorites: active uses category color instead of accent */
+.nav-item.has-cat-color.active {
+  color: var(--cat-color);
+  background: color-mix(in srgb, var(--cat-color) 16%, transparent);
+}
+
 .nav-icon {
   display: flex;
   width: 18px;
   align-items: center;
   justify-content: center;
   color: inherit;
+  flex-shrink: 0;
+}
+
+.nav-item.has-cat-color .nav-icon {
+  color: var(--cat-color);
 }
 
 .nav-label {
@@ -288,7 +303,8 @@ function onTagMenuSelect(id: string) {
 }
 
 .nav-item.active .nav-count {
-  color: var(--accent);
+  color: inherit;
+  opacity: 0.85;
 }
 
 .tags-list {

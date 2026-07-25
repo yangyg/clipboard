@@ -172,7 +172,7 @@
       <button
         type="button"
         class="action-btn"
-        :class="{ 'action-active': pinnedDisplay }"
+        :class="{ 'action-pinned': pinnedDisplay }"
         @click="pin"
       >
         <span class="action-icon"><AppIcon name="pin" :size="15" :fill="pinnedDisplay ? 'currentColor' : 'none'" /></span>
@@ -597,11 +597,11 @@ async function permanentDel() {
 }
 
 .preview-pin-btn.active {
-  color: var(--accent);
+  color: var(--pin);
 }
 
 .preview-pin-btn.active:hover {
-  color: color-mix(in srgb, var(--accent) 75%, var(--text-primary));
+  color: color-mix(in srgb, var(--pin) 75%, var(--text-primary));
 }
 
 .preview-more {
@@ -941,6 +941,26 @@ async function permanentDel() {
 .action-btn.action-active:hover .action-label,
 .action-btn.action-active:hover .action-icon {
   color: var(--warning);
+}
+
+.action-btn.action-pinned {
+  background: var(--pin-soft);
+  border-color: color-mix(in srgb, var(--pin) 20%, transparent);
+}
+
+.action-btn.action-pinned .action-label,
+.action-btn.action-pinned .action-icon {
+  color: var(--pin);
+}
+
+.action-btn.action-pinned:hover {
+  background: color-mix(in srgb, var(--pin) 28%, transparent);
+  border-color: color-mix(in srgb, var(--pin) 45%, transparent);
+}
+
+.action-btn.action-pinned:hover .action-label,
+.action-btn.action-pinned:hover .action-icon {
+  color: var(--pin);
 }
 
 .action-btn.action-icon-only {

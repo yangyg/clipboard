@@ -31,17 +31,17 @@ export const TAG_PALETTE_TOKEN_KEYS = [
 
 /** Distinct fallbacks — one per slot so the picker stays 12 unique colors. */
 const TAG_PALETTE_FALLBACKS: Record<(typeof TAG_PALETTE_TOKEN_KEYS)[number], string> = {
-  "--accent": "#6366f1",
-  "--accent-light": "#818cf8",
-  "--accent-hover": "#7577f5",
+  "--accent": "#3b82f6",
+  "--accent-light": "#93c5fd",
+  "--accent-hover": "#60a5fa",
   "--type-code": "#34d399",
   "--success": "#2dd4bf",
-  "--type-image": "#fbbf24",
+  "--type-image": "#0ea5e9",
   "--warning": "#f59e0b",
   "--danger": "#f87171",
   "--sensitive": "#fb923c",
-  "--type-link": "#60a5fa",
-  "--type-file": "#94a3b8",
+  "--type-link": "#2563eb",
+  "--type-file": "#eab308",
   "--text-secondary": "#8b8fa6",
 };
 
@@ -87,9 +87,9 @@ export function resolveTagPalette(extraColors: string[] = []): string[] {
 export function resolveKnownTagColors(): Record<string, string> {
   return {
     部署: cssColorVar("--type-code", "#34d399"),
-    前端: cssColorVar("--accent", "#6366f1"),
-    链接: cssColorVar("--type-image", "#fbbf24"),
+    前端: cssColorVar("--accent", "#3b82f6"),
+    链接: cssColorVar("--type-link", "#2563eb"),
     重要: cssColorVar("--danger", "#f87171"),
-    设计: cssColorVar("--accent-light", "#818cf8"),
+    设计: cssColorVar("--accent-light", "#93c5fd"),
   };
 }

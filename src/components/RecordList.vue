@@ -105,6 +105,12 @@
       <template v-for="item in displayItems" :key="item.key">
         <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> 置顶</div>
         <div
+          v-else-if="item.type === 'divider'"
+          class="pin-section-divider"
+          :style="{ height: `${item.height}px` }"
+          aria-hidden="true"
+        />
+        <div
           v-else
           :id="`record-option-${item.record!.id}`"
           class="record-item"
@@ -115,9 +121,11 @@
             selected: clipboardStore.selectedId === item.record!.id && !clipboardStore.batchMode,
             'batch-mode': clipboardStore.batchMode,
             'batch-checked': clipboardStore.batchMode && clipboardStore.selectedIds.has(item.record!.id),
+            'is-text': item.record!.content_type === 'text',
             'is-link': item.record!.content_type === 'link',
             'is-code': item.record!.content_type === 'code',
             'is-image': item.record!.content_type === 'image',
+            'is-file': item.record!.content_type === 'file',
             'is-new': item.record!.id === clipboardStore.lastIncomingId,
             'is-leaving': leavingIds.has(item.record!.id),
           }"
@@ -411,12 +419,16 @@ function isOptionTabbable(id: number): boolean {
 /** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
 const BASE_ROW_HEIGHT = 76;
 const BASE_LABEL_HEIGHT = 28;
+const BASE_DIVIDER_HEIGHT = 17;
 const OVERSCAN = 6;
 const rowHeight = computed(() =>
   Math.round(BASE_ROW_HEIGHT * (settingsStore.settings.font_size / 16))
 );
 const labelHeight = computed(() =>
   Math.round(BASE_LABEL_HEIGHT * (settingsStore.settings.font_size / 16))
+);
+const dividerHeight = computed(() =>
+  Math.round(BASE_DIVIDER_HEIGHT * (settingsStore.settings.font_size / 16))
 );
 
 const scrollTop = ref(0);
@@ -485,7 +497,7 @@ function sourceLabel(record: ClipboardRecord): string {
 }
 
 const SOURCE_DOT_PALETTE = [
-  "#6366f1",
+  "#3b82f6",
   "#34d399",
   "#fbbf24",
   "#f87171",
@@ -506,7 +518,7 @@ function sourceDotColor(sourceApp: string | undefined): string {
 /** Layout-only row (no record payload — avoids rebuild on content/copy_count churn). */
 interface FlatItem {
   key: string;
-  type: "label" | "record";
+  type: "label" | "divider" | "record";
   id?: number;
   height: number;
   offset: number;
@@ -522,7 +534,8 @@ const layoutSig = computed(() => {
   const records = clipboardStore.filteredRecords;
   const rh = rowHeight.value;
   const lh = labelHeight.value;
-  let sig = `${rh}|${lh}|`;
+  const dh = dividerHeight.value;
+  let sig = `${rh}|${lh}|${dh}|`;
   for (const r of records) {
     sig += `${r.id}:${r.is_pinned ? 1 : 0},`;
   }
@@ -535,12 +548,20 @@ function buildFlatItems(): FlatItem[] {
   let offset = 0;
   const rh = rowHeight.value;
   const lh = labelHeight.value;
+  const dh = dividerHeight.value;
   const hasPinned = records.some((r) => r.is_pinned);
+  const hasUnpinned = records.some((r) => !r.is_pinned);
   if (hasPinned) {
     items.push({ key: "pinned-label", type: "label", height: lh, offset });
     offset += lh;
   }
+  let dividerInserted = false;
   for (const r of records) {
+    if (hasPinned && hasUnpinned && !r.is_pinned && !dividerInserted) {
+      items.push({ key: "pin-divider", type: "divider", height: dh, offset });
+      offset += dh;
+      dividerInserted = true;
+    }
     items.push({
       key: `r-${r.id}`,
       type: "record",
@@ -1134,6 +1155,11 @@ onUnmounted(() => {
   padding: 4px 2px 0;
 }
 
+.view-grid .pin-section-divider {
+  grid-column: 1 / -1;
+  margin-inline: 2px;
+}
+
 .view-grid .record-item {
   display: flex;
   flex-direction: column;
@@ -1183,8 +1209,8 @@ onUnmounted(() => {
 }
 
 .view-grid .record-item.batch-checked {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--row-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--row-accent) 10%, var(--bg-surface));
   box-shadow: var(--shadow-sm);
 }
 
@@ -1314,11 +1340,34 @@ onUnmounted(() => {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
+  color: var(--pin);
   padding: 10px 14px 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pin-section-divider {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  width: 100%;
+  margin: 0;
+  padding: 0 14px;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+}
+
+.pin-section-divider::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 1px;
+  background: var(--border-subtle);
 }
 
 .record-item {
+  --row-accent: var(--accent);
   padding: 12px 12px;
   margin: 0 8px 8px;
   cursor: pointer;
@@ -1337,14 +1386,20 @@ onUnmounted(() => {
   background: var(--bg-surface);
 }
 
+.record-item.is-text { --row-accent: var(--type-text); }
+.record-item.is-code { --row-accent: var(--type-code); }
+.record-item.is-link { --row-accent: var(--type-link); }
+.record-item.is-image { --row-accent: var(--type-image); }
+.record-item.is-file { --row-accent: var(--type-file); }
+
 .record-item:hover {
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border-default));
+  border-color: color-mix(in srgb, var(--row-accent) 32%, var(--border-default));
   box-shadow: var(--shadow-sm);
 }
 
 .record-item.selected {
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface));
-  border: 1.5px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--row-accent) 8%, var(--bg-surface));
+  border: 1.5px solid color-mix(in srgb, var(--row-accent) 45%, transparent);
   box-shadow: var(--shadow-sm);
   animation: select-pop var(--transition-fast) ease-out;
 }
@@ -1364,15 +1419,15 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* Freshly captured row: brief accent flash as capture confirmation. */
+/* Freshly captured row: brief type-color flash as capture confirmation. */
 .record-item.is-new {
   animation: row-flash 900ms ease-out;
 }
 
 @keyframes row-flash {
   from {
-    background: color-mix(in srgb, var(--accent) 22%, var(--bg-surface));
-    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    background: color-mix(in srgb, var(--row-accent) 22%, var(--bg-surface));
+    border-color: color-mix(in srgb, var(--row-accent) 45%, transparent);
   }
   to {
     background: var(--bg-surface);
@@ -1381,7 +1436,7 @@ onUnmounted(() => {
 }
 
 .record-item:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--row-accent);
   outline-offset: 1px;
 }
 
@@ -1482,9 +1537,9 @@ onUnmounted(() => {
 }
 
 .record-item.is-link .record-title {
-  color: var(--accent-light, var(--accent));
+  color: var(--type-link);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--type-link) 35%, transparent);
   text-underline-offset: 2px;
 }
 
@@ -1591,7 +1646,7 @@ onUnmounted(() => {
 }
 
 .record-action-btn.active {
-  color: var(--accent-light, var(--accent));
+  color: var(--pin);
 }
 
 .record-action-btn.starred {

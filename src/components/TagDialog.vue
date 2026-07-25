@@ -109,7 +109,7 @@ const { toast } = useToast();
 
 const presetColors = ref(resolveTagPalette());
 const tagName = ref("");
-const selectedColor = ref(presetColors.value[0] ?? "#6366f1");
+const selectedColor = ref(presetColors.value[0] ?? "#3b82f6");
 const assignedIds = ref<Set<number>>(new Set());
 const nameInput = ref<HTMLInputElement | null>(null);
 
@@ -134,7 +134,7 @@ watch(() => props.visible, async (v) => {
       selectedColor.value = props.editTag.color;
     } else {
       tagName.value = "";
-      selectedColor.value = presetColors.value[0] ?? "#6366f1";
+      selectedColor.value = presetColors.value[0] ?? "#3b82f6";
     }
     if (props.mode === "assign" && props.recordId) {
       const record = clipboardStore.records.find((r) => r.id === props.recordId);

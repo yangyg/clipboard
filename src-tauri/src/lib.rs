@@ -5,6 +5,7 @@ mod detect;
 mod commands;
 mod window;
 mod tray;
+mod webdav;
 
 use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
@@ -56,24 +57,27 @@ pub struct ClipboardRecord {
     pub created_at: String,
     #[serde(rename = "updated_at")]
     pub updated_at: String,
+    #[serde(default)]
     pub tags: Vec<String>,
     /// HTML clipboard fragment when format was captured (Word, browser, etc.)
-    #[serde(rename = "content_html")]
+    #[serde(default, rename = "content_html")]
     pub content_html: Option<String>,
     /// Relative path under app data dir, e.g. media/{hash}.png
-    #[serde(rename = "media_path")]
+    #[serde(default, rename = "media_path")]
     pub media_path: Option<String>,
-    #[serde(rename = "thumb_path")]
+    #[serde(default, rename = "thumb_path")]
     pub thumb_path: Option<String>,
+    #[serde(default)]
     pub width: Option<i32>,
+    #[serde(default)]
     pub height: Option<i32>,
     /// Absolute filesystem paths for frontend convertFileSrc
-    #[serde(rename = "media_abs")]
+    #[serde(default, rename = "media_abs")]
     pub media_abs: Option<String>,
-    #[serde(rename = "thumb_abs")]
+    #[serde(default, rename = "thumb_abs")]
     pub thumb_abs: Option<String>,
     /// Full content character length (list rows may truncate `content`)
-    #[serde(rename = "content_len")]
+    #[serde(default, rename = "content_len")]
     pub content_len: Option<i32>,
 }
 
@@ -95,6 +99,10 @@ fn default_enable_auto_tag() -> bool {
 /// Missing field in saved JSON → treat as already onboarded (upgrades).
 fn default_onboarding_completed() -> bool {
     true
+}
+
+fn default_webdav_remote_path() -> String {
+    "ClipVaultSync".to_string()
 }
 
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
@@ -189,6 +197,21 @@ pub struct Settings {
         rename = "onboarding_completed"
     )]
     pub onboarding_completed: bool,
+    // --- WebDAV sync (credentials stay local; never part of JSON export) ---
+    #[serde(default, rename = "webdav_url")]
+    pub webdav_url: String,
+    #[serde(default, rename = "webdav_username")]
+    pub webdav_username: String,
+    #[serde(default, rename = "webdav_password")]
+    pub webdav_password: String,
+    #[serde(default = "default_webdav_remote_path", rename = "webdav_remote_path")]
+    pub webdav_remote_path: String,
+    #[serde(default, rename = "webdav_sync_sensitive")]
+    pub webdav_sync_sensitive: bool,
+    #[serde(default, rename = "webdav_device_id")]
+    pub webdav_device_id: String,
+    #[serde(default, rename = "webdav_last_sync_at")]
+    pub webdav_last_sync_at: Option<String>,
 }
 
 impl Default for Settings {
@@ -222,6 +245,13 @@ impl Default for Settings {
             enable_auto_tag: true,
             auto_tag_rules: default_auto_tag_rules(),
             onboarding_completed: false,
+            webdav_url: String::new(),
+            webdav_username: String::new(),
+            webdav_password: String::new(),
+            webdav_remote_path: default_webdav_remote_path(),
+            webdav_sync_sensitive: false,
+            webdav_device_id: String::new(),
+            webdav_last_sync_at: None,
         }
     }
 }
@@ -369,6 +399,10 @@ pub fn run() {
             commands::tray_menu_action,
             commands::export_data,
             commands::import_data,
+            commands::webdav_test_connection,
+            commands::webdav_pull,
+            commands::webdav_push,
+            commands::webdav_sync,
             commands::clear_history,
             commands::get_stats,
             commands::switch_app_mode,

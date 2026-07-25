@@ -484,6 +484,91 @@
               </div>
               <div v-if="importStatus" class="status-line" :class="importStatusKind">{{ importStatus }}</div>
 
+              <div class="settings-section-title" style="margin-top: 1.25rem">WebDAV 同步</div>
+              <p class="setting-desc" style="margin: 0 0 0.75rem">
+                使用坚果云 / Nextcloud / 群晖等自备 WebDAV，多机合并剪贴板历史。不同步数据库文件与应用设置。
+              </p>
+              <label class="webdav-field">
+                <span class="setting-label">服务器地址</span>
+                <input
+                  class="auto-tag-input"
+                  type="url"
+                  placeholder="https://dav.jianguoyun.com/dav/"
+                  :value="settings.webdav_url"
+                  @input="update('webdav_url', ($event.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="webdav-field">
+                <span class="setting-label">用户名</span>
+                <input
+                  class="auto-tag-input"
+                  type="text"
+                  autocomplete="username"
+                  :value="settings.webdav_username"
+                  @input="update('webdav_username', ($event.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="webdav-field">
+                <span class="setting-label">密码 / 应用密码</span>
+                <input
+                  class="auto-tag-input"
+                  type="password"
+                  autocomplete="current-password"
+                  :value="settings.webdav_password"
+                  @input="update('webdav_password', ($event.target as HTMLInputElement).value)"
+                />
+              </label>
+              <label class="webdav-field">
+                <span class="setting-label">远端目录</span>
+                <input
+                  class="auto-tag-input"
+                  type="text"
+                  placeholder="ClipVaultSync"
+                  :value="settings.webdav_remote_path"
+                  @input="update('webdav_remote_path', ($event.target as HTMLInputElement).value)"
+                />
+              </label>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">同步敏感内容</div>
+                  <div class="setting-desc">默认关闭；开启后敏感记录也会上传到 WebDAV</div>
+                </div>
+                <div
+                  class="toggle"
+                  :class="{ on: settings.webdav_sync_sensitive }"
+                  role="switch"
+                  :aria-checked="settings.webdav_sync_sensitive"
+                  tabindex="0"
+                  @click="update('webdav_sync_sensitive', !settings.webdav_sync_sensitive)"
+                  @keydown.enter.prevent="update('webdav_sync_sensitive', !settings.webdav_sync_sensitive)"
+                  @keydown.space.prevent="update('webdav_sync_sensitive', !settings.webdav_sync_sensitive)"
+                >
+                  <div class="toggle-knob" />
+                </div>
+              </div>
+              <div class="data-card webdav-actions">
+                <button class="btn btn-secondary" :disabled="webdavBusy" @click="webdavTest">
+                  <AppIcon name="cloud" :size="13" />
+                  {{ webdavAction === 'test' ? '测试中…' : '测试连接' }}
+                </button>
+                <button class="btn btn-secondary" :disabled="webdavBusy" @click="webdavPull">
+                  <AppIcon name="cloudDownload" :size="13" />
+                  {{ webdavAction === 'pull' ? '拉取中…' : '拉取合并' }}
+                </button>
+                <button class="btn btn-secondary" :disabled="webdavBusy" @click="webdavPush">
+                  <AppIcon name="cloudUpload" :size="13" />
+                  {{ webdavAction === 'push' ? '推送中…' : '推送' }}
+                </button>
+                <button class="btn btn-primary" :disabled="webdavBusy" @click="webdavSyncNow">
+                  <AppIcon name="refresh" :size="13" />
+                  {{ webdavAction === 'sync' ? '同步中…' : '立即同步' }}
+                </button>
+              </div>
+              <div v-if="settings.webdav_last_sync_at" class="setting-desc">
+                上次同步：{{ formatSyncTime(settings.webdav_last_sync_at) }}
+              </div>
+              <div v-if="webdavStatus" class="status-line" :class="webdavStatusKind">{{ webdavStatus }}</div>
+
               <div class="setting-row">
                 <div>
                   <div class="setting-label">清理历史</div>
@@ -613,7 +698,7 @@ import { useToast } from "../composables/useToast";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
-import type { ClipboardRecord, Settings } from "../types";
+import type { ClipboardRecord, Settings, WebDavSyncResult } from "../types";
 import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../types";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
@@ -638,6 +723,10 @@ const importStatusKind = ref<"success" | "error" | "">("");
 const isExporting = ref(false);
 const isImporting = ref(false);
 const isRecordingShortcut = ref(false);
+const webdavBusy = ref(false);
+const webdavAction = ref<"" | "test" | "pull" | "push" | "sync">("");
+const webdavStatus = ref("");
+const webdavStatusKind = ref<"success" | "error" | "">("");
 
 const CONTENT_TYPE_OPTIONS = [
   { value: "text", label: "文本", icon: "type" as AppIconName, color: "var(--type-text)" },
@@ -964,6 +1053,76 @@ async function importData() {
   } finally {
     isImporting.value = false;
   }
+}
+
+function formatSyncTime(iso: string) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return iso;
+  }
+}
+
+async function flushSettings() {
+  await settingsStore.saveSettings();
+}
+
+async function webdavTest() {
+  webdavStatus.value = "";
+  webdavStatusKind.value = "";
+  webdavBusy.value = true;
+  webdavAction.value = "test";
+  try {
+    await flushSettings();
+    await invoke("webdav_test_connection");
+    webdavStatus.value = "连接成功。";
+    webdavStatusKind.value = "success";
+  } catch (e) {
+    webdavStatus.value = `连接失败：${String(e)}`;
+    webdavStatusKind.value = "error";
+  } finally {
+    webdavBusy.value = false;
+    webdavAction.value = "";
+  }
+}
+
+async function runWebDav(
+  action: "pull" | "push" | "sync",
+  command: "webdav_pull" | "webdav_push" | "webdav_sync",
+) {
+  webdavStatus.value = "";
+  webdavStatusKind.value = "";
+  webdavBusy.value = true;
+  webdavAction.value = action;
+  try {
+    await flushSettings();
+    const result = await invoke<WebDavSyncResult>(command);
+    webdavStatus.value = result.message;
+    webdavStatusKind.value = "success";
+    await settingsStore.loadSettings();
+    if (action === "pull" || action === "sync") {
+      await clipboardStore.loadRecords();
+      await clipboardStore.loadStats();
+    }
+  } catch (e) {
+    webdavStatus.value = `${action === "pull" ? "拉取" : action === "push" ? "推送" : "同步"}失败：${String(e)}`;
+    webdavStatusKind.value = "error";
+  } finally {
+    webdavBusy.value = false;
+    webdavAction.value = "";
+  }
+}
+
+async function webdavPull() {
+  await runWebDav("pull", "webdav_pull");
+}
+
+async function webdavPush() {
+  await runWebDav("push", "webdav_push");
+}
+
+async function webdavSyncNow() {
+  await runWebDav("sync", "webdav_sync");
 }
 
 async function clearHistory() {
@@ -1783,6 +1942,24 @@ input[type="range"]::-webkit-slider-thumb {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
+}
+
+.webdav-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.webdav-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.webdav-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .storage-card {

@@ -34,6 +34,13 @@ const DEFAULT_SETTINGS: Settings = {
     content_types: [...r.content_types],
   })),
   onboarding_completed: false,
+  webdav_url: "",
+  webdav_username: "",
+  webdav_password: "",
+  webdav_remote_path: "ClipVaultSync",
+  webdav_sync_sensitive: false,
+  webdav_device_id: "",
+  webdav_last_sync_at: null,
 };
 
 const SAVE_DEBOUNCE_MS = 200;

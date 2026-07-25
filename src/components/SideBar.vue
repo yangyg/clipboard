@@ -52,22 +52,64 @@
       <div class="sidebar-label">标签管理</div>
       <div class="tags-list" role="list">
         <button
-          v-for="tag in clipboardStore.tags"
+          v-for="tag in primaryTags"
           :key="tag.id"
           type="button"
           class="tag-item"
           :class="{ active: props.activeTag === tag.name }"
           :aria-pressed="props.activeTag === tag.name"
-          :title="tag.name"
-          :aria-label="tag.name"
+          :title="tagTitle(tag)"
+          :aria-label="tagAriaLabel(tag)"
           @click="selectTag(tag.name)"
           @contextmenu.prevent.stop="showTagMenu($event, tag)"
         >
           <span class="tag-dot" :style="{ background: tag.color }"></span>
           <span class="tag-name">{{ tag.name }}</span>
-          <span v-if="tag.is_auto" class="tag-auto-badge">自动</span>
+          <span
+            v-if="tag.is_auto"
+            class="tag-auto-icon"
+            title="自动打标规则创建"
+            aria-hidden="true"
+          ><AppIcon name="sparkles" :size="11" /></span>
           <span class="tag-count">{{ tag.count }}</span>
         </button>
+
+        <template v-if="moreTags.length > 0">
+          <button
+            type="button"
+            class="tag-more-toggle"
+            :aria-expanded="moreTagsOpen"
+            :aria-label="moreTagsOpen ? `收起空标签，共 ${moreTags.length} 个` : `更多空标签，共 ${moreTags.length} 个`"
+            @click="moreTagsOpen = !moreTagsOpen"
+          >
+            <span class="tag-more-label">{{ moreTagsOpen ? "收起" : "更多" }}</span>
+            <span class="tag-more-meta">{{ moreTags.length }}</span>
+          </button>
+          <template v-if="moreTagsOpen">
+            <button
+              v-for="tag in moreTags"
+              :key="tag.id"
+              type="button"
+              class="tag-item tag-item-muted"
+              :class="{ active: props.activeTag === tag.name }"
+              :aria-pressed="props.activeTag === tag.name"
+              :title="tagTitle(tag)"
+              :aria-label="tagAriaLabel(tag)"
+              @click="selectTag(tag.name)"
+              @contextmenu.prevent.stop="showTagMenu($event, tag)"
+            >
+              <span class="tag-dot" :style="{ background: tag.color }"></span>
+              <span class="tag-name">{{ tag.name }}</span>
+              <span
+                v-if="tag.is_auto"
+                class="tag-auto-icon"
+                title="自动打标规则创建"
+                aria-hidden="true"
+              ><AppIcon name="sparkles" :size="11" /></span>
+              <span class="tag-count">{{ tag.count }}</span>
+            </button>
+          </template>
+        </template>
       </div>
         <button type="button" class="tag-add" title="新建标签" aria-label="新建标签" @click="$emit('addTag')">
         <AppIcon name="plus" :size="13" /> <span class="tag-add-label">新建标签</span>
@@ -120,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
@@ -153,6 +195,29 @@ const emit = defineEmits<{
   (e: "editTag", tag: Tag): void;
   (e: "deleteTag", tag: Tag): void;
 }>();
+
+const moreTagsOpen = ref(false);
+
+/** Count > 0, or currently selected (so a zero-count filter stays visible). */
+const primaryTags = computed(() =>
+  clipboardStore.tags.filter(
+    (t) => t.count > 0 || (props.activeTag != null && t.name === props.activeTag),
+  ),
+);
+
+const moreTags = computed(() =>
+  clipboardStore.tags.filter(
+    (t) => t.count === 0 && !(props.activeTag != null && t.name === props.activeTag),
+  ),
+);
+
+function tagTitle(tag: Tag): string {
+  return tag.is_auto ? `${tag.name}（自动打标规则创建）` : tag.name;
+}
+
+function tagAriaLabel(tag: Tag): string {
+  return tag.is_auto ? `${tag.name}，自动打标规则创建` : tag.name;
+}
 
 const tagMenu = reactive({
   visible: false,
@@ -354,19 +419,56 @@ function onTagMenuSelect(id: string) {
   white-space: nowrap;
 }
 
-.tag-auto-badge {
+.tag-auto-icon {
   flex-shrink: 0;
-  font-size: 0.5625rem;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 3px;
-  background: var(--accent-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--accent);
+  opacity: 0.9;
 }
 
 .tag-count {
   font-size: 0.625rem;
   color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-more-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 8px;
+  margin-top: 2px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 0.6875rem;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.tag-more-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.tag-more-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.tag-more-meta {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.tag-item-muted {
+  opacity: 0.85;
 }
 
 .tag-add {
@@ -444,7 +546,8 @@ function onTagMenuSelect(id: string) {
   .nav-count,
   .tag-name,
   .tag-count,
-  .tag-auto-badge {
+  .tag-auto-icon,
+  .tag-more-label {
     display: none;
   }
 

@@ -812,7 +812,7 @@ function ruleAccentColor(tagName: string, index: number): string {
 }
 
 function cssFallbackAccent(): string {
-  return resolveTagPalette()[0] ?? "#3b82f6";
+  return resolveTagPalette()[0] ?? "#0078d4";
 }
 
 function addIgnoredApp() {

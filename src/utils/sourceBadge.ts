@@ -1,6 +1,6 @@
 /** Stable colors for source letter avatars (same palette as the old list source-dot). */
 export const SOURCE_AVATAR_PALETTE = [
-  "#3b82f6",
+  "#0078d4",
   "#34d399",
   "#fbbf24",
   "#f87171",

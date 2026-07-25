@@ -42,6 +42,7 @@ import {
   HelpCircle,
   List,
   LayoutGrid,
+  Sparkles,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -85,6 +86,7 @@ const ICONS = {
   help: HelpCircle,
   list: List,
   grid: LayoutGrid,
+  sparkles: Sparkles,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;

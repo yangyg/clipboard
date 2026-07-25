@@ -154,7 +154,7 @@ FloatingPanel / WindowApp / PreviewPane 头部操作按钮已补 `aria-label`，
 
 | 项 | 约定 |
 |----|------|
-| 强调色 | 冷蓝：暗色 `#3b82f6`，浅色 `#1d4ed8`（替代历史 indigo `#6366f1` / `#5b52e8`） |
+| 强调色 | Fluent 蓝 `#0078d4`（暗/浅共用主色；替代历史 `#3b82f6` / `#1d4ed8`） |
 | 类型色 | text `#7dd3fc` · code `#34d399` · link `#2563eb` · image `#0ea5e9` · file `#eab308`；侧栏激活与列表行 `--row-accent` 跟类型色 |
 | 置顶 / 收藏 | `--pin` 图钉红 vs `--warning` 金；预览底栏 `action-pinned` ≠ `action-active` |
 | 置顶分组 | 「置顶」标签 + 与普通列表之间的细分割线（两组都有时） |

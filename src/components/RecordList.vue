@@ -424,7 +424,7 @@ function isOptionTabbable(id: number): boolean {
 }
 
 /** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
-const BASE_ROW_HEIGHT = 76;
+const BASE_ROW_HEIGHT = 68;
 const BASE_LABEL_HEIGHT = 28;
 const BASE_DIVIDER_HEIGHT = 17;
 const OVERSCAN = 6;
@@ -1116,7 +1116,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 0 4px;
+  padding: 4px 0 6px;
 }
 
 /* —— Grid view: vertical cards (original structure) —— */
@@ -1152,6 +1152,21 @@ onUnmounted(() => {
   height: 132px;
   max-height: 132px;
   box-sizing: border-box;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface);
+}
+
+.view-grid .record-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+  box-shadow: none;
+}
+
+.view-grid .record-item.selected {
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-surface));
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  box-shadow: none;
 }
 
 .view-grid .record-item.is-image {
@@ -1187,9 +1202,9 @@ onUnmounted(() => {
 }
 
 .view-grid .record-item.batch-checked {
-  border-color: color-mix(in srgb, var(--row-accent) 55%, transparent);
-  background: color-mix(in srgb, var(--row-accent) 10%, var(--bg-surface));
-  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface));
+  box-shadow: none;
 }
 
 .view-grid .record-item.batch-mode .record-actions {
@@ -1346,22 +1361,21 @@ onUnmounted(() => {
 
 .record-item {
   --row-accent: var(--accent);
-  padding: 12px 12px;
-  margin: 0 8px 8px;
+  padding: 10px 12px;
+  margin: 0 4px 2px;
   cursor: pointer;
-  border-radius: var(--radius-lg, 14px);
+  border-radius: 6px;
   transition:
     background var(--transition-fast),
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast),
     opacity var(--transition-fast),
     transform var(--transition-fast);
   display: flex;
   align-items: flex-start;
   gap: 10px;
   position: relative;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .record-item.is-text { --row-accent: var(--type-text); }
@@ -1371,24 +1385,11 @@ onUnmounted(() => {
 .record-item.is-file { --row-accent: var(--type-file); }
 
 .record-item:hover {
-  border-color: color-mix(in srgb, var(--row-accent) 32%, var(--border-default));
-  box-shadow: var(--shadow-sm);
+  background: var(--bg-hover);
 }
 
 .record-item.selected {
-  background: color-mix(in srgb, var(--row-accent) 8%, var(--bg-surface));
-  border: 1.5px solid color-mix(in srgb, var(--row-accent) 45%, transparent);
-  box-shadow: var(--shadow-sm);
-  animation: select-pop var(--transition-fast) ease-out;
-}
-
-@keyframes select-pop {
-  from {
-    transform: scale(0.98);
-  }
-  to {
-    transform: scale(1);
-  }
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .record-item.is-leaving {
@@ -1397,25 +1398,23 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* Freshly captured row: brief type-color flash as capture confirmation. */
+/* Freshly captured row: brief accent flash as capture confirmation. */
 .record-item.is-new {
   animation: row-flash 900ms ease-out;
 }
 
 @keyframes row-flash {
   from {
-    background: color-mix(in srgb, var(--row-accent) 22%, var(--bg-surface));
-    border-color: color-mix(in srgb, var(--row-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
   }
   to {
-    background: var(--bg-surface);
-    border-color: var(--border-subtle);
+    background: transparent;
   }
 }
 
 .record-item:focus-visible {
-  outline: 2px solid var(--row-accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .record-item.batch-mode {

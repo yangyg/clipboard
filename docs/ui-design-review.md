@@ -150,15 +150,21 @@ FloatingPanel / WindowApp / PreviewPane 头部操作按钮已补 `aria-label`，
 
 ## 后续视觉 token 对齐（2026-07-25）
 
-与 `fe49fdf` 同期落地，审查项本身不回退；此处只记录语义色约定，避免再写回紫色强调色或混用置顶/收藏态。
+与当日多轮 UI 迭代同步；审查项本身不回退。权威摘要以 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」为准。
 
 | 项 | 约定 |
 |----|------|
-| 强调色 | Fluent 蓝 `#0078d4`（暗/浅共用主色；替代历史 `#3b82f6` / `#1d4ed8`） |
-| 类型色 | text `#7dd3fc` · code `#34d399` · link `#2563eb` · image `#0ea5e9` · file `#eab308`；侧栏激活与列表行 `--row-accent` 跟类型色 |
-| 置顶 / 收藏 | `--pin` 图钉红 vs `--warning` 金；预览底栏 `action-pinned` ≠ `action-active` |
+| 强调色 | Fluent 蓝 `#0078d4`（暗/浅共用；hover/light 见 CLAUDE） |
+| 类型色 | text / code / link / image / file 语义色；用于徽章、侧栏分类、类型图标与链接标题 |
+| 列表行 | Fluent 扁平 ListView：无描边无投影；hover `--bg-hover`；选中 accent 浅底；类型色不用于整行描边 |
+| 三栏底色 | 侧栏 `--bg-elevated`；列表+详情共用 `--bg-surface`；仅列表右边线分隔 |
+| 详情描边 | 保留头底分区线；文本无框；链接/文件浅底无描边 |
+| 置顶 / 收藏 | `--pin` 图钉红 vs `--warning` 金；`action-pinned` ≠ `action-active` |
 | 置顶分组 | 「置顶」标签 + 与普通列表之间的细分割线（两组都有时） |
+| 标签侧栏 | 0 计数收进「更多」；`is_auto` 用 sparkles + tooltip「自动打标规则创建」 |
+| 色值预览 | 整段 CSS 颜色仍为 `text`；列表/详情显示 swatch（`clipboardColor.ts`） |
 | Toast | 右上角，`top: 60px`，避开标题栏按钮 |
-| 标签色板 | 仍 12 色预设，fallback 跟新 accent / type token（`themeColors.ts`） |
+| 标签色板 | 仍 12 色预设，fallback 跟 accent / type token（`themeColors.ts`） |
+| 来源标识 | `SourceBadge` 首字母色块 + 短名；真实图标后置 |
 
-权威摘要：[`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」；动效侧同步见 [`ClipVault-交互动效规范.md`](./ClipVault-交互动效规范.md)。
+动效侧同步见 [`ClipVault-交互动效规范.md`](./ClipVault-交互动效规范.md)。

@@ -9,7 +9,7 @@
 
 **当前状态**：静态输入框 + `Ctrl+K` 快捷键提示徽标。
 
-- **聚焦时**：边框颜色从灰变冷蓝强调色（`--accent` / `--border-focus`），`duration-fast` + `ease-out`；同时 `Ctrl+K` 徽标做 `opacity 1→0.4`，暗示"已进入输入状态，快捷键提示让位"。
+- **聚焦时**：边框颜色从灰变 Fluent 蓝强调色（`--accent` / `--border-focus` ≈ `#0078d4`），`duration-fast` + `ease-out`；同时 `Ctrl+K` 徽标做 `opacity 1→0.4`，暗示"已进入输入状态，快捷键提示让位"。
 - **输入内容后开始搜索**：不做实时高亮动画本身的过渡（避免频繁重排），但**列表结果的增减**走"三、列表项"里定义的增删动效。
 - **清空搜索**（如果有 clear 按钮）：按钮本身 `opacity 0→1` 随输入内容出现，`duration-instant`。
 
@@ -70,7 +70,9 @@
 
 - **切换详情内容**：不用简单的 `opacity` 淡入淡出（信息量太大，纯淡入淡出会让人在过渡瞬间short读不到内容主体在哪）。推荐：内容整体 `translateY(4px→0)` + `opacity 0→1`，`duration-fast`，方向感极轻微，主要作用是给"内容已更新"一个明确的时间锚点。
 - **标题区（纯文本 / 图标 + 文件名）**：不单独做动效，与内容主体同步过渡即可，避免标题和正文错峰产生的割裂感。
+- **内容区描边**：与列表同底后，文本正文无框；链接/文件用浅底块、无描边；分区只保留头底分隔线 + 底栏顶线，避免多层盒子。
 - **底部标签区"+ 添加标签"**：点击后原地展开一个小输入框（`width` 从图标宽度过渡到输入框宽度，`duration-base` + `ease-in-out`，这是少数值得用 width 过渡的场景，因为宽度变化本身就是信息）；确认后新标签 chip 以 `scale(0.9→1)` + `opacity` 方式出现，`duration-fast`。
+- **纯文本色值**：整段为 CSS 颜色时详情显示大色块 + 色值（仍为 `text` 类型，无单独动效）。
 
 ---
 
@@ -103,7 +105,7 @@
 
 ## 附录：Token 复用
 
-ClipVault **默认暗色主题**（另有浅色 / OLED），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` 冷蓝、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。视觉语义摘要见 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」。
+ClipVault **默认暗色主题**（另有浅色 / OLED），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。视觉语义摘要见 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」。
 
 动效时长与缓动对齐现有 token（本规范文中的 `duration-*` / `ease-*` 按此映射，不另立一套）：
 

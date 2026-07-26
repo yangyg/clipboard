@@ -2,25 +2,25 @@
   <BaseDialog :open="visible" @close="$emit('close')">
     <div class="dialog-header">
       <span class="dialog-title">{{ dialogTitle }}</span>
-      <button type="button" class="dialog-close" aria-label="关闭" @click="$emit('close')">
+      <button type="button" class="dialog-close" :aria-label="$t('common.close')" @click="$emit('close')">
         <AppIcon name="close" :size="14" />
       </button>
     </div>
 
     <template v-if="mode === 'create' || mode === 'edit'">
       <div class="dialog-body">
-        <label class="field-label" for="tag-name-input">标签名称</label>
+        <label class="field-label" for="tag-name-input">{{ $t('tagDialog.nameLabel') }}</label>
         <input
           id="tag-name-input"
           ref="nameInput"
           v-model="tagName"
           class="field-input"
           type="text"
-          placeholder="输入标签名称…"
+          :placeholder="$t('tagDialog.namePlaceholder')"
           maxlength="20"
           @keydown.enter="confirmForm"
         />
-        <label class="field-label">颜色</label>
+        <label class="field-label">{{ $t('tagDialog.colorLabel') }}</label>
         <div class="color-grid">
           <button
             v-for="c in presetColors"
@@ -29,7 +29,7 @@
             class="color-swatch"
             :class="{ selected: selectedColor === c }"
             :style="{ background: c }"
-            :aria-label="`颜色 ${c}`"
+            :aria-label="`${$t('tagDialog.colorLabel')} ${c}`"
             @click="selectedColor = c"
           >
             <span v-if="selectedColor === c" class="swatch-check">✓</span>
@@ -37,21 +37,21 @@
         </div>
       </div>
       <div class="dialog-footer">
-        <button type="button" class="btn-cancel" @click="$emit('close')">取消</button>
+        <button type="button" class="btn-cancel" @click="$emit('close')">{{ $t('common.cancel') }}</button>
         <button
           type="button"
           class="btn-confirm"
           :disabled="!tagName.trim()"
           @click="confirmForm"
-        >{{ mode === 'edit' ? '保存' : '创建' }}</button>
+        >{{ mode === 'edit' ? $t('common.save') : $t('common.create') }}</button>
       </div>
     </template>
 
     <template v-else>
       <div class="dialog-body assign-body">
         <div v-if="availableTags.length === 0" class="assign-empty">
-          <p>暂无可用标签</p>
-          <button type="button" class="btn-create-inline" @click="$emit('switchToCreate')">新建标签</button>
+          <p>{{ $t('tagDialog.noTags') }}</p>
+          <button type="button" class="btn-create-inline" @click="$emit('switchToCreate')">{{ $t('tagDialog.createTag') }}</button>
         </div>
         <label
           v-for="tag in availableTags"
@@ -73,8 +73,8 @@
         </label>
       </div>
       <div class="dialog-footer">
-        <button type="button" class="btn-cancel" @click="$emit('close')">取消</button>
-        <button type="button" class="btn-confirm" @click="confirmAssign">确定</button>
+        <button type="button" class="btn-cancel" @click="$emit('close')">{{ $t('common.cancel') }}</button>
+        <button type="button" class="btn-confirm" @click="confirmAssign">{{ $t('common.confirm') }}</button>
       </div>
     </template>
   </BaseDialog>
@@ -88,6 +88,7 @@ import { resolveTagPalette } from "../utils/themeColors";
 import AppIcon from "./icons/AppIcon.vue";
 import BaseDialog from "./BaseDialog.vue";
 import type { Tag } from "../types";
+import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
   visible: boolean;
@@ -106,6 +107,7 @@ const emit = defineEmits<{
 
 const clipboardStore = useClipboardStore();
 const { toast } = useToast();
+const { t } = useI18n();
 
 const presetColors = ref(resolveTagPalette());
 const tagName = ref("");
@@ -115,9 +117,9 @@ const nameInput = ref<HTMLInputElement | null>(null);
 
 const availableTags = computed(() => clipboardStore.tags);
 const dialogTitle = computed(() => {
-  if (props.mode === "edit") return "编辑标签";
-  if (props.mode === "create") return "新建标签";
-  return "添加标签";
+  if (props.mode === "edit") return t('tagDialog.editTitle');
+  if (props.mode === "create") return t('tagDialog.createTitle');
+  return t('tagDialog.assignTitle');
 });
 
 watch(() => props.visible, async (v) => {
@@ -173,7 +175,7 @@ async function confirmForm() {
     if (props.recordId != null) return;
     emit("close");
   } catch (e) {
-    toast(props.mode === "edit" ? "保存标签失败" : "创建标签失败", "error");
+    toast(props.mode === "edit" ? t('tagDialog.saveFailed') : t('tagDialog.createFailed'), "error");
     console.error("Tag form failed:", e);
   }
 }
@@ -190,7 +192,7 @@ async function confirmAssign() {
     emit("assigned");
     emit("close");
   } catch (e) {
-    toast("设置标签失败", "error");
+    toast(t('tagDialog.assignFailed'), "error");
     console.error("Assign tags failed:", e);
   }
 }

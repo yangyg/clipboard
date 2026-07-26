@@ -92,6 +92,8 @@ export interface Settings {
   auto_tag_rules: AutoTagRule[];
   /** False until first-run welcome is dismissed. */
   onboarding_completed: boolean;
+  /** UI language preference. */
+  language: 'zh-CN' | 'en-US' | 'system';
   /** WebDAV sync (local credentials; not included in JSON export). */
   webdav_url: string;
   webdav_username: string;

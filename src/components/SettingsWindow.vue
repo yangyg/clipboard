@@ -3,7 +3,7 @@
     <div class="settings-window panel-surface">
       <!-- Header -->
       <div class="settings-header" :class="{ 'with-chrome': isWindowMode }" data-tauri-drag-region>
-        <span class="settings-title"><AppIcon name="settings" :size="15" /> 设置</span>
+        <span class="settings-title"><AppIcon name="settings" :size="15" /> {{ $t('settings.title') }}</span>
         <div v-if="isWindowMode" class="settings-header-right">
           <WindowControls />
         </div>
@@ -12,9 +12,9 @@
       <div class="settings-main">
         <!-- Nav -->
         <nav class="settings-nav">
-          <button type="button" class="nav-item nav-back" title="返回" aria-label="返回" @click="emit('close')">
+          <button type="button" class="nav-item nav-back" :title="$t('settings.back')" :aria-label="$t('settings.back')" @click="emit('close')">
             <span class="nav-icon"><AppIcon name="back" :size="15" /></span>
-            <span class="nav-label">返回</span>
+            <span class="nav-label">{{ $t('settings.back') }}</span>
           </button>
           <div class="nav-divider" aria-hidden="true"></div>
           <button
@@ -23,12 +23,12 @@
             type="button"
             class="nav-item"
             :class="{ active: activeSection === section.key }"
-            :title="section.label"
-            :aria-label="section.label"
+            :title="$t(section.labelKey)"
+            :aria-label="$t(section.labelKey)"
             @click="activeSection = section.key"
           >
             <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
-            <span class="nav-label">{{ section.label }}</span>
+            <span class="nav-label">{{ $t(section.labelKey) }}</span>
           </button>
         </nav>
 
@@ -37,11 +37,11 @@
           <!-- Shortcuts -->
           <template v-if="activeSection === 'shortcuts'">
             <div class="settings-section">
-              <div class="settings-section-title">快捷键</div>
+              <div class="settings-section-title">{{ $t('settings.shortcuts.title') }}</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">全局快捷键</div>
-                  <div class="setting-desc">唤起悬浮面板</div>
+                  <div class="setting-label">{{ $t('settings.shortcuts.globalShortcut') }}</div>
+                  <div class="setting-desc">{{ $t('settings.shortcuts.globalShortcutDesc') }}</div>
                 </div>
                 <button
                   class="shortcut-btn"
@@ -50,30 +50,30 @@
                   @click="startShortcutRecording"
                   @keydown="onShortcutKeydown"
                 >
-                  {{ isRecordingShortcut ? "按下快捷键…" : settings.global_shortcut }}
+                  {{ isRecordingShortcut ? $t('settings.shortcuts.pressShortcut') : settings.global_shortcut }}
                 </button>
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">搜索聚焦</div>
-                  <div class="setting-desc">在面板内快速聚焦搜索框</div>
+                  <div class="setting-label">{{ $t('settings.shortcuts.searchFocus') }}</div>
+                  <div class="setting-desc">{{ $t('settings.shortcuts.searchFocusDesc') }}</div>
                 </div>
-                <span class="kbd-display">/ 或 Ctrl+K</span>
+                <span class="kbd-display">/ {{ $t('common.or') }} Ctrl+K</span>
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">纯文本粘贴</div>
-                  <div class="setting-desc">面板内快捷切换</div>
+                  <div class="setting-label">{{ $t('settings.shortcuts.plainPaste') }}</div>
+                  <div class="setting-desc">{{ $t('settings.shortcuts.plainPasteDesc') }}</div>
                 </div>
                 <span class="kbd-display">Alt + V</span>
               </div>
             </div>
             <div class="settings-section">
-              <div class="settings-section-title">行为</div>
+              <div class="settings-section-title">{{ $t('settings.shortcuts.behavior') }}</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">粘贴后自动隐藏</div>
-                  <div class="setting-desc">悬浮模式隐藏到托盘；窗口模式最小化到任务栏（关闭则粘贴后保持打开）</div>
+                  <div class="setting-label">{{ $t('settings.shortcuts.autoHide') }}</div>
+                  <div class="setting-desc">{{ $t('settings.shortcuts.autoHideDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -88,8 +88,8 @@
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">默认粘贴模式</div>
-                  <div class="setting-desc">从面板粘贴时使用的格式</div>
+                  <div class="setting-label">{{ $t('settings.shortcuts.defaultPasteMode') }}</div>
+                  <div class="setting-desc">{{ $t('settings.shortcuts.defaultPasteModeDesc') }}</div>
                 </div>
                 <div class="segmented">
                   <button
@@ -100,7 +100,7 @@
                     :class="{ selected: settings.default_paste_mode === mode.key }"
                     @click="update('default_paste_mode', mode.key)"
                   >
-                    {{ mode.label }}
+                    {{ $t(mode.labelKey) }}
                   </button>
                 </div>
               </div>
@@ -110,8 +110,8 @@
           <!-- Appearance -->
           <template v-else-if="activeSection === 'appearance'">
             <div class="settings-section">
-              <div class="settings-section-title">主题</div>
-              <div class="theme-cards" role="radiogroup" aria-label="主题">
+              <div class="settings-section-title">{{ $t('settings.appearance.theme') }}</div>
+              <div class="theme-cards" role="radiogroup" :aria-label="$t('settings.appearance.theme')">
                 <div
                   v-for="(t, idx) in THEMES"
                   :key="t.key"
@@ -119,7 +119,7 @@
                   role="radio"
                   :data-theme="t.key"
                   :aria-checked="settings.theme === t.key"
-                  :aria-label="t.label"
+                  :aria-label="$t(t.labelKey)"
                   :tabindex="settings.theme === t.key ? 0 : -1"
                   :class="{ selected: settings.theme === t.key }"
                   @click="update('theme', t.key)"
@@ -131,13 +131,13 @@
                   @keydown.arrowup.prevent="focusTheme(idx - 1)"
                 >
                   <div class="theme-preview" :class="`theme-${t.key}`" aria-hidden="true"></div>
-                  <div class="theme-name"><AppIcon :name="t.icon" :size="13" /> {{ t.label }}</div>
+                  <div class="theme-name"><AppIcon :name="t.icon" :size="13" /> {{ $t(t.labelKey) }}</div>
                 </div>
               </div>
             </div>
             <div class="settings-section">
-              <div class="settings-section-title">应用模式</div>
-              <div class="mode-grid" role="radiogroup" aria-label="应用模式">
+              <div class="settings-section-title">{{ $t('settings.appearance.appMode') }}</div>
+              <div class="mode-grid" role="radiogroup" :aria-label="$t('settings.appearance.appMode')">
                 <button
                   v-for="mode in APP_MODES"
                   :key="mode.key"
@@ -149,31 +149,31 @@
                   @click="update('app_mode', mode.key)"
                 >
                   <span class="mode-icon"><AppIcon :name="mode.icon" :size="18" /></span>
-                  <span class="mode-title">{{ mode.label }}</span>
-                  <span class="mode-desc">{{ mode.desc }}</span>
+                  <span class="mode-title">{{ $t(mode.labelKey) }}</span>
+                  <span class="mode-desc">{{ $t(mode.descKey) }}</span>
                 </button>
               </div>
             </div>
             <div class="settings-section">
-              <div class="settings-section-title">面板外观</div>
+              <div class="settings-section-title">{{ $t('settings.appearance.panelAppearance') }}</div>
               <div class="setting-row">
-                <div class="setting-label">圆角大小</div>
+                <div class="setting-label">{{ $t('settings.appearance.cornerRadius') }}</div>
                 <div class="slider-row">
-                  <input type="range" min="0" max="40" aria-label="圆角大小" :value="settings.panel_radius" @input="(e) => update('panel_radius', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="0" max="40" :aria-label="$t('settings.appearance.cornerRadius')" :value="settings.panel_radius" @input="(e) => update('panel_radius', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_radius }}px</span>
                 </div>
               </div>
               <div class="setting-row">
-                  <div class="setting-label">不透明度</div>
+                  <div class="setting-label">{{ $t('settings.appearance.opacity') }}</div>
                 <div class="slider-row">
-                  <input type="range" min="60" max="100" aria-label="不透明度" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="60" max="100" :aria-label="$t('settings.appearance.opacity')" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_opacity }}%</span>
                 </div>
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">毛玻璃效果</div>
-                  <div class="setting-desc">默认关闭以降低开销；仅悬浮模式生效，窗口模式始终关闭</div>
+                  <div class="setting-label">{{ $t('settings.appearance.blur') }}</div>
+                  <div class="setting-desc">{{ $t('settings.appearance.blurDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -187,7 +187,7 @@
                 ></div>
               </div>
               <div class="setting-row">
-                <div class="setting-label">动画效果</div>
+                <div class="setting-label">{{ $t('settings.appearance.animation') }}</div>
                 <div
                   class="toggle"
                   :class="{ on: settings.enable_animation }"
@@ -200,9 +200,9 @@
                 ></div>
               </div>
               <div class="setting-row">
-                <div class="setting-label">字体大小</div>
+                <div class="setting-label">{{ $t('settings.appearance.fontSize') }}</div>
                 <div class="slider-row">
-                  <input type="range" min="11" max="18" aria-label="字体大小" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="11" max="18" :aria-label="$t('settings.appearance.fontSize')" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.font_size }}px</span>
                 </div>
               </div>
@@ -212,25 +212,25 @@
           <!-- History -->
           <template v-else-if="activeSection === 'history'">
             <div class="settings-section">
-              <div class="settings-section-title">历史记录</div>
+              <div class="settings-section-title">{{ $t('settings.history.title') }}</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">最大记录数</div>
-                  <div class="setting-desc">超出后自动清理旧记录</div>
+                  <div class="setting-label">{{ $t('settings.history.maxRecords') }}</div>
+                  <div class="setting-desc">{{ $t('settings.history.maxRecordsDesc') }}</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="100" max="10000" step="100" aria-label="最大记录数" :value="settings.max_records" @input="(e) => update('max_records', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="100" max="10000" step="100" :aria-label="$t('settings.history.maxRecords')" :value="settings.max_records" @input="(e) => update('max_records', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.max_records }}</span>
                 </div>
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">回收站保留天数</div>
-                  <div class="setting-desc">回收站内超过天数后永久删除（收藏、置顶除外）</div>
+                  <div class="setting-label">{{ $t('settings.history.retentionDays') }}</div>
+                  <div class="setting-desc">{{ $t('settings.history.retentionDaysDesc') }}</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="7" max="365" step="1" aria-label="回收站保留天数" :value="settings.retention_days" @input="(e) => update('retention_days', Number((e.target as HTMLInputElement).value))" />
-                  <span class="slider-value">{{ settings.retention_days }} 天</span>
+                  <input type="range" min="7" max="365" step="1" :aria-label="$t('settings.history.retentionDays')" :value="settings.retention_days" @input="(e) => update('retention_days', Number((e.target as HTMLInputElement).value))" />
+                  <span class="slider-value">{{ settings.retention_days }} {{ $t('common.days') }}</span>
                 </div>
               </div>
             </div>
@@ -239,11 +239,11 @@
           <!-- Tags -->
           <template v-else-if="activeSection === 'tags'">
             <div class="settings-section">
-              <div class="settings-section-title">自动打标</div>
+              <div class="settings-section-title">{{ $t('settings.tags.title') }}</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">根据内容自动打标签</div>
-                  <div class="setting-desc">新记录匹配规则时自动附加标签；类型或关键词命中其一即可</div>
+                  <div class="setting-label">{{ $t('settings.tags.autoTag') }}</div>
+                  <div class="setting-desc">{{ $t('settings.tags.autoTagDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -259,13 +259,13 @@
 
               <div v-if="settings.enable_auto_tag" class="auto-tag-panel">
                 <div class="auto-tag-panel-head">
-                  <div class="auto-tag-panel-title">匹配规则</div>
-                  <div class="auto-tag-panel-meta">{{ rulesDraft.length }} 条</div>
+                  <div class="auto-tag-panel-title">{{ $t('settings.tags.matchRules') }}</div>
+                  <div class="auto-tag-panel-meta">{{ $t('settings.tags.rulesCount', { count: rulesDraft.length }) }}</div>
                 </div>
 
                 <div v-if="rulesDraft.length === 0" class="auto-tag-empty">
                   <AppIcon name="tag" :size="18" />
-                  <p>暂无规则。添加后，新复制的内容会按规则自动打标。</p>
+                  <p>{{ $t('settings.tags.noRules') }}</p>
                 </div>
 
                 <div v-else class="auto-tag-rules">
@@ -280,12 +280,12 @@
                         :style="{ background: ruleAccentColor(rule.tag_name, index) }"
                         aria-hidden="true"
                       ></span>
-                      <span class="auto-tag-rule-index">规则 {{ index + 1 }}</span>
+                      <span class="auto-tag-rule-index">{{ $t('settings.tags.rule', { index: index + 1 }) }}</span>
                       <button
                         type="button"
                         class="auto-tag-remove"
-                        title="删除规则"
-                        aria-label="删除规则"
+                        :title="$t('settings.tags.deleteRule')"
+                        :aria-label="$t('settings.tags.deleteRule')"
                         @click="removeAutoTagRule(index)"
                       >
                         <AppIcon name="close" :size="12" />
@@ -293,21 +293,21 @@
                     </header>
 
                     <label class="auto-tag-field">
-                      <span class="auto-tag-field-label">标签名</span>
+                      <span class="auto-tag-field-label">{{ $t('settings.tags.tagName') }}</span>
                       <input
                         class="auto-tag-input"
                         :value="rule.tag_name"
-                        placeholder="例如：部署"
+                        :placeholder="$t('settings.tags.tagNamePlaceholder')"
                         @input="updateRuleField(index, 'tag_name', (($event.target as HTMLInputElement).value))"
                       />
                     </label>
 
                     <label class="auto-tag-field">
-                      <span class="auto-tag-field-label">关键词</span>
+                      <span class="auto-tag-field-label">{{ $t('settings.tags.keywords') }}</span>
                       <input
                         class="auto-tag-input auto-tag-input-mono"
                         :value="rule.keywords.join(', ')"
-                        placeholder="逗号分隔，如 deploy, docker"
+                        :placeholder="$t('settings.tags.keywordsPlaceholder')"
                         @change="updateRuleKeywords(index, ($event.target as HTMLInputElement).value)"
                       />
                       <div v-if="rule.keywords.length" class="auto-tag-keyword-chips" aria-hidden="true">
@@ -320,8 +320,8 @@
                     </label>
 
                     <div class="auto-tag-field">
-                      <span class="auto-tag-field-label">内容类型</span>
-                      <div class="auto-tag-type-chips" role="group" aria-label="内容类型">
+                      <span class="auto-tag-field-label">{{ $t('settings.tags.contentTypes') }}</span>
+                      <div class="auto-tag-type-chips" role="group" :aria-label="$t('settings.tags.contentTypes')">
                         <button
                           v-for="ct in CONTENT_TYPE_OPTIONS"
                           :key="ct.value"
@@ -333,7 +333,7 @@
                           @click="toggleRuleContentType(index, ct.value)"
                         >
                           <AppIcon :name="ct.icon" :size="12" />
-                          {{ ct.label }}
+                          {{ $t(ct.labelKey) }}
                         </button>
                       </div>
                     </div>
@@ -342,10 +342,10 @@
 
                 <div class="auto-tag-actions">
                   <button type="button" class="btn btn-secondary" @click="addAutoTagRule">
-                    <AppIcon name="plus" :size="13" /> 添加规则
+                    <AppIcon name="plus" :size="13" /> {{ $t('settings.tags.addRule') }}
                   </button>
                   <button type="button" class="btn btn-secondary" @click="restoreDefaultAutoTagRules">
-                    <AppIcon name="restore" :size="13" /> 恢复默认
+                    <AppIcon name="restore" :size="13" /> {{ $t('settings.tags.restoreDefaults') }}
                   </button>
                 </div>
               </div>
@@ -355,11 +355,11 @@
           <!-- Privacy -->
           <template v-else-if="activeSection === 'privacy'">
             <div class="settings-section">
-              <div class="settings-section-title">敏感内容</div>
+              <div class="settings-section-title">{{ $t('settings.privacy.sensitiveTitle') }}</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">自动检测敏感内容</div>
-                  <div class="setting-desc">检测密码、验证码等</div>
+                  <div class="setting-label">{{ $t('settings.privacy.autoDetect') }}</div>
+                  <div class="setting-desc">{{ $t('settings.privacy.autoDetectDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -374,27 +374,27 @@
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">自动过期时间</div>
-                  <div class="setting-desc">敏感内容自动删除</div>
+                  <div class="setting-label">{{ $t('settings.privacy.autoExpire') }}</div>
+                  <div class="setting-desc">{{ $t('settings.privacy.autoExpireDesc') }}</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="10" max="3600" step="10" aria-label="敏感内容自动过期秒数" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
-                  <span class="slider-value">{{ Math.floor(settings.sensitive_auto_expire_seconds / 60) }} 分钟</span>
+                  <input type="range" min="10" max="3600" step="10" :aria-label="$t('settings.privacy.autoExpire')" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
+                  <span class="slider-value">{{ $t('settings.privacy.autoExpireUnit', { minutes: Math.floor(settings.sensitive_auto_expire_seconds / 60) }) }}</span>
                 </div>
               </div>
             </div>
             <div class="settings-section">
-              <div class="settings-section-title">忽略应用</div>
+              <div class="settings-section-title">{{ $t('settings.privacy.ignoreTitle') }}</div>
               <div class="ignore-list">
                 <div v-for="app in settings.ignored_apps" :key="app" class="ignore-item">
                   <span class="ignore-icon"><AppIcon name="monitor" :size="14" /></span>
                   <span class="ignore-name">{{ app }}</span>
-                  <button type="button" class="ignore-remove" :aria-label="`移除 ${app}`" @click="removeIgnoredApp(app)"><AppIcon name="close" :size="12" /></button>
+                  <button type="button" class="ignore-remove" :aria-label="$t('settings.privacy.removeApp', { app })" @click="removeIgnoredApp(app)"><AppIcon name="close" :size="12" /></button>
                 </div>
               </div>
               <div class="ignore-add-row">
-                <input class="ignore-input" aria-label="忽略应用进程名" placeholder="输入应用进程名…" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
-                <button type="button" class="ignore-add-btn" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> 添加</button>
+                <input class="ignore-input" :aria-label="$t('settings.privacy.ignoreTitle')" :placeholder="$t('settings.privacy.ignorePlaceholder')" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
+                <button type="button" class="ignore-add-btn" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> {{ $t('settings.privacy.ignoreAdd') }}</button>
               </div>
             </div>
           </template>
@@ -404,24 +404,24 @@
             <div class="stats-dashboard">
               <div class="stats-card">
                 <div class="stats-value accent">{{ stats?.total_records ?? 0 }}</div>
-                <div class="stats-label">总记录</div>
+                <div class="stats-label">{{ $t('settings.stats.totalRecords') }}</div>
               </div>
               <div class="stats-card">
                 <div class="stats-value success">{{ stats?.total_copies ?? 0 }}</div>
-                <div class="stats-label">复制次数</div>
+                <div class="stats-label">{{ $t('settings.stats.totalCopies') }}</div>
               </div>
               <div class="stats-card">
                 <div class="stats-value warning">{{ stats?.favorites_count ?? 0 }}</div>
-                <div class="stats-label">收藏</div>
+                <div class="stats-label">{{ $t('settings.stats.favorites') }}</div>
               </div>
               <div class="stats-card">
                 <div class="stats-value sensitive">{{ stats?.sensitive_count ?? 0 }}</div>
-                <div class="stats-label">敏感</div>
+                <div class="stats-label">{{ $t('settings.stats.sensitive') }}</div>
               </div>
             </div>
 
             <div class="settings-section">
-              <div class="settings-section-title">类型分布</div>
+              <div class="settings-section-title">{{ $t('settings.stats.typeDistribution') }}</div>
               <div class="type-bars">
                 <div v-for="item in typeDistribution" :key="item.key" class="type-row">
                   <div class="type-row-label">
@@ -436,12 +436,12 @@
             </div>
 
             <div class="settings-section">
-              <div class="settings-section-title">存储</div>
+              <div class="settings-section-title">{{ $t('settings.stats.storage') }}</div>
               <div class="data-card storage-card">
                 <div class="storage-card-main">
-                  <div class="setting-label">本地存储占用</div>
+                  <div class="setting-label">{{ $t('settings.stats.localStorage') }}</div>
                   <div class="setting-desc">
-                    文本内容估算 + media 图片目录（不含 SQLite 索引开销）
+                    {{ $t('settings.stats.storageDesc') }}
                   </div>
                   <div
                     v-if="stats?.data_path"
@@ -459,37 +459,37 @@
           <!-- Data -->
           <template v-else-if="activeSection === 'data'">
             <div class="settings-section">
-              <div class="settings-section-title">数据管理</div>
+              <div class="settings-section-title">{{ $t('settings.data.title') }}</div>
               <div class="data-card">
                 <div>
-                  <div class="setting-label">导出记录</div>
-                  <div class="setting-desc">保存为 ClipVault JSON 备份文件，可再次导入</div>
+                  <div class="setting-label">{{ $t('settings.data.exportTitle') }}</div>
+                  <div class="setting-desc">{{ $t('settings.data.exportDesc') }}</div>
                 </div>
                 <button class="btn btn-secondary" :disabled="isExporting" @click="exportData">
                   <AppIcon v-if="!isExporting" name="package" :size="13" />
-                  {{ isExporting ? '导出中…' : '选择保存位置' }}
+                  {{ isExporting ? $t('settings.data.exporting') : $t('settings.data.exportBtn') }}
                 </button>
               </div>
               <div v-if="exportStatus" class="status-line" :class="exportStatusKind">{{ exportStatus }}</div>
 
               <div class="data-card">
                 <div>
-                  <div class="setting-label">导入记录</div>
-                  <div class="setting-desc">读取 JSON 备份，按内容 hash 自动跳过重复记录</div>
+                  <div class="setting-label">{{ $t('settings.data.importTitle') }}</div>
+                  <div class="setting-desc">{{ $t('settings.data.importDesc') }}</div>
                 </div>
                 <button class="btn btn-secondary" :disabled="isImporting" @click="importData">
                   <AppIcon v-if="!isImporting" name="history" :size="13" />
-                  {{ isImporting ? '导入中…' : '选择备份文件' }}
+                  {{ isImporting ? $t('settings.data.importing') : $t('settings.data.importBtn') }}
                 </button>
               </div>
               <div v-if="importStatus" class="status-line" :class="importStatusKind">{{ importStatus }}</div>
 
-              <div class="settings-section-title" style="margin-top: 1.25rem">WebDAV 同步</div>
+              <div class="settings-section-title" style="margin-top: 1.25rem">{{ $t('settings.data.webdavTitle') }}</div>
               <p class="setting-desc" style="margin: 0 0 0.75rem">
-                使用坚果云 / Nextcloud / 群晖等自备 WebDAV，多机合并剪贴板历史。不同步数据库文件与应用设置。
+                {{ $t('settings.data.webdavDesc') }}
               </p>
               <label class="webdav-field">
-                <span class="setting-label">服务器地址</span>
+                <span class="setting-label">{{ $t('settings.data.webdavUrl') }}</span>
                 <input
                   class="auto-tag-input"
                   type="url"
@@ -499,7 +499,7 @@
                 />
               </label>
               <label class="webdav-field">
-                <span class="setting-label">用户名</span>
+                <span class="setting-label">{{ $t('settings.data.webdavUsername') }}</span>
                 <input
                   class="auto-tag-input"
                   type="text"
@@ -509,7 +509,7 @@
                 />
               </label>
               <label class="webdav-field">
-                <span class="setting-label">密码 / 应用密码</span>
+                <span class="setting-label">{{ $t('settings.data.webdavPassword') }}</span>
                 <input
                   class="auto-tag-input"
                   type="password"
@@ -519,7 +519,7 @@
                 />
               </label>
               <label class="webdav-field">
-                <span class="setting-label">远端目录</span>
+                <span class="setting-label">{{ $t('settings.data.webdavRemotePath') }}</span>
                 <input
                   class="auto-tag-input"
                   type="text"
@@ -530,8 +530,8 @@
               </label>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">同步敏感内容</div>
-                  <div class="setting-desc">默认关闭；开启后敏感记录也会上传到 WebDAV</div>
+                  <div class="setting-label">{{ $t('settings.data.webdavSyncSensitive') }}</div>
+                  <div class="setting-desc">{{ $t('settings.data.webdavSyncSensitiveDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -549,32 +549,32 @@
               <div class="data-card webdav-actions">
                 <button class="btn btn-secondary" :disabled="webdavBusy" @click="webdavTest">
                   <AppIcon name="cloud" :size="13" />
-                  {{ webdavAction === 'test' ? '测试中…' : '测试连接' }}
+                  {{ webdavAction === 'test' ? $t('settings.data.webdavTesting') : $t('settings.data.webdavTest') }}
                 </button>
                 <button class="btn btn-secondary" :disabled="webdavBusy" @click="webdavPull">
                   <AppIcon name="cloudDownload" :size="13" />
-                  {{ webdavAction === 'pull' ? '拉取中…' : '拉取合并' }}
+                  {{ webdavAction === 'pull' ? $t('settings.data.webdavPulling') : $t('settings.data.webdavPull') }}
                 </button>
                 <button class="btn btn-secondary" :disabled="webdavBusy" @click="webdavPush">
                   <AppIcon name="cloudUpload" :size="13" />
-                  {{ webdavAction === 'push' ? '推送中…' : '推送' }}
+                  {{ webdavAction === 'push' ? $t('settings.data.webdavPushing') : $t('settings.data.webdavPush') }}
                 </button>
                 <button class="btn btn-primary" :disabled="webdavBusy" @click="webdavSyncNow">
                   <AppIcon name="refresh" :size="13" />
-                  {{ webdavAction === 'sync' ? '同步中…' : '立即同步' }}
+                  {{ webdavAction === 'sync' ? $t('settings.data.webdavSyncing') : $t('settings.data.webdavSync') }}
                 </button>
               </div>
               <div v-if="settings.webdav_last_sync_at" class="setting-desc">
-                上次同步：{{ formatSyncTime(settings.webdav_last_sync_at) }}
+                {{ $t('settings.data.lastSync', { time: formatSyncTime(settings.webdav_last_sync_at) }) }}
               </div>
               <div v-if="webdavStatus" class="status-line" :class="webdavStatusKind">{{ webdavStatus }}</div>
 
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">清理历史</div>
-                  <div class="setting-desc">手动清理所有记录</div>
+                  <div class="setting-label">{{ $t('settings.data.clearHistory') }}</div>
+                  <div class="setting-desc">{{ $t('settings.data.clearHistoryDesc') }}</div>
                 </div>
-                <button class="btn btn-danger" @click="clearHistory"><AppIcon name="trash" :size="13" /> 清空历史</button>
+                <button class="btn btn-danger" @click="clearHistory"><AppIcon name="trash" :size="13" /> {{ $t('settings.data.clearHistoryBtn') }}</button>
               </div>
             </div>
           </template>
@@ -582,11 +582,11 @@
           <!-- System -->
           <template v-else-if="activeSection === 'system'">
             <div class="settings-section">
-              <div class="settings-section-title">系统</div>
+              <div class="settings-section-title">{{ $t('settings.system.title') }}</div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">开机自启动</div>
-                  <div class="setting-desc">Windows 启动时自动运行</div>
+                  <div class="setting-label">{{ $t('settings.system.autoStart') }}</div>
+                  <div class="setting-desc">{{ $t('settings.system.autoStartDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -601,8 +601,8 @@
               </div>
               <div class="setting-row">
                 <div>
-                  <div class="setting-label">最小化到托盘</div>
-                  <div class="setting-desc">关闭按钮最小化而非退出</div>
+                  <div class="setting-label">{{ $t('settings.system.minimizeToTray') }}</div>
+                  <div class="setting-desc">{{ $t('settings.system.minimizeToTrayDesc') }}</div>
                 </div>
                 <div
                   class="toggle"
@@ -615,57 +615,89 @@
                   @keydown.space.prevent="update('minimize_to_tray', !settings.minimize_to_tray)"
                 ></div>
               </div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-label">{{ $t('settings.system.language') }}</div>
+                  <div class="setting-desc">{{ $t('settings.system.languageDesc') }}</div>
+                </div>
+                <div class="segmented">
+                  <button
+                    type="button"
+                    class="segment-btn"
+                    :class="{ selected: settings.language === 'zh-CN' }"
+                    @click="updateLanguage('zh-CN')"
+                  >
+                    {{ $t('settings.system.langZhCN') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="segment-btn"
+                    :class="{ selected: settings.language === 'en-US' }"
+                    @click="updateLanguage('en-US')"
+                  >
+                    {{ $t('settings.system.langEnUS') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="segment-btn"
+                    :class="{ selected: settings.language === 'system' }"
+                    @click="updateLanguage('system')"
+                  >
+                    {{ $t('settings.system.langSystem') }}
+                  </button>
+                </div>
+              </div>
             </div>
           </template>
 
           <!-- Help -->
           <template v-else-if="activeSection === 'help'">
             <div class="settings-section">
-              <div class="settings-section-title">使用指南</div>
+              <div class="settings-section-title">{{ $t('settings.help.title') }}</div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="keyboard" :size="14" /> 唤起面板</div>
-                <div class="guide-text">在任意应用中按下全局快捷键 <span class="guide-kbd">{{ settings.global_shortcut }}</span> 即可唤起剪贴板面板；可在“快捷键”中自定义。</div>
+                <div class="guide-heading"><AppIcon name="keyboard" :size="14" /> {{ $t('settings.help.invokePanel') }}</div>
+                <div class="guide-text">{{ $t('settings.help.invokePanelText', { shortcut: settings.global_shortcut }) }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="clipboard" :size="14" /> 自动记录</div>
-                <div class="guide-text">复制任意文本、链接、代码、图片或文件，内容会自动进入历史列表，无需手动保存。</div>
+                <div class="guide-heading"><AppIcon name="clipboard" :size="14" /> {{ $t('settings.help.autoRecord') }}</div>
+                <div class="guide-text">{{ $t('settings.help.autoRecordText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="paste" :size="14" /> 粘贴到当前应用</div>
-                <div class="guide-text">按 <span class="guide-kbd">Enter</span>、点行内/底栏「粘贴」或右键菜单选“粘贴”，会把内容写回系统剪贴板（图片优先以 PNG 格式写入），并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
+                <div class="guide-heading"><AppIcon name="paste" :size="14" /> {{ $t('settings.help.pasteToApp') }}</div>
+                <div class="guide-text">{{ $t('settings.help.pasteToAppText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="search" :size="14" /> 搜索与筛选</div>
-                <div class="guide-text">面板内按 <span class="guide-kbd">/</span> 或 <span class="guide-kbd">Ctrl + K</span> 快速聚焦搜索框（支持正文、来源与标签；短关键词也可搜）。左侧导航可按类型、收藏、标签筛选。独立窗口模式下，列表工具栏可切换排序（最新 / 最早 / 最近创建 / 粘贴最多；置顶仍优先）。</div>
+                <div class="guide-heading"><AppIcon name="search" :size="14" /> {{ $t('settings.help.searchFilter') }}</div>
+                <div class="guide-text">{{ $t('settings.help.searchFilterText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="star" :size="14" /> 收藏、置顶与标签</div>
-                <div class="guide-text">常用内容可收藏或置顶，不会被自动清理；也可手动为条目添加标签。开启「自动打标」（设置 → 标签，默认开）后，新记录会按内容类型或关键词规则打上标签（如链接、部署、前端）；可自定义规则。同一内容再次复制不会重复打标。</div>
+                <div class="guide-heading"><AppIcon name="star" :size="14" /> {{ $t('settings.help.favoritePinTag') }}</div>
+                <div class="guide-text">{{ $t('settings.help.favoritePinTagText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="shield" :size="14" /> 隐私保护</div>
-                <div class="guide-text">开启“自动检测敏感内容”后，密码、验证码等会被标记并在设定时间后自动删除；可在“隐私”中将密码管理器等应用加入忽略列表，不记录其剪贴板。</div>
+                <div class="guide-heading"><AppIcon name="shield" :size="14" /> {{ $t('settings.help.privacyProtection') }}</div>
+                <div class="guide-text">{{ $t('settings.help.privacyProtectionText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="trash" :size="14" /> 回收站与清理</div>
-                <div class="guide-text">删除的条目会进入回收站，超过“保留天数”后自动清除（收藏、置顶除外）；历史超过最大记录数时也会自动淘汰最旧的普通记录。</div>
+                <div class="guide-heading"><AppIcon name="trash" :size="14" /> {{ $t('settings.help.trashCleanup') }}</div>
+                <div class="guide-text">{{ $t('settings.help.trashCleanupText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="panel" :size="14" /> 两种应用模式</div>
-                <div class="guide-text">“悬浮面板”无边框置顶、失焦自动隐藏，适合快速粘贴（毛玻璃仅在此模式生效）；“独立窗口”带侧边栏与任务栏入口，适合长期管理（为降低合成开销自动关闭毛玻璃）。两种模式都会记住你上次调整的窗口大小。可在“外观”中切换。</div>
+                <div class="guide-heading"><AppIcon name="panel" :size="14" /> {{ $t('settings.help.appModes') }}</div>
+                <div class="guide-text">{{ $t('settings.help.appModesText') }}</div>
               </div>
 
               <div class="guide-block">
-                <div class="guide-heading"><AppIcon name="stats" :size="14" /> 数据与占用</div>
-                <div class="guide-text">设置 → 统计可查看记录概览、类型分布、本地存储占用估算，以及数据目录绝对路径（默认在 %LOCALAPPDATA%\ClipVault）。</div>
+                <div class="guide-heading"><AppIcon name="stats" :size="14" /> {{ $t('settings.help.dataUsage') }}</div>
+                <div class="guide-text">{{ $t('settings.help.dataUsageText') }}</div>
               </div>
             </div>
           </template>
@@ -678,8 +710,8 @@
                   <img :src="appIconUrl" alt="ClipVault" width="48" height="48" draggable="false" />
                 </div>
                 <div class="about-name">ClipVault</div>
-                <div class="about-version">版本 0.1.0</div>
-                <div class="about-desc">Windows 剪贴板管理工具 · Tauri + Vue 3 + Rust</div>
+                <div class="about-version">{{ $t('settings.about.version') }}</div>
+                <div class="about-desc">{{ $t('settings.about.desc') }}</div>
               </div>
             </div>
           </template>
@@ -691,6 +723,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
 import { useSettingsStore } from "../stores/settings";
 import { useClipboardStore } from "../stores/clipboard";
 import { useConfirm } from "../composables/useConfirm";
@@ -703,6 +736,7 @@ import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
 import appIconUrl from "../assets/app-icon-128.png";
 import { resolveKnownTagColors, resolveTagPalette } from "../utils/themeColors";
+import { setLocale, resolveLocale } from "../locales";
 
 const emit = defineEmits<{ close: [] }>();
 const props = defineProps<{
@@ -712,6 +746,7 @@ const settingsStore = useSettingsStore();
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const { t } = useI18n();
 const settings = settingsStore.settings;
 const isWindowMode = computed(() => settings.app_mode === "window");
 const stats = computed(() => clipboardStore.stats);
@@ -731,31 +766,31 @@ const webdavStatus = ref("");
 const webdavStatusKind = ref<"success" | "error" | "">("");
 
 const CONTENT_TYPE_OPTIONS = [
-  { value: "text", label: "文本", icon: "type" as AppIconName, color: "var(--type-text)" },
-  { value: "code", label: "代码", icon: "code" as AppIconName, color: "var(--type-code)" },
-  { value: "link", label: "链接", icon: "link" as AppIconName, color: "var(--type-link)" },
-  { value: "image", label: "图片", icon: "image" as AppIconName, color: "var(--type-image)" },
-  { value: "file", label: "文件", icon: "file" as AppIconName, color: "var(--type-file)" },
+  { value: "text", labelKey: "settings.tags.typeText", icon: "type" as AppIconName, color: "var(--type-text)" },
+  { value: "code", labelKey: "settings.tags.typeCode", icon: "code" as AppIconName, color: "var(--type-code)" },
+  { value: "link", labelKey: "settings.tags.typeLink", icon: "link" as AppIconName, color: "var(--type-link)" },
+  { value: "image", labelKey: "settings.tags.typeImage", icon: "image" as AppIconName, color: "var(--type-image)" },
+  { value: "file", labelKey: "settings.tags.typeFile", icon: "file" as AppIconName, color: "var(--type-file)" },
 ] as const;
 
-const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
-  { key: "appearance", icon: "palette", label: "外观" },
-  { key: "shortcuts", icon: "keyboard", label: "快捷键" },
-  { key: "history", icon: "history", label: "历史" },
-  { key: "tags", icon: "tag", label: "标签" },
-  { key: "privacy", icon: "shield", label: "隐私" },
-  { key: "system", icon: "settings", label: "系统" },
-  { key: "data", icon: "package", label: "数据" },
-  { key: "stats", icon: "stats", label: "统计" },
-  { key: "help", icon: "help", label: "帮助" },
-  { key: "about", icon: "info", label: "关于" },
+const SECTIONS: { key: string; icon: AppIconName; labelKey: string }[] = [
+  { key: "appearance", icon: "palette", labelKey: "settings.nav.appearance" },
+  { key: "shortcuts", icon: "keyboard", labelKey: "settings.nav.shortcuts" },
+  { key: "history", icon: "history", labelKey: "settings.nav.history" },
+  { key: "tags", icon: "tag", labelKey: "settings.nav.tags" },
+  { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy" },
+  { key: "system", icon: "settings", labelKey: "settings.nav.system" },
+  { key: "data", icon: "package", labelKey: "settings.nav.data" },
+  { key: "stats", icon: "stats", labelKey: "settings.nav.stats" },
+  { key: "help", icon: "help", labelKey: "settings.nav.help" },
+  { key: "about", icon: "info", labelKey: "settings.nav.about" },
 ];
 
-const THEMES: { key: Settings["theme"]; icon: AppIconName; label: string }[] = [
-  { key: "dark", icon: "moon", label: "深色" },
-  { key: "light", icon: "sun", label: "浅色" },
-  { key: "oled", icon: "circle", label: "深黑" },
-  { key: "system", icon: "monitor", label: "跟随系统" },
+const THEMES: { key: Settings["theme"]; icon: AppIconName; labelKey: string }[] = [
+  { key: "dark", icon: "moon", labelKey: "settings.appearance.themeDark" },
+  { key: "light", icon: "sun", labelKey: "settings.appearance.themeLight" },
+  { key: "oled", icon: "circle", labelKey: "settings.appearance.themeOled" },
+  { key: "system", icon: "monitor", labelKey: "settings.appearance.themeSystem" },
 ];
 
 function focusTheme(index: number) {
@@ -773,20 +808,20 @@ const APP_MODES = [
   {
     key: "floating",
     icon: "panel" as AppIconName,
-    label: "悬浮面板",
-    desc: "无边框置顶，失焦后自动隐藏，适合快速粘贴。",
+    labelKey: "settings.appearance.modeFloating",
+    descKey: "settings.appearance.modeFloatingDesc",
   },
   {
     key: "window",
     icon: "window" as AppIconName,
-    label: "独立窗口应用",
-    desc: "显示系统边框和任务栏，不会因失焦关闭，适合长期管理。",
+    labelKey: "settings.appearance.modeWindow",
+    descKey: "settings.appearance.modeWindowDesc",
   },
 ] as const;
 
 const PASTE_MODES = [
-  { key: "original", label: "原格式" },
-  { key: "plain", label: "纯文本" },
+  { key: "original", labelKey: "settings.shortcuts.pasteOriginal" },
+  { key: "plain", labelKey: "settings.shortcuts.pastePlain" },
 ] as const;
 
 const KEY_ALIASES: Record<string, string> = {
@@ -800,6 +835,11 @@ const KEY_ALIASES: Record<string, string> = {
 
 function update<K extends keyof Settings>(key: K, value: Settings[K]) {
   settingsStore.updateSetting(key, value);
+}
+
+function updateLanguage(lang: 'zh-CN' | 'en-US' | 'system') {
+  update('language', lang);
+  setLocale(resolveLocale(lang));
 }
 
 function cloneRules(rules: AutoTagRule[]): AutoTagRule[] {
@@ -910,11 +950,11 @@ function cssFallbackAccent(): string {
 function addIgnoredApp() {
   const name = newIgnoredApp.value.trim();
   if (!name) {
-    toast("请输入应用名称", "warning");
+    toast(t('settings.privacy.ignoreEmpty'), "warning");
     return;
   }
   if (settings.ignored_apps.includes(name)) {
-    toast("该应用已在忽略列表中", "warning");
+    toast(t('settings.privacy.ignoreDuplicate'), "warning");
     return;
   }
   const updated = [...settings.ignored_apps, name];
@@ -985,12 +1025,12 @@ function onShortcutKeydown(e: KeyboardEvent) {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  text: "文本",
-  code: "代码",
-  link: "链接",
-  image: "图片",
-  file: "文件",
-  sensitive: "敏感",
+  text: "settings.tags.typeText",
+  code: "settings.tags.typeCode",
+  link: "settings.tags.typeLink",
+  image: "settings.tags.typeImage",
+  file: "settings.tags.typeFile",
+  sensitive: "settings.stats.sensitive",
 };
 
 const typeDistribution = computed(() => {
@@ -1001,7 +1041,7 @@ const typeDistribution = computed(() => {
     return {
       key,
       count,
-      label: TYPE_LABELS[key] ?? key,
+      label: TYPE_LABELS[key] ? t(TYPE_LABELS[key]) : key,
       percent: Math.max(4, Math.round((count / total) * 100)),
     };
   });
@@ -1019,11 +1059,11 @@ async function exportData() {
     if (!path) return;
     // Backend streams JSON to disk — avoids holding the full export in JS/Rust heap.
     await invoke("export_data", { path });
-    exportStatus.value = "导出完成，备份文件已保存。";
+    exportStatus.value = t('settings.data.exportDone');
     exportStatusKind.value = "success";
   } catch (e) {
     console.error("Export failed:", e);
-    exportStatus.value = `导出失败：${String(e)}`;
+    exportStatus.value = t('settings.data.exportFailed', { error: String(e) });
     exportStatusKind.value = "error";
   } finally {
     isExporting.value = false;
@@ -1042,11 +1082,11 @@ async function importData() {
     if (!path || Array.isArray(path)) return;
     const imported = await invoke<number>("import_data_from_path", { path });
     await clipboardStore.loadRecords();
-    importStatus.value = `导入完成：新增 ${imported} 条记录。`;
+    importStatus.value = t('settings.data.importDone', { count: imported });
     importStatusKind.value = "success";
   } catch (e) {
     console.error("Import failed:", e);
-    importStatus.value = `导入失败：${String(e)}`;
+    importStatus.value = t('settings.data.importFailed', { error: String(e) });
     importStatusKind.value = "error";
   } finally {
     isImporting.value = false;
@@ -1073,10 +1113,10 @@ async function webdavTest() {
   try {
     await flushSettings();
     await invoke("webdav_test_connection");
-    webdavStatus.value = "连接成功。";
+    webdavStatus.value = t('settings.data.webdavConnected');
     webdavStatusKind.value = "success";
   } catch (e) {
-    webdavStatus.value = `连接失败：${String(e)}`;
+    webdavStatus.value = t('settings.data.webdavConnectFailed', { error: String(e) });
     webdavStatusKind.value = "error";
   } finally {
     webdavBusy.value = false;
@@ -1103,7 +1143,7 @@ async function runWebDav(
       await clipboardStore.loadStats();
     }
   } catch (e) {
-    webdavStatus.value = `${action === "pull" ? "拉取" : action === "push" ? "推送" : "同步"}失败：${String(e)}`;
+    webdavStatus.value = `${action === "pull" ? t('settings.data.webdavPullFailed', { error: String(e) }) : action === "push" ? t('settings.data.webdavPushFailed', { error: String(e) }) : t('settings.data.webdavSyncFailed', { error: String(e) })}`;
     webdavStatusKind.value = "error";
   } finally {
     webdavBusy.value = false;
@@ -1125,20 +1165,20 @@ async function webdavSyncNow() {
 
 async function clearHistory() {
   const ok = await confirm({
-    title: "清空历史",
-    message: "确定要清空所有历史记录吗？此操作不可恢复。",
-    confirmText: "清空",
-    cancelText: "取消",
+    title: t('confirm.clearHistoryTitle'),
+    message: t('confirm.clearHistoryMsg'),
+    confirmText: t('confirm.clearHistoryConfirm'),
+    cancelText: t('common.cancel'),
     danger: true,
   });
   if (!ok) return;
   try {
     await invoke("clear_history");
     await clipboardStore.loadRecords();
-    toast("历史已清空", "success");
+    toast(t('confirm.historyCleared'), "success");
   } catch (e) {
     console.error("Clear history failed:", e);
-    toast("清空失败", "error");
+    toast(t('confirm.clearHistoryFailed'), "error");
   }
 }
 

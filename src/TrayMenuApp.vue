@@ -27,6 +27,7 @@ import { LogicalSize } from "@tauri-apps/api/dpi";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import AppIcon from "./components/icons/AppIcon.vue";
 import { buildTrayMenuItems, type TrayMenuItemDef } from "./utils/trayMenuItems";
+import { setLocale, resolveLocale } from "./locales";
 
 interface TrayMenuState {
   paused: boolean;
@@ -34,6 +35,7 @@ interface TrayMenuState {
   enable_blur: boolean;
   enable_animation: boolean;
   panel_opacity: number;
+  language: string;
 }
 
 const MENU_WIDTH = 176;
@@ -73,6 +75,7 @@ function applyPaused(paused: boolean) {
 async function refreshState() {
   const state = await invoke<TrayMenuState>("get_tray_menu_state");
   applyChrome(state);
+  setLocale(resolveLocale(state.language));
   applyPaused(state.paused);
 }
 

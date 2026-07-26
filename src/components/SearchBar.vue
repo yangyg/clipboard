@@ -6,8 +6,8 @@
       v-model="query"
       class="search-box"
       type="text"
-      aria-label="搜索剪贴板"
-      :placeholder="compact ? '搜索剪贴板内容…' : '搜索剪贴板历史…'"
+      :aria-label="$t('search.ariaLabel')"
+      :placeholder="compact ? $t('search.placeholderCompact') : $t('search.placeholder')"
       @focus="isFocused = true"
       @blur="isFocused = false"
       @input="onInput"
@@ -19,13 +19,13 @@
       :class="{ dimmed: isFocused }"
       aria-hidden="true"
     >{{ searchHint }}</span>
-    <span v-if="clipboardStore.isSearching" class="search-spinner" aria-label="搜索中"></span>
+    <span v-if="clipboardStore.isSearching" class="search-spinner" :aria-label="$t('search.searching')"></span>
     <Transition name="fade-instant">
       <button
         v-if="query"
         type="button"
         class="clear-btn"
-        aria-label="清除搜索"
+        :aria-label="$t('search.clear')"
         @click="clearSearch"
       ><AppIcon name="close" :size="11" /></button>
     </Transition>

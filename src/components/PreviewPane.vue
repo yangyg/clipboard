@@ -3,40 +3,40 @@
     <!-- Header -->
     <div class="preview-header">
       <div class="preview-type-row">
-        <div class="preview-type-icon" :class="record.content_type" :title="`内容类型：${typeLabel}`">
+        <div class="preview-type-icon" :class="record.content_type" :title="$t('preview.contentType', { type: typeLabel })">
           <TypeIcon :type="record.content_type" :size="14" />
         </div>
         <div class="preview-heading">
-          <div class="preview-name" :title="`内容类型：${typeLabel}`">{{ typeLabel }}</div>
+          <div class="preview-name" :title="$t('preview.contentType', { type: typeLabel })">{{ typeLabel }}</div>
           <button
             v-if="!record.is_trashed"
             type="button"
             class="preview-alias-btn"
             :class="{ 'has-alias': !!recordAlias }"
-            :title="recordAlias ? '编辑别名' : '设置别名'"
+            :title="recordAlias ? $t('preview.editAlias') : $t('preview.setAlias')"
             @click="aliasDialogVisible = true"
           >
             <AppIcon name="edit" :size="11" />
-            <span>{{ recordAlias || "设置别名" }}</span>
+            <span>{{ recordAlias || $t('preview.setAlias') }}</span>
           </button>
           <div class="preview-meta-line">
             <SourceBadge :source-app="record.source_app" />
             <span class="meta-sep" aria-hidden="true">·</span>
-            <span :title="`创建时间：${formatDateTime(record.created_at)}`">{{ formatDateTime(record.created_at) }}</span>
+            <span :title="$t('preview.createdAt', { time: formatDateTime(record.created_at) })">{{ formatDateTime(record.created_at) }}</span>
             <template v-if="record.content_type === 'image' && record.width && record.height">
               <span class="meta-sep" aria-hidden="true">·</span>
-              <span :title="`尺寸：${record.width}×${record.height}`">{{ record.width }}×{{ record.height }}</span>
+              <span :title="$t('preview.dimensions', { w: record.width, h: record.height })">{{ record.width }}×{{ record.height }}</span>
             </template>
             <template v-else>
               <span class="meta-sep" aria-hidden="true">·</span>
-              <span :title="`字符数：${record.content_len ?? record.content.length}`">{{ record.content_len ?? record.content.length }} 字符</span>
+              <span :title="$t('preview.charCount', { count: record.content_len ?? record.content.length })">{{ record.content_len ?? record.content.length }} {{ $t('common.chars') }}</span>
             </template>
             <template v-if="record.content_html">
               <span class="meta-sep" aria-hidden="true">·</span>
-              <span title="格式：保留富文本">富文本</span>
+              <span :title="$t('preview.richTextTitle')">{{ $t('preview.richText') }}</span>
             </template>
             <span class="meta-sep" aria-hidden="true">·</span>
-            <span :title="`从本应用粘贴次数：${record.copy_count}`">粘贴 {{ record.copy_count }} 次</span>
+            <span :title="$t('preview.pasteCountTitle', { count: record.copy_count })">{{ $t('preview.pasteCount', { count: record.copy_count }) }}</span>
           </div>
         </div>
       </div>
@@ -45,9 +45,9 @@
     <!-- Sensitive Warning -->
     <div v-if="record.is_sensitive" class="sensitive-warning">
       <AppIcon name="warning" :size="14" />
-      <span>敏感内容</span>
+      <span>{{ $t('preview.sensitiveContent') }}</span>
       <span class="auto-expire" v-if="record.auto_expire_at">
-        {{ formatExpireTime(record.auto_expire_at) }} 后自动删除
+        {{ $t('preview.autoExpire', { time: formatExpireTime(record.auto_expire_at) }) }}
       </span>
     </div>
 
@@ -81,7 +81,7 @@
       <template v-else-if="record.content_type === 'link'">
         <div class="link-card">
           <div class="link-icon"><AppIcon name="link" :size="22" /></div>
-          <div class="link-title">网页链接</div>
+          <div class="link-title">{{ $t('preview.webLink') }}</div>
           <a
             v-if="safeLinkHref"
             class="link-url"
@@ -108,21 +108,21 @@
           <img
             v-if="imageSrc"
             :src="imageSrc"
-            alt="剪贴板图片"
+            :alt="$t('preview.clipboardImage')"
             class="image-thumb"
-            title="点击用系统查看器打开"
+            :title="$t('preview.clickToOpen')"
             loading="lazy"
             decoding="async"
             @click.stop="openImageExternally"
           />
-          <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> 暂无图片数据</div>
+          <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> {{ $t('preview.noImageData') }}</div>
         </div>
       </template>
     </div>
 
     <!-- Tags -->
     <div class="preview-tags">
-      <div class="tags-label">标签</div>
+      <div class="tags-label">{{ $t('preview.tags') }}</div>
       <div class="tags-list">
         <span
           v-for="tag in record.tags"
@@ -135,10 +135,10 @@
           <button
             class="tag-remove"
             @click.stop="removeTag(tag)"
-            title="移除标签"
+            :title="$t('preview.removeTag')"
           ><AppIcon name="close" :size="10" /></button>
         </span>
-        <button class="tag-add-btn" @click="openTagAssign"><AppIcon name="plus" :size="12" /> 添加标签</button>
+        <button class="tag-add-btn" @click="openTagAssign"><AppIcon name="plus" :size="12" /> {{ $t('preview.addTag') }}</button>
       </div>
     </div>
 
@@ -163,11 +163,11 @@
     <div class="preview-actions" v-if="record && !record.is_trashed">
       <button type="button" class="action-btn action-primary" @click="paste">
         <span class="action-icon"><AppIcon name="paste" :size="15" /></span>
-        <span class="action-label">粘贴</span>
+        <span class="action-label">{{ $t('preview.paste') }}</span>
       </button>
       <button type="button" class="action-btn" @click="pastePlain">
         <span class="action-icon"><AppIcon name="type" :size="15" /></span>
-        <span class="action-label">纯文本</span>
+        <span class="action-label">{{ $t('preview.plainText') }}</span>
       </button>
       <button
         type="button"
@@ -176,7 +176,7 @@
         @click="favorite"
       >
         <span class="action-icon"><AppIcon name="star" :size="15" :fill="record.is_favorite ? 'currentColor' : 'none'" /></span>
-        <span class="action-label">{{ record.is_favorite ? '已收藏' : '收藏' }}</span>
+        <span class="action-label">{{ record.is_favorite ? $t('preview.favorited') : $t('preview.favorite') }}</span>
       </button>
       <button
         type="button"
@@ -185,18 +185,18 @@
         @click="pin"
       >
         <span class="action-icon"><AppIcon name="pin" :size="15" :fill="pinnedDisplay ? 'currentColor' : 'none'" /></span>
-        <span class="action-label">{{ pinnedDisplay ? '已置顶' : '置顶' }}</span>
+        <span class="action-label">{{ pinnedDisplay ? $t('preview.pinned') : $t('preview.pin') }}</span>
       </button>
-      <button type="button" class="action-btn action-icon-only danger" aria-label="删除" title="删除" @click="del">
+      <button type="button" class="action-btn action-icon-only danger" :aria-label="$t('preview.deleteBtn')" :title="$t('preview.deleteBtn')" @click="del">
         <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
       </button>
     </div>
     <div class="preview-actions trash-actions" v-if="record && record.is_trashed">
       <button type="button" class="action-btn action-primary" @click="restore">
         <span class="action-icon"><AppIcon name="restore" :size="15" /></span>
-        <span class="action-label">恢复</span>
+        <span class="action-label">{{ $t('preview.restoreBtn') }}</span>
       </button>
-      <button type="button" class="action-btn action-icon-only danger" aria-label="永久删除" title="永久删除" @click="permanentDel">
+      <button type="button" class="action-btn action-icon-only danger" :aria-label="$t('preview.permanentDelete')" :title="$t('preview.permanentDelete')" @click="permanentDel">
         <span class="action-icon"><AppIcon name="trash" :size="15" /></span>
       </button>
     </div>
@@ -219,11 +219,13 @@ import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 import { escapeHtml, highlightSearchHtml } from "../utils/highlightSearch";
 import { parseClipboardColor } from "../utils/clipboardColor";
+import { useI18n } from "vue-i18n";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const { t } = useI18n();
 const record = computed(() => clipboardStore.selectedRecord);
 const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
 
@@ -248,7 +250,7 @@ async function openImageExternally() {
     await invoke("open_record_media", { id });
   } catch (e) {
     console.error("Open image failed:", e);
-    const msg = typeof e === "string" ? e : "无法用系统查看器打开";
+    const msg = typeof e === "string" ? e : t('preview.openImageFailed');
     toast(msg, "error");
   }
 }
@@ -319,19 +321,19 @@ const aliasDialogVisible = ref(false);
 
 const recordAlias = computed(() => (record.value?.alias ?? "").trim());
 
-const TYPE_LABELS: Record<string, string> = {
-  text: "纯文本",
-  code: "代码片段",
-  link: "链接",
-  image: "图片",
-  file: "文件路径",
-  sensitive: "敏感内容",
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  text: "preview.typeText",
+  code: "preview.typeCode",
+  link: "preview.typeLink",
+  image: "preview.typeImage",
+  file: "preview.typeFile",
+  sensitive: "preview.typeSensitive",
 };
 
 const typeLabel = computed(() => {
   if (!record.value) return "";
-  if (record.value.is_sensitive) return "敏感内容";
-  return TYPE_LABELS[record.value.content_type] ?? "文本片段";
+  if (record.value.is_sensitive) return t('preview.typeSensitive');
+  return t(TYPE_LABEL_KEYS[record.value.content_type] ?? 'preview.typeDefault');
 });
 
 const tagsByName = computed(() => {
@@ -410,16 +412,16 @@ onUnmounted(() => {
 /** Live countdown — always include seconds so the UI visibly ticks. */
 function formatExpireTime(iso: string): string {
   const ms = new Date(iso).getTime() - expireNow.value;
-  if (ms <= 0) return "已过期";
+  if (ms <= 0) return t('preview.expired');
   const totalSec = Math.ceil(ms / 1000);
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
-  if (m > 0) return `${m} 分 ${String(s).padStart(2, "0")} 秒`;
-  return `${s} 秒`;
+  if (m > 0) return `${m}:${String(s).padStart(2, "0")}`;
+  return `${s}s`;
 }
 
 function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
+  return new Date(iso).toLocaleString(undefined, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -434,9 +436,9 @@ async function paste() {
   const mode = settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original";
   try {
     await clipboardStore.pasteRecord(record.value.id, mode);
-    toast(mode === "plain" ? "已粘贴为纯文本" : "已粘贴", "success");
+    toast(mode === "plain" ? t('record.pastedPlain') : t('record.pasted'), "success");
   } catch {
-    toast("粘贴失败", "error");
+    toast(t('record.pasteFailed'), "error");
   }
 }
 
@@ -444,16 +446,16 @@ async function pastePlain() {
   if (!record.value) return;
   try {
     await clipboardStore.pasteRecord(record.value.id, "plain");
-    toast("已粘贴为纯文本", "success");
+    toast(t('record.pastedPlain'), "success");
   } catch {
-    toast("粘贴失败", "error");
+    toast(t('record.pasteFailed'), "error");
   }
 }
 
 async function favorite() {
   if (!record.value) return;
   const next = await clipboardStore.toggleFavorite(record.value.id);
-  if (next == null) toast("操作失败", "error");
+  if (next == null) toast(t('common.operationFailed'), "error");
 }
 
 async function pin() {
@@ -467,13 +469,13 @@ async function pin() {
   }
   const next = await clipboardStore.togglePin(id);
   pinOverride.value = null;
-  if (next == null) toast("操作失败", "error");
+  if (next == null) toast(t('common.operationFailed'), "error");
 }
 
 async function del() {
   if (!record.value) return;
   await clipboardStore.deleteRecord(record.value.id);
-  toast("已移到回收站", "success");
+  toast(t('record.deleted'), "success");
 }
 
 async function restore() {
@@ -484,14 +486,14 @@ async function restore() {
 async function permanentDel() {
   if (!record.value) return;
   const ok = await confirm({
-    title: "永久删除",
-    message: "确定要永久删除这条记录吗？此操作不可恢复。",
-    confirmText: "永久删除",
+    title: t('record.permanentDelete'),
+    message: t('record.permanentDeleteMsg'),
+    confirmText: t('record.permanentDelete'),
     danger: true,
   });
   if (ok) {
     await clipboardStore.permanentlyDeleteRecord(record.value.id);
-    toast("已永久删除", "success");
+    toast(t('record.deletedPermanently'), "success");
   }
 }
 </script>

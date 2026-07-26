@@ -14,27 +14,27 @@
               type="button"
               class="empty-trash-btn"
               @click="onEmptyTrash"
-            >清空回收站</button>
+            >{{ $t('listView.emptyTrashBtn') }}</button>
             <select
               class="list-sort"
               :value="clipboardStore.listSort"
-              title="列表排序"
-              aria-label="列表排序"
+              :title="$t('sort.listSort')"
+              :aria-label="$t('sort.listSort')"
               @change="onSortChange"
             >
               <option
                 v-for="opt in LIST_SORT_OPTIONS"
                 :key="opt.value"
                 :value="opt.value"
-              >{{ opt.label }}</option>
+              >{{ $t(opt.labelKey) }}</option>
             </select>
-            <div class="view-toggle" role="group" aria-label="视图切换">
+            <div class="view-toggle" role="group" :aria-label="$t('listView.listView')">
               <button
                 type="button"
                 class="view-toggle-btn"
                 :class="{ active: listLayout === 'list' }"
-                title="列表视图"
-                aria-label="列表视图"
+                :title="$t('listView.listView')"
+                :aria-label="$t('listView.listView')"
                 :aria-pressed="listLayout === 'list'"
                 @click="setListLayout('list')"
               ><AppIcon name="list" :size="14" /></button>
@@ -42,8 +42,8 @@
                 type="button"
                 class="view-toggle-btn"
                 :class="{ active: listLayout === 'grid' }"
-                title="网格视图"
-                aria-label="网格视图"
+                :title="$t('listView.gridView')"
+                :aria-label="$t('listView.gridView')"
                 :aria-pressed="listLayout === 'grid'"
                 @click="setListLayout('grid')"
               ><AppIcon name="grid" :size="14" /></button>
@@ -52,8 +52,8 @@
               type="button"
               class="list-tool-btn"
               :class="{ active: clipboardStore.batchMode }"
-              title="批量操作"
-              aria-label="批量操作"
+              :title="$t('panel.batch')"
+              :aria-label="$t('panel.batch')"
               :aria-pressed="clipboardStore.batchMode"
               @click="toggleBatchMode"
             ><AppIcon name="batch" :size="14" /></button>
@@ -68,7 +68,7 @@
       <!-- Loading (initial only) -->
       <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state">
         <div class="loading-spinner"></div>
-        <span>加载中…</span>
+        <span>{{ $t('common.loading') }}</span>
       </div>
 
       <!-- Empty -->
@@ -77,8 +77,8 @@
         <div class="empty-text">{{ emptyState.title }}</div>
         <div v-if="emptyState.hint" class="empty-hint">
           <template v-if="emptyState.clearSearch">
-            试试其他关键词，或
-            <button class="clear-link" @click="clipboardStore.search('')">清除搜索</button>
+            {{ $t('emptyState.tryOtherKeywords') }}
+            <button class="clear-link" @click="clipboardStore.search('')">{{ $t('common.clearSearch') }}</button>
           </template>
           <template v-else>{{ emptyState.hint }}</template>
         </div>
@@ -91,7 +91,7 @@
         :class="{ 'view-grid': listLayout === 'grid' }"
         ref="listRef"
         role="listbox"
-        aria-label="剪贴板记录"
+        :aria-label="$t('record.clipboardRecords')"
         :aria-activedescendant="activeDescendantId"
         tabindex="-1"
         @scroll="onListScroll"
@@ -103,7 +103,7 @@
         aria-hidden="true"
       />
       <template v-for="item in displayItems" :key="item.key">
-        <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> 置顶</div>
+        <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> {{ $t('record.pinnedSection') }}</div>
         <div
           v-else-if="item.type === 'divider'"
           class="pin-section-divider"
@@ -193,7 +193,7 @@
                 v-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height"
                 class="record-dims"
               >{{ item.record!.width }}×{{ item.record!.height }}</span>
-              <span v-if="item.record!.is_sensitive" class="record-sensitive">敏感</span>
+              <span v-if="item.record!.is_sensitive" class="record-sensitive">{{ $t('record.sensitive') }}</span>
             </div>
           </div>
 
@@ -202,31 +202,31 @@
               v-if="!clipboardStore.trashFilter"
               type="button"
               class="record-action-btn"
-              aria-label="粘贴"
-              title="粘贴"
+              :aria-label="$t('record.pasteLabel')"
+              :title="$t('record.pasteLabel')"
               @click="quickPaste(item.record!.id)"
             ><AppIcon name="paste" :size="13" /></button>
             <button
               type="button"
               class="record-action-btn"
               :class="{ starred: item.record!.is_favorite }"
-              :aria-label="item.record!.is_favorite ? '取消收藏' : '收藏'"
-              :title="item.record!.is_favorite ? '取消收藏' : '收藏'"
+              :aria-label="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
+              :title="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
               @click="clipboardStore.toggleFavorite(item.record!.id)"
             ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
             <button
               type="button"
               class="record-action-btn"
               :class="{ active: isPinned(item.record!) }"
-              :aria-label="isPinned(item.record!) ? '取消置顶' : '置顶'"
-              :title="isPinned(item.record!) ? '取消置顶' : '置顶'"
+              :aria-label="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
+              :title="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
               @click="scheduleTogglePin(item.record!)"
             ><AppIcon name="pin" :size="13" :fill="isPinned(item.record!) ? 'currentColor' : 'none'" /></button>
             <button
               type="button"
               class="record-action-btn danger"
-              :aria-label="clipboardStore.trashFilter ? '永久删除' : '删除'"
-              :title="clipboardStore.trashFilter ? '永久删除' : '删除'"
+              :aria-label="clipboardStore.trashFilter ? $t('record.permanentDelete') : $t('record.deleteRecord')"
+              :title="clipboardStore.trashFilter ? $t('record.permanentDelete') : $t('record.deleteRecord')"
               @click="quickDelete(item.record!)"
             ><AppIcon name="trash" :size="13" /></button>
           </div>
@@ -242,9 +242,9 @@
       <!-- Footer: load-more status only -->
       <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
         <span v-if="clipboardStore.isLoadingMore" class="footer-loading">
-          <span class="loading-spinner small" aria-hidden="true"></span>加载更多…
+          <span class="loading-spinner small" aria-hidden="true"></span>{{ $t('common.loadMore') }}
         </span>
-        <span v-else>继续滚动加载更多</span>
+        <span v-else>{{ $t('common.scrollForMore') }}</span>
       </div>
       </div>
     </div>
@@ -289,6 +289,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useBatchActions } from "../composables/useBatchActions";
 import { recordThumbSrc } from "../utils/mediaUrl";
+import { useI18n } from "vue-i18n";
 import {
   escapeHtml,
   highlightSearchHtml,
@@ -300,6 +301,7 @@ const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const { toggleBatchMode } = useBatchActions();
+const { t } = useI18n();
 const listRef = ref<HTMLElement | null>(null);
 
 /** Optimistic pin icon before list reorders (spec §3.3). */
@@ -326,7 +328,7 @@ async function scheduleTogglePin(record: ClipboardRecord) {
   const cleared = new Map(pinOverride.value);
   cleared.delete(record.id);
   pinOverride.value = cleared;
-  if (result == null) toast("操作失败", "error");
+  if (result == null) toast(t('common.operationFailed'), "error");
 }
 
 type ListLayout = "list" | "grid";
@@ -357,48 +359,48 @@ function setListLayout(mode: ListLayout) {
 /** Window mode: toolbar lives in the list column (not spanning the preview). */
 const showListChrome = computed(() => settingsStore.settings.app_mode === "window");
 
-const CATEGORY_TITLES: Record<string, string> = {
-  all: "全部",
-  text: "文本",
-  image: "图片",
-  file: "文件",
-  link: "链接",
-  code: "代码",
-  favorites: "收藏",
-  trash: "回收站",
+const CATEGORY_TITLE_KEYS: Record<string, string> = {
+  all: "category.all",
+  text: "category.text",
+  image: "category.image",
+  file: "category.file",
+  link: "category.link",
+  code: "category.code",
+  favorites: "category.favorites",
+  trash: "category.trash",
 };
 
 const categoryTitle = computed(() => {
-  if (clipboardStore.trashFilter) return "回收站";
+  if (clipboardStore.trashFilter) return t('category.trash');
   const typeKey = clipboardStore.activeFilter;
   const typePart =
-    typeKey !== "all" ? CATEGORY_TITLES[typeKey] ?? typeKey : null;
+    typeKey !== "all" ? t(CATEGORY_TITLE_KEYS[typeKey] ?? typeKey) : null;
   const tagPart = clipboardStore.activeTag;
   if (typePart && tagPart) return `${typePart} · ${tagPart}`;
   if (tagPart) return tagPart;
   if (typePart) return typePart;
-  return "全部剪贴板";
+  return t('category.all');
 });
 
 const listCountLabel = computed(() => {
   if (clipboardStore.searchQuery) {
     const n = clipboardStore.filteredRecords.length;
-    return clipboardStore.hasMore ? `已找到 ${n}+ 条` : `共 ${n} 条`;
+    return clipboardStore.hasMore ? t('record.countFound', { n }) : t('record.countTotal', { n });
   }
   if (clipboardStore.trashFilter) {
-    return `共 ${clipboardStore.trashCount} 条`;
+    return t('record.countTotal', { n: clipboardStore.trashCount });
   }
   if (clipboardStore.activeTag) {
     const n = clipboardStore.filteredRecords.length;
-    return clipboardStore.hasMore ? `已加载 ${n}+ 条` : `共 ${n} 条`;
+    return clipboardStore.hasMore ? t('record.countLoaded', { n }) : t('record.countTotal', { n });
   }
   if (clipboardStore.activeFilter === "favorites") {
-    return `共 ${clipboardStore.filterCounts.favorites} 条`;
+    return t('record.countTotal', { n: clipboardStore.filterCounts.favorites });
   }
   if (clipboardStore.activeFilter !== "all") {
-    return `共 ${clipboardStore.filterCounts[clipboardStore.activeFilter]} 条`;
+    return t('record.countTotal', { n: clipboardStore.filterCounts[clipboardStore.activeFilter] });
   }
-  return `共 ${clipboardStore.filterCounts.all} 条`;
+  return t('record.countTotal', { n: clipboardStore.filterCounts.all });
 });
 
 function onSortChange(e: Event) {
@@ -408,17 +410,17 @@ function onSortChange(e: Event) {
 
 async function onEmptyTrash() {
   const ok = await confirm({
-    title: "清空回收站",
-    message: "确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。",
-    confirmText: "清空",
+    title: t('confirm.emptyTrashTitle'),
+    message: t('confirm.emptyTrashMsg'),
+    confirmText: t('confirm.emptyTrashConfirm'),
     danger: true,
   });
   if (ok) {
     try {
       await clipboardStore.emptyTrash();
-      toast("回收站已清空", "success");
+      toast(t('confirm.trashEmptied'), "success");
     } catch {
-      toast("清空失败", "error");
+      toast(t('confirm.emptyFailed'), "error");
     }
   }
 }
@@ -504,12 +506,12 @@ onMounted(() => {
   void fillViewportIfNeeded();
 });
 
-const TYPE_LABELS: Record<string, string> = {
-  text: '文本',
-  code: '代码',
-  link: '链接',
-  image: '图片',
-  file: '文件',
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  text: 'filter.text',
+  code: 'filter.code',
+  link: 'filter.link',
+  image: 'filter.image',
+  file: 'filter.file',
 };
 
 function sourceLabelHtml(record: ClipboardRecord): string | undefined {
@@ -806,28 +808,28 @@ const virtualPadBottom = computed(() => {
 
 const emptyState = computed(() => {
   if (clipboardStore.searchQuery) {
-    return { icon: "search" as AppIconName, title: "没有找到匹配的结果", hint: "", clearSearch: true };
+    return { icon: "search" as AppIconName, title: t('emptyState.noResults'), hint: "", clearSearch: true };
   }
   if (clipboardStore.trashFilter) {
-    return { icon: "trash" as AppIconName, title: "回收站是空的", hint: "删除的记录会出现在这里", clearSearch: false };
+    return { icon: "trash" as AppIconName, title: t('emptyState.trashEmpty'), hint: t('emptyState.trashHint'), clearSearch: false };
   }
   if (clipboardStore.activeTag && clipboardStore.activeFilter !== "all") {
     const typeLabel =
       clipboardStore.activeFilter === "favorites"
-        ? "收藏"
-        : (TYPE_LABELS[clipboardStore.activeFilter] ?? clipboardStore.activeFilter);
+        ? t('filter.favorites')
+        : t(TYPE_LABEL_KEYS[clipboardStore.activeFilter] ?? clipboardStore.activeFilter);
     return {
       icon: "tag" as AppIconName,
-      title: `${typeLabel} · ${clipboardStore.activeTag} 下暂无记录`,
-      hint: "尝试取消其中一个筛选条件",
+      title: t('emptyState.tagFilterEmpty', { type: typeLabel, tag: clipboardStore.activeTag }),
+      hint: t('emptyState.tagFilterHint'),
       clearSearch: false,
     };
   }
   if (clipboardStore.activeTag) {
-    return { icon: "tag" as AppIconName, title: "该标签下暂无记录", hint: "可在预览区为记录添加标签", clearSearch: false };
+    return { icon: "tag" as AppIconName, title: t('emptyState.tagEmpty'), hint: t('emptyState.tagHint'), clearSearch: false };
   }
   if (clipboardStore.activeFilter === "favorites") {
-    return { icon: "star" as AppIconName, title: "还没有收藏", hint: "按 Ctrl+D 或点击星标收藏记录", clearSearch: false };
+    return { icon: "star" as AppIconName, title: t('emptyState.favoritesEmpty'), hint: t('emptyState.favoritesHint'), clearSearch: false };
   }
   if (clipboardStore.activeFilter !== "all") {
     const typeIconMap: Record<string, AppIconName> = {
@@ -835,12 +837,12 @@ const emptyState = computed(() => {
     };
     return {
       icon: typeIconMap[clipboardStore.activeFilter] ?? ("clipboard" as AppIconName),
-      title: `暂无${TYPE_LABELS[clipboardStore.activeFilter] ?? ""}记录`,
-      hint: "复制对应类型的内容后会出现在这里",
+      title: t('emptyState.typeEmpty', { type: t(TYPE_LABEL_KEYS[clipboardStore.activeFilter] ?? '') }),
+      hint: t('emptyState.typeHint'),
       clearSearch: false,
     };
   }
-  return { icon: "clipboard" as AppIconName, title: "暂无剪贴板记录", hint: "复制任意内容即可开始使用", clearSearch: false };
+  return { icon: "clipboard" as AppIconName, title: t('emptyState.allEmpty'), hint: t('emptyState.allHint'), clearSearch: false };
 });
 
 watch(
@@ -895,33 +897,33 @@ function closeAliasDialog() {
 const contextMenuItems = computed<ContextMenuItem[]>(() => {
   if (clipboardStore.trashFilter) {
     return [
-      { id: "restore", label: "恢复", icon: "restore" },
-      { id: "permanentDelete", label: "永久删除", icon: "trash", danger: true, separatorBefore: true },
+      { id: "restore", label: t('common.restore'), icon: "restore" },
+      { id: "permanentDelete", label: t('record.permanentDelete'), icon: "trash", danger: true, separatorBefore: true },
     ];
   }
   const rec = contextMenu.record;
   return [
-    { id: "paste", label: "粘贴", icon: "paste", shortcut: "Enter" },
-    { id: "pastePlain", label: "纯文本粘贴", icon: "type", shortcut: "Alt+V" },
+    { id: "paste", label: t('common.paste'), icon: "paste", shortcut: "Enter" },
+    { id: "pastePlain", label: t('common.pastePlain'), icon: "type", shortcut: "Alt+V" },
     {
       id: "favorite",
-      label: rec?.is_favorite ? "取消收藏" : "收藏",
+      label: rec?.is_favorite ? t('record.unfavorite') : t('record.favorite'),
       icon: "star",
       shortcut: "Ctrl+D",
       separatorBefore: true,
     },
     {
       id: "pin",
-      label: rec?.is_pinned ? "取消置顶" : "置顶",
+      label: rec?.is_pinned ? t('record.unpin') : t('record.pin'),
       icon: "pin",
       shortcut: "Ctrl+T",
     },
     {
       id: "alias",
-      label: rec?.alias?.trim() ? "编辑别名" : "设置别名",
+      label: rec?.alias?.trim() ? t('record.editAlias') : t('record.setAlias'),
       icon: "edit",
     },
-    { id: "delete", label: "删除", icon: "trash", shortcut: "Del", danger: true, separatorBefore: true },
+    { id: "delete", label: t('common.delete'), icon: "trash", shortcut: "Del", danger: true, separatorBefore: true },
   ];
 });
 
@@ -932,9 +934,9 @@ function recordAlias(record: ClipboardRecord): string {
 function contentPreview(record: ClipboardRecord): string {
   if (record.content_type === "image") {
     if (record.width && record.height) {
-      return `图片 ${record.width}×${record.height}`;
+      return t('record.imageLabel', { w: record.width, h: record.height });
     }
-    return "图片";
+    return t('record.imageOnly');
   }
   const maxLen = 80;
   if (record.content.length <= maxLen) return record.content;
@@ -972,23 +974,23 @@ function previewHtml(record: ClipboardRecord): string {
 async function quickPaste(id: number) {
   try {
     await clipboardStore.pasteRecord(id);
-    toast("已粘贴", "success");
+    toast(t('record.pasted'), "success");
   } catch {
-    toast("粘贴失败", "error");
+    toast(t('record.pasteFailed'), "error");
   }
 }
 
 async function quickDelete(record: ClipboardRecord) {
   if (clipboardStore.trashFilter) {
     const ok = await confirm({
-      title: "永久删除",
-      message: "确定要永久删除这条记录吗？此操作不可恢复。",
-      confirmText: "永久删除",
+      title: t('record.permanentDelete'),
+      message: t('record.permanentDeleteMsg'),
+      confirmText: t('record.permanentDelete'),
       danger: true,
     });
     if (ok) {
       await clipboardStore.permanentlyDeleteRecord(record.id);
-      toast("已永久删除", "success");
+      toast(t('record.deletedPermanently'), "success");
     }
     return;
   }
@@ -1001,7 +1003,7 @@ async function quickDelete(record: ClipboardRecord) {
   const cleared = new Set(leavingIds.value);
   cleared.delete(record.id);
   leavingIds.value = cleared;
-  toast("已移到回收站", "success");
+  toast(t('record.deleted'), "success");
 }
 
 let cachedNow = Date.now();
@@ -1023,10 +1025,10 @@ function formatTime(iso: string): string {
   const d = new Date(iso);
   const diffMs = getNow() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return "刚刚";
-  if (diffMin < 60) return `${diffMin} 分钟前`;
-  if (diffMin < 1440) return `${Math.floor(diffMin / 60)} 小时前`;
-  return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  if (diffMin < 1) return t('record.justNow');
+  if (diffMin < 60) return t('record.minutesAgo', { n: diffMin });
+  if (diffMin < 1440) return t('record.hoursAgo', { n: Math.floor(diffMin / 60) });
+  return d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
 }
 
 function onItemClick(id: number) {
@@ -1049,9 +1051,9 @@ async function onItemActivate(id: number) {
   }
   try {
     await clipboardStore.pasteRecord(id);
-    toast("已粘贴", "success");
+    toast(t('record.pasted'), "success");
   } catch {
-    toast("粘贴失败", "error");
+    toast(t('record.pasteFailed'), "error");
   }
 }
 
@@ -1070,24 +1072,24 @@ async function onContextSelect(id: string) {
   if (id === "paste") {
     try {
       await clipboardStore.pasteRecord(record.id);
-      toast("已粘贴", "success");
+      toast(t('record.pasted'), "success");
     } catch {
-      toast("粘贴失败", "error");
+      toast(t('record.pasteFailed'), "error");
     }
     return;
   }
   if (id === "pastePlain") {
     try {
       await clipboardStore.pasteRecord(record.id, "plain");
-      toast("已粘贴为纯文本", "success");
+      toast(t('record.pastedPlain'), "success");
     } catch {
-      toast("粘贴失败", "error");
+      toast(t('record.pasteFailed'), "error");
     }
     return;
   }
   if (id === "favorite") {
     const next = await clipboardStore.toggleFavorite(record.id);
-    if (next == null) toast("操作失败", "error");
+    if (next == null) toast(t('common.operationFailed'), "error");
     return;
   }
   if (id === "pin") {
@@ -1108,14 +1110,14 @@ async function onContextSelect(id: string) {
   }
   if (id === "permanentDelete") {
     const ok = await confirm({
-      title: "永久删除",
-      message: "确定要永久删除这条记录吗？此操作不可恢复。",
-      confirmText: "永久删除",
+      title: t('record.permanentDelete'),
+      message: t('record.permanentDeleteMsg'),
+      confirmText: t('record.permanentDelete'),
       danger: true,
     });
     if (ok) {
       await clipboardStore.permanentlyDeleteRecord(record.id);
-      toast("已永久删除", "success");
+      toast(t('record.deletedPermanently'), "success");
     }
   }
 }

@@ -24,11 +24,14 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { resolveSourceBadge } from "../utils/sourceBadge";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   sourceApp: string;
-  /** Full tooltip; defaults to `来源：{raw or 系统剪贴板}`. */
+  /** Full tooltip; defaults to `Source: {raw or System Clipboard}`. */
   title?: string;
   /** Pre-highlighted / escaped HTML for the label (search). */
   labelHtml?: string;
@@ -41,7 +44,7 @@ const badge = computed(() => resolveSourceBadge(props.sourceApp ?? ""));
 const resolvedTitle = computed(() => {
   if (props.title != null && props.title !== "") return props.title;
   const raw = (props.sourceApp || "").trim();
-  return `来源：${raw || "系统剪贴板"}`;
+  return t('record.sourceTooltip', { app: raw || t('record.systemClipboard') });
 });
 </script>
 

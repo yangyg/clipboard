@@ -1,13 +1,13 @@
 <template>
   <BaseDialog :open="visible" @close="$emit('close')">
     <div class="dialog-header">
-      <span class="dialog-title">{{ hasAlias ? "编辑别名" : "设置别名" }}</span>
-      <button type="button" class="dialog-close" aria-label="关闭" @click="$emit('close')">
+      <span class="dialog-title">{{ hasAlias ? $t('alias.editTitle') : $t('alias.setTitle') }}</span>
+      <button type="button" class="dialog-close" :aria-label="$t('common.close')" @click="$emit('close')">
         <AppIcon name="close" :size="14" />
       </button>
     </div>
     <div class="dialog-body">
-      <label class="field-label" for="alias-input">别名</label>
+      <label class="field-label" for="alias-input">{{ $t('alias.label') }}</label>
       <input
         id="alias-input"
         ref="aliasInput"
@@ -15,14 +15,14 @@
         class="field-input"
         type="text"
         maxlength="80"
-        placeholder="方便辨认的短名称（清空则删除）"
+        :placeholder="$t('alias.placeholder')"
         @keydown.enter="confirm"
       />
-      <p class="field-hint">不改变粘贴内容，最多 80 字</p>
+      <p class="field-hint">{{ $t('alias.hint') }}</p>
     </div>
     <div class="dialog-footer">
-      <button type="button" class="btn-cancel" @click="$emit('close')">取消</button>
-      <button type="button" class="btn-confirm" @click="confirm">保存</button>
+      <button type="button" class="btn-cancel" @click="$emit('close')">{{ $t('common.cancel') }}</button>
+      <button type="button" class="btn-confirm" @click="confirm">{{ $t('common.save') }}</button>
     </div>
   </BaseDialog>
 </template>
@@ -33,6 +33,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "../composables/useToast";
 import AppIcon from "./icons/AppIcon.vue";
 import BaseDialog from "./BaseDialog.vue";
+import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
   visible: boolean;
@@ -47,6 +48,7 @@ const emit = defineEmits<{
 
 const clipboardStore = useClipboardStore();
 const { toast } = useToast();
+const { t } = useI18n();
 
 const draft = ref("");
 const aliasInput = ref<HTMLInputElement | null>(null);
@@ -68,7 +70,7 @@ async function confirm() {
   if (props.recordId == null) return;
   const saved = await clipboardStore.setAlias(props.recordId, draft.value);
   if (saved === null) {
-    toast("保存别名失败", "error");
+    toast(t('alias.saveFailed'), "error");
     return;
   }
   emit("saved", saved);

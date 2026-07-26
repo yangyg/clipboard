@@ -1,13 +1,13 @@
 <template>
   <div class="capture-status" :class="{ compact }">
     <span class="live-dot" :class="{ paused: clipboardStore.pauseCapture }"></span>
-    <span class="status-text">{{ clipboardStore.pauseCapture ? '捕获已暂停' : '正在捕获剪贴板' }}</span>
+    <span class="status-text">{{ clipboardStore.pauseCapture ? $t('capture.paused') : $t('capture.capturing') }}</span>
     <button
       class="capture-toggle"
       :class="{ paused: clipboardStore.pauseCapture }"
       @click="clipboardStore.togglePauseCapture()"
     >
-      {{ clipboardStore.pauseCapture ? '恢复' : '暂停' }}
+      {{ clipboardStore.pauseCapture ? $t('capture.resume') : $t('capture.pause') }}
     </button>
   </div>
 </template>

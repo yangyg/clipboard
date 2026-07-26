@@ -11,11 +11,11 @@ export type ListSort =
   | "created_desc"
   | "copies_desc";
 
-export const LIST_SORT_OPTIONS: { value: ListSort; label: string }[] = [
-  { value: "updated_desc", label: "最新在前" },
-  { value: "updated_asc", label: "最早在前" },
-  { value: "created_desc", label: "最近创建" },
-  { value: "copies_desc", label: "粘贴最多" },
+export const LIST_SORT_OPTIONS: { value: ListSort; labelKey: string }[] = [
+  { value: "updated_desc", labelKey: "sort.updatedDesc" },
+  { value: "updated_asc", labelKey: "sort.updatedAsc" },
+  { value: "created_desc", labelKey: "sort.createdDesc" },
+  { value: "copies_desc", labelKey: "sort.copiesDesc" },
 ];
 
 const PAGE_SIZE = 60;

@@ -14,8 +14,8 @@
           type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.batchMode }"
-          title="批量操作"
-          aria-label="批量操作"
+          :title="$t('panel.batch')"
+          :aria-label="$t('panel.batch')"
           :aria-pressed="clipboardStore.batchMode"
           @click="toggleBatchMode"
         ><AppIcon name="batch" :size="15" /></button>
@@ -23,8 +23,8 @@
           type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.activeFilter === 'favorites' }"
-          title="收藏"
-          aria-label="收藏"
+          :title="$t('panel.favorites')"
+          :aria-label="$t('panel.favorites')"
           :aria-pressed="clipboardStore.activeFilter === 'favorites'"
           @click="clipboardStore.setFilter(clipboardStore.activeFilter === 'favorites' ? 'all' : 'favorites')"
         ><AppIcon name="star" :size="15" :fill="clipboardStore.activeFilter === 'favorites' ? 'currentColor' : 'none'" /></button>
@@ -32,12 +32,12 @@
           type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.trashFilter }"
-          title="回收站"
-          aria-label="回收站"
+          :title="$t('panel.trash')"
+          :aria-label="$t('panel.trash')"
           :aria-pressed="clipboardStore.trashFilter"
           @click="toggleTrash"
         ><AppIcon name="trash" :size="15" /></button>
-        <button type="button" class="icon-btn" title="设置" aria-label="设置" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
+        <button type="button" class="icon-btn" :title="$t('panel.settings')" :aria-label="$t('panel.settings')" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
       </div>
     </div>
 
@@ -50,17 +50,17 @@
         :class="{ active: clipboardStore.activeFilter === tab.key }"
         @click="clipboardStore.setFilter(tab.key)"
       >
-        {{ tab.label }}
+        {{ $t(tab.labelKey) }}
         <span class="filter-count">{{ clipboardStore.filterCounts[tab.key] }}</span>
       </button>
     </div>
     <div v-else class="trash-banner">
-      <span>回收站 · {{ clipboardStore.trashCount }} 项</span>
+      <span>{{ $t('panel.trashBanner', { count: clipboardStore.trashCount }) }}</span>
       <button
         v-if="clipboardStore.trashCount > 0"
         class="empty-trash-link"
         @click="onEmptyTrash"
-      >清空</button>
+      >{{ $t('panel.emptyTrash') }}</button>
     </div>
 
     <!-- Body -->
@@ -86,6 +86,9 @@ import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useBatchActions } from "../composables/useBatchActions";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   openSettings: [];
@@ -102,13 +105,13 @@ useClipboardHotkeys({
   allowCloseOnEscape: true,
 });
 
-const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: "all", label: "全部" },
-  { key: "text", label: "文本" },
-  { key: "code", label: "代码" },
-  { key: "link", label: "链接" },
-  { key: "image", label: "图片" },
-  { key: "file", label: "文件" },
+const FILTER_TABS: { key: FilterTab; labelKey: string }[] = [
+  { key: "all", labelKey: "filter.all" },
+  { key: "text", labelKey: "filter.text" },
+  { key: "code", labelKey: "filter.code" },
+  { key: "link", labelKey: "filter.link" },
+  { key: "image", labelKey: "filter.image" },
+  { key: "file", labelKey: "filter.file" },
 ];
 
 async function toggleTrash() {
@@ -123,17 +126,17 @@ async function toggleTrash() {
 
 async function onEmptyTrash() {
   const ok = await confirm({
-    title: "清空回收站",
-    message: "确定要清空回收站吗？所有已删除的记录将被永久删除，此操作不可恢复。",
-    confirmText: "清空",
+    title: t('confirm.emptyTrashTitle'),
+    message: t('confirm.emptyTrashMsg'),
+    confirmText: t('confirm.emptyTrashConfirm'),
     danger: true,
   });
   if (ok) {
     try {
       await clipboardStore.emptyTrash();
-      toast("回收站已清空", "success");
+      toast(t('confirm.trashEmptied'), "success");
     } catch {
-      toast("清空失败", "error");
+      toast(t('confirm.emptyFailed'), "error");
     }
   }
 }

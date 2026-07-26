@@ -36,6 +36,7 @@ import { useClipboardStore } from "./stores/clipboard";
 import { useSettingsStore } from "./stores/settings";
 import { storeToRefs } from "pinia";
 import { isPasteFocusLock, setPasteFocusLock } from "./composables/pasteFocusLock";
+import { setLocale, resolveLocale } from "./locales";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -138,6 +139,7 @@ onUnmounted(() => {
 onMounted(async () => {
   // Load settings
   await settingsStore.loadSettings();
+  setLocale(resolveLocale(settings.value.language));
   await applyAppMode();
 
   // showPanel() loads records once (avoid a duplicate get_records on cold start)
@@ -241,6 +243,13 @@ onMounted(async () => {
       await applyAppMode();
       await appWindow.show();
       await appWindow.setFocus();
+    }
+  );
+
+  watch(
+    () => settings.value.language,
+    (lang) => {
+      setLocale(resolveLocale(lang));
     }
   );
 });

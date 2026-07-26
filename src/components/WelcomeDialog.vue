@@ -8,22 +8,18 @@
     @close="emit('complete')"
   >
     <div class="dialog-header">
-      <span id="welcome-title" class="dialog-title">欢迎使用 ClipVault</span>
+      <span id="welcome-title" class="dialog-title">{{ $t('welcome.title') }}</span>
     </div>
     <div class="dialog-body">
       <ol id="welcome-desc" class="welcome-steps">
-        <li>
-          用全局快捷键
-          <kbd class="kbd">{{ shortcut }}</kbd>
-          唤起面板
-        </li>
-        <li>选一条记录，回车或点粘贴</li>
-        <li>托盘图标右键：打开面板 / 设置 / 退出</li>
+        <li>{{ $t('welcome.step1', { shortcut }) }}</li>
+        <li>{{ $t('welcome.step2') }}</li>
+        <li>{{ $t('welcome.step3') }}</li>
       </ol>
     </div>
     <div class="dialog-footer">
       <button class="btn-confirm" type="button" @click="emit('complete')">
-        开始使用
+        {{ $t('welcome.start') }}
       </button>
     </div>
   </BaseDialog>

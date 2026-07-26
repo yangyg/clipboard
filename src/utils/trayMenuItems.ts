@@ -1,4 +1,5 @@
 import type { AppIconName } from "../components/icons/AppIcon.vue";
+import { i18n } from "../locales";
 
 export interface TrayMenuItemDef {
   id: "show" | "pause" | "settings" | "quit";
@@ -9,14 +10,15 @@ export interface TrayMenuItemDef {
 }
 
 export function buildTrayMenuItems(paused: boolean): TrayMenuItemDef[] {
+  const t = i18n.global.t;
   return [
-    { id: "show", label: "打开面板", icon: "panel" },
+    { id: "show", label: t("tray.openPanel"), icon: "panel" },
     {
       id: "pause",
-      label: paused ? "恢复捕获" : "暂停捕获",
+      label: paused ? t("tray.resumeCapture") : t("tray.pauseCapture"),
       icon: paused ? "play" : "pause",
     },
-    { id: "settings", label: "设置", icon: "settings", separatorBefore: true },
-    { id: "quit", label: "退出", icon: "close", danger: true, separatorBefore: true },
+    { id: "settings", label: t("tray.settings"), icon: "settings", separatorBefore: true },
+    { id: "quit", label: t("tray.quit"), icon: "close", danger: true, separatorBefore: true },
   ];
 }

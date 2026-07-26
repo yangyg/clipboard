@@ -109,6 +109,10 @@ fn default_webdav_remote_path() -> String {
     "ClipVaultSync".to_string()
 }
 
+fn default_language() -> String {
+    "system".to_string()
+}
+
 /// L-3: Default auto-tag rules for new installs.
 /// IMPORTANT: Keep in sync with `DEFAULT_AUTO_TAG_RULES` in src/types.ts.
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
@@ -203,6 +207,9 @@ pub struct Settings {
         rename = "onboarding_completed"
     )]
     pub onboarding_completed: bool,
+    // --- UI language preference ---
+    #[serde(default = "default_language", rename = "language")]
+    pub language: String,
     // --- WebDAV sync (credentials stay local; never part of JSON export) ---
     #[serde(default, rename = "webdav_url")]
     pub webdav_url: String,
@@ -251,6 +258,7 @@ impl Default for Settings {
             enable_auto_tag: true,
             auto_tag_rules: default_auto_tag_rules(),
             onboarding_completed: false,
+            language: default_language(),
             webdav_url: String::new(),
             webdav_username: String::new(),
             webdav_password: String::new(),

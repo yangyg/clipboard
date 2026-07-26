@@ -54,12 +54,14 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
+import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
+const { t } = useI18n();
 const appWindow = getCurrentWindow();
 
 defineEmits<{
@@ -134,16 +136,16 @@ function onTagDialogClose() {
 
 async function onDeleteTag(tag: Tag) {
   const ok = await confirm({
-    title: "删除标签",
-    message: `确定删除标签「${tag.name}」吗？已关联的记录将移除该标签，此操作不可恢复。`,
-    confirmText: "删除",
+    title: t('sidebar.deleteTagTitle'),
+    message: t('sidebar.deleteTagMsg', { name: tag.name }),
+    confirmText: t('common.delete'),
     danger: true,
   });
   if (!ok) return;
   try {
     await clipboardStore.deleteTag(tag.id);
   } catch {
-    toast("删除失败", "error");
+    toast(t('sidebar.deleteTagFailed'), "error");
   }
 }
 

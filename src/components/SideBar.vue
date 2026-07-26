@@ -1,8 +1,8 @@
 <template>
   <aside class="sidebar">
     <!-- Navigation: Categories (includes favorites as a view filter) -->
-    <nav class="sidebar-section" aria-label="分类">
-      <div class="sidebar-label">分类</div>
+    <nav class="sidebar-section" :aria-label="$t('sidebar.categories')">
+      <div class="sidebar-label">{{ $t('sidebar.categories') }}</div>
       <button
         v-for="item in categoryItems"
         :key="item.key"
@@ -31,25 +31,25 @@
     </nav>
 
     <!-- Trash: separate from categories / favorites -->
-    <nav class="sidebar-section" aria-label="回收站">
+    <nav class="sidebar-section" :aria-label="$t('sidebar.trash')">
       <button
         type="button"
         class="nav-item"
         :class="{ active: props.activeCategory === 'trash' }"
         :aria-current="props.activeCategory === 'trash' ? 'page' : undefined"
-        title="回收站"
-        aria-label="回收站"
+        :title="$t('sidebar.trash')"
+        :aria-label="$t('sidebar.trash')"
         @click="selectCategory('trash')"
       >
         <span class="nav-icon"><AppIcon name="trash" :size="15" /></span>
-        <span class="nav-label">回收站</span>
+        <span class="nav-label">{{ $t('sidebar.trash') }}</span>
         <span class="nav-count">{{ clipboardStore.trashCount }}</span>
       </button>
     </nav>
 
     <!-- Tags Section -->
     <div class="sidebar-section sidebar-tags-section">
-      <div class="sidebar-label">标签管理</div>
+      <div class="sidebar-label">{{ $t('sidebar.tagManagement') }}</div>
       <div class="tags-list" role="list">
         <button
           v-for="tag in primaryTags"
@@ -68,7 +68,7 @@
           <span
             v-if="tag.is_auto"
             class="tag-auto-icon"
-            title="自动打标规则创建"
+            :title="$t('sidebar.autoTagCreated')"
             aria-hidden="true"
           ><AppIcon name="sparkles" :size="11" /></span>
           <span class="tag-count">{{ tag.count }}</span>
@@ -79,10 +79,10 @@
             type="button"
             class="tag-more-toggle"
             :aria-expanded="moreTagsOpen"
-            :aria-label="moreTagsOpen ? `收起空标签，共 ${moreTags.length} 个` : `更多空标签，共 ${moreTags.length} 个`"
+            :aria-label="moreTagsOpen ? $t('sidebar.collapse') : $t('sidebar.more')"
             @click="moreTagsOpen = !moreTagsOpen"
           >
-            <span class="tag-more-label">{{ moreTagsOpen ? "收起" : "更多" }}</span>
+            <span class="tag-more-label">{{ moreTagsOpen ? $t('sidebar.collapse') : $t('sidebar.more') }}</span>
             <span class="tag-more-meta">{{ moreTags.length }}</span>
           </button>
           <template v-if="moreTagsOpen">
@@ -103,7 +103,7 @@
               <span
                 v-if="tag.is_auto"
                 class="tag-auto-icon"
-                title="自动打标规则创建"
+                :title="$t('sidebar.autoTagCreated')"
                 aria-hidden="true"
               ><AppIcon name="sparkles" :size="11" /></span>
               <span class="tag-count">{{ tag.count }}</span>
@@ -111,8 +111,8 @@
           </template>
         </template>
       </div>
-        <button type="button" class="tag-add" title="新建标签" aria-label="新建标签" @click="$emit('addTag')">
-        <AppIcon name="plus" :size="13" /> <span class="tag-add-label">新建标签</span>
+        <button type="button" class="tag-add" :title="$t('sidebar.newTag')" :aria-label="$t('sidebar.newTag')" @click="$emit('addTag')">
+        <AppIcon name="plus" :size="13" /> <span class="tag-add-label">{{ $t('sidebar.newTag') }}</span>
       </button>
     </div>
 
@@ -125,8 +125,8 @@
         :class="{ 'sidebar-icon-btn-warning': clipboardStore.pauseCapture }"
         aria-haspopup="menu"
         :aria-expanded="quickMenu.visible"
-        aria-label="快捷菜单"
-        title="主题与监控"
+        :aria-label="$t('sidebar.quickMenu')"
+        :title="$t('sidebar.themeAndCapture')"
         @click="toggleQuickMenu"
       >
         <AppIcon name="menu" :size="15" />
@@ -134,8 +134,8 @@
       <button
         type="button"
         class="sidebar-icon-btn"
-        aria-label="设置"
-        title="设置"
+        :aria-label="$t('sidebar.settings')"
+        :title="$t('sidebar.settings')"
         @click="$emit('openSettings')"
       >
         <AppIcon name="settings" :size="15" />
@@ -176,10 +176,12 @@ import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
 import type { WebDavSyncResult } from "../types";
+import { useI18n } from "vue-i18n";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { toast } = useToast();
+const { t } = useI18n();
 
 const props = defineProps<{
   activeCategory?: string;
@@ -211,11 +213,11 @@ const moreTags = computed(() =>
 );
 
 function tagTitle(tag: Tag): string {
-  return tag.is_auto ? `${tag.name}（自动打标规则创建）` : tag.name;
+  return tag.is_auto ? `${tag.name}（${t('sidebar.autoTagCreated')}）` : tag.name;
 }
 
 function tagAriaLabel(tag: Tag): string {
-  return tag.is_auto ? `${tag.name}，自动打标规则创建` : tag.name;
+  return tag.is_auto ? `${tag.name}，${t('sidebar.autoTagCreated')}` : tag.name;
 }
 
 const tagMenu = reactive({
@@ -225,19 +227,19 @@ const tagMenu = reactive({
   tag: null as Tag | null,
 });
 
-const tagMenuItems: ContextMenuItem[] = [
-  { id: "edit", label: "编辑", icon: "edit" },
-  { id: "delete", label: "删除", icon: "trash", danger: true, separatorBefore: true },
-];
+const tagMenuItems = computed<ContextMenuItem[]>(() => [
+  { id: "edit", label: t('sidebar.editTag'), icon: "edit" },
+  { id: "delete", label: t('sidebar.deleteTag'), icon: "trash", danger: true, separatorBefore: true },
+]);
 
 const categoryItems = computed(() => [
-  { key: "all", icon: "clipboard" as AppIconName, label: "全部剪贴板", count: clipboardStore.filterCounts.all },
-  { key: "text", icon: "type" as AppIconName, label: "文本", count: clipboardStore.filterCounts.text, color: "var(--type-text)" },
-  { key: "image", icon: "image" as AppIconName, label: "图片", count: clipboardStore.filterCounts.image, color: "var(--type-image)" },
-  { key: "file", icon: "file" as AppIconName, label: "文件", count: clipboardStore.filterCounts.file, color: "var(--type-file)" },
-  { key: "link", icon: "link" as AppIconName, label: "链接", count: clipboardStore.filterCounts.link, color: "var(--type-link)" },
-  { key: "code", icon: "code" as AppIconName, label: "代码", count: clipboardStore.filterCounts.code, color: "var(--type-code)" },
-  { key: "favorites", icon: "star" as AppIconName, label: "收藏夹", count: clipboardStore.filterCounts.favorites, color: "var(--warning)" },
+  { key: "all", icon: "clipboard" as AppIconName, label: t('category.all'), count: clipboardStore.filterCounts.all },
+  { key: "text", icon: "type" as AppIconName, label: t('category.text'), count: clipboardStore.filterCounts.text, color: "var(--type-text)" },
+  { key: "image", icon: "image" as AppIconName, label: t('category.image'), count: clipboardStore.filterCounts.image, color: "var(--type-image)" },
+  { key: "file", icon: "file" as AppIconName, label: t('category.file'), count: clipboardStore.filterCounts.file, color: "var(--type-file)" },
+  { key: "link", icon: "link" as AppIconName, label: t('category.link'), count: clipboardStore.filterCounts.link, color: "var(--type-link)" },
+  { key: "code", icon: "code" as AppIconName, label: t('category.code'), count: clipboardStore.filterCounts.code, color: "var(--type-code)" },
+  { key: "favorites", icon: "star" as AppIconName, label: t('category.favorites'), count: clipboardStore.filterCounts.favorites, color: "var(--warning)" },
 ]);
 
 function selectCategory(key: string) {
@@ -286,28 +288,28 @@ const quickMenuAnchorEl = ref<HTMLElement | null>(null);
 const quickMenuItems = computed<ContextMenuItem[]>(() => [
   {
     id: "theme-toggle",
-    label: "外观",
+    label: t('sidebar.appearance'),
     icon: "palette",
     toggle: {
       value: settingsStore.settings.theme !== "light",
-      labels: ["浅色", "深色"],
+      labels: [t('sidebar.light'), t('sidebar.dark')],
     },
   },
   {
     id: "capture-toggle",
-    label: clipboardStore.pauseCapture ? "恢复捕获" : "暂停捕获",
+    label: clipboardStore.pauseCapture ? t('sidebar.resumeCapture') : t('sidebar.pauseCapture'),
     icon: (clipboardStore.pauseCapture ? "play" : "pause") as AppIconName,
     separatorBefore: true,
   },
   {
     id: "webdav-sync",
-    label: webdavSyncing.value ? "同步中…" : "WebDAV 同步",
+    label: webdavSyncing.value ? t('sidebar.syncing') : t('sidebar.webdavSync'),
     icon: "cloud",
     separatorBefore: true,
   },
   {
     id: "help",
-    label: "帮助",
+    label: t('sidebar.help'),
     icon: "help",
   },
 ]);
@@ -358,7 +360,7 @@ function isWebDavConfigured(): boolean {
 async function webdavSync() {
   if (webdavSyncing.value) return;
   if (!isWebDavConfigured()) {
-    toast("请先在设置中配置 WebDAV 同步", "warning");
+    toast(t('sidebar.webdavNotConfigured'), "warning");
     quickMenu.visible = false;
     emit("openSettings", "data");
     return;
@@ -370,9 +372,9 @@ async function webdavSync() {
     await settingsStore.loadSettings();
     await clipboardStore.loadRecords();
     await clipboardStore.loadStats();
-    toast(result.message || "WebDAV 同步完成", "success");
+    toast(result.message || t('sidebar.webdavSyncDone'), "success");
   } catch (e) {
-    toast(`WebDAV 同步失败：${String(e)}`, "error");
+    toast(t('sidebar.webdavSyncFailed', { error: String(e) }), "error");
     quickMenu.visible = false;
     emit("openSettings", "data");
   } finally {

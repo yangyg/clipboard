@@ -2,19 +2,19 @@
   <div class="batch-bar">
     <div class="batch-info">
       <AppIcon name="batch" :size="13" />
-      已选择 <strong>{{ clipboardStore.selectedIds.size }}</strong> 项
+      {{ $t('batch.selected', { count: clipboardStore.selectedIds.size }) }}
     </div>
     <div class="batch-actions">
       <button type="button" class="batch-btn" @click="batchCopy">
-        <AppIcon name="copy" :size="13" /> 复制
+        <AppIcon name="copy" :size="13" /> {{ $t('batch.copy') }}
       </button>
       <button type="button" class="batch-btn" @click="batchFavorite">
-        <AppIcon name="star" :size="13" /> 收藏
+        <AppIcon name="star" :size="13" /> {{ $t('batch.favorite') }}
       </button>
       <button type="button" class="batch-btn danger" @click="batchDelete">
-        <AppIcon name="trash" :size="13" /> 删除
+        <AppIcon name="trash" :size="13" /> {{ $t('batch.delete') }}
       </button>
-      <button type="button" class="batch-btn" :aria-label="'退出批量'" @click="toggleBatchMode">
+      <button type="button" class="batch-btn" :aria-label="$t('batch.exit')" @click="toggleBatchMode">
         <AppIcon name="close" :size="13" />
       </button>
     </div>

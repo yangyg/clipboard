@@ -34,6 +34,7 @@ const DEFAULT_SETTINGS: Settings = {
     content_types: [...r.content_types],
   })),
   onboarding_completed: false,
+  language: 'system',
   webdav_url: "",
   webdav_username: "",
   webdav_password: "",

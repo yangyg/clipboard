@@ -291,8 +291,8 @@ const quickMenuItems = computed<ContextMenuItem[]>(() => [
     label: t('sidebar.appearance'),
     icon: "palette",
     toggle: {
-      value: settingsStore.settings.theme !== "light",
-      labels: [t('sidebar.light'), t('sidebar.dark')],
+      value: settingsStore.settings.theme !== "dark",
+      labels: [t('sidebar.dark'),t('sidebar.light')],
     },
   },
   {

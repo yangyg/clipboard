@@ -5,6 +5,7 @@
         v-if="visible"
         ref="menuRef"
         class="context-menu"
+        :class="{ 'placement-top': placement === 'top' }"
         role="menu"
         :style="{ left: pos.x + 'px', top: pos.y + 'px', width: width + 'px' }"
         @click.stop
@@ -25,7 +26,14 @@
               <AppIcon :name="item.icon" :size="14" />
             </span>
             {{ item.label }}
-            <span v-if="item.shortcut" class="ctx-shortcut">{{ item.shortcut }}</span>
+            <span v-if="item.toggle" class="ctx-toggle">
+              <span class="ctx-toggle-opt" :class="{ active: !item.toggle.value }">{{ item.toggle.labels[0] }}</span>
+              <span class="ctx-toggle-opt" :class="{ active: item.toggle.value }">{{ item.toggle.labels[1] }}</span>
+            </span>
+            <span v-else-if="item.checked" class="ctx-check" aria-hidden="true">
+              <AppIcon name="check" :size="14" />
+            </span>
+            <span v-else-if="item.shortcut" class="ctx-shortcut">{{ item.shortcut }}</span>
           </button>
         </template>
       </div>
@@ -44,6 +52,11 @@ export interface ContextMenuItem {
   shortcut?: string;
   danger?: boolean;
   separatorBefore?: boolean;
+  checked?: boolean;
+  toggle?: {
+    value: boolean;
+    labels: [string, string];
+  };
 }
 
 const props = withDefaults(
@@ -53,8 +66,11 @@ const props = withDefaults(
     y: number;
     items: ContextMenuItem[];
     width?: number;
+    placement?: "bottom" | "top";
+    /** Element that toggles this menu; clicks on it are ignored by the outside-close handler. */
+    anchor?: HTMLElement | null;
   }>(),
-  { width: 190 },
+  { width: 190, placement: "bottom" },
 );
 
 const emit = defineEmits<{
@@ -75,13 +91,27 @@ function clamp() {
   }
   const rect = el.getBoundingClientRect();
   const pad = 8;
+  const gap = 4;
   pos.x = Math.max(pad, Math.min(props.x, window.innerWidth - rect.width - pad));
-  pos.y = Math.max(pad, Math.min(props.y, window.innerHeight - rect.height - pad));
+  if (props.placement === "top") {
+    // Place menu above the anchor (menu bottom ≈ y - gap)
+    const aboveY = props.y - rect.height - gap;
+    if (aboveY >= pad) {
+      pos.y = aboveY;
+    } else {
+      // Not enough space above — fall back to below the anchor
+      pos.y = Math.min(props.y + gap, window.innerHeight - rect.height - pad);
+    }
+  } else {
+    pos.y = Math.max(pad, Math.min(props.y, window.innerHeight - rect.height - pad));
+  }
 }
 
 function select(id: string) {
   emit("select", id);
-  emit("close");
+  const item = props.items.find((i) => i.id === id);
+  // Keep menu open for toggle items so the user sees the state change
+  if (!item?.toggle) emit("close");
 }
 
 function onKeydown(e: KeyboardEvent) {
@@ -120,6 +150,7 @@ function focusItem() {
 function onGlobalPointer(e: MouseEvent) {
   if (!props.visible) return;
   if (menuRef.value?.contains(e.target as Node)) return;
+  if (props.anchor?.contains(e.target as Node)) return;
   emit("close");
 }
 
@@ -170,6 +201,10 @@ onUnmounted(() => {
   transform-origin: top left;
 }
 
+.context-menu.placement-top {
+  transform-origin: bottom left;
+}
+
 .ctx-item {
   display: flex;
   align-items: center;
@@ -218,6 +253,39 @@ onUnmounted(() => {
   font-size: var(--text-xs);
   font-family: var(--font-mono);
   color: var(--text-tertiary);
+}
+
+.ctx-check {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+}
+
+.ctx-toggle {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  background: var(--bg-hover);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.ctx-toggle-opt {
+  padding: 2px 10px;
+  font-size: var(--text-xs);
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 3px;
+  transition: all var(--transition-fast);
+  line-height: 1.5;
+}
+
+.ctx-toggle-opt.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .ctx-sep {

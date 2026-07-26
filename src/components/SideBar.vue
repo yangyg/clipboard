@@ -116,27 +116,20 @@
       </button>
     </div>
 
-    <!-- Bottom Actions -->
+    <!-- Bottom Actions: quick-menu (left) + settings (right) -->
     <div class="sidebar-bottom">
       <button
+        ref="quickMenuAnchorEl"
         type="button"
-        class="sidebar-icon-btn"
+        class="sidebar-icon-btn sidebar-icon-btn-grow"
         :class="{ 'sidebar-icon-btn-warning': clipboardStore.pauseCapture }"
-        :aria-pressed="clipboardStore.pauseCapture"
-        :aria-label="clipboardStore.pauseCapture ? '恢复捕获' : '暂停捕获'"
-        :title="clipboardStore.pauseCapture ? '恢复捕获' : '暂停捕获'"
-        @click="clipboardStore.togglePauseCapture()"
+        aria-haspopup="menu"
+        :aria-expanded="quickMenu.visible"
+        aria-label="快捷菜单"
+        title="主题与监控"
+        @click="toggleQuickMenu"
       >
-        <AppIcon :name="clipboardStore.pauseCapture ? 'play' : 'pause'" :size="15" />
-      </button>
-      <button
-        type="button"
-        class="sidebar-icon-btn"
-        :aria-label="themeToggleLabel"
-        :title="themeToggleLabel"
-        @click="toggleTheme"
-      >
-        <AppIcon :name="themeToggleIcon" :size="15" />
+        <AppIcon name="menu" :size="15" />
       </button>
       <button
         type="button"
@@ -148,6 +141,18 @@
         <AppIcon name="settings" :size="15" />
       </button>
     </div>
+
+    <ContextMenu
+      :visible="quickMenu.visible"
+      :x="quickMenu.x"
+      :y="quickMenu.y"
+      :width="180"
+      :items="quickMenuItems"
+      placement="top"
+      :anchor="quickMenuAnchorEl"
+      @close="closeQuickMenu"
+      @select="onQuickMenuSelect"
+    />
 
     <ContextMenu
       :visible="tagMenu.visible"
@@ -163,24 +168,18 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
+import { useToast } from "../composables/useToast";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
+import type { WebDavSyncResult } from "../types";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
-
-/** Quick toggle: light ↔ dark; oled/system first click → light. */
-const offeringLight = computed(() => settingsStore.settings.theme !== "light");
-const themeToggleIcon = computed<AppIconName>(() => (offeringLight.value ? "sun" : "moon"));
-const themeToggleLabel = computed(() => (offeringLight.value ? "浅色模式" : "深色模式"));
-
-function toggleTheme() {
-  const next = settingsStore.settings.theme === "light" ? "dark" : "light";
-  settingsStore.updateSetting("theme", next);
-}
+const { toast } = useToast();
 
 const props = defineProps<{
   activeCategory?: string;
@@ -190,7 +189,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "update:activeCategory", value: string): void;
   (e: "update:activeTag", value: string | null): void;
-  (e: "openSettings"): void;
+  (e: "openSettings", section?: string): void;
   (e: "addTag"): void;
   (e: "editTag", tag: Tag): void;
   (e: "deleteTag", tag: Tag): void;
@@ -270,6 +269,116 @@ function onTagMenuSelect(id: string) {
   if (!tagMenu.tag) return;
   if (id === "edit") emit("editTag", tagMenu.tag);
   if (id === "delete") emit("deleteTag", tagMenu.tag);
+}
+
+/* ── Quick menu (theme + capture toggle) ── */
+
+const quickMenu = reactive({
+  visible: false,
+  x: 0,
+  y: 0,
+});
+
+const webdavSyncing = ref(false);
+
+const quickMenuAnchorEl = ref<HTMLElement | null>(null);
+
+const quickMenuItems = computed<ContextMenuItem[]>(() => [
+  {
+    id: "theme-toggle",
+    label: "外观",
+    icon: "palette",
+    toggle: {
+      value: settingsStore.settings.theme !== "light",
+      labels: ["浅色", "深色"],
+    },
+  },
+  {
+    id: "capture-toggle",
+    label: clipboardStore.pauseCapture ? "恢复捕获" : "暂停捕获",
+    icon: (clipboardStore.pauseCapture ? "play" : "pause") as AppIconName,
+    separatorBefore: true,
+  },
+  {
+    id: "webdav-sync",
+    label: webdavSyncing.value ? "同步中…" : "WebDAV 同步",
+    icon: "cloud",
+    separatorBefore: true,
+  },
+  {
+    id: "help",
+    label: "帮助",
+    icon: "help",
+  },
+]);
+
+function toggleQuickMenu(e: MouseEvent) {
+  if (quickMenu.visible) {
+    quickMenu.visible = false;
+    return;
+  }
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  quickMenu.x = rect.left;
+  quickMenu.y = rect.top; // ContextMenu clamps into viewport
+  quickMenu.visible = true;
+}
+
+function closeQuickMenu() {
+  quickMenu.visible = false;
+}
+
+function onQuickMenuSelect(id: string) {
+  if (id === "theme-toggle") {
+    const next = settingsStore.settings.theme === "light" ? "dark" : "light";
+    settingsStore.updateSetting("theme", next);
+    return;
+  }
+  if (id === "capture-toggle") {
+    clipboardStore.togglePauseCapture();
+    return;
+  }
+  if (id === "webdav-sync") {
+    webdavSync();
+    return;
+  }
+  if (id === "help") {
+    quickMenu.visible = false;
+    emit("openSettings", "help");
+    return;
+  }
+}
+
+function isWebDavConfigured(): boolean {
+  const s = settingsStore.settings;
+  const urlOk = /^https?:\/\/.+/i.test(s.webdav_url.trim());
+  return urlOk && s.webdav_username.trim().length > 0 && s.webdav_password.length > 0;
+}
+
+async function webdavSync() {
+  if (webdavSyncing.value) return;
+  if (!isWebDavConfigured()) {
+    toast("请先在设置中配置 WebDAV 同步", "warning");
+    quickMenu.visible = false;
+    emit("openSettings", "data");
+    return;
+  }
+  webdavSyncing.value = true;
+  try {
+    await settingsStore.saveSettings();
+    const result = await invoke<WebDavSyncResult>("webdav_sync");
+    await settingsStore.loadSettings();
+    await clipboardStore.loadRecords();
+    await clipboardStore.loadStats();
+    toast(result.message || "WebDAV 同步完成", "success");
+  } catch (e) {
+    toast(`WebDAV 同步失败：${String(e)}`, "error");
+    quickMenu.visible = false;
+    emit("openSettings", "data");
+  } finally {
+    webdavSyncing.value = false;
+    quickMenu.visible = false;
+  }
 }
 </script>
 
@@ -500,7 +609,7 @@ function onTagMenuSelect(id: string) {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-around;
+  justify-content: space-between;
   gap: 4px;
 }
 
@@ -508,7 +617,7 @@ function onTagMenuSelect(id: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  width: 36px;
   height: 32px;
   padding: 0;
   border: none;
@@ -522,6 +631,13 @@ function onTagMenuSelect(id: string) {
 .sidebar-icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+/* Left (quick-menu) button fills remaining width for a larger click target */
+.sidebar-icon-btn-grow {
+  flex: 1;
+  justify-content: flex-start;
+  padding-left: 10px;
 }
 
 .sidebar-icon-btn-warning {
@@ -568,6 +684,13 @@ function onTagMenuSelect(id: string) {
   .sidebar-bottom {
     flex-direction: column;
     align-items: center;
+  }
+
+  .sidebar-icon-btn-grow {
+    flex: 0 0 auto;
+    width: 36px;
+    justify-content: center;
+    padding-left: 0;
   }
 }
 </style>

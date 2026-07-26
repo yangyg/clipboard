@@ -705,6 +705,9 @@ import appIconUrl from "../assets/app-icon-128.png";
 import { resolveKnownTagColors, resolveTagPalette } from "../utils/themeColors";
 
 const emit = defineEmits<{ close: [] }>();
+const props = defineProps<{
+  initialSection?: string;
+}>();
 const settingsStore = useSettingsStore();
 const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
@@ -713,7 +716,7 @@ const settings = settingsStore.settings;
 const isWindowMode = computed(() => settings.app_mode === "window");
 const stats = computed(() => clipboardStore.stats);
 
-const activeSection = ref("appearance");
+const activeSection = ref(props.initialSection ?? "appearance");
 const newIgnoredApp = ref("");
 const exportStatus = ref("");
 const exportStatusKind = ref<"success" | "error" | "">("");

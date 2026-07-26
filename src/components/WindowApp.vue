@@ -22,7 +22,7 @@
         :activeTag="clipboardStore.activeTag"
         @update:activeCategory="onCategoryChange"
         @update:activeTag="onTagChange"
-        @openSettings="$emit('openSettings')"
+        @openSettings="(section?: string) => $emit('openSettings', section)"
         @addTag="onAddTag"
         @editTag="onEditTag"
         @deleteTag="onDeleteTag"
@@ -63,7 +63,7 @@ const { toast } = useToast();
 const appWindow = getCurrentWindow();
 
 defineEmits<{
-  (e: "openSettings"): void;
+  (e: "openSettings", section?: string): void;
 }>();
 
 useClipboardHotkeys({ allowCloseOnEscape: false });

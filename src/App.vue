@@ -3,11 +3,11 @@
     <!-- Floating mode: keep panel mounted (v-show) to avoid full remount cost -->
     <template v-if="!isWindowMode">
       <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
-      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
+      <SettingsWindow v-if="settingsVisible" :initial-section="settingsInitialSection" @close="closeSettings" />
     </template>
     <!-- Window mode: panel always visible, settings replaces panel -->
     <template v-else>
-      <SettingsWindow v-if="settingsVisible" @close="closeSettings" />
+      <SettingsWindow v-if="settingsVisible" :initial-section="settingsInitialSection" @close="closeSettings" />
       <WindowApp v-else-if="panelVisible" @openSettings="openSettings" />
     </template>
     <ToastHost />
@@ -43,6 +43,7 @@ const { settings } = storeToRefs(settingsStore);
 
 const panelVisible = ref(false);
 const settingsVisible = ref(false);
+const settingsInitialSection = ref<string | undefined>(undefined);
 const welcomeOpen = ref(false);
 /** Avoid full get_records on every focus if list is fresh enough. */
 let lastPanelReloadAt = 0;
@@ -103,6 +104,7 @@ async function hidePanel() {
 function closeSettings() {
   settingsVisible.value = false;
   panelVisible.value = true;
+  settingsInitialSection.value = undefined;
 }
 
 function completeOnboarding() {
@@ -111,7 +113,8 @@ function completeOnboarding() {
   settingsStore.updateSetting("onboarding_completed", true);
 }
 
-async function openSettings() {
+async function openSettings(section?: string) {
+  settingsInitialSection.value = section;
   if (isWindowMode.value) {
     panelVisible.value = true;
     settingsVisible.value = true;

@@ -36,7 +36,7 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 - **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only; column `content_len` stores text length at insert (backfilled once). Capture/store max edge **2560**; list thumb max edge **160**.
 - **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged. **Text-first:** meaningful share text skips `get_image()`; otherwise only call it when `IsClipboardFormatAvailable` reports bitmap/DIB. Monitor **`try_send`s** to a bounded worker (`sync_channel(2)`); full queue drops the event (never blocks the poll thread). Large images are downscaled on the poll thread before enqueue. Image SHA-256 runs on the worker; poll only uses a cheap edge-sample fingerprint.
 - **List IPC:** `substr(content,1,400)` + `content_len` column; `content_html` omitted. `clipboard-changed` emits the same light payload. Detail/`get_record` still full. **Export** uses `get_records_for_export` (full `content` + `content_html` + tags) — never reuse list columns.
-- **List UI:** `RecordList` window-virtualizes rows (row height scales with `font_size`); soft-cap bounds in-memory pages; soft-cap dirty → next `loadMore` reloads. Default sort `loadMore` uses **keyset** (`before_pinned` / `before_updated_at` / `before_id`) to avoid OFFSET drift when new rows prepend. Floating panel stays mounted (`v-show`); `showPanel` reloads at most every ~30s unless empty.
+- **List UI:** `RecordList` window-virtualizes rows via the `useVirtualList` composable (row height scales with `font_size`; grid rows grouped in JS). Grid column count is a **single JS source of truth** (`gridCols` from ResizeObserver, inline `grid-template-columns`) — never CSS `auto-fill`, which would drift from the virtualizer's row grouping (ADR-0001). Toolbar (`ListToolbar`) + empty/loading state (`ListEmptyState`) are child components; toolbar renders only in window mode (`showListChrome`). Soft-cap bounds in-memory pages; soft-cap dirty → next `loadMore` reloads. Default sort `loadMore` uses **keyset** (`before_pinned` / `before_updated_at` / `before_id`) to avoid OFFSET drift when new rows prepend. Floating panel stays mounted (`v-show`); `showPanel` reloads at most every ~30s unless empty.
 - **Stats:** one SQL scan (aggregates + per-type CASE counts) + `SUM(content_len)`; `media/` size cached 120s and **incrementally adjusted** on image store/delete. Frontend `scheduleLoadStats`: 800ms debounce + 5s max-wait. Tag assign uses `set_record_tags` (one transaction + single FTS refresh).
 - **Expire sweep:** watches expire fingerprint (`count:nearest`), not every list length change.
 - **Appearance IPC:** `set_window_corner_radius` only when `panel_radius` changes.
@@ -55,22 +55,28 @@ ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
 ### Frontend Component Tree
 ```
 App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; ToastHost, ConfirmDialog
-├── FloatingPanel.vue            # Floating UI; filters; BatchBar; useBatchActions + useClipboardHotkeys
-├── WindowApp.vue                # Window UI; SideBar; list-toolbar sort; BatchBar; hotkeys
+├── FloatingPanel.vue            # Floating UI; filters; CaptureStatus; BatchBar; useBatchActions + useClipboardHotkeys
+├── WindowApp.vue                # Window UI; SideBar; hotkeys
 │   ├── SearchBar.vue            # aria-label; / or Ctrl+K focus
-│   ├── RecordList.vue           # Virtual listbox; cards/grid; ContextMenu; PreviewPane
+│   ├── RecordList.vue           # Virtual listbox (useVirtualList); cards/grid; ContextMenu; BatchBar; AliasDialog
+│   │   ├── ListToolbar.vue      # Window-only chrome: category title, sort select, list/grid toggle, empty-trash
+│   │   ├── ListEmptyState.vue   # Loading / empty state
 │   │   └── PreviewPane.vue      # Paste primary CTA; icon-only delete; tags; trash
 │   └── SideBar.vue              # Categories; trash; tags; ContextMenu; ≤720px icon rail
-├── SettingsWindow.vue           # Nav: 外观 → … → 关于；theme radiogroup; ≤720px icon nav
+├── SettingsWindow.vue           # Nav + section router; shortcut-recording window listener; ≤720px icon nav
+│   └── settings/Settings*.vue   # 10 sections (shortcuts/appearance/history/tags/privacy/stats/data/system/help/about)
+│                                #   shared store access via composables/useSettings.ts; primitives in styles/settings.css
 ├── WelcomeDialog.vue            # First-run welcome (BaseDialog); onboarding_completed
 ├── BatchBar.vue                 # Shared batch actions (floating + window)
+├── ToggleSwitch.vue             # Shared switch primitive (settings sections)
+├── SourceBadge.vue              # Source-app letter avatar + short name
 ├── BaseDialog.vue               # Teleport + Esc + focus trap; shared dialog chrome
-├── ConfirmDialog.vue / TagDialog.vue  # Content slots on BaseDialog
+├── ConfirmDialog.vue / TagDialog.vue / AliasDialog.vue  # Content slots on BaseDialog
 ├── ContextMenu.vue              # Fixed + clamp; Arrow/Enter/Esc; role=menu
 ├── WindowControls.vue
 ├── ToastHost.vue
 ├── TrayMenuApp.vue              # Custom tray-menu window entry (Vite multi-page)
-├── composables/useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts
+├── composables/useVirtualList.ts · useSettings.ts · useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts · pasteFocusLock.ts
 └── utils/mediaUrl.ts · sanitizeHtml.ts · trayMenuItems.ts
 ```
 
@@ -135,7 +141,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Paste focus:** On panel show, remember previous foreground HWND. Paste writes clipboard (PNG bytes preferred for images), focuses target while still holding FG, then floating hide / window minimize when auto-close, Ctrl+V. No valid target → clipboard only. `auto_close_on_paste` false → restore panel (unminimize/show) without stealing focus.
 - **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.
-- **UI review:** Historical findings + batch status in [`docs/ui-design-review.md`](docs/ui-design-review.md).
+- **Architecture decisions:** [`docs/adr/`](docs/adr/) — ADR-0001 covers the virtual-list composable extraction and the responsive grid-column single-source-of-truth rule.
 - **Tray / onboarding specs:** [`docs/superpowers/specs/`](docs/superpowers/specs/).
 
 ## Agent skills

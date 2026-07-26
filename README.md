@@ -13,7 +13,7 @@ Windows 桌面剪贴板管理器。自动记录复制历史，支持文本 / 富
 - 粘贴：写回系统剪贴板（图片优先 PNG 格式）后，把焦点还给唤出前的应用并模拟 Ctrl+V；开启「粘贴后自动关闭」时，悬浮模式隐藏、窗口模式最小化
 - 搜索（≥3 字走 FTS5；1–2 字走轻量匹配，含别名）、可叠加类型 / 收藏 / 标签；收藏、置顶、短别名、标签、回收站、批量操作
 - 自动打标：新记录按规则匹配（内容类型 / 关键词）；内置默认规则可改，设置里可关（默认开）；侧栏空标签收在「更多」
-- 窗口模式列表可排序：最新 / 最早 / 最近创建 / 粘贴最多（置顶仍优先）；列表虚拟滚动（Fluent 扁平行）
+- 窗口模式列表可排序：最新 / 最早 / 最近创建 / 粘贴最多（置顶仍优先）；列表虚拟滚动（Fluent 扁平行）；列表 / 网格双视图，网格列数随宽度自适应（窄窗口自动降为 1 列）
 - 敏感内容检测与自动过期；忽略应用列表
 - 悬浮面板 / 窗口两种界面；记住上次窗口尺寸；圆角 / 不透明度可调；毛玻璃默认关，仅悬浮模式可开（窗口模式始终关闭）；关闭默认进托盘
 - 自定义托盘右键菜单（主题一致）；左键在后台时置前窗口、已前台时隐藏；休眠唤醒后自动恢复托盘与 WebView
@@ -82,7 +82,7 @@ cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试
 | 后端 | Rust、arboard、rusqlite |
 | 存储 | SQLite（WAL + FTS5 + 读写分离连接池）+ 本地 media 目录 |
 
-实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。完整架构与视觉 token 约定见 [CLAUDE.md](./CLAUDE.md)。前端 UI 审查见 [docs/ui-design-review.md](./docs/ui-design-review.md)；交互动效见 [docs/ClipVault-交互动效规范.md](./docs/ClipVault-交互动效规范.md)；托盘菜单与首次引导设计见 [docs/superpowers/specs/](./docs/superpowers/specs/)。
+实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。完整架构与视觉 token 约定见 [CLAUDE.md](./CLAUDE.md)；架构决策记录（虚拟化引擎抽取、响应式网格列数等）见 [docs/adr/](./docs/adr/)；交互动效见 [docs/ClipVault-交互动效规范.md](./docs/ClipVault-交互动效规范.md)；托盘菜单与首次引导设计见 [docs/superpowers/specs/](./docs/superpowers/specs/)。
 
 ## 许可
 

@@ -176,8 +176,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
         seen.add(r.id);
       }
     }
-    // loadMore previously bypassed the soft cap used by onNewRecord.
-    trimRecordsSoftCap();
+    // NOTE: no soft-cap trim here — trimming paginated rows resets the keyset
+    // cursor (list tail) and livelocks loadMore (same page re-fetched forever).
+    // The cap still applies to onNewRecord prepends via applySoftCap.
   }
 
   // === Actions ===
@@ -334,12 +335,6 @@ export const useClipboardStore = defineStore("clipboard", () => {
       }
     }
     recordDetails.value = next;
-  }
-
-  /** Drop oldest non-pinned rows so in-memory list cannot grow without bound. */
-  function trimRecordsSoftCap() {
-    if (records.value.length <= LIST_SOFT_CAP) return;
-    records.value = applySoftCap(records.value);
   }
 
   function applySoftCap(list: ClipboardRecord[]): ClipboardRecord[] {

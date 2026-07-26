@@ -24,6 +24,7 @@ export default {
     maximize: 'Maximize',
     restoreWindow: 'Restore',
     or: 'or',
+    backToTop: 'Back to top',
   },
   capture: {
     capturing: 'Capturing clipboard',

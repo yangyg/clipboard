@@ -48,6 +48,7 @@ import {
   CloudDownload,
   RefreshCw,
   Menu,
+  ArrowUp,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -97,6 +98,7 @@ const ICONS = {
   cloudDownload: CloudDownload,
   refresh: RefreshCw,
   menu: Menu,
+  arrowUp: ArrowUp,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;

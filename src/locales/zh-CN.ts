@@ -24,6 +24,7 @@ export default {
     maximize: '最大化',
     restoreWindow: '还原',
     or: '或',
+    backToTop: '回到顶部',
   },
   capture: {
     capturing: '正在捕获剪贴板',

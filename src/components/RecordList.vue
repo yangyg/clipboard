@@ -177,6 +177,20 @@
         <span v-else>{{ $t('common.scrollForMore') }}</span>
       </div>
       </div>
+
+      <!-- Back to top: floats over the list column, scrolls only the list area -->
+      <Transition name="back-top">
+        <button
+          v-if="showBackToTop"
+          type="button"
+          class="back-to-top-btn"
+          :aria-label="$t('common.backToTop')"
+          :title="$t('common.backToTop')"
+          @click="scrollToTop"
+        >
+          <AppIcon name="arrowUp" :size="15" />
+        </button>
+      </Transition>
     </div>
 
     <!-- Preview Pane (right side) -->
@@ -305,6 +319,20 @@ const isEmptyOrLoading = computed(
     (clipboardStore.isLoading && clipboardStore.records.length === 0) ||
     (clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading)
 );
+
+/** Back-to-top: reveal once scrolled past a fixed threshold (~1 viewport). */
+const BACK_TO_TOP_THRESHOLD = 400;
+
+const showBackToTop = computed(
+  () => !isEmptyOrLoading.value && scrollTop.value > BACK_TO_TOP_THRESHOLD
+);
+
+function scrollToTop() {
+  const el = listRef.value;
+  if (!el) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+}
 
 const activeDescendantId = computed(() =>
   clipboardStore.selectedId != null ? `record-option-${clipboardStore.selectedId}` : undefined
@@ -632,6 +660,7 @@ function closeContextMenu() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
   /* Same surface as preview — sidebar stays elevated for nav hierarchy. */
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
@@ -1170,5 +1199,50 @@ function closeContextMenu() {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* —— Back to top —— */
+.back-to-top-btn {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-4);
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.back-to-top-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.back-to-top-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.back-top-enter-active,
+.back-top-leave-active {
+  transition: opacity var(--transition-normal), transform var(--transition-normal);
+}
+
+.back-top-enter-from,
+.back-top-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
 }
 </style>

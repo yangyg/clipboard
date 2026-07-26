@@ -3,92 +3,22 @@
     <div class="list-column">
       <!-- Middle-column chrome (window mode): matches design list toolbar -->
       <template v-if="showListChrome">
-        <div class="list-toolbar">
-          <div class="list-toolbar-left">
-            <span class="list-title">{{ categoryTitle }}</span>
-            <span class="list-count">{{ listCountLabel }}</span>
-          </div>
-          <div class="list-toolbar-right">
-            <button
-              v-if="clipboardStore.trashFilter && clipboardStore.trashCount > 0"
-              type="button"
-              class="empty-trash-btn"
-              @click="onEmptyTrash"
-            >{{ $t('listView.emptyTrashBtn') }}</button>
-            <select
-              class="list-sort"
-              :value="clipboardStore.listSort"
-              :title="$t('sort.listSort')"
-              :aria-label="$t('sort.listSort')"
-              @change="onSortChange"
-            >
-              <option
-                v-for="opt in LIST_SORT_OPTIONS"
-                :key="opt.value"
-                :value="opt.value"
-              >{{ $t(opt.labelKey) }}</option>
-            </select>
-            <div class="view-toggle" role="group" :aria-label="$t('listView.listView')">
-              <button
-                type="button"
-                class="view-toggle-btn"
-                :class="{ active: listLayout === 'list' }"
-                :title="$t('listView.listView')"
-                :aria-label="$t('listView.listView')"
-                :aria-pressed="listLayout === 'list'"
-                @click="setListLayout('list')"
-              ><AppIcon name="list" :size="14" /></button>
-              <button
-                type="button"
-                class="view-toggle-btn"
-                :class="{ active: listLayout === 'grid' }"
-                :title="$t('listView.gridView')"
-                :aria-label="$t('listView.gridView')"
-                :aria-pressed="listLayout === 'grid'"
-                @click="setListLayout('grid')"
-              ><AppIcon name="grid" :size="14" /></button>
-            </div>
-            <button
-              type="button"
-              class="list-tool-btn"
-              :class="{ active: clipboardStore.batchMode }"
-              :title="$t('panel.batch')"
-              :aria-label="$t('panel.batch')"
-              :aria-pressed="clipboardStore.batchMode"
-              @click="toggleBatchMode"
-            ><AppIcon name="batch" :size="14" /></button>
-          </div>
-        </div>
+        <ListToolbar :list-layout="listLayout" @set-layout="setListLayout" />
 
         <Transition name="fade">
           <BatchBar v-if="clipboardStore.batchMode" />
         </Transition>
       </template>
 
-      <!-- Loading (initial only) -->
-      <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state">
-        <div class="loading-spinner"></div>
-        <span>{{ $t('common.loading') }}</span>
-      </div>
-
-      <!-- Empty -->
-      <div v-else-if="clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading" class="empty-state">
-        <div class="empty-icon"><AppIcon :name="emptyState.icon" :size="36" :stroke-width="1.5" /></div>
-        <div class="empty-text">{{ emptyState.title }}</div>
-        <div v-if="emptyState.hint" class="empty-hint">
-          <template v-if="emptyState.clearSearch">
-            {{ $t('emptyState.tryOtherKeywords') }}
-            <button class="clear-link" @click="clipboardStore.search('')">{{ $t('common.clearSearch') }}</button>
-          </template>
-          <template v-else>{{ emptyState.hint }}</template>
-        </div>
-      </div>
+      <!-- Loading / Empty -->
+      <ListEmptyState v-if="isEmptyOrLoading" />
 
       <!-- Record List (windowed: only mount rows near the viewport) -->
       <div
         v-else
         class="record-list"
         :class="{ 'view-grid': listLayout === 'grid' }"
+        :style="listLayout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
         ref="listRef"
         role="listbox"
         :aria-label="$t('record.clipboardRecords')"
@@ -154,7 +84,7 @@
           />
           <div
             v-else
-            class="record-type-icon"
+            class="record-type-icon type-chip"
             :class="item.record!.content_type"
             aria-hidden="true"
           >
@@ -272,23 +202,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, nextTick, onMounted, onUnmounted, shallowRef } from "vue";
-import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/clipboard";
+import { computed, reactive, ref, watch, nextTick, shallowRef } from "vue";
+import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import AliasDialog from "./AliasDialog.vue";
 import BatchBar from "./BatchBar.vue";
 import SourceBadge from "./SourceBadge.vue";
-import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
+import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
+import ListToolbar from "./ListToolbar.vue";
+import ListEmptyState from "./ListEmptyState.vue";
 import { sourceShortName } from "../utils/sourceBadge";
 import { parseClipboardColor } from "../utils/clipboardColor";
 import type { ClipboardRecord } from "../types";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
-import { useBatchActions } from "../composables/useBatchActions";
-import { recordThumbSrc } from "../utils/mediaUrl";
+import { useVirtualList, type ListLayout } from "../composables/useVirtualList";
 import { useI18n } from "vue-i18n";
 import {
   escapeHtml,
@@ -300,7 +231,6 @@ const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
-const { toggleBatchMode } = useBatchActions();
 const { t } = useI18n();
 const listRef = ref<HTMLElement | null>(null);
 
@@ -331,7 +261,6 @@ async function scheduleTogglePin(record: ClipboardRecord) {
   if (result == null) toast(t('common.operationFailed'), "error");
 }
 
-type ListLayout = "list" | "grid";
 const LAYOUT_KEY = "clipvault-list-layout";
 
 function readStoredLayout(): ListLayout {
@@ -346,6 +275,17 @@ function readStoredLayout(): ListLayout {
 
 const listLayout = ref<ListLayout>(readStoredLayout());
 
+const {
+  displayItems,
+  virtualPadTop,
+  virtualPadBottom,
+  flatItems,
+  gridCols,
+  scrollTop,
+  onListScroll,
+  fillViewportIfNeeded,
+} = useVirtualList(listRef, listLayout);
+
 function setListLayout(mode: ListLayout) {
   listLayout.value = mode;
   try {
@@ -359,71 +299,12 @@ function setListLayout(mode: ListLayout) {
 /** Window mode: toolbar lives in the list column (not spanning the preview). */
 const showListChrome = computed(() => settingsStore.settings.app_mode === "window");
 
-const CATEGORY_TITLE_KEYS: Record<string, string> = {
-  all: "category.all",
-  text: "category.text",
-  image: "category.image",
-  file: "category.file",
-  link: "category.link",
-  code: "category.code",
-  favorites: "category.favorites",
-  trash: "category.trash",
-};
-
-const categoryTitle = computed(() => {
-  if (clipboardStore.trashFilter) return t('category.trash');
-  const typeKey = clipboardStore.activeFilter;
-  const typePart =
-    typeKey !== "all" ? t(CATEGORY_TITLE_KEYS[typeKey] ?? typeKey) : null;
-  const tagPart = clipboardStore.activeTag;
-  if (typePart && tagPart) return `${typePart} · ${tagPart}`;
-  if (tagPart) return tagPart;
-  if (typePart) return typePart;
-  return t('category.all');
-});
-
-const listCountLabel = computed(() => {
-  if (clipboardStore.searchQuery) {
-    const n = clipboardStore.filteredRecords.length;
-    return clipboardStore.hasMore ? t('record.countFound', { n }) : t('record.countTotal', { n });
-  }
-  if (clipboardStore.trashFilter) {
-    return t('record.countTotal', { n: clipboardStore.trashCount });
-  }
-  if (clipboardStore.activeTag) {
-    const n = clipboardStore.filteredRecords.length;
-    return clipboardStore.hasMore ? t('record.countLoaded', { n }) : t('record.countTotal', { n });
-  }
-  if (clipboardStore.activeFilter === "favorites") {
-    return t('record.countTotal', { n: clipboardStore.filterCounts.favorites });
-  }
-  if (clipboardStore.activeFilter !== "all") {
-    return t('record.countTotal', { n: clipboardStore.filterCounts[clipboardStore.activeFilter] });
-  }
-  return t('record.countTotal', { n: clipboardStore.filterCounts.all });
-});
-
-function onSortChange(e: Event) {
-  const value = (e.target as HTMLSelectElement).value as ListSort;
-  clipboardStore.setListSort(value);
-}
-
-async function onEmptyTrash() {
-  const ok = await confirm({
-    title: t('confirm.emptyTrashTitle'),
-    message: t('confirm.emptyTrashMsg'),
-    confirmText: t('confirm.emptyTrashConfirm'),
-    danger: true,
-  });
-  if (ok) {
-    try {
-      await clipboardStore.emptyTrash();
-      toast(t('confirm.trashEmptied'), "success");
-    } catch {
-      toast(t('confirm.emptyFailed'), "error");
-    }
-  }
-}
+/** Show the loading / empty-state panel instead of the virtualized list. */
+const isEmptyOrLoading = computed(
+  () =>
+    (clipboardStore.isLoading && clipboardStore.records.length === 0) ||
+    (clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading)
+);
 
 const activeDescendantId = computed(() =>
   clipboardStore.selectedId != null ? `record-option-${clipboardStore.selectedId}` : undefined
@@ -442,78 +323,6 @@ function isOptionTabbable(id: number): boolean {
   return false;
 }
 
-/** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
-const BASE_ROW_HEIGHT = 68;
-const BASE_LABEL_HEIGHT = 28;
-const BASE_DIVIDER_HEIGHT = 17;
-const OVERSCAN = 6;
-const rowHeight = computed(() =>
-  Math.round(BASE_ROW_HEIGHT * (settingsStore.settings.font_size / 16))
-);
-const labelHeight = computed(() =>
-  Math.round(BASE_LABEL_HEIGHT * (settingsStore.settings.font_size / 16))
-);
-const dividerHeight = computed(() =>
-  Math.round(BASE_DIVIDER_HEIGHT * (settingsStore.settings.font_size / 16))
-);
-
-const scrollTop = ref(0);
-const viewportHeight = ref(480);
-let scrollRaf = 0;
-
-function onListScroll() {
-  const el = listRef.value;
-  if (!el) return;
-  if (scrollRaf) cancelAnimationFrame(scrollRaf);
-  scrollRaf = requestAnimationFrame(() => {
-    scrollRaf = 0;
-    scrollTop.value = el.scrollTop;
-    viewportHeight.value = el.clientHeight;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
-      void clipboardStore.loadMore();
-    }
-  });
-}
-
-/** If list shorter than viewport, keep fetching until filled or exhausted. */
-async function fillViewportIfNeeded() {
-  await nextTick();
-  const el = listRef.value;
-  if (!el || !clipboardStore.hasMore || clipboardStore.isLoadingMore) return;
-  viewportHeight.value = el.clientHeight;
-  let rounds = 0;
-  while (
-    rounds < 3 &&
-    clipboardStore.hasMore &&
-    !clipboardStore.isLoadingMore &&
-    el.scrollHeight <= el.clientHeight + 40
-  ) {
-    rounds += 1;
-    await clipboardStore.loadMore();
-    await nextTick();
-  }
-}
-
-// Explicit token from store after first-page load/search — not tied to isLoading churn.
-watch(
-  () => clipboardStore.viewportFillToken,
-  () => {
-    void fillViewportIfNeeded();
-  }
-);
-
-onMounted(() => {
-  void fillViewportIfNeeded();
-});
-
-const TYPE_LABEL_KEYS: Record<string, string> = {
-  text: 'filter.text',
-  code: 'filter.code',
-  link: 'filter.link',
-  image: 'filter.image',
-  file: 'filter.file',
-};
-
 function sourceLabelHtml(record: ClipboardRecord): string | undefined {
   const q = clipboardStore.searchQuery.trim();
   if (!q) return undefined;
@@ -525,331 +334,6 @@ function rowColor(record: ClipboardRecord): string | null {
   if (record.content_type !== "text") return null;
   return parseClipboardColor(record.content);
 }
-
-/** Layout-only row (no record payload — avoids rebuild on content/copy_count churn). */
-interface FlatItem {
-  key: string;
-  type: "label" | "divider" | "record";
-  id?: number;
-  height: number;
-  offset: number;
-}
-
-interface WindowItem extends FlatItem {
-  record?: ClipboardRecord;
-  thumb?: string | null;
-}
-
-// === H-3: Grid virtualization constants ===
-const GRID_COLS = 2;
-const GRID_GAP = 8; // px, matches CSS .view-grid gap
-const GRID_CARD_HEIGHT = 132; // px, matches CSS .view-grid .record-item height
-const GRID_IMAGE_HEIGHT = 140; // px, matches CSS .view-grid .record-item.is-image height
-
-/** A virtual row in grid layout: 1-2 record cards, or a solo label/divider. */
-interface GridRow {
-  items: FlatItem[];
-  height: number; // row content height (excludes gap)
-  offset: number; // cumulative top offset including gaps
-}
-
-function gridItemHeight(item: FlatItem): number {
-  if (item.type === "label") return item.height;
-  if (item.type === "divider") return item.height;
-  // record: image cards are taller
-  const records = clipboardStore.filteredRecords;
-  const idx = recordIndexById.value.get(item.id!);
-  const r = idx !== undefined ? records[idx] : undefined;
-  return r && r.content_type === "image" ? GRID_IMAGE_HEIGHT : GRID_CARD_HEIGHT;
-}
-
-/** Group flatItems into grid rows (2 records per row; labels/dividers solo). */
-function buildGridRows(items: FlatItem[]): GridRow[] {
-  const rows: GridRow[] = [];
-  let offset = 0;
-  let i = 0;
-  while (i < items.length) {
-    const item = items[i];
-    if (item.type !== "record") {
-      // Label or divider: full-width solo row
-      rows.push({ items: [item], height: item.height, offset });
-      offset += item.height + GRID_GAP;
-      i++;
-    } else {
-      // Pair up to GRID_COLS record items into one row
-      const rowItems: FlatItem[] = [item];
-      let rowH = gridItemHeight(item);
-      i++;
-      while (rowItems.length < GRID_COLS && i < items.length && items[i].type === "record") {
-        rowItems.push(items[i]);
-        rowH = Math.max(rowH, gridItemHeight(items[i]));
-        i++;
-      }
-      rows.push({ items: rowItems, height: rowH, offset });
-      offset += rowH + GRID_GAP;
-    }
-  }
-  return rows;
-}
-
-const gridRows = shallowRef<GridRow[]>([]);
-
-// Also build on layout switch
-watch(listLayout, (v) => {
-  if (v === "grid") {
-    gridRows.value = buildGridRows(flatItems.value);
-  }
-});
-
-/** M-2: Numeric layout signature — detects id order / pin flags / row height
- * changes without O(N) string concatenation. Uses FNV-style hash (32-bit).
- * Collision probability negligible for ≤1000 records (list soft cap = 120). */
-const layoutSig = computed(() => {
-  const records = clipboardStore.filteredRecords;
-  // Incorporate row heights (change on font-size setting).
-  let h = rowHeight.value * 2654435761;
-  h = (h ^ (labelHeight.value * 40503)) >>> 0;
-  h = (h ^ (dividerHeight.value * 12347)) >>> 0;
-  // Mix in record count + id/pin per record.
-  h = (h ^ records.length) >>> 0;
-  for (const r of records) {
-    // id is unique; pin flag in high bit. Multiply-xor for order sensitivity.
-    h = (h ^ ((r.id * 2654435761 + (r.is_pinned ? 0x9e3779b9 : 0)) >>> 0)) >>> 0;
-    h = ((h << 5) ^ (h >>> 27)) >>> 0; // rotate-mix
-  }
-  return h;
-});
-
-function buildFlatItems(): FlatItem[] {
-  const records = clipboardStore.filteredRecords;
-  const items: FlatItem[] = [];
-  let offset = 0;
-  const rh = rowHeight.value;
-  const lh = labelHeight.value;
-  const dh = dividerHeight.value;
-  // Single pass to detect pin partition presence (avoids two O(N) .some() scans).
-  let hasPinned = false;
-  let hasUnpinned = false;
-  for (const r of records) {
-    if (r.is_pinned) hasPinned = true;
-    else hasUnpinned = true;
-    if (hasPinned && hasUnpinned) break;
-  }
-  if (hasPinned) {
-    items.push({ key: "pinned-label", type: "label", height: lh, offset });
-    offset += lh;
-  }
-  let dividerInserted = false;
-  for (const r of records) {
-    if (hasPinned && hasUnpinned && !r.is_pinned && !dividerInserted) {
-      items.push({ key: "pin-divider", type: "divider", height: dh, offset });
-      offset += dh;
-      dividerInserted = true;
-    }
-    items.push({
-      key: `r-${r.id}`,
-      type: "record",
-      id: r.id,
-      height: rh,
-      offset,
-    });
-    offset += rh;
-  }
-  return items;
-}
-
-function buildRecordIndex(): Map<number, number> {
-  const m = new Map<number, number>();
-  clipboardStore.filteredRecords.forEach((r, i) => m.set(r.id, i));
-  return m;
-}
-
-const flatItems = shallowRef<FlatItem[]>(buildFlatItems());
-/** id → index in filteredRecords; rebuilt with layout only (not on content churn). */
-const recordIndexById = shallowRef(buildRecordIndex());
-
-watch(layoutSig, () => {
-  flatItems.value = buildFlatItems();
-  recordIndexById.value = buildRecordIndex();
-  // H-3: Keep grid rows in sync (must run AFTER flatItems + index update).
-  if (listLayout.value === "grid") {
-    gridRows.value = buildGridRows(flatItems.value);
-  }
-});
-
-const contentHeight = computed(() => {
-  const items = flatItems.value;
-  if (items.length === 0) return 0;
-  const last = items[items.length - 1];
-  return last.offset + last.height;
-});
-
-/** First index where item.offset + item.height >= target (item not fully above target). */
-function lowerBoundPastTop(items: FlatItem[], target: number): number {
-  let lo = 0;
-  let hi = items.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (items[mid].offset + items[mid].height < target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
-/** First index where item.offset >= target. */
-function lowerBoundByOffset(items: FlatItem[], target: number): number {
-  let lo = 0;
-  let hi = items.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (items[mid].offset < target) lo = mid + 1;
-    else hi = mid;
-  }
-  return lo;
-}
-
-const virtualRange = computed(() => {
-  const items = flatItems.value;
-  const n = items.length;
-  if (n === 0) return { start: 0, end: 0 };
-  const top = scrollTop.value;
-  const bottom = top + viewportHeight.value;
-  let start = lowerBoundPastTop(items, top);
-  let end = lowerBoundByOffset(items, bottom);
-  start = Math.max(0, start - OVERSCAN);
-  end = Math.min(n, end + OVERSCAN);
-  return { start, end };
-});
-
-function resolveWindowItem(
-  item: FlatItem,
-  records: ClipboardRecord[],
-  indexById: Map<number, number>
-): WindowItem {
-  if (item.type !== "record" || item.id == null) return item;
-  const idx = indexById.get(item.id);
-  const record = idx !== undefined ? records[idx] : undefined;
-  if (!record) return item;
-  return { ...item, record, thumb: recordThumbSrc(record) };
-}
-
-/** Grid virtual range: binary search on grid row offsets. */
-const gridVirtualRange = computed(() => {
-  const rows = gridRows.value;
-  const n = rows.length;
-  if (n === 0) return { start: 0, end: 0 };
-  const top = scrollTop.value;
-  const bottom = top + viewportHeight.value;
-  // First row whose bottom edge >= top
-  let lo = 0, hi = n;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (rows[mid].offset + rows[mid].height < top) lo = mid + 1;
-    else hi = mid;
-  }
-  let start = lo;
-  // First row whose offset >= bottom
-  lo = 0; hi = n;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (rows[mid].offset < bottom) lo = mid + 1;
-    else hi = mid;
-  }
-  let end = lo;
-  start = Math.max(0, start - OVERSCAN);
-  end = Math.min(n, end + OVERSCAN);
-  return { start, end };
-});
-
-const gridContentHeight = computed(() => {
-  const rows = gridRows.value;
-  if (rows.length === 0) return 0;
-  const last = rows[rows.length - 1];
-  return last.offset + last.height;
-});
-
-/** Grid: render all loaded rows (page size is small); list: virtual window. */
-const displayItems = computed<WindowItem[]>(() => {
-  const records = clipboardStore.filteredRecords;
-  const indexById = recordIndexById.value;
-  if (listLayout.value !== "grid") {
-    const { start, end } = virtualRange.value;
-    const slice = flatItems.value.slice(start, end);
-    return slice.map((item) => resolveWindowItem(item, records, indexById));
-  }
-  // H-3: Grid virtualization — only resolve items in visible rows.
-  const { start, end } = gridVirtualRange.value;
-  const visibleRows = gridRows.value.slice(start, end);
-  const result: WindowItem[] = [];
-  for (const row of visibleRows) {
-    for (const item of row.items) {
-      result.push(resolveWindowItem(item, records, indexById));
-    }
-  }
-  return result;
-});
-
-const virtualPadTop = computed(() => {
-  if (listLayout.value === "grid") {
-    const { start } = gridVirtualRange.value;
-    const rows = gridRows.value;
-    return start > 0 && rows.length > 0 ? rows[start].offset : 0;
-  }
-  const { start } = virtualRange.value;
-  return start > 0 ? flatItems.value[start].offset : 0;
-});
-
-const virtualPadBottom = computed(() => {
-  if (listLayout.value === "grid") {
-    const { end } = gridVirtualRange.value;
-    const rows = gridRows.value;
-    if (end >= rows.length) return 0;
-    return Math.max(0, gridContentHeight.value - rows[end].offset);
-  }
-  const { end } = virtualRange.value;
-  const items = flatItems.value;
-  if (end >= items.length) return 0;
-  return Math.max(0, contentHeight.value - items[end].offset);
-});
-
-const emptyState = computed(() => {
-  if (clipboardStore.searchQuery) {
-    return { icon: "search" as AppIconName, title: t('emptyState.noResults'), hint: "", clearSearch: true };
-  }
-  if (clipboardStore.trashFilter) {
-    return { icon: "trash" as AppIconName, title: t('emptyState.trashEmpty'), hint: t('emptyState.trashHint'), clearSearch: false };
-  }
-  if (clipboardStore.activeTag && clipboardStore.activeFilter !== "all") {
-    const typeLabel =
-      clipboardStore.activeFilter === "favorites"
-        ? t('filter.favorites')
-        : t(TYPE_LABEL_KEYS[clipboardStore.activeFilter] ?? clipboardStore.activeFilter);
-    return {
-      icon: "tag" as AppIconName,
-      title: t('emptyState.tagFilterEmpty', { type: typeLabel, tag: clipboardStore.activeTag }),
-      hint: t('emptyState.tagFilterHint'),
-      clearSearch: false,
-    };
-  }
-  if (clipboardStore.activeTag) {
-    return { icon: "tag" as AppIconName, title: t('emptyState.tagEmpty'), hint: t('emptyState.tagHint'), clearSearch: false };
-  }
-  if (clipboardStore.activeFilter === "favorites") {
-    return { icon: "star" as AppIconName, title: t('emptyState.favoritesEmpty'), hint: t('emptyState.favoritesHint'), clearSearch: false };
-  }
-  if (clipboardStore.activeFilter !== "all") {
-    const typeIconMap: Record<string, AppIconName> = {
-      text: "type", code: "code", link: "link", image: "image", file: "file",
-    };
-    return {
-      icon: typeIconMap[clipboardStore.activeFilter] ?? ("clipboard" as AppIconName),
-      title: t('emptyState.typeEmpty', { type: t(TYPE_LABEL_KEYS[clipboardStore.activeFilter] ?? '') }),
-      hint: t('emptyState.typeHint'),
-      clearSearch: false,
-    };
-  }
-  return { icon: "clipboard" as AppIconName, title: t('emptyState.allEmpty'), hint: t('emptyState.allHint'), clearSearch: false };
-});
 
 watch(
   () => clipboardStore.selectedId,
@@ -1131,18 +615,6 @@ async function onContextSelect(id: string) {
 function closeContextMenu() {
   contextMenu.visible = false;
 }
-
-onMounted(() => {
-  const el = listRef.value;
-  if (el) {
-    viewportHeight.value = el.clientHeight;
-    scrollTop.value = el.scrollTop;
-  }
-});
-
-onUnmounted(() => {
-  if (scrollRaf) cancelAnimationFrame(scrollRaf);
-});
 </script>
 
 <style scoped>
@@ -1163,151 +635,6 @@ onUnmounted(() => {
   /* Same surface as preview — sidebar stays elevated for nav hierarchy. */
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
-}
-
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  height: 44px;
-  padding: 0 var(--space-3);
-  flex-shrink: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border-default) 60%, transparent);
-}
-
-.list-toolbar-left {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.list-title {
-  font-size: var(--text-sm, 0.6875rem);
-  font-weight: 600;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 7rem;
-}
-
-.list-count {
-  font-size: var(--text-sm, 0.6875rem);
-  font-weight: 500;
-  color: var(--text-tertiary);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.list-toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.empty-trash-btn {
-  height: var(--btn-height-sm);
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs, 0.625rem);
-  font-weight: 500;
-  background: var(--danger-soft);
-  color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  font-family: inherit;
-}
-
-.empty-trash-btn:hover {
-  background: color-mix(in srgb, var(--danger) 20%, transparent);
-}
-
-.list-sort {
-  height: var(--btn-height-sm);
-  max-width: 7rem;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  font-size: var(--text-sm, 0.6875rem);
-  font-family: inherit;
-  cursor: pointer;
-  outline: none;
-  transition: border-color var(--transition-fast), color var(--transition-fast);
-}
-
-.list-sort:hover,
-.list-sort:focus {
-  border-color: var(--accent);
-  color: var(--text-primary);
-}
-
-.list-tool-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
-}
-
-.list-tool-btn:hover,
-.list-tool-btn.active {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--accent);
-}
-
-.view-toggle {
-  display: flex;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--bg-surface);
-}
-
-.view-toggle-btn {
-  width: 28px;
-  height: var(--btn-height-sm);
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.view-toggle-btn + .view-toggle-btn {
-  border-left: 1px solid var(--border-subtle);
-}
-
-.view-toggle-btn:hover {
-  color: var(--text-secondary);
-  background: var(--bg-hover);
-}
-
-.view-toggle-btn.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.view-toggle-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  z-index: 1;
 }
 
 .record-list {
@@ -1677,30 +1004,8 @@ onUnmounted(() => {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 10%, transparent);
 }
 
-.record-type-icon.text {
-  background: color-mix(in srgb, var(--type-text) 16%, transparent);
-  color: var(--type-text);
-}
-
-.record-type-icon.code {
-  background: color-mix(in srgb, var(--type-code) 16%, transparent);
-  color: var(--type-code);
-}
-
-.record-type-icon.link {
-  background: color-mix(in srgb, var(--type-link) 16%, transparent);
-  color: var(--type-link);
-}
-
-.record-type-icon.image {
-  background: color-mix(in srgb, var(--type-image) 16%, transparent);
-  color: var(--type-image);
-}
-
-.record-type-icon.file {
-  background: color-mix(in srgb, var(--type-file) 16%, transparent);
-  color: var(--type-file);
-}
+/* Type icon coloring is provided by the shared .type-chip utility in
+   main.css (single source of truth for content-type colors). */
 
 /* Image thumb in body (design: type icon left, preview right) */
 .record-image-tile {
@@ -1861,68 +1166,9 @@ onUnmounted(() => {
   margin-top: var(--space-1);
 }
 
-/* Empty / Loading */
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  color: var(--text-tertiary);
-  font-size: var(--text-md);
-  flex: 1;
-  padding: var(--space-5);
-  text-align: center;
-}
-
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid var(--border-default);
-  border-top-color: var(--accent);
-  border-radius: var(--radius-pill);
-  animation: spin 0.6s linear infinite;
-}
-
-.loading-spinner.small {
-  width: 13px;
-  height: 13px;
-  border-width: 1.5px;
-}
-
 .footer-loading {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-tertiary);
-  opacity: 0.9;
-  margin-bottom: 4px;
-}
-
-.empty-text {
-  font-size: var(--text-base);
-}
-
-.empty-hint {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-}
-
-.clear-link {
-  color: var(--accent);
-  cursor: pointer;
-  text-decoration: underline;
 }
 </style>

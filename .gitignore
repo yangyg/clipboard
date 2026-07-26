@@ -15,6 +15,7 @@ src-tauri/gen/
 *.swp
 *.swo
 .claude/
+.qoder/
 
 # OS
 .DS_Store

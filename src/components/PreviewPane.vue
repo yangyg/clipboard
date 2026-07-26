@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="preview-header">
       <div class="preview-type-row">
-        <div class="preview-type-icon" :class="record.content_type" :title="$t('preview.contentType', { type: typeLabel })">
+        <div class="preview-type-icon type-chip" :class="record.content_type" :title="$t('preview.contentType', { type: typeLabel })">
           <TypeIcon :type="record.content_type" :size="14" />
         </div>
         <div class="preview-heading">
@@ -534,30 +534,8 @@ async function permanentDel() {
   flex-shrink: 0;
 }
 
-.preview-type-icon.text {
-  background: color-mix(in srgb, var(--type-text) 15%, transparent);
-  color: var(--type-text);
-}
-
-.preview-type-icon.code {
-  background: color-mix(in srgb, var(--type-code) 15%, transparent);
-  color: var(--type-code);
-}
-
-.preview-type-icon.link {
-  background: color-mix(in srgb, var(--type-link) 15%, transparent);
-  color: var(--type-link);
-}
-
-.preview-type-icon.image {
-  background: color-mix(in srgb, var(--type-image) 15%, transparent);
-  color: var(--type-image);
-}
-
-.preview-type-icon.file {
-  background: color-mix(in srgb, var(--type-file) 15%, transparent);
-  color: var(--type-file);
-}
+/* Type icon coloring is provided by the shared .type-chip utility in
+   main.css (single source of truth for content-type colors). */
 
 .preview-heading {
   flex: 1;

@@ -324,6 +324,19 @@ body.anim-disabled *::after {
   transform: translateX(16px);
 }
 
+/* Content-type color mapping — single source of truth for type colors.
+   Apply a bare type class (record.content_type) alongside .type-chip to
+   color a chip/icon; all components share this instead of per-type rules. */
+.type-chip.text { --type-color: var(--type-text); }
+.type-chip.code { --type-color: var(--type-code); }
+.type-chip.link { --type-color: var(--type-link); }
+.type-chip.image { --type-color: var(--type-image); }
+.type-chip.file { --type-color: var(--type-file); }
+.type-chip {
+  background: color-mix(in srgb, var(--type-color, var(--text-secondary)) 15%, transparent);
+  color: var(--type-color, var(--text-secondary));
+}
+
 .badge {
   font-size: var(--text-xs);
   padding: 1px 5px;
@@ -443,6 +456,22 @@ body.anim-disabled *::after {
 /* Shared keyframes (deduplicated from SearchBar / RecordList) */
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Shared loading spinner (ListEmptyState + RecordList load-more footer) */
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-default);
+  border-top-color: var(--accent);
+  border-radius: var(--radius-pill);
+  animation: spin 0.6s linear infinite;
+}
+
+.loading-spinner.small {
+  width: 13px;
+  height: 13px;
+  border-width: 1.5px;
 }
 
 /* Search keyword highlight (list + preview) */

@@ -1,0 +1,190 @@
+/*
+ * Shared settings UI primitives.
+ *
+ * These building blocks are used across the settings section subcomponents
+ * (src/components/settings/*). They live here — global, loaded once — so each
+ * section subcomponent can use them without duplicating styles or relying on
+ * cross-component scoped CSS. Section-specific styles stay scoped inside each
+ * subcomponent.
+ */
+
+.settings-section {
+  margin-bottom: 24px;
+}
+
+.settings-section-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: var(--text-primary);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 16px;
+  transition: border-color var(--transition-smooth);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-label {
+  font-size: var(--text-md);
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.setting-desc {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+/* Segmented control */
+.segmented {
+  display: flex;
+  background: var(--bg-active);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.segment-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  padding: 4px 10px;
+  border-radius: calc(var(--radius-sm) - 1px);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.segment-btn:hover {
+  color: var(--text-primary);
+}
+
+.segment-btn.selected {
+  background: var(--bg-elevated);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--border-subtle);
+}
+
+/* Slider row */
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slider-value {
+  font-size: var(--text-md);
+  font-family: var(--font-mono);
+  color: var(--accent);
+  min-width: 50px;
+  text-align: right;
+}
+
+/* Range inputs only exist inside the settings body — scope defensively. */
+.settings-body input[type="range"] {
+  -webkit-appearance: none;
+  width: 140px;
+  height: 4px;
+  background: var(--bg-active);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: background var(--transition-smooth);
+}
+
+.settings-body input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Keyboard hint display (shortcuts + stats) */
+.kbd-display {
+  background: var(--bg-active);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: var(--text-sm);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* Card row (data + stats) */
+.data-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+/* Inline status message (data import/export/sync) */
+.status-line {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-sm);
+}
+
+.status-line.success {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-line.error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Text input shared by auto-tag rules (tags) and WebDAV fields (data) */
+.auto-tag-input {
+  width: 100%;
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: var(--text-md);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.auto-tag-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.auto-tag-input:hover {
+  border-color: var(--border-default);
+}
+
+.auto-tag-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  background: var(--bg-base);
+}
+
+/* Disabled button treatment, scoped to the settings body. */
+.settings-body .btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}

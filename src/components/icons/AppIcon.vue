@@ -43,6 +43,10 @@ import {
   List,
   LayoutGrid,
   Sparkles,
+  Cloud,
+  CloudUpload,
+  CloudDownload,
+  RefreshCw,
 } from "lucide-vue-next";
 
 const ICONS = {
@@ -87,6 +91,10 @@ const ICONS = {
   list: List,
   grid: LayoutGrid,
   sparkles: Sparkles,
+  cloud: Cloud,
+  cloudUpload: CloudUpload,
+  cloudDownload: CloudDownload,
+  refresh: RefreshCw,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;

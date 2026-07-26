@@ -750,3 +750,35 @@ pub async fn set_window_corner_radius(app: tauri::AppHandle, radius: i32) -> Res
     let window = app.get_webview_window("main").ok_or("window not found")?;
     crate::window::apply_window_round_corners(&window, radius)
 }
+
+// === WebDAV sync ===
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn webdav_test_connection(state: State<'_, AppState>) -> Result<(), String> {
+    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    crate::webdav::webdav_test_connection(&settings).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn webdav_pull(
+    state: State<'_, AppState>,
+) -> Result<crate::webdav::WebDavSyncResult, String> {
+    let mut settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    crate::webdav::webdav_pull(&state.db, &mut settings).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn webdav_push(
+    state: State<'_, AppState>,
+) -> Result<crate::webdav::WebDavSyncResult, String> {
+    let mut settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    crate::webdav::webdav_push(&state.db, &mut settings).await
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn webdav_sync(
+    state: State<'_, AppState>,
+) -> Result<crate::webdav::WebDavSyncResult, String> {
+    let mut settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    crate::webdav::webdav_sync(&state.db, &mut settings).await
+}

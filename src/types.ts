@@ -92,6 +92,24 @@ export interface Settings {
   auto_tag_rules: AutoTagRule[];
   /** False until first-run welcome is dismissed. */
   onboarding_completed: boolean;
+  /** WebDAV sync (local credentials; not included in JSON export). */
+  webdav_url: string;
+  webdav_username: string;
+  webdav_password: string;
+  webdav_remote_path: string;
+  webdav_sync_sensitive: boolean;
+  webdav_device_id: string;
+  webdav_last_sync_at: string | null;
+}
+
+export interface WebDavSyncResult {
+  pulled: number;
+  pushed: number;
+  merged: number;
+  media_downloaded: number;
+  media_uploaded: number;
+  media_skipped: number;
+  message: string;
 }
 
 export const DEFAULT_AUTO_TAG_RULES: AutoTagRule[] = [

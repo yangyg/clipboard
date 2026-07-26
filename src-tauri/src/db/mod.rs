@@ -1299,9 +1299,22 @@ impl ClipboardDb {
     }
 
     pub fn import_records(&self, records: &[ClipboardRecord], max_records: i32) -> SqlResult<i32> {
+        let (imported, _) = self.import_records_with_merge(records, max_records)?;
+        Ok(imported)
+    }
+
+    /// Import with hash dedup. Existing hashes get a shallow merge:
+    /// newer `updated_at`, OR on favorite/pin, max `copy_count`, fill missing media paths.
+    /// Returns `(inserted, merged)`.
+    pub fn import_records_with_merge(
+        &self,
+        records: &[ClipboardRecord],
+        max_records: i32,
+    ) -> SqlResult<(i32, i32)> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let mut imported = 0;
+        let mut merged = 0;
 
         // Batch-load existing hashes in one query instead of per-record lookups.
         let existing_hashes: std::collections::HashSet<String> = {
@@ -1346,6 +1359,38 @@ impl ClipboardDb {
             }
 
             if existing_hashes.contains(&record.hash) {
+                let changed = tx.execute(
+                    "UPDATE records SET
+                        is_favorite = CASE WHEN is_favorite = 1 OR ? = 1 THEN 1 ELSE 0 END,
+                        is_pinned = CASE WHEN is_pinned = 1 OR ? = 1 THEN 1 ELSE 0 END,
+                        copy_count = CASE WHEN copy_count < ? THEN ? ELSE copy_count END,
+                        updated_at = CASE WHEN updated_at < ? THEN ? ELSE updated_at END,
+                        media_path = CASE
+                            WHEN (media_path IS NULL OR media_path = '') AND ? IS NOT NULL AND ? != ''
+                            THEN ? ELSE media_path END,
+                        thumb_path = CASE
+                            WHEN (thumb_path IS NULL OR thumb_path = '') AND ? IS NOT NULL AND ? != ''
+                            THEN ? ELSE thumb_path END
+                     WHERE hash = ?",
+                    params![
+                        record.is_favorite as i32,
+                        record.is_pinned as i32,
+                        record.copy_count,
+                        record.copy_count,
+                        record.updated_at,
+                        record.updated_at,
+                        record.media_path,
+                        record.media_path,
+                        record.media_path,
+                        record.thumb_path,
+                        record.thumb_path,
+                        record.thumb_path,
+                        record.hash,
+                    ],
+                )?;
+                if changed > 0 {
+                    merged += 1;
+                }
                 continue;
             }
 
@@ -1437,7 +1482,7 @@ impl ClipboardDb {
         } else {
             tx.commit()?;
         }
-        Ok(imported)
+        Ok((imported, merged))
     }
 
     /// Full-content page for export/backup (never use list truncation columns).

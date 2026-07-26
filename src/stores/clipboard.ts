@@ -210,8 +210,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   async function loadMore() {
     if (!hasMore.value || isLoading.value || isLoadingMore.value) return;
-    // Soft-cap trimmed the local window; offset pagination would skip rows.
-    if (listWindowDirty) {
+    // Offset-based sorts (created_desc, copies_desc, updated_asc) can skip rows
+    // when the soft cap has trimmed the local window; keyset pagination for
+    // updated_desc is stable against prepends/trim so we continue normally.
+    if (listWindowDirty && listSort.value !== "updated_desc") {
       await reloadList();
       return;
     }
@@ -229,9 +231,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
         if (seq !== loadSeq || trashFilter.value) return;
         appendRecords(result.records);
         listFetchOffset = offset + result.records.length;
-        if (!listWindowDirty) {
-          hasMore.value = result.has_more;
-        }
+        hasMore.value = result.has_more;
       } else if (listSort.value === "updated_desc" && records.value.length > 0) {
         // Keyset cursor — stable when new rows are prepended during scroll.
         const last = records.value[records.value.length - 1];
@@ -245,18 +245,14 @@ export const useClipboardStore = defineStore("clipboard", () => {
         );
         if (seq !== loadSeq) return;
         appendRecords(page.records);
-        if (!listWindowDirty) {
-          hasMore.value = page.has_more;
-        }
+        hasMore.value = page.has_more;
       } else {
         const offset = listFetchOffset;
         const page = await invoke<RecordsPage>("get_records", listQueryArgs(offset));
         if (seq !== loadSeq) return;
         appendRecords(page.records);
         listFetchOffset = offset + page.records.length;
-        if (!listWindowDirty) {
-          hasMore.value = page.has_more;
-        }
+        hasMore.value = page.has_more;
       }
     } catch (e) {
       console.error("Failed to load more records:", e);

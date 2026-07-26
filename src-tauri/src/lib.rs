@@ -76,6 +76,9 @@ pub struct ClipboardRecord {
     /// Full content character length (list rows may truncate `content`)
     #[serde(rename = "content_len")]
     pub content_len: Option<i32>,
+    /// Short display alias (does not change paste content / hash). Empty = none.
+    #[serde(default)]
+    pub alias: String,
 }
 
 // === Settings (must match src/types.ts Settings) ===
@@ -361,6 +364,7 @@ pub fn run() {
             commands::toggle_favorite,
             commands::batch_set_favorite,
             commands::toggle_pin,
+            commands::set_record_alias,
             commands::get_settings,
             commands::save_settings,
             commands::set_capture_paused,

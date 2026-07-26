@@ -65,13 +65,15 @@ pub struct ImageMeta {
 const RECORD_COLS: &str = "id, content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, content_html,
-               content_len";
+               content_len, alias";
 
 /// List/search: omit HTML, truncate content for IPC/memory; prefer content_len column.
 const RECORD_COLS_LIST: &str = "id, substr(content, 1, 400) as content, content_type, source_app, source_window, hash,
                copy_count, is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at,
                created_at, updated_at, media_path, thumb_path, width, height, NULL as content_html,
-               content_len";
+               content_len, alias";
+
+const ALIAS_MAX_CHARS: usize = 80;
 
 pub struct ClipboardDb {
     /// Writer connection (schema, inserts, updates, deletes).
@@ -129,7 +131,8 @@ impl ClipboardDb {
                 width INTEGER,
                 height INTEGER,
                 content_html TEXT,
-                content_len INTEGER NOT NULL DEFAULT 0
+                content_len INTEGER NOT NULL DEFAULT 0,
+                alias TEXT NOT NULL DEFAULT ''
             );
 
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
@@ -157,6 +160,10 @@ impl ClipboardDb {
         conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
         conn.execute_batch(
             "ALTER TABLE records ADD COLUMN content_len INTEGER NOT NULL DEFAULT 0;",
+        )
+        .ok();
+        conn.execute_batch(
+            "ALTER TABLE records ADD COLUMN alias TEXT NOT NULL DEFAULT '';",
         )
         .ok();
         conn.execute_batch(
@@ -288,6 +295,7 @@ impl ClipboardDb {
     ) {
         sql.push_str(
             "instr(content, ?) > 0
+             OR instr(alias, ?) > 0
              OR instr(source_app, ?) > 0
              OR instr(source_window, ?) > 0
              OR EXISTS (
@@ -297,6 +305,7 @@ impl ClipboardDb {
              )",
         );
         let q = query.to_string();
+        params.push(Box::new(q.clone()));
         params.push(Box::new(q.clone()));
         params.push(Box::new(q.clone()));
         params.push(Box::new(q.clone()));
@@ -333,7 +342,7 @@ impl ClipboardDb {
         // builds (incl. Windows); use DELETE FROM fts WHERE rowid=... instead.
         // v3: FTS au only on content (dedup source updates must not rebuild FTS);
         //     tag→FTS refresh is application-driven (batch auto-tag once).
-        const FTS_VERSION: &str = "3";
+        const FTS_VERSION: &str = "4";
         let current: Option<String> = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = 'fts_version'",
@@ -375,11 +384,12 @@ impl ClipboardDb {
                 source_app,
                 source_window,
                 tags,
+                alias,
                 tokenize = 'trigram'
             );
 
             CREATE TRIGGER records_fts_ai AFTER INSERT ON records BEGIN
-                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
                 VALUES (
                     new.id,
                     new.content,
@@ -390,7 +400,8 @@ impl ClipboardDb {
                         FROM record_tags rt
                         INNER JOIN tags t ON t.id = rt.tag_id
                         WHERE rt.record_id = new.id
-                    ), '')
+                    ), ''),
+                    new.alias
                 );
             END;
 
@@ -400,9 +411,10 @@ impl ClipboardDb {
 
             -- Only content changes rebuild FTS. Dedup updates of source_app/window
             -- must not rewrite the full content into FTS on every re-copy.
+            -- Alias updates call refresh_record_fts from set_record_alias.
             CREATE TRIGGER records_fts_au AFTER UPDATE OF content ON records BEGIN
                 DELETE FROM records_fts WHERE rowid = old.id;
-                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
                 VALUES (
                     new.id,
                     new.content,
@@ -413,7 +425,8 @@ impl ClipboardDb {
                         FROM record_tags rt
                         INNER JOIN tags t ON t.id = rt.tag_id
                         WHERE rt.record_id = new.id
-                    ), '')
+                    ), ''),
+                    new.alias
                 );
             END;
 
@@ -421,7 +434,7 @@ impl ClipboardDb {
                 DELETE FROM records_fts WHERE rowid IN (
                     SELECT rt.record_id FROM record_tags rt WHERE rt.tag_id = new.id
                 );
-                INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+                INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
                 SELECT
                     r.id,
                     r.content,
@@ -432,7 +445,8 @@ impl ClipboardDb {
                         FROM record_tags rt
                         INNER JOIN tags t ON t.id = rt.tag_id
                         WHERE rt.record_id = r.id
-                    ), '')
+                    ), ''),
+                    r.alias
                 FROM records r
                 WHERE r.id IN (SELECT rt.record_id FROM record_tags rt WHERE rt.tag_id = new.id);
             END;
@@ -441,7 +455,7 @@ impl ClipboardDb {
 
         conn.execute_batch(
             r#"
-            INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+            INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
             SELECT
                 r.id,
                 r.content,
@@ -452,7 +466,8 @@ impl ClipboardDb {
                     FROM record_tags rt
                     INNER JOIN tags t ON t.id = rt.tag_id
                     WHERE rt.record_id = r.id
-                ), '')
+                ), ''),
+                r.alias
             FROM records r;
             "#,
         )?;
@@ -469,7 +484,7 @@ impl ClipboardDb {
         conn.execute("DELETE FROM records_fts WHERE rowid = ?", [record_id])?;
         conn.execute(
             r#"
-            INSERT INTO records_fts(rowid, content, source_app, source_window, tags)
+            INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
             SELECT
                 r.id,
                 r.content,
@@ -480,7 +495,8 @@ impl ClipboardDb {
                     FROM record_tags rt
                     INNER JOIN tags t ON t.id = rt.tag_id
                     WHERE rt.record_id = r.id
-                ), '')
+                ), ''),
+                r.alias
             FROM records r WHERE r.id = ?
             "#,
             [record_id],
@@ -531,6 +547,7 @@ impl ClipboardDb {
             media_abs,
             thumb_abs,
             content_len: row.get(19).ok(),
+            alias: row.get::<_, String>(20).unwrap_or_default(),
         })
     }
 
@@ -1156,6 +1173,24 @@ impl ClipboardDb {
         Ok(new_val == 1)
     }
 
+    /// Set short display alias (trim + max 80 chars). Empty clears. Does not touch content/hash.
+    pub fn set_record_alias(&self, id: i64, alias: &str) -> SqlResult<String> {
+        let mut alias = alias.trim().to_string();
+        if alias.chars().count() > ALIAS_MAX_CHARS {
+            alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
+        }
+        let conn = self.conn.lock();
+        let n = conn.execute(
+            "UPDATE records SET alias = ? WHERE id = ?",
+            params![alias, id],
+        )?;
+        if n == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+        Self::refresh_record_fts(&conn, id)?;
+        Ok(alias)
+    }
+
     pub fn get_settings(&self) -> SqlResult<Settings> {
         if let Some(cached) = self.settings_cache.read().as_ref() {
             return Ok(cached.clone());
@@ -1314,12 +1349,17 @@ impl ClipboardDb {
                 continue;
             }
 
+            let mut alias = record.alias.trim().to_string();
+            if alias.chars().count() > ALIAS_MAX_CHARS {
+                alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
+            }
+
             tx.execute(
                 "INSERT INTO records (
                     content, content_type, source_app, source_window, hash, copy_count,
                     is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at,
-                    media_path, thumb_path, width, height, content_html
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    media_path, thumb_path, width, height, content_html, alias
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
                     record.content_type,
@@ -1339,6 +1379,7 @@ impl ClipboardDb {
                     record.width,
                     record.height,
                     record.content_html,
+                    alias,
                 ],
             )?;
             imported += 1;

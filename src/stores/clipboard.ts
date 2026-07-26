@@ -498,6 +498,19 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  async function setAlias(id: number, alias: string): Promise<string | null> {
+    const record = records.value.find((r) => r.id === id);
+    if (!record) return null;
+    try {
+      const saved = await invoke<string>("set_record_alias", { id, alias });
+      patchRecord(id, { alias: saved });
+      return saved;
+    } catch (e) {
+      console.error("Set alias failed:", e);
+      return null;
+    }
+  }
+
   async function deleteBatch(ids: number[]) {
     try {
       await invoke("delete_records_batch", { ids });
@@ -1004,6 +1017,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     toggleFavorite,
     batchFavorite,
     togglePin,
+    setAlias,
     deleteBatch,
     restoreRecord,
     restoreRecordsBatch,

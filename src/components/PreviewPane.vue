@@ -8,6 +8,17 @@
         </div>
         <div class="preview-heading">
           <div class="preview-name" :title="`内容类型：${typeLabel}`">{{ typeLabel }}</div>
+          <button
+            v-if="!record.is_trashed"
+            type="button"
+            class="preview-alias-btn"
+            :class="{ 'has-alias': !!recordAlias }"
+            :title="recordAlias ? '编辑别名' : '设置别名'"
+            @click="aliasDialogVisible = true"
+          >
+            <AppIcon name="edit" :size="11" />
+            <span>{{ recordAlias || "设置别名" }}</span>
+          </button>
           <div class="preview-meta-line">
             <SourceBadge :source-app="record.source_app" />
             <span class="meta-sep" aria-hidden="true">·</span>
@@ -141,6 +152,13 @@
       @created="onTagCreated"
     />
 
+    <AliasDialog
+      :visible="aliasDialogVisible"
+      :record-id="record.id"
+      :initial-alias="record.alias ?? ''"
+      @close="aliasDialogVisible = false"
+    />
+
     <!-- Actions -->
     <div class="preview-actions" v-if="record && !record.is_trashed">
       <button type="button" class="action-btn action-primary" @click="paste">
@@ -189,6 +207,7 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import TagDialog from "./TagDialog.vue";
+import AliasDialog from "./AliasDialog.vue";
 import SourceBadge from "./SourceBadge.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
@@ -296,6 +315,9 @@ const clipboardColor = computed(() => {
 
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"assign" | "create">("assign");
+const aliasDialogVisible = ref(false);
+
+const recordAlias = computed(() => (record.value?.alias ?? "").trim());
 
 const TYPE_LABELS: Record<string, string> = {
   text: "纯文本",
@@ -547,6 +569,37 @@ async function permanentDel() {
   font-size: 0.875rem;
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.preview-alias-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.preview-alias-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-alias-btn:hover {
+  color: var(--accent);
+}
+
+.preview-alias-btn.has-alias {
+  color: var(--text-secondary);
 }
 
 .preview-meta-line {

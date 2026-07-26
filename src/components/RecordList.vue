@@ -179,6 +179,7 @@
             <div
               v-else
               class="record-title"
+              :title="recordTitleAttr(item.record!)"
               v-html="previewHtml(item.record!)"
             ></div>
             <div class="record-meta">
@@ -261,6 +262,13 @@
       @close="closeContextMenu"
       @select="onContextSelect"
     />
+
+    <AliasDialog
+      :visible="aliasDialog.visible"
+      :record-id="aliasDialog.recordId"
+      :initial-alias="aliasDialog.initialAlias"
+      @close="closeAliasDialog"
+    />
   </div>
 </template>
 
@@ -270,6 +278,7 @@ import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/c
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
+import AliasDialog from "./AliasDialog.vue";
 import BatchBar from "./BatchBar.vue";
 import SourceBadge from "./SourceBadge.vue";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
@@ -746,6 +755,24 @@ const contextMenu = reactive({
   record: null as ClipboardRecord | null,
 });
 
+const aliasDialog = reactive({
+  visible: false,
+  recordId: null as number | null,
+  initialAlias: "",
+});
+
+function openAliasDialog(record: ClipboardRecord) {
+  aliasDialog.recordId = record.id;
+  aliasDialog.initialAlias = record.alias ?? "";
+  aliasDialog.visible = true;
+}
+
+function closeAliasDialog() {
+  aliasDialog.visible = false;
+  aliasDialog.recordId = null;
+  aliasDialog.initialAlias = "";
+}
+
 const contextMenuItems = computed<ContextMenuItem[]>(() => {
   if (clipboardStore.trashFilter) {
     return [
@@ -770,11 +797,20 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       icon: "pin",
       shortcut: "Ctrl+T",
     },
+    {
+      id: "alias",
+      label: rec?.alias?.trim() ? "编辑别名" : "设置别名",
+      icon: "edit",
+    },
     { id: "delete", label: "删除", icon: "trash", shortcut: "Del", danger: true, separatorBefore: true },
   ];
 });
 
-function getPreview(record: ClipboardRecord): string {
+function recordAlias(record: ClipboardRecord): string {
+  return (record.alias ?? "").trim();
+}
+
+function contentPreview(record: ClipboardRecord): string {
   if (record.content_type === "image") {
     if (record.width && record.height) {
       return `图片 ${record.width}×${record.height}`;
@@ -786,12 +822,30 @@ function getPreview(record: ClipboardRecord): string {
   return record.content.slice(0, maxLen) + "…";
 }
 
+/** List primary line: alias when set, otherwise content preview. */
+function getPreview(record: ClipboardRecord): string {
+  const alias = recordAlias(record);
+  if (alias) return alias.length > 80 ? alias.slice(0, 80) + "…" : alias;
+  return contentPreview(record);
+}
+
+/** Hover shows original content when an alias is displayed. */
+function recordTitleAttr(record: ClipboardRecord): string | undefined {
+  if (!recordAlias(record)) return undefined;
+  return contentPreview(record);
+}
+
 /** Safe HTML for list title — highlights search hits when querying. */
 function previewHtml(record: ClipboardRecord): string {
+  const alias = recordAlias(record);
+  const q = clipboardStore.searchQuery.trim();
+  if (alias) {
+    if (!q) return escapeHtml(getPreview(record));
+    return highlightedPreview(alias, q, 80);
+  }
   if (record.content_type === "image") {
     return escapeHtml(getPreview(record));
   }
-  const q = clipboardStore.searchQuery.trim();
   if (!q) return escapeHtml(getPreview(record));
   return highlightedPreview(record.content, q, 80);
 }
@@ -922,6 +976,10 @@ async function onContextSelect(id: string) {
   }
   if (id === "pin") {
     await scheduleTogglePin(record);
+    return;
+  }
+  if (id === "alias") {
+    openAliasDialog(record);
     return;
   }
   if (id === "restore") {

@@ -34,6 +34,8 @@ export interface ClipboardRecord {
   thumb_abs?: string | null;
   /** Full content length (list rows may truncate `content`) */
   content_len?: number | null;
+  /** Short display alias; empty = none. Does not change paste content. */
+  alias?: string;
   /** Preview-specific fields (not stored) */
   preview?: string; // truncated content for list
   display_time?: string; // relative time string

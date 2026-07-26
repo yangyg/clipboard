@@ -392,6 +392,18 @@ pub async fn toggle_pin(state: State<'_, AppState>, id: i64) -> Result<bool, Str
 }
 
 #[tauri::command]
+pub async fn set_record_alias(
+    state: State<'_, AppState>,
+    id: i64,
+    alias: String,
+) -> Result<String, String> {
+    state
+        .db
+        .set_record_alias(id, &alias)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
     state.db.get_settings().map_err(|e| e.to_string())
 }

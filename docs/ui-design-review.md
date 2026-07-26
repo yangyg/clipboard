@@ -164,6 +164,7 @@ FloatingPanel / WindowApp / PreviewPane 头部操作按钮已补 `aria-label`，
 | 置顶分组 | 「置顶」标签 + 与普通列表之间的细分割线（两组都有时） |
 | 标签侧栏 | 0 计数收进「更多」；`is_auto` 用 sparkles + tooltip「自动打标规则创建」 |
 | 托盘左键 | 后台可见 → 置前；已前台 → 隐藏；最小化/隐藏 → 显示（`toggle_main_panel`） |
+| 记录别名 | 短 `alias`（≤80）；列表主文案优先；搜索可命中；不改粘贴内容 |
 | 色值预览 | 整段 CSS 颜色仍为 `text`；列表/详情显示 swatch（`clipboardColor.ts`） |
 | Toast | 右上角，`top: 60px`，避开标题栏按钮 |
 | 标签色板 | 仍 12 色预设，fallback 跟 accent / type token（`themeColors.ts`） |

@@ -818,7 +818,7 @@ async function permanentDel() {
 
 /* Tags */
 .preview-tags {
-  padding: 0 20px 12px;
+  padding: 8px 20px 16px;
 }
 
 .tags-label {
@@ -893,8 +893,7 @@ async function permanentDel() {
 
 /* Action Buttons */
 .preview-actions {
-  padding: 12px 20px 20px;
-  border-top: 1px solid var(--border-light, var(--border-subtle));
+  padding: 8px 20px 20px;
   display: grid;
   grid-template-columns: 1.5fr repeat(3, 1fr) auto;
   gap: 8px;

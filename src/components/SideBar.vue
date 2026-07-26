@@ -496,7 +496,6 @@ function onTagMenuSelect(id: string) {
 
 .sidebar-bottom {
   padding: 8px 10px 12px;
-  border-top: 1px solid var(--border-subtle);
   flex-shrink: 0;
   display: flex;
   flex-direction: row;

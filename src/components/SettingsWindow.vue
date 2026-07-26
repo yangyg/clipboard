@@ -550,7 +550,7 @@
 
               <div class="guide-block">
                 <div class="guide-heading"><AppIcon name="paste" :size="14" /> 粘贴到当前应用</div>
-                <div class="guide-text">双击条目、按 <span class="guide-kbd">Enter</span> 或右键菜单选“粘贴”，会把内容写回系统剪贴板（图片优先以 PNG 格式写入），并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
+                <div class="guide-text">按 <span class="guide-kbd">Enter</span>、点行内/底栏「粘贴」或右键菜单选“粘贴”，会把内容写回系统剪贴板（图片优先以 PNG 格式写入），并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 <span class="guide-kbd">Alt + V</span> 或选“纯文本粘贴”则去除格式。</div>
               </div>
 
               <div class="guide-block">

@@ -28,7 +28,7 @@
 3. **全局降级完备**：`prefers-reduced-motion`（0.01ms 全覆盖）+ `anim-disabled` 设置项（0s 全覆盖），无限动画（spin/pulse-border）均被覆盖。
 4. **弹窗动画标准**：BaseDialog 遮罩 opacity + 卡片 `translateY(10px) scale(0.98)` 分离过渡（`BaseDialog.vue:236-255`）；Toast TransitionGroup 带 `.toast-move` FLIP 移动（`ToastHost.vue:87-89`）。
 5. **性能意识好**：虚拟滚动（OVERSCAN=6、rAF 节流 scroll、`RecordList.vue:396-408`）、窗口模式禁用 backdrop-filter（`main.css:237-240`）、主题切换背景 280ms 渐变而非突变。
-6. **滚轮/键盘**：原生滚动 + rAF 同步 scrollTop；roving tabindex + aria-activedescendant；双击粘贴与单击选中无冲突。
+6. **滚轮/键盘**：原生滚动 + rAF 同步 scrollTop；roving tabindex + aria-activedescendant；单击选中，Enter / 按钮粘贴（已去掉双击粘贴，避免误触）。
 
 ---
 

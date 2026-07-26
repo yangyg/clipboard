@@ -131,7 +131,6 @@
           }"
           :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
-          @dblclick="onItemDoubleClick(item.record!.id)"
           @contextmenu.prevent="showContextMenu($event, item.record!)"
           @keydown.enter.prevent="onItemActivate(item.record!.id)"
           @keydown.space.prevent="onItemClick(item.record!.id)"
@@ -918,15 +917,12 @@ function onItemClick(id: number) {
   clipboardStore.selectRecord(id);
 }
 
+/** Enter activates paste (or restore in trash). Double-click removed — easy to misfire. */
 async function onItemActivate(id: number) {
   if (clipboardStore.batchMode) {
     clipboardStore.toggleBatchSelect(id);
     return;
   }
-  await onItemDoubleClick(id);
-}
-
-async function onItemDoubleClick(id: number) {
   if (clipboardStore.trashFilter) {
     await clipboardStore.restoreRecord(id);
     return;

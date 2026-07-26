@@ -112,6 +112,10 @@ export interface WebDavSyncResult {
   message: string;
 }
 
+/**
+ * L-3: Default auto-tag rules shown in settings UI on reset.
+ * IMPORTANT: Keep in sync with `default_auto_tag_rules()` in src-tauri/src/lib.rs.
+ */
 export const DEFAULT_AUTO_TAG_RULES: AutoTagRule[] = [
   { tag_name: "链接", keywords: [], content_types: ["link"] },
   {

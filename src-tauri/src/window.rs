@@ -98,9 +98,11 @@ fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWi
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    let Ok(mut settings) = state.db.get_settings() else {
+    let Ok(settings_arc) = state.db.get_settings() else {
         return;
     };
+    // Cold path (debounced resize): clone inner Settings for mutation.
+    let mut settings = (*settings_arc).clone();
     // Prefer live window chrome over DB app_mode (mode switch may not be saved yet).
     let is_window = !window.is_always_on_top().unwrap_or(settings.app_mode == "window");
     let (min_w, min_h, _, _) = mode_size_bounds(is_window);

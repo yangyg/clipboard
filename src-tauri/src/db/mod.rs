@@ -1,6 +1,7 @@
 use rusqlite::{Connection, Result as SqlResult, params, Row};
 use parking_lot::{Mutex, RwLock};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::fmt;
 use crate::media;
 use crate::{ClipboardRecord, Settings};
@@ -83,9 +84,13 @@ pub struct ClipboardDb {
     read_conns: Vec<Mutex<Connection>>,
     read_rr: std::sync::atomic::AtomicUsize,
     media_root: PathBuf,
+    /// M-3: Cached string prefix (with trailing separator) for fast path enrichment.
+    /// Avoids PathBuf alloc + to_string_lossy per record row.
+    media_root_prefix: String,
     /// In-memory copy of `app_settings`, populated lazily. Avoids re-parsing the
     /// settings JSON on every clipboard event (the monitor reads it 2-3x/event).
-    settings_cache: RwLock<Option<Settings>>,
+    /// Arc allows cheap clone on the capture hot path (atomic refcount bump only).
+    settings_cache: RwLock<Option<Arc<Settings>>>,
 }
 
 const READ_POOL_SIZE: usize = 3;
@@ -244,11 +249,21 @@ impl ClipboardDb {
             read_conns.push(Mutex::new(c));
         }
 
+        // M-3: Pre-compute string prefix for enrich_paths (avoids per-record PathBuf).
+        let media_root_prefix = {
+            let mut s = media_root.to_string_lossy().to_string();
+            if !s.ends_with('\\') && !s.ends_with('/') {
+                s.push('\\');
+            }
+            s
+        };
+
         Ok(Self {
             conn: Mutex::new(conn),
             read_conns,
             read_rr: std::sync::atomic::AtomicUsize::new(0),
             media_root,
+            media_root_prefix,
             settings_cache: RwLock::new(None),
         })
     }
@@ -265,6 +280,8 @@ impl ClipboardDb {
                 return g;
             }
         }
+        // L-5: All readers busy — log contention for diagnostics before blocking.
+        tracing::debug!("DB read pool exhausted ({} conns); blocking on lock", n);
         self.read_conns[start].lock()
     }
 
@@ -508,21 +525,25 @@ impl ClipboardDb {
         &self.media_root
     }
 
-    fn enrich_paths(&self, media_path: Option<String>, thumb_path: Option<String>) -> (Option<String>, Option<String>) {
+    /// M-3: Fast path enrichment using cached prefix + string concat.
+    /// Relative paths are known-safe (SHA-256 hex filenames from our own code).
+    #[inline]
+    fn enrich_paths(&self, media_path: Option<&str>, thumb_path: Option<&str>) -> (Option<String>, Option<String>) {
         let to_abs = |rel: &str| {
-            media::absolute(&self.media_root, rel)
-                .to_string_lossy()
-                .to_string()
+            // Replace '/' with '\\' for Windows; single allocation via format!.
+            let normalized = rel.replace('/', "\\");
+            format!("{}{}", self.media_root_prefix, normalized)
         };
-        let media_abs = media_path.as_deref().map(to_abs);
-        let thumb_abs = thumb_path.as_deref().map(to_abs);
+        let media_abs = media_path.map(to_abs);
+        let thumb_abs = thumb_path.map(to_abs);
         (media_abs, thumb_abs)
     }
 
     fn map_record_row(&self, row: &Row<'_>) -> SqlResult<ClipboardRecord> {
         let media_path: Option<String> = row.get(14)?;
         let thumb_path: Option<String> = row.get(15)?;
-        let (media_abs, thumb_abs) = self.enrich_paths(media_path.clone(), thumb_path.clone());
+        // M-3: Pass &str — no clone needed since enrich_paths only reads.
+        let (media_abs, thumb_abs) = self.enrich_paths(media_path.as_deref(), thumb_path.as_deref());
         Ok(ClipboardRecord {
             id: row.get(0)?,
             content: row.get(1)?,
@@ -1191,9 +1212,11 @@ impl ClipboardDb {
         Ok(alias)
     }
 
-    pub fn get_settings(&self) -> SqlResult<Settings> {
+    /// Returns a shared reference-counted Settings snapshot. Clone is cheap (Arc bump).
+    /// Callers needing mutation (resize persist, webdav sync) should clone the inner Settings.
+    pub fn get_settings(&self) -> SqlResult<Arc<Settings>> {
         if let Some(cached) = self.settings_cache.read().as_ref() {
-            return Ok(cached.clone());
+            return Ok(Arc::clone(cached));
         }
 
         let mut settings = Settings::default();
@@ -1210,8 +1233,9 @@ impl ClipboardDb {
             }
         }
 
-        *self.settings_cache.write() = Some(settings.clone());
-        Ok(settings)
+        let arc = Arc::new(settings);
+        *self.settings_cache.write() = Some(Arc::clone(&arc));
+        Ok(arc)
     }
 
     pub fn save_settings(&self, settings: &Settings) -> SqlResult<()> {
@@ -1223,7 +1247,7 @@ impl ClipboardDb {
                 [&json],
             )?;
         }
-        *self.settings_cache.write() = Some(settings.clone());
+        *self.settings_cache.write() = Some(Arc::new(settings.clone()));
         Ok(())
     }
 
@@ -1326,34 +1350,30 @@ impl ClipboardDb {
         };
 
         for record in records {
-            let mut record = record.clone();
-            record.content_type = crate::security::normalize_content_type(&record.content_type);
-            if record.content_type == "link" && !crate::security::is_safe_http_url(&record.content) {
-                record.content_type = "text".into();
+            // M-5: Avoid cloning the entire record (content + content_html can be large).
+            // Only create local overrides for fields we might sanitize.
+            let mut content_type = crate::security::normalize_content_type(&record.content_type);
+            if content_type == "link" && !crate::security::is_safe_http_url(&record.content) {
+                content_type = "text".into();
             }
-            if let Some(ref mp) = record.media_path {
+            let mut media_path = record.media_path.as_deref();
+            let mut thumb_path = record.thumb_path.as_deref();
+            if let Some(mp) = media_path {
                 if !crate::security::is_allowed_media_rel(mp) {
-                    record.media_path = None;
-                    record.thumb_path = None;
-                    record.media_abs = None;
-                    record.thumb_abs = None;
+                    media_path = None;
+                    thumb_path = None;
                 }
             }
-            if let Some(ref tp) = record.thumb_path {
+            if let Some(tp) = thumb_path {
                 if !crate::security::is_allowed_media_rel(tp) {
-                    record.thumb_path = None;
-                    record.thumb_abs = None;
+                    thumb_path = None;
                 }
             }
             // Cap HTML blob size from malicious imports
-            if let Some(ref html) = record.content_html {
-                if html.len() > 512 * 1024 {
-                    record.content_html = None;
-                }
-            }
+            let content_html = record.content_html.as_deref().filter(|h| h.len() <= 512 * 1024);
 
             // Skip empty text records; image records may have empty content with media_path
-            let is_image = record.content_type == "image";
+            let is_image = content_type == "image";
             if (!is_image && record.content.trim().is_empty()) || record.hash.trim().is_empty() {
                 continue;
             }
@@ -1379,12 +1399,12 @@ impl ClipboardDb {
                         record.copy_count,
                         record.updated_at,
                         record.updated_at,
-                        record.media_path,
-                        record.media_path,
-                        record.media_path,
-                        record.thumb_path,
-                        record.thumb_path,
-                        record.thumb_path,
+                        media_path,
+                        media_path,
+                        media_path,
+                        thumb_path,
+                        thumb_path,
+                        thumb_path,
                         record.hash,
                     ],
                 )?;
@@ -1407,7 +1427,7 @@ impl ClipboardDb {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
-                    record.content_type,
+                    content_type,
                     record.source_app,
                     record.source_window,
                     record.hash,
@@ -1419,11 +1439,11 @@ impl ClipboardDb {
                     record.auto_expire_at,
                     record.created_at,
                     record.updated_at,
-                    record.media_path,
-                    record.thumb_path,
+                    media_path,
+                    thumb_path,
                     record.width,
                     record.height,
-                    record.content_html,
+                    content_html,
                     alias,
                 ],
             )?;

@@ -97,8 +97,8 @@
         @scroll="onListScroll"
       >
       <div
-        v-if="listLayout === 'list'"
         class="virtual-spacer"
+        :class="{ 'grid-span': listLayout === 'grid' }"
         :style="{ height: `${virtualPadTop}px` }"
         aria-hidden="true"
       />
@@ -233,8 +233,8 @@
         </div>
       </template>
       <div
-        v-if="listLayout === 'list'"
         class="virtual-spacer"
+        :class="{ 'grid-span': listLayout === 'grid' }"
         :style="{ height: `${virtualPadBottom}px` }"
         aria-hidden="true"
       />
@@ -538,17 +538,84 @@ interface WindowItem extends FlatItem {
   thumb?: string | null;
 }
 
-/** Id order + pin flags + row heights — not content fields. */
+// === H-3: Grid virtualization constants ===
+const GRID_COLS = 2;
+const GRID_GAP = 8; // px, matches CSS .view-grid gap
+const GRID_CARD_HEIGHT = 132; // px, matches CSS .view-grid .record-item height
+const GRID_IMAGE_HEIGHT = 140; // px, matches CSS .view-grid .record-item.is-image height
+
+/** A virtual row in grid layout: 1-2 record cards, or a solo label/divider. */
+interface GridRow {
+  items: FlatItem[];
+  height: number; // row content height (excludes gap)
+  offset: number; // cumulative top offset including gaps
+}
+
+function gridItemHeight(item: FlatItem): number {
+  if (item.type === "label") return item.height;
+  if (item.type === "divider") return item.height;
+  // record: image cards are taller
+  const records = clipboardStore.filteredRecords;
+  const idx = recordIndexById.value.get(item.id!);
+  const r = idx !== undefined ? records[idx] : undefined;
+  return r && r.content_type === "image" ? GRID_IMAGE_HEIGHT : GRID_CARD_HEIGHT;
+}
+
+/** Group flatItems into grid rows (2 records per row; labels/dividers solo). */
+function buildGridRows(items: FlatItem[]): GridRow[] {
+  const rows: GridRow[] = [];
+  let offset = 0;
+  let i = 0;
+  while (i < items.length) {
+    const item = items[i];
+    if (item.type !== "record") {
+      // Label or divider: full-width solo row
+      rows.push({ items: [item], height: item.height, offset });
+      offset += item.height + GRID_GAP;
+      i++;
+    } else {
+      // Pair up to GRID_COLS record items into one row
+      const rowItems: FlatItem[] = [item];
+      let rowH = gridItemHeight(item);
+      i++;
+      while (rowItems.length < GRID_COLS && i < items.length && items[i].type === "record") {
+        rowItems.push(items[i]);
+        rowH = Math.max(rowH, gridItemHeight(items[i]));
+        i++;
+      }
+      rows.push({ items: rowItems, height: rowH, offset });
+      offset += rowH + GRID_GAP;
+    }
+  }
+  return rows;
+}
+
+const gridRows = shallowRef<GridRow[]>([]);
+
+// Also build on layout switch
+watch(listLayout, (v) => {
+  if (v === "grid") {
+    gridRows.value = buildGridRows(flatItems.value);
+  }
+});
+
+/** M-2: Numeric layout signature — detects id order / pin flags / row height
+ * changes without O(N) string concatenation. Uses FNV-style hash (32-bit).
+ * Collision probability negligible for ≤1000 records (list soft cap = 120). */
 const layoutSig = computed(() => {
   const records = clipboardStore.filteredRecords;
-  const rh = rowHeight.value;
-  const lh = labelHeight.value;
-  const dh = dividerHeight.value;
-  let sig = `${rh}|${lh}|${dh}|`;
+  // Incorporate row heights (change on font-size setting).
+  let h = rowHeight.value * 2654435761;
+  h = (h ^ (labelHeight.value * 40503)) >>> 0;
+  h = (h ^ (dividerHeight.value * 12347)) >>> 0;
+  // Mix in record count + id/pin per record.
+  h = (h ^ records.length) >>> 0;
   for (const r of records) {
-    sig += `${r.id}:${r.is_pinned ? 1 : 0},`;
+    // id is unique; pin flag in high bit. Multiply-xor for order sensitivity.
+    h = (h ^ ((r.id * 2654435761 + (r.is_pinned ? 0x9e3779b9 : 0)) >>> 0)) >>> 0;
+    h = ((h << 5) ^ (h >>> 27)) >>> 0; // rotate-mix
   }
-  return sig;
+  return h;
 });
 
 function buildFlatItems(): FlatItem[] {
@@ -596,6 +663,10 @@ const recordIndexById = shallowRef(buildRecordIndex());
 watch(layoutSig, () => {
   flatItems.value = buildFlatItems();
   recordIndexById.value = buildRecordIndex();
+  // H-3: Keep grid rows in sync (must run AFTER flatItems + index update).
+  if (listLayout.value === "grid") {
+    gridRows.value = buildGridRows(flatItems.value);
+  }
 });
 
 const contentHeight = computed(() => {
@@ -654,30 +725,79 @@ function resolveWindowItem(
   return { ...item, record, thumb: recordThumbSrc(record) };
 }
 
-const windowItems = computed<WindowItem[]>(() => {
-  const { start, end } = virtualRange.value;
-  const slice = flatItems.value.slice(start, end);
-  const records = clipboardStore.filteredRecords;
-  const indexById = recordIndexById.value;
-  return slice.map((item) => resolveWindowItem(item, records, indexById));
+/** Grid virtual range: binary search on grid row offsets. */
+const gridVirtualRange = computed(() => {
+  const rows = gridRows.value;
+  const n = rows.length;
+  if (n === 0) return { start: 0, end: 0 };
+  const top = scrollTop.value;
+  const bottom = top + viewportHeight.value;
+  // First row whose bottom edge >= top
+  let lo = 0, hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (rows[mid].offset + rows[mid].height < top) lo = mid + 1;
+    else hi = mid;
+  }
+  let start = lo;
+  // First row whose offset >= bottom
+  lo = 0; hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (rows[mid].offset < bottom) lo = mid + 1;
+    else hi = mid;
+  }
+  let end = lo;
+  start = Math.max(0, start - OVERSCAN);
+  end = Math.min(n, end + OVERSCAN);
+  return { start, end };
+});
+
+const gridContentHeight = computed(() => {
+  const rows = gridRows.value;
+  if (rows.length === 0) return 0;
+  const last = rows[rows.length - 1];
+  return last.offset + last.height;
 });
 
 /** Grid: render all loaded rows (page size is small); list: virtual window. */
 const displayItems = computed<WindowItem[]>(() => {
-  if (listLayout.value !== "grid") return windowItems.value;
   const records = clipboardStore.filteredRecords;
   const indexById = recordIndexById.value;
-  return flatItems.value.map((item) => resolveWindowItem(item, records, indexById));
+  if (listLayout.value !== "grid") {
+    const { start, end } = virtualRange.value;
+    const slice = flatItems.value.slice(start, end);
+    return slice.map((item) => resolveWindowItem(item, records, indexById));
+  }
+  // H-3: Grid virtualization — only resolve items in visible rows.
+  const { start, end } = gridVirtualRange.value;
+  const visibleRows = gridRows.value.slice(start, end);
+  const result: WindowItem[] = [];
+  for (const row of visibleRows) {
+    for (const item of row.items) {
+      result.push(resolveWindowItem(item, records, indexById));
+    }
+  }
+  return result;
 });
 
 const virtualPadTop = computed(() => {
-  if (listLayout.value === "grid") return 0;
+  if (listLayout.value === "grid") {
+    const { start } = gridVirtualRange.value;
+    const rows = gridRows.value;
+    return start > 0 && rows.length > 0 ? rows[start].offset : 0;
+  }
   const { start } = virtualRange.value;
   return start > 0 ? flatItems.value[start].offset : 0;
 });
 
 const virtualPadBottom = computed(() => {
-  if (listLayout.value === "grid") return 0;
+  if (listLayout.value === "grid") {
+    const { end } = gridVirtualRange.value;
+    const rows = gridRows.value;
+    if (end >= rows.length) return 0;
+    return Math.max(0, gridContentHeight.value - rows[end].offset);
+  }
   const { end } = virtualRange.value;
   const items = flatItems.value;
   if (end >= items.length) return 0;
@@ -1402,6 +1522,11 @@ onUnmounted(() => {
   width: 100%;
   flex-shrink: 0;
   pointer-events: none;
+}
+
+/* H-3: Grid spacer must span all columns to maintain scroll height */
+.virtual-spacer.grid-span {
+  grid-column: 1 / -1;
 }
 
 .section-label {

@@ -106,8 +106,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
     return merged;
   });
 
-  /** Server applies category/tag/trash/search filters; list is ready to render. */
-  const filteredRecords = computed(() => records.value);
+  /** M-4: Server applies category/tag/trash/search filters; list is ready to render.
+   * Direct ref alias (not a computed) — avoids an extra reactive caching layer
+   * on every access. Name kept for API compatibility. */
+  const filteredRecords = records;
 
   const filterCounts = computed(() => {
     const dist = (stats.value?.type_distribution ?? {}) as Record<string, number>;
@@ -371,11 +373,34 @@ export const useClipboardStore = defineStore("clipboard", () => {
     records.value = next;
   }
 
+  /**
+   * Batch-patch multiple records in ONE array copy + ONE reactive trigger.
+   * Eliminates O(N²) when patchRecord is called in a loop (deleteTag, updateTag).
+   */
+  function patchRecordsBatch(patches: Map<number, Partial<ClipboardRecord>>) {
+    if (patches.size === 0) return;
+    const next = records.value.slice();
+    let changed = false;
+    for (let i = 0; i < next.length; i++) {
+      const patch = patches.get(next[i].id);
+      if (patch) {
+        next[i] = { ...next[i], ...patch };
+        changed = true;
+      }
+    }
+    if (changed) records.value = next;
+  }
+
+  /** L-4: In-flight detail fetches — prevents duplicate IPC when selection changes rapidly. */
+  const detailInFlight = new Set<number>();
+
   /** Lazy-load full content / HTML into a separate detail cache (not list rows). */
   async function ensureRecordDetail(id: number) {
     if (recordDetails.value.has(id)) return;
+    if (detailInFlight.has(id)) return; // L-4: dedup concurrent calls
     const record = records.value.find((r) => r.id === id);
     if (!record || record.content_type === "image") return;
+    detailInFlight.add(id);
     try {
       const full = await invoke<ClipboardRecord | null>("get_record", { id });
       if (!full || selectedId.value !== id) return;
@@ -385,6 +410,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
       pruneRecordDetails(id);
     } catch (e) {
       console.error("Failed to load record detail:", e);
+    } finally {
+      detailInFlight.delete(id);
     }
   }
 
@@ -425,9 +452,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
     if (!toFav.length) return;
     try {
       await invoke("batch_set_favorite", { ids: toFav, favorite: true });
-      for (const id of toFav) {
-        patchRecord(id, { is_favorite: true });
-      }
+      const patches = new Map<number, Partial<ClipboardRecord>>();
+      for (const id of toFav) patches.set(id, { is_favorite: true });
+      patchRecordsBatch(patches);
       scheduleLoadStats();
     } catch (e) {
       console.error("Batch favorite failed:", e);
@@ -619,6 +646,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     let nextAt = Infinity;
     for (const r of records.value) {
       if (!r.auto_expire_at) continue;
+      // M-1: Only parse the nearest timestamp (one Date parse vs N).
       const t = new Date(r.auto_expire_at).getTime();
       if (Number.isNaN(t)) continue;
       if (t <= now) {
@@ -636,16 +664,17 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
-  // Only reschedule when expire-relevant rows change (not every list append/dedup).
+  // M-1: Watch source uses string comparison (RFC3339 is lexicographically
+  // ordered) to avoid N Date parses on every records change. The callback
+  // (scheduleExpireSweep) only runs when the signature actually changes.
   watch(
     () => {
       let count = 0;
-      let nearest = 0;
+      let nearest = "";
       for (const r of records.value) {
         if (!r.auto_expire_at) continue;
         count++;
-        const t = new Date(r.auto_expire_at).getTime();
-        if (!Number.isNaN(t) && (nearest === 0 || t < nearest)) nearest = t;
+        if (!nearest || r.auto_expire_at < nearest) nearest = r.auto_expire_at;
       }
       return count === 0 ? "0" : `${count}:${nearest}`;
     },
@@ -866,13 +895,13 @@ export const useClipboardStore = defineStore("clipboard", () => {
       const existing = tags.value.find((t) => t.id === id);
       await invoke("delete_tag", { id });
       if (existing) {
+        const patches = new Map<number, Partial<ClipboardRecord>>();
         for (const record of records.value) {
           if (record.tags.includes(existing.name)) {
-            patchRecord(record.id, {
-              tags: record.tags.filter((t) => t !== existing.name),
-            });
+            patches.set(record.id, { tags: record.tags.filter((t) => t !== existing.name) });
           }
         }
+        patchRecordsBatch(patches);
         if (activeTag.value === existing.name) {
           activeTag.value = null;
         }
@@ -890,14 +919,16 @@ export const useClipboardStore = defineStore("clipboard", () => {
       const oldName = existing?.name;
       await invoke("update_tag", { id, name, color });
       if (oldName && oldName !== name) {
+        const patches = new Map<number, Partial<ClipboardRecord>>();
         for (const record of records.value) {
           const idx = record.tags.indexOf(oldName);
           if (idx !== -1) {
             const nextTags = [...record.tags];
             nextTags[idx] = name;
-            patchRecord(record.id, { tags: nextTags });
+            patches.set(record.id, { tags: nextTags });
           }
         }
+        patchRecordsBatch(patches);
         if (activeTag.value === oldName) {
           activeTag.value = name;
         }

@@ -752,8 +752,8 @@ const SECTIONS: { key: string; icon: AppIconName; label: string }[] = [
 ];
 
 const THEMES: { key: Settings["theme"]; icon: AppIconName; label: string }[] = [
-  { key: "dark", icon: "moon", label: "暗色" },
-  { key: "light", icon: "sun", label: "亮色" },
+  { key: "dark", icon: "moon", label: "深色" },
+  { key: "light", icon: "sun", label: "浅色" },
   { key: "oled", icon: "circle", label: "深黑" },
   { key: "system", icon: "monitor", label: "跟随系统" },
 ];

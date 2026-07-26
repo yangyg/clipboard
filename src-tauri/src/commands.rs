@@ -176,10 +176,7 @@ pub async fn paste_record(
 ) -> Result<(), String> {
     use tauri::Manager;
 
-    // Serialize paste (async mutex — safe to hold across .await).
-    static PASTE_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-    let _paste_guard = PASTE_GATE.lock().await;
-
+    // H-5: Read-only preparation OUTSIDE the mutex — reduces lock hold time.
     let settings = state.db.get_settings().unwrap_or_default();
     let auto_close = settings.auto_close_on_paste;
     // Prefer live chrome over DB — matches what the user actually sees.
@@ -207,6 +204,13 @@ pub async fn paste_record(
     let monitor = state.monitor.clone();
     let media_root = state.db.media_root().to_path_buf();
 
+    // Serialize only the critical section: clipboard write → focus → Ctrl+V → restore.
+    // H-5: Mutex now guards only the timing-sensitive paste sequence, not the
+    // read-only preparation above. This reduces contention when multiple paste
+    // requests queue up (e.g. rapid keyboard shortcuts).
+    static PASTE_GATE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _paste_guard = PASTE_GATE.lock().await;
+
     // 1) Write clipboard while we still own the foreground (focus rights intact).
     let outcome = tokio::task::spawn_blocking(move || {
         let record = db.take_record_for_paste(id).map_err(|e| e.to_string())?;
@@ -228,7 +232,7 @@ pub async fn paste_record(
                     clipboard::write_clipboard_image(&rgba, w, h)
                 }
             } else {
-                return Err("Image file missing for this record".into());
+                return Err("该记录的图片文件缺失".into());
             }
         } else {
             match mode.as_deref() {
@@ -237,7 +241,7 @@ pub async fn paste_record(
             }
         };
         if !wrote {
-            return Err("Failed to set clipboard".into());
+            return Err("写入剪贴板失败".into());
         }
         Ok(PasteOutcome::Ready)
     })
@@ -405,7 +409,8 @@ pub async fn set_record_alias(
 
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
-    state.db.get_settings().map_err(|e| e.to_string())
+    let arc = state.db.get_settings().map_err(|e| e.to_string())?;
+    Ok((*arc).clone())
 }
 
 #[tauri::command]
@@ -521,7 +526,7 @@ pub async fn get_tray_menu_state(state: State<'_, AppState>) -> Result<TrayMenuS
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
     Ok(TrayMenuState {
         paused: *state.capture_paused.read(),
-        theme: settings.theme,
+        theme: settings.theme.clone(),
         enable_blur: settings.enable_blur,
         enable_animation: settings.enable_animation,
         panel_opacity: settings.panel_opacity,
@@ -763,7 +768,7 @@ pub async fn webdav_test_connection(state: State<'_, AppState>) -> Result<(), St
 pub async fn webdav_pull(
     state: State<'_, AppState>,
 ) -> Result<crate::webdav::WebDavSyncResult, String> {
-    let mut settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    let mut settings = (*state.db.get_settings().map_err(|e| e.to_string())?).clone();
     crate::webdav::webdav_pull(&state.db, &mut settings).await
 }
 
@@ -771,7 +776,7 @@ pub async fn webdav_pull(
 pub async fn webdav_push(
     state: State<'_, AppState>,
 ) -> Result<crate::webdav::WebDavSyncResult, String> {
-    let mut settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    let mut settings = (*state.db.get_settings().map_err(|e| e.to_string())?).clone();
     crate::webdav::webdav_push(&state.db, &mut settings).await
 }
 
@@ -779,6 +784,6 @@ pub async fn webdav_push(
 pub async fn webdav_sync(
     state: State<'_, AppState>,
 ) -> Result<crate::webdav::WebDavSyncResult, String> {
-    let mut settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    let mut settings = (*state.db.get_settings().map_err(|e| e.to_string())?).clone();
     crate::webdav::webdav_sync(&state.db, &mut settings).await
 }

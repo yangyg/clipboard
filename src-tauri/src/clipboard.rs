@@ -248,25 +248,33 @@ fn clipboard_has_bitmap_format() -> bool {
     }
 }
 
-/// Width/height/len + sampled bytes — enough to skip unchanged images cheaply.
-/// Cheap change-detection fingerprint for clipboard bitmaps (poll thread).
-/// Hashes width/height/len + first/last 2KB of RGBA — not cryptographic uniqueness.
+/// H-2: Quick dedup fingerprint for clipboard images. Uses FNV-1a (non-crypto)
+/// over dimensions + sampled head/tail bytes. This only guards the poll-loop
+/// dedup check (last_image_hash); the authoritative content hash is computed
+/// later by the image worker (SHA-256 over full RGBA).
 /// Collision risk: two different images with identical size and matching edge
-/// samples (e.g. large near-solid screenshots) may be treated as unchanged;
-/// full SHA-256 still runs on the capture worker when we do emit.
+/// samples (e.g. large near-solid screenshots) may be treated as unchanged.
 fn image_quick_fingerprint(img: &arboard::ImageData<'_>) -> String {
-    use sha2::{Digest, Sha256};
     let bytes = img.bytes.as_ref();
-    let mut hasher = Sha256::new();
-    hasher.update(img.width.to_le_bytes());
-    hasher.update(img.height.to_le_bytes());
-    hasher.update((bytes.len() as u64).to_le_bytes());
+    // FNV-1a 64-bit: fast, no heap alloc, sufficient collision resistance for dedup.
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x0000_0100_0000_01B3;
+    let mut h = FNV_OFFSET;
+    let mut feed = |data: &[u8]| {
+        for &b in data {
+            h ^= b as u64;
+            h = h.wrapping_mul(FNV_PRIME);
+        }
+    };
+    feed(&img.width.to_le_bytes());
+    feed(&img.height.to_le_bytes());
+    feed(&(bytes.len() as u64).to_le_bytes());
     let n = bytes.len().min(2048);
-    hasher.update(&bytes[..n]);
+    feed(&bytes[..n]);
     if bytes.len() > 4096 {
-        hasher.update(&bytes[bytes.len() - 2048..]);
+        feed(&bytes[bytes.len() - 2048..]);
     }
-    hex::encode(hasher.finalize())
+    format!("{:016x}", h)
 }
 
 /// Maximum edge (px) for a captured bitmap entering the process pipeline.
@@ -528,10 +536,26 @@ pub fn hwnd_belongs_to_us(
 #[cfg(windows)]
 pub fn track_last_foreign_foreground() {
     use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    use std::sync::atomic::{AtomicIsize, Ordering};
+
+    // H-1: Cache last-seen foreground HWND. The expensive hwnd_belongs_to_us
+    // parent-walk (up to 24 levels) only runs when the user actually switches
+    // windows, not on every 250ms poll tick.
+    static LAST_SEEN_FG: AtomicIsize = AtomicIsize::new(0);
 
     unsafe {
         let fg = GetForegroundWindow();
-        if fg.is_null() || hwnd_belongs_to_us(fg, our_main_hwnd()) {
+        if fg.is_null() {
+            return;
+        }
+        let fg_val = fg as isize;
+        // Fast path: same window as last tick → skip all further work.
+        if LAST_SEEN_FG.load(Ordering::Relaxed) == fg_val {
+            return;
+        }
+        LAST_SEEN_FG.store(fg_val, Ordering::Relaxed);
+
+        if hwnd_belongs_to_us(fg, our_main_hwnd()) {
             return;
         }
         let target = root_hwnd(fg) as isize;

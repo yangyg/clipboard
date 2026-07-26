@@ -109,6 +109,8 @@ fn default_webdav_remote_path() -> String {
     "ClipVaultSync".to_string()
 }
 
+/// L-3: Default auto-tag rules for new installs.
+/// IMPORTANT: Keep in sync with `DEFAULT_AUTO_TAG_RULES` in src/types.ts.
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
     vec![
         AutoTagRule {
@@ -328,7 +330,10 @@ fn setup_logging(app_data_dir: &std::path::Path) {
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
         .init();
 
-    Box::leak(Box::new(_guard));
+    // L-1: The non-blocking writer guard must live until process exit (dropping it
+    // flushes + stops the background writer thread). Use mem::forget instead of
+    // Box::leak — same effect, clearer intent (no dangling &'static mut created).
+    std::mem::forget(_guard);
 }
 
 pub fn run() {
@@ -439,7 +444,7 @@ pub fn run() {
 
             let shortcut = db
                 .get_settings()
-                .map(|s| s.global_shortcut)
+                .map(|s| s.global_shortcut.clone())
                 .unwrap_or_else(|_| "Ctrl+Shift+V".into());
             if let Err(e) = apply_global_shortcut(app.handle(), &shortcut) {
                 warn!("Failed to register global shortcut {}: {}", shortcut, e);
@@ -471,20 +476,31 @@ pub fn run() {
                 }
             }
 
-            // Clipboard monitor only enqueues; a worker does media encode / DB / emit
-            // so the poll thread is not blocked on PNG compression or SQLite.
+            // Clipboard monitor only enqueues; separate workers handle text (fast)
+            // and image (slow: PNG encode + thumbnail) so a large image capture
+            // never blocks subsequent text captures.
             let media_root = db.media_root().to_path_buf();
-            // Bounded channel: capacity 2 keeps at most 2 queued jobs + 1 in the
-            // worker. Combined with pre-channel downscaling (clipboard.rs), the
-            // in-flight RGBA peak stays small even for 8K captures. A full queue
-            // is dropped (not blocking) by the poll thread — see try_send below.
-            let (capture_tx, capture_rx) = mpsc::sync_channel::<CaptureJob>(2);
-            let db_worker = db.clone();
-            let app_worker = app_handle.clone();
-            let media_root_worker = media_root.clone();
+
+            // Text worker: detect + hash + DB insert (<5ms per job).
+            let (text_tx, text_rx) = mpsc::sync_channel::<TextCaptureJob>(4);
+            let db_text = db.clone();
+            let app_text = app_handle.clone();
             std::thread::spawn(move || {
-                while let Ok(job) = capture_rx.recv() {
-                    process_capture_job(job, &db_worker, &media_root_worker, &app_worker);
+                while let Ok(job) = text_rx.recv() {
+                    process_text_job(job, &db_text, &app_text);
+                }
+            });
+
+            // Image worker: RGBA → PNG encode → thumbnail → DB insert (50-300ms).
+            // Capacity 2: at most 2 queued + 1 in-flight; full queue drops (poll
+            // thread must not block). Pre-channel downscaling caps RGBA at ~26MB.
+            let (image_tx, image_rx) = mpsc::sync_channel::<ImageCaptureJob>(2);
+            let db_image = db.clone();
+            let app_image = app_handle.clone();
+            let media_root_image = media_root.clone();
+            std::thread::spawn(move || {
+                while let Ok(job) = image_rx.recv() {
+                    process_image_job(job, &db_image, &media_root_image, &app_image);
                 }
             });
 
@@ -510,27 +526,32 @@ pub fn run() {
                         return;
                     }
                     let (source_window, source_app) = clipboard::get_foreground_window_info();
-                    let job = match event {
-                        ClipboardEvent::Text(captured) => CaptureJob::Text {
-                            captured,
-                            source_app,
-                            source_window,
-                        },
-                        ClipboardEvent::Image(captured) => CaptureJob::Image {
-                            captured,
-                            source_app,
-                            source_window,
-                        },
-                    };
-                    // Non-blocking: a full queue must not stall the poll thread
-                    // (otherwise GetClipboardSequenceNumber shortcuts stop working).
-                    match capture_tx.try_send(job) {
-                        Ok(()) => {}
-                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                            warn!("Capture queue full; dropping clipboard event");
+                    // Dispatch to the appropriate worker: text (fast) or image (slow).
+                    // Non-blocking: a full queue must not stall the poll thread.
+                    match event {
+                        ClipboardEvent::Text(captured) => {
+                            let job = TextCaptureJob { captured, source_app, source_window };
+                            match text_tx.try_send(job) {
+                                Ok(()) => {}
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    warn!("Text capture queue full; dropping event");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    warn!("Text capture worker stopped");
+                                }
+                            }
                         }
-                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                            warn!("Capture worker stopped accepting jobs");
+                        ClipboardEvent::Image(captured) => {
+                            let job = ImageCaptureJob { captured, source_app, source_window };
+                            match image_tx.try_send(job) {
+                                Ok(()) => {}
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    warn!("Image capture queue full; dropping event");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    warn!("Image capture worker stopped");
+                                }
+                            }
                         }
                     }
                 });
@@ -579,64 +600,133 @@ pub fn run() {
 }
 
 // ============================================================
-// Helper Functions
+// Capture Job Types & Workers (C-1: split text/image pipelines)
 // ============================================================
 
-enum CaptureJob {
-    Text {
-        captured: CapturedText,
-        source_app: String,
-        source_window: String,
-    },
-    Image {
-        captured: CapturedImage,
-        source_app: String,
-        source_window: String,
-    },
+/// Lightweight text capture job — processed by the fast text worker thread.
+struct TextCaptureJob {
+    captured: CapturedText,
+    source_app: String,
+    source_window: String,
 }
 
-fn process_capture_job(
-    job: CaptureJob,
+/// Heavy image capture job — processed by the dedicated image worker thread
+/// so PNG encode + thumbnail generation never blocks text captures.
+struct ImageCaptureJob {
+    captured: CapturedImage,
+    source_app: String,
+    source_window: String,
+}
+
+/// Text worker: detect content type, hash, dedup, insert (<5ms per job).
+fn process_text_job(
+    job: TextCaptureJob,
+    db: &ClipboardDb,
+    app: &tauri::AppHandle,
+) {
+    let TextCaptureJob { captured, source_app, source_window } = job;
+    let settings = db.get_settings().unwrap_or_default();
+    if is_ignored_app(&source_app, &settings.ignored_apps) {
+        return;
+    }
+
+    let content_type = detect_content_type(&captured.text);
+    let is_sensitive =
+        settings.enable_sensitive_detection && detect_sensitive(&captured.text);
+    // Keep wrapping fingerprint for DB hash so existing rows still dedupe
+    // (historical inserts stored sha256(fingerprint), not fingerprint itself).
+    let hash = sha256_hash(&captured.fingerprint());
+
+    match db.insert_record(
+        &captured.text,
+        &content_type,
+        &hash,
+        is_sensitive,
+        settings.max_records,
+        settings.sensitive_auto_expire_seconds,
+        &source_app,
+        &source_window,
+        None,
+        captured.html.as_deref(),
+    ) {
+        Ok((id, is_new, mut record)) => {
+            if is_new && settings.enable_auto_tag {
+                if let Err(e) = db.apply_auto_tags(
+                    id,
+                    &captured.text,
+                    &content_type,
+                    &settings.auto_tag_rules,
+                ) {
+                    warn!("Failed to apply auto tags: {}", e);
+                } else if let Ok(tags) = db.get_record_tag_names(id) {
+                    record.tags = tags;
+                }
+            }
+            info!(
+                "New clipboard record: id={}, type={}, formatted={}, is_new={}",
+                id,
+                content_type,
+                captured.html.is_some(),
+                is_new
+            );
+            app.emit("clipboard-changed", list_ipc_payload(record)).ok();
+        }
+        Err(e) => warn!("Failed to insert text record: {}", e),
+    }
+}
+
+/// Image worker: RGBA → PNG encode → downscale → thumbnail → DB insert (50-300ms).
+/// Runs on its own thread so heavy encoding never starves text captures.
+fn process_image_job(
+    job: ImageCaptureJob,
     db: &ClipboardDb,
     media_root: &PathBuf,
     app: &tauri::AppHandle,
 ) {
-    match job {
-        CaptureJob::Text {
-            captured,
-            source_app,
-            source_window,
-        } => {
-            let settings = db.get_settings().unwrap_or_default();
-            if is_ignored_app(&source_app, &settings.ignored_apps) {
-                return;
-            }
+    let ImageCaptureJob { captured, source_app, source_window } = job;
+    let settings = db.get_settings().unwrap_or_default();
+    if is_ignored_app(&source_app, &settings.ignored_apps) {
+        return;
+    }
 
-            let content_type = detect_content_type(&captured.text);
-            let is_sensitive =
-                settings.enable_sensitive_detection && detect_sensitive(&captured.text);
-            // Keep wrapping fingerprint for DB hash so existing rows still dedupe
-            // (historical inserts stored sha256(fingerprint), not fingerprint itself).
-            let hash = sha256_hash(&captured.fingerprint());
-
+    let hash = if captured.hash.is_empty() {
+        sha256_hash_bytes(&captured.rgba)
+    } else {
+        captured.hash
+    };
+    match media::store_clipboard_image(
+        media_root,
+        captured.rgba,
+        captured.width,
+        captured.height,
+        &hash,
+    ) {
+        Ok(stored) => {
+            let image_meta = ImageMeta {
+                media_path: stored.media_path,
+                thumb_path: stored.thumb_path,
+                width: stored.width as i32,
+                height: stored.height as i32,
+            };
+            let label = format!("[image {}x{}]", stored.width, stored.height);
             match db.insert_record(
-                &captured.text,
-                &content_type,
+                &label,
+                &ContentType::Image,
                 &hash,
-                is_sensitive,
+                false,
                 settings.max_records,
                 settings.sensitive_auto_expire_seconds,
                 &source_app,
                 &source_window,
+                Some(&image_meta),
                 None,
-                captured.html.as_deref(),
             ) {
                 Ok((id, is_new, mut record)) => {
                     if is_new && settings.enable_auto_tag {
                         if let Err(e) = db.apply_auto_tags(
                             id,
-                            &captured.text,
-                            &content_type,
+                            &label,
+                            &ContentType::Image,
                             &settings.auto_tag_rules,
                         ) {
                             warn!("Failed to apply auto tags: {}", e);
@@ -645,84 +735,15 @@ fn process_capture_job(
                         }
                     }
                     info!(
-                        "New clipboard record: id={}, type={}, formatted={}, is_new={}",
-                        id,
-                        content_type,
-                        captured.html.is_some(),
-                        is_new
+                        "New clipboard record: id={}, type=image, is_new={}",
+                        id, is_new
                     );
                     app.emit("clipboard-changed", list_ipc_payload(record)).ok();
                 }
-                Err(e) => warn!("Failed to insert text record: {}", e),
+                Err(e) => warn!("Failed to insert image record: {}", e),
             }
         }
-        CaptureJob::Image {
-            captured,
-            source_app,
-            source_window,
-        } => {
-            let settings = db.get_settings().unwrap_or_default();
-            if is_ignored_app(&source_app, &settings.ignored_apps) {
-                return;
-            }
-
-            let hash = if captured.hash.is_empty() {
-                sha256_hash_bytes(&captured.rgba)
-            } else {
-                captured.hash
-            };
-            match media::store_clipboard_image(
-                media_root,
-                captured.rgba,
-                captured.width,
-                captured.height,
-                &hash,
-            ) {
-                Ok(stored) => {
-                    let image_meta = ImageMeta {
-                        media_path: stored.media_path,
-                        thumb_path: stored.thumb_path,
-                        width: stored.width as i32,
-                        height: stored.height as i32,
-                    };
-                    let label = format!("[image {}x{}]", stored.width, stored.height);
-                    match db.insert_record(
-                        &label,
-                        &ContentType::Image,
-                        &hash,
-                        false,
-                        settings.max_records,
-                        settings.sensitive_auto_expire_seconds,
-                        &source_app,
-                        &source_window,
-                        Some(&image_meta),
-                        None,
-                    ) {
-                        Ok((id, is_new, mut record)) => {
-                            if is_new && settings.enable_auto_tag {
-                                if let Err(e) = db.apply_auto_tags(
-                                    id,
-                                    &label,
-                                    &ContentType::Image,
-                                    &settings.auto_tag_rules,
-                                ) {
-                                    warn!("Failed to apply auto tags: {}", e);
-                                } else if let Ok(tags) = db.get_record_tag_names(id) {
-                                    record.tags = tags;
-                                }
-                            }
-                            info!(
-                                "New clipboard record: id={}, type=image, is_new={}",
-                                id, is_new
-                            );
-                            app.emit("clipboard-changed", list_ipc_payload(record)).ok();
-                        }
-                        Err(e) => warn!("Failed to insert image record: {}", e),
-                    }
-                }
-                Err(e) => warn!("Failed to store clipboard image: {}", e),
-            }
-        }
+        Err(e) => warn!("Failed to store clipboard image: {}", e),
     }
 }
 

@@ -37,6 +37,8 @@ pub fn absolute(app_data_dir: &Path, relative: &str) -> PathBuf {
 
 /// Encode RGBA clipboard image to PNG (+ JPEG thumb) under media/.
 /// Downscales if either edge exceeds MAX_EDGE.
+/// NOTE: H-4 — `ensure_dirs` is called once at startup (lib.rs + db init);
+/// calling it per-image added a redundant create_dir_all syscall on the hot path.
 pub fn store_clipboard_image(
     app_data_dir: &Path,
     rgba: Vec<u8>,
@@ -44,8 +46,6 @@ pub fn store_clipboard_image(
     height: u32,
     hash: &str,
 ) -> Result<StoredImage, String> {
-    ensure_dirs(app_data_dir).map_err(|e| e.to_string())?;
-
     let media_rel = format!("media/{hash}.png");
     let thumb_rel = format!("media/thumbs/{hash}.jpg");
     let media_abs = absolute(app_data_dir, &media_rel);

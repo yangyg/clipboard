@@ -10,7 +10,7 @@
 ## 非目标
 
 - 不在菜单中展示最近剪贴板或今日条数
-- 不改变左键托盘行为（显示/隐藏主面板）
+- 左键仍走主面板切换（实现上见 `toggle_main_panel`：后台置前 / 前台隐藏），本 spec 不改右键菜单以外的业务
 - 不改粘贴、捕获、设置等业务逻辑本身
 
 ## 方案
@@ -27,7 +27,7 @@
 | 外观 | `decorations: false`，透明，`alwaysOnTop: true`，`skipTaskbar: true`，默认不可见 |
 | 前端入口 | 独立 `tray-menu.html` + `TrayMenuApp.vue`（不挂载主 `App.vue`） |
 | 原生菜单 | 托盘**不**挂载系统右键菜单 |
-| 左键 | 保持现状：切换主面板显隐 |
+| 左键 | `toggle_main_panel`：隐藏/最小化 → 显示置前；可见但非前台 → 置前；已是前台 → 隐藏 |
 | 右键 | 计算位置 → `show` / `set_position` `tray-menu` |
 | 关闭 | 失焦、Esc、点选任一项后立即 `hide` |
 | CloseRequested | `prevent_close` + `hide`，不退出进程 |

@@ -115,7 +115,7 @@
           :id="`record-option-${item.record!.id}`"
           class="record-item"
           role="option"
-          :aria-selected="clipboardStore.selectedId === item.record!.id"
+          :aria-selected="clipboardStore.batchMode ? clipboardStore.selectedIds.has(item.record!.id) : clipboardStore.selectedId === item.record!.id"
           :tabindex="isOptionTabbable(item.record!.id) ? 0 : -1"
           :class="{
             selected: clipboardStore.selectedId === item.record!.id && !clipboardStore.batchMode,
@@ -627,8 +627,14 @@ function buildFlatItems(): FlatItem[] {
   const rh = rowHeight.value;
   const lh = labelHeight.value;
   const dh = dividerHeight.value;
-  const hasPinned = records.some((r) => r.is_pinned);
-  const hasUnpinned = records.some((r) => !r.is_pinned);
+  // Single pass to detect pin partition presence (avoids two O(N) .some() scans).
+  let hasPinned = false;
+  let hasUnpinned = false;
+  for (const r of records) {
+    if (r.is_pinned) hasPinned = true;
+    else hasUnpinned = true;
+    if (hasPinned && hasUnpinned) break;
+  }
   if (hasPinned) {
     items.push({ key: "pinned-label", type: "label", height: lh, offset });
     offset += lh;
@@ -1163,9 +1169,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--space-3);
   height: 44px;
-  padding: 0 12px;
+  padding: 0 var(--space-3);
   flex-shrink: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--border-default) 60%, transparent);
 }
@@ -1173,7 +1179,7 @@ onUnmounted(() => {
 .list-toolbar-left {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -1198,14 +1204,14 @@ onUnmounted(() => {
 .list-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   flex-shrink: 0;
   margin-left: auto;
 }
 
 .empty-trash-btn {
-  height: 26px;
-  padding: 0 8px;
+  height: var(--btn-height-sm);
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   font-size: var(--text-xs, 0.625rem);
   font-weight: 500;
@@ -1222,9 +1228,9 @@ onUnmounted(() => {
 }
 
 .list-sort {
-  height: 26px;
+  height: var(--btn-height-sm);
   max-width: 7rem;
-  padding: 0 6px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
@@ -1273,7 +1279,7 @@ onUnmounted(() => {
 
 .view-toggle-btn {
   width: 28px;
-  height: 26px;
+  height: var(--btn-height-sm);
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -1308,21 +1314,21 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 4px 0 6px;
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 /* —— Grid view: vertical cards (original structure) —— */
 .record-list.view-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 10px;
+  gap: 8px; /* must match GRID_GAP in script */
+  padding: var(--space-3);
   align-content: start;
 }
 
 .view-grid .section-label {
   grid-column: 1 / -1;
-  padding: 4px 2px 0;
+  padding: var(--space-1) 2px 0;
 }
 
 .view-grid .pin-section-divider {
@@ -1338,6 +1344,7 @@ onUnmounted(() => {
   max-width: 100%;
   overflow: hidden;
   margin: 0;
+  /* padding/gap/height coupled to GRID_CARD_HEIGHT in script — keep in sync */
   padding: 10px;
   gap: 6px;
   /* Cap height so long text cannot blow out the grid track */
@@ -1345,7 +1352,7 @@ onUnmounted(() => {
   max-height: 132px;
   box-sizing: border-box;
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
 }
 
@@ -1372,12 +1379,12 @@ onUnmounted(() => {
 
 .view-grid .record-checkbox {
   left: auto;
-  right: 8px;
-  top: 8px;
+  right: var(--space-2);
+  top: var(--space-2);
   z-index: 3;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   border-color: var(--border-default);
   box-shadow: var(--shadow-sm);
@@ -1428,7 +1435,7 @@ onUnmounted(() => {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  gap: 4px;
+  gap: var(--space-1);
   overflow: hidden;
 }
 
@@ -1495,14 +1502,14 @@ onUnmounted(() => {
 
 .view-grid .record-actions {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: var(--space-2);
+  right: var(--space-2);
   margin: 0;
   z-index: 2;
   max-width: calc(100% - 12px);
   overflow: hidden;
   background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 1px;
   box-shadow: var(--shadow-sm);
 }
@@ -1517,7 +1524,7 @@ onUnmounted(() => {
   grid-column: 1 / -1;
   margin-top: 0;
   border-top: none;
-  padding: 4px 0 8px;
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 .virtual-spacer {
@@ -1537,10 +1544,10 @@ onUnmounted(() => {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--pin);
-  padding: 10px 14px 4px;
+  padding: var(--space-3) var(--space-4) var(--space-1);
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .pin-section-divider {
@@ -1548,7 +1555,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 100%;
   margin: 0;
-  padding: 0 14px;
+  padding: 0 var(--space-4);
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -1564,17 +1571,18 @@ onUnmounted(() => {
 
 .record-item {
   --row-accent: var(--accent);
+  /* padding/margin coupled to BASE_ROW_HEIGHT in script — keep in sync */
   padding: 10px 12px;
   margin: 0 4px 2px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   transition:
     background var(--transition-fast),
     opacity var(--transition-fast),
     transform var(--transition-fast);
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: var(--space-3);
   position: relative;
   border: 1px solid transparent;
   background: transparent;
@@ -1635,7 +1643,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.563rem;
+  font-size: var(--text-xs);
   color: transparent;
   transition: all var(--transition-fast);
   flex-shrink: 0;
@@ -1743,7 +1751,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
   margin-top: 6px;
   font-size: var(--text-sm, 0.6875rem);
   color: var(--text-tertiary);
@@ -1804,7 +1812,7 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
@@ -1845,12 +1853,12 @@ onUnmounted(() => {
 
 /* Footer */
 .list-footer {
-  padding: 10px 16px 14px;
+  padding: var(--space-3) var(--space-4);
   text-align: center;
-  font-size: 0.719rem;
+  font-size: var(--text-md);
   color: var(--text-muted, var(--text-tertiary));
   border-top: 1px solid var(--border-light, var(--border-subtle));
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 /* Empty / Loading */
@@ -1860,11 +1868,11 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-2);
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   flex: 1;
-  padding: 20px;
+  padding: var(--space-5);
   text-align: center;
 }
 
@@ -1873,7 +1881,7 @@ onUnmounted(() => {
   height: 20px;
   border: 2px solid var(--border-default);
   border-top-color: var(--accent);
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   animation: spin 0.6s linear infinite;
 }
 
@@ -1886,11 +1894,7 @@ onUnmounted(() => {
 .footer-loading {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+  gap: var(--space-2);
 }
 
 .empty-icon {
@@ -1908,11 +1912,11 @@ onUnmounted(() => {
 }
 
 .empty-text {
-  font-size: 0.813rem;
+  font-size: var(--text-base);
 }
 
 .empty-hint {
-  font-size: 0.688rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 

@@ -129,6 +129,7 @@ onUnmounted(() => {
 
 .dialog-card {
   width: 340px;
+  max-width: calc(100vw - 2 * var(--space-4));
   background: var(--bg-surface);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg, 14px);
@@ -141,7 +142,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.875rem 1rem;
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -171,22 +172,22 @@ onUnmounted(() => {
 }
 
 .dialog-body {
-  padding: 1rem;
+  padding: var(--space-4);
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border-top: 1px solid var(--border-subtle);
 }
 
 .dialog-footer .btn-cancel,
 .dialog-card > .dialog-footer .btn-cancel,
 button.btn-cancel {
-  height: 32px;
-  padding: 0 0.875rem;
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   color: var(--text-secondary);
@@ -209,8 +210,8 @@ button.btn-confirm:active {
 }
 
 button.btn-confirm {
-  height: 32px;
-  padding: 0 0.875rem;
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   background: var(--accent);
   color: #fff;

@@ -529,7 +529,7 @@ async function permanentDel() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.875rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -568,7 +568,7 @@ async function permanentDel() {
 }
 
 .preview-name {
-  font-size: 0.875rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -576,14 +576,14 @@ async function permanentDel() {
 .preview-alias-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   margin-top: 2px;
   max-width: 100%;
   padding: 0;
   border: none;
   background: none;
   font-family: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-tertiary);
   cursor: pointer;
@@ -609,7 +609,7 @@ async function permanentDel() {
   flex-wrap: wrap;
   align-items: center;
   gap: 0 2px;
-  font-size: 0.688rem;
+  font-size: var(--text-sm);
   color: var(--text-muted, var(--text-tertiary));
   line-height: 1.35;
   overflow: hidden;
@@ -624,7 +624,7 @@ async function permanentDel() {
 
 .meta-sep {
   flex-shrink: 0;
-  margin: 0 4px;
+  margin: 0 var(--space-1);
   opacity: 0.7;
 }
 
@@ -632,18 +632,18 @@ async function permanentDel() {
 .sensitive-warning {
   background: var(--danger-soft);
   border-bottom: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
-  padding: 6px 12px;
+  padding: var(--space-2) var(--space-3);
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.688rem;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   color: var(--danger);
   flex-shrink: 0;
 }
 
 .auto-expire {
   margin-left: auto;
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   opacity: 0.8;
 }
 
@@ -652,7 +652,7 @@ async function permanentDel() {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  padding: 16px 20px;
+  padding: var(--space-4) var(--space-5);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -695,8 +695,8 @@ async function permanentDel() {
   background: transparent;
   border: none;
   border-radius: 0;
-  padding: 4px 0;
-  font-size: 0.813rem;
+  padding: var(--space-1) 0;
+  font-size: var(--text-base);
   line-height: 1.65;
   color: var(--text-primary);
   max-width: 100%;
@@ -710,7 +710,7 @@ async function permanentDel() {
 .color-preview-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -725,20 +725,20 @@ async function permanentDel() {
 
 .color-value {
   font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-size: var(--text-lg);
   letter-spacing: 0.02em;
   padding: 0;
 }
 
 .code-box {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   line-height: 1.6;
   background: var(--code-bg);
   color: var(--text-primary);
   border: none;
   border-radius: var(--radius-md, 10px);
-  padding: 14px 16px;
+  padding: var(--space-3) var(--space-4);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -748,8 +748,8 @@ async function permanentDel() {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
   border: none;
   border-radius: var(--radius-md, 10px);
   background: var(--bg-elevated);
@@ -761,14 +761,14 @@ async function permanentDel() {
 }
 
 .link-title {
-  font-size: 0.813rem;
+  font-size: var(--text-base);
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .link-url {
   color: var(--accent);
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   word-break: break-all;
   text-decoration: none;
 }
@@ -780,8 +780,8 @@ async function permanentDel() {
 .file-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md, 10px);
   border: none;
   background: var(--bg-elevated);
@@ -800,7 +800,7 @@ async function permanentDel() {
 
 .file-path {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   color: var(--text-secondary);
   word-break: break-all;
 }
@@ -809,11 +809,11 @@ async function permanentDel() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 .image-placeholder {
-  padding: 20px;
+  padding: var(--space-5);
   background: var(--bg-elevated);
   border-radius: var(--radius-md, 10px);
   font-size: 2rem;
@@ -831,46 +831,46 @@ async function permanentDel() {
 
 /* Tags */
 .preview-tags {
-  padding: 8px 20px 16px;
+  padding: var(--space-2) var(--space-5) var(--space-4);
 }
 
 .tags-label {
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .tags-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .tag-chip {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.719rem;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-xl);
+  font-size: var(--text-md);
   font-weight: 500;
 }
 
 .tag-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
 }
 
 .tag-remove {
   width: 14px;
   height: 14px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: inherit;
   opacity: 0.6;
-  font-size: 0.563rem;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -888,10 +888,10 @@ async function permanentDel() {
 .tag-add-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.719rem;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-xl);
+  font-size: var(--text-md);
   color: var(--text-muted, var(--text-tertiary));
   cursor: pointer;
   border: 1px dashed var(--border-default, var(--border-subtle));
@@ -906,10 +906,10 @@ async function permanentDel() {
 
 /* Action Buttons */
 .preview-actions {
-  padding: 8px 20px 20px;
+  padding: var(--space-2) var(--space-5) var(--space-5);
   display: grid;
   grid-template-columns: 1.5fr repeat(3, 1fr) auto;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .action-btn {
@@ -917,8 +917,8 @@ async function permanentDel() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 10px 4px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-1);
   border-radius: var(--radius-md, 10px);
   border: 1px solid var(--border-default, var(--border-subtle));
   background: var(--bg-card, var(--bg-surface));
@@ -1003,7 +1003,7 @@ async function permanentDel() {
 }
 
 .action-btn.action-icon-only {
-  padding: 10px;
+  padding: var(--space-3);
   min-width: 42px;
 }
 

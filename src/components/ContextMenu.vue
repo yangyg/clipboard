@@ -195,7 +195,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  padding: 6px;
+  padding: var(--space-2);
   z-index: 1100;
   /* Menu grows from the click point, matching the menu-pop scale animation. */
   transform-origin: top left;
@@ -208,9 +208,9 @@ onUnmounted(() => {
 .ctx-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 7px 10px;
+  padding: 7px var(--space-3);
   font-size: var(--text-md);
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
@@ -272,7 +272,7 @@ onUnmounted(() => {
 }
 
 .ctx-toggle-opt {
-  padding: 2px 10px;
+  padding: 2px var(--space-3);
   font-size: var(--text-xs);
   border: none;
   background: transparent;
@@ -290,7 +290,7 @@ onUnmounted(() => {
 
 .ctx-sep {
   height: 1px;
-  margin: 4px 6px;
+  margin: var(--space-1) var(--space-2);
   background: var(--border-subtle);
 }
 </style>

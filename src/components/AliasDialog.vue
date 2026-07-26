@@ -83,11 +83,11 @@ async function confirm() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px 0;
+  padding: var(--space-4) var(--space-4) 0;
 }
 
 .dialog-title {
-  font-size: 0.938rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -111,14 +111,14 @@ async function confirm() {
 }
 
 .dialog-body {
-  padding: 14px 18px 8px;
+  padding: var(--space-3) var(--space-4) var(--space-2);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .field-label {
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -127,13 +127,13 @@ async function confirm() {
   width: 100%;
   box-sizing: border-box;
   height: 36px;
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-default);
   background: var(--bg-input);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 0.813rem;
+  font-size: var(--text-base);
 }
 
 .field-input:focus {
@@ -143,24 +143,24 @@ async function confirm() {
 
 .field-hint {
   margin: 0;
-  font-size: 0.688rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 18px 16px;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
 .btn-cancel,
 .btn-confirm {
-  height: 32px;
-  padding: 0 14px;
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 0.813rem;
+  font-size: var(--text-base);
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--border-default);

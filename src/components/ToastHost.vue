@@ -28,7 +28,7 @@ const { toasts, dismiss } = useToast()
 .toast-host {
   position: fixed;
   /* Below 38px titlebar; leave room for enter translateY(-8px) */
-  right: 16px;
+  right: var(--space-4);
   top: 60px;
   left: auto;
   transform: none;
@@ -36,20 +36,20 @@ const { toasts, dismiss } = useToast()
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
+  gap: var(--space-2);
   pointer-events: none;
   max-width: min(420px, calc(100vw - 40px));
 }
 
 .toast-item {
   pointer-events: auto;
-  padding: 10px 16px;
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   color: var(--text-primary);
   box-shadow: var(--shadow-md);
-  font-size: 13px;
+  font-size: var(--text-base);
   line-height: 1.4;
   cursor: pointer;
   transition: all var(--transition-smooth);

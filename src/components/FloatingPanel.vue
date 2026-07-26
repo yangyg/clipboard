@@ -7,9 +7,7 @@
           <div class="panel-title">ClipVault</div>
           <CaptureStatus compact />
         </div>
-      </div>
-      <SearchBar />
-      <div class="header-actions">
+        <div class="header-actions">
         <button
           type="button"
           class="icon-btn"
@@ -38,7 +36,9 @@
           @click="toggleTrash"
         ><AppIcon name="trash" :size="15" /></button>
         <button type="button" class="icon-btn" :title="$t('panel.settings')" :aria-label="$t('panel.settings')" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
+        </div>
       </div>
+      <SearchBar />
     </div>
 
     <!-- Filter Tabs (hidden in trash) -->
@@ -152,24 +152,23 @@ async function onEmptyTrash() {
 }
 
 .panel-header {
-  padding: 12px 14px 8px;
+  padding: var(--space-3) var(--space-4) var(--space-2);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3);
   flex-shrink: 0;
-  position: relative;
 }
 
 .panel-title-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding-right: 130px;
+  gap: var(--space-2);
 }
 
 .panel-title {
-  font-size: 0.875rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -177,30 +176,28 @@ async function onEmptyTrash() {
 .header-actions {
   display: flex;
   gap: 2px;
-  position: absolute;
-  top: 12px;
-  right: 14px;
+  flex-shrink: 0;
 }
 
 .filter-row {
   display: flex;
   gap: 2px;
-  padding: 0 14px 8px;
+  padding: 0 var(--space-4) var(--space-2);
   flex-shrink: 0;
   overflow-x: auto;
 }
 
 .filter-tab {
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 5px;
-  font-size: 0.72rem;
+  height: var(--btn-height-sm);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-secondary);
   transition: all var(--transition-fast);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-1);
   cursor: pointer;
 }
 
@@ -215,9 +212,9 @@ async function onEmptyTrash() {
 }
 
 .filter-count {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   background: var(--bg-active);
-  padding: 1px 5px;
+  padding: 1px var(--space-1);
   border-radius: 4px;
   color: var(--text-tertiary);
 }
@@ -231,8 +228,8 @@ async function onEmptyTrash() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px 10px;
-  font-size: 0.72rem;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  font-size: var(--text-md);
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-subtle);
 }

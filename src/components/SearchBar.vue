@@ -65,7 +65,8 @@ function clearSearch() {
   }
   query.value = "";
   clipboardStore.search("");
-  inputRef.value?.blur();
+  // Keep focus so keyboard users can continue typing immediately
+  inputRef.value?.focus();
 }
 
 function onEscapeInSearch() {
@@ -111,7 +112,7 @@ onUnmounted(() => {
 .search-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   position: relative;
 }
 
@@ -124,11 +125,11 @@ onUnmounted(() => {
 
 .search-row.compact .search-box {
   height: 28px;
-  font-size: 0.78rem;
+  font-size: var(--text-md);
   background: var(--bg-surface);
   border-color: var(--border-default);
   border-radius: var(--radius-md);
-  padding: 0 12px 0 32px;
+  padding: 0 var(--space-3) 0 32px;
 }
 
 .search-row.compact .search-box:focus {
@@ -138,12 +139,12 @@ onUnmounted(() => {
 
 .search-row.compact .search-icon {
   left: 14px;
-  font-size: 0.75rem;
+  font-size: var(--text-md);
 }
 
 .search-row.compact .search-kbd {
   right: 6px;
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
 }
 
 .search-icon {
@@ -151,7 +152,7 @@ onUnmounted(() => {
   left: 26px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 0.81rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   pointer-events: none;
   z-index: 1;
@@ -168,8 +169,8 @@ onUnmounted(() => {
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0 12px 0 34px;
-  font-size: 0.81rem;
+  padding: 0 var(--space-3) 0 34px;
+  font-size: var(--text-base);
   color: var(--text-primary);
   transition: border-color var(--transition-fast), background var(--transition-smooth);
 }
@@ -195,11 +196,11 @@ onUnmounted(() => {
 
 .search-kbd {
   position: absolute;
-  right: 8px;
+  right: var(--space-2);
   top: 50%;
   transform: translateY(-50%);
   font-family: var(--font-mono);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   background: var(--bg-active);
   border: 1px solid var(--border-subtle);
@@ -213,17 +214,13 @@ onUnmounted(() => {
   opacity: 0.4;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .clear-btn {
   width: 20px;
   height: 20px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--bg-active);
   color: var(--text-tertiary);
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   justify-content: center;

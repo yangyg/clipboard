@@ -14,7 +14,7 @@
   --border-focus: #0078d4;
   --text-primary: #e2e4ed;
   --text-secondary: #8b8fa6;
-  --text-tertiary: #868ba6;
+  --text-tertiary: #9298b4;
   --text-inverse: #0f1117;
   --accent: #0078d4;
   --accent-hover: #1b86d9;
@@ -63,6 +63,11 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-xl: 20px;
+  --radius-pill: 999px;
+  /* Button height scale: sm (compact bars) / md (default) / lg (dialogs) */
+  --btn-height-sm: 26px;
+  --btn-height-md: 30px;
+  --btn-height-lg: 32px;
   --font-sans: "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", "Consolas", monospace;
   --transition-instant: 50ms cubic-bezier(0.25, 0.1, 0.25, 1);
@@ -85,7 +90,7 @@ body.light-theme,
   --border-focus: #0078d4;
   --text-primary: #1a1c2e;
   --text-secondary: #5c6078;
-  --text-tertiary: #6b7089;
+  --text-tertiary: #636880;
   --text-inverse: #ffffff;
   --accent: #0078d4;
   --accent-hover: #106ebe;
@@ -125,7 +130,7 @@ body.oled-theme,
   --border-default: rgba(255, 255, 255, 0.07);
   --text-primary: #e8e8f0;
   --text-secondary: #7878a0;
-  --text-tertiary: #8484a8;
+  --text-tertiary: #9090b6;
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.8);
   --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.9);
 }
@@ -433,6 +438,11 @@ body.anim-disabled *::after {
 .fade-instant-enter-from,
 .fade-instant-leave-to {
   opacity: 0;
+}
+
+/* Shared keyframes (deduplicated from SearchBar / RecordList) */
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Search keyword highlight (list + preview) */

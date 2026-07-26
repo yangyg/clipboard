@@ -159,14 +159,14 @@
               <div class="setting-row">
                 <div class="setting-label">{{ $t('settings.appearance.cornerRadius') }}</div>
                 <div class="slider-row">
-                  <input type="range" min="0" max="40" :aria-label="$t('settings.appearance.cornerRadius')" :value="settings.panel_radius" @input="(e) => update('panel_radius', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="0" max="40" :aria-label="$t('settings.appearance.cornerRadius')" :aria-valuetext="`${settings.panel_radius}px`" :value="settings.panel_radius" @input="(e) => update('panel_radius', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_radius }}px</span>
                 </div>
               </div>
               <div class="setting-row">
                   <div class="setting-label">{{ $t('settings.appearance.opacity') }}</div>
                 <div class="slider-row">
-                  <input type="range" min="60" max="100" :aria-label="$t('settings.appearance.opacity')" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="60" max="100" :aria-label="$t('settings.appearance.opacity')" :aria-valuetext="`${settings.panel_opacity}%`" :value="settings.panel_opacity" @input="(e) => update('panel_opacity', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.panel_opacity }}%</span>
                 </div>
               </div>
@@ -202,7 +202,7 @@
               <div class="setting-row">
                 <div class="setting-label">{{ $t('settings.appearance.fontSize') }}</div>
                 <div class="slider-row">
-                  <input type="range" min="11" max="18" :aria-label="$t('settings.appearance.fontSize')" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="11" max="18" :aria-label="$t('settings.appearance.fontSize')" :aria-valuetext="`${settings.font_size}px`" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ settings.font_size }}px</span>
                 </div>
               </div>
@@ -378,7 +378,7 @@
                   <div class="setting-desc">{{ $t('settings.privacy.autoExpireDesc') }}</div>
                 </div>
                 <div class="slider-row">
-                  <input type="range" min="10" max="3600" step="10" :aria-label="$t('settings.privacy.autoExpire')" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
+                  <input type="range" min="10" max="3600" step="10" :aria-label="$t('settings.privacy.autoExpire')" :aria-valuetext="$t('settings.privacy.autoExpireUnit', { minutes: Math.floor(settings.sensitive_auto_expire_seconds / 60) })" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
                   <span class="slider-value">{{ $t('settings.privacy.autoExpireUnit', { minutes: Math.floor(settings.sensitive_auto_expire_seconds / 60) }) }}</span>
                 </div>
               </div>
@@ -1520,8 +1520,8 @@ input[type="range"]::-webkit-slider-thumb {
 .theme-preview {
   width: 100%;
   height: 36px;
-  border-radius: 6px;
-  margin-bottom: 6px;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2);
 }
 
 .theme-dark { background: linear-gradient(135deg, #181a22, #1e2130); }
@@ -1706,7 +1706,7 @@ input[type="range"]::-webkit-slider-thumb {
 .auto-tag-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .auto-tag-field-label {
@@ -1719,8 +1719,8 @@ input[type="range"]::-webkit-slider-thumb {
 
 .auto-tag-input {
   width: 100%;
-  height: 32px;
-  padding: 0 10px;
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -1759,7 +1759,7 @@ input[type="range"]::-webkit-slider-thumb {
   align-items: center;
   max-width: 100%;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--text-xs);
   line-height: 1.4;
   overflow: hidden;
@@ -1776,7 +1776,7 @@ input[type="range"]::-webkit-slider-thumb {
 .auto-tag-type-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .auto-tag-type-chip {
@@ -1784,9 +1784,9 @@ input[type="range"]::-webkit-slider-thumb {
   align-items: center;
   gap: 5px;
   height: 28px;
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-input);
   color: var(--text-secondary);
   font-size: var(--text-sm);
@@ -1868,16 +1868,16 @@ input[type="range"]::-webkit-slider-thumb {
 
 .ignore-add-row {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .ignore-input {
   flex: 1;
-  height: 32px;
+  height: var(--btn-height-lg);
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   font-size: var(--text-md);
   color: var(--text-primary);
   transition: border-color var(--transition-fast), background var(--transition-smooth);
@@ -1888,8 +1888,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .ignore-add-btn {
-  height: 32px;
-  padding: 0 14px;
+  height: var(--btn-height-lg);
+  padding: 0 var(--space-4);
   background: var(--accent);
   color: white;
   border-radius: var(--radius-sm);
@@ -1960,7 +1960,7 @@ input[type="range"]::-webkit-slider-thumb {
 .type-track {
   height: 6px;
   overflow: hidden;
-  border-radius: 99px;
+  border-radius: var(--radius-pill);
   background: var(--bg-active);
 }
 
@@ -2095,7 +2095,7 @@ input[type="range"]::-webkit-slider-thumb {
 .about-logo img {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   object-fit: contain;
   user-select: none;
 }

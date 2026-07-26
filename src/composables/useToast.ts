@@ -11,13 +11,17 @@ export interface ToastItem {
 const toasts = ref<ToastItem[]>([])
 let nextId = 1
 
+/** Cap visible toasts so rapid failures cannot stack into an unreadable column. */
+const MAX_TOASTS = 5
+
 function dismiss(id: number) {
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
 
 function toast(message: string, kind: ToastKind = 'info') {
   const id = nextId++
-  toasts.value = [...toasts.value, { id, message, kind }]
+  const next = [...toasts.value, { id, message, kind }]
+  toasts.value = next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
   window.setTimeout(() => dismiss(id), 1500)
 }
 

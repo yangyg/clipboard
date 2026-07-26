@@ -166,24 +166,24 @@ async function onDeleteTag(tag: Tag) {
   min-height: 38px;
   display: flex;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 var(--space-3);
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-subtle);
   user-select: none;
   flex-shrink: 0;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   -webkit-app-region: drag;
 }
 
 .titlebar-title {
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: var(--text-lg);
   letter-spacing: -0.02em;
   color: var(--text-primary);
 }
@@ -197,12 +197,12 @@ async function onDeleteTag(tag: Tag) {
 
 .titlebar-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--space-1);
   -webkit-app-region: no-drag;
   flex-shrink: 0;
   align-items: stretch;
   height: 100%;
-  margin-right: -10px;
+  margin-right: calc(-1 * var(--space-3));
 }
 
 .window-body {

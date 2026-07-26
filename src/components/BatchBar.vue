@@ -32,7 +32,7 @@ const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActio
 
 <style scoped>
 .batch-bar {
-  padding: 8px 14px;
+  padding: var(--space-2) var(--space-4);
   background: var(--accent-soft);
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
   display: flex;
@@ -47,23 +47,23 @@ const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActio
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .batch-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .batch-btn {
-  height: 26px;
-  padding: 0 10px;
+  height: var(--btn-height-sm);
+  padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   background: var(--bg-surface);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);

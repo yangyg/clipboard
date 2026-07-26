@@ -26,11 +26,11 @@ const clipboardStore = useClipboardStore();
 .capture-status {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-2);
 }
 
 .capture-status.compact {
-  gap: 6px;
+  gap: var(--space-2);
 }
 
 .capture-status.compact .status-text {
@@ -40,7 +40,7 @@ const clipboardStore = useClipboardStore();
 .live-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   background: var(--success);
   box-shadow: 0 0 0 3px var(--success-soft);
   flex-shrink: 0;

@@ -398,7 +398,7 @@ async function webdavSync() {
 }
 
 .sidebar-section {
-  padding: 12px 10px 4px;
+  padding: var(--space-3) var(--space-3) var(--space-1);
   flex-shrink: 0;
 }
 
@@ -411,19 +411,19 @@ async function webdavSync() {
 }
 
 .sidebar-label {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-tertiary);
-  padding: 0 8px 6px;
+  padding: 0 var(--space-2) var(--space-2);
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 7px 8px;
+  padding: 7px var(--space-2);
   border: none;
   background: transparent;
   font: inherit;
@@ -431,7 +431,7 @@ async function webdavSync() {
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 0.78rem;
+  font-size: var(--text-base);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -473,7 +473,7 @@ async function webdavSync() {
 }
 
 .nav-count {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -492,16 +492,16 @@ async function webdavSync() {
 .tag-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 7px 8px;
+  padding: 7px var(--space-2);
   border: none;
   background: transparent;
   font: inherit;
   text-align: left;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   color: var(--text-secondary);
   transition: background var(--transition-fast);
 }
@@ -518,7 +518,7 @@ async function webdavSync() {
 .tag-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   flex-shrink: 0;
 }
 
@@ -540,7 +540,7 @@ async function webdavSync() {
 }
 
 .tag-count {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
@@ -548,9 +548,9 @@ async function webdavSync() {
 .tag-more-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--space-2);
   margin-top: 2px;
   border: none;
   background: transparent;
@@ -559,7 +559,7 @@ async function webdavSync() {
   border-radius: var(--radius-sm);
   cursor: pointer;
   color: var(--text-tertiary);
-  font-size: 0.6875rem;
+  font-size: var(--text-sm);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
@@ -585,16 +585,16 @@ async function webdavSync() {
 .tag-add {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2);
   width: 100%;
-  padding: 8px;
-  margin-top: 4px;
+  padding: var(--space-2);
+  margin-top: var(--space-1);
   border: none;
   background: transparent;
   font: inherit;
   text-align: left;
   border-radius: var(--radius-sm);
-  font-size: 0.75rem;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
@@ -606,13 +606,13 @@ async function webdavSync() {
 }
 
 .sidebar-bottom {
-  padding: 8px 10px 12px;
+  padding: var(--space-2) var(--space-3) var(--space-3);
   flex-shrink: 0;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .sidebar-icon-btn {
@@ -639,7 +639,7 @@ async function webdavSync() {
 .sidebar-icon-btn-grow {
   flex: 1;
   justify-content: flex-start;
-  padding-left: 10px;
+  padding-left: var(--space-3);
 }
 
 .sidebar-icon-btn-warning {
@@ -671,12 +671,12 @@ async function webdavSync() {
   .nav-item,
   .tag-item {
     justify-content: center;
-    padding: 8px;
+    padding: var(--space-2);
   }
 
   .tag-add {
     justify-content: center;
-    padding: 8px;
+    padding: var(--space-2);
   }
 
   .tag-add-label {

@@ -160,7 +160,7 @@ FloatingPanel / WindowApp / PreviewPane 头部操作按钮已补 `aria-label`，
 | 三栏底色 | 侧栏 `--bg-elevated`；列表+详情共用 `--bg-surface`；仅列表右边线分隔 |
 | 详情描边 | 仅详情头底分区线；`preview-actions` / `sidebar-bottom` 无顶部分割线；文本无框；链接/文件浅底无描边 |
 | 详情间距 | `.preview-tags` `8px 20px 16px`；`.preview-actions` `8px 20px 20px` |
-| 置顶 / 收藏 | `--pin` 图钉红 vs `--warning` 金；`action-pinned` ≠ `action-active` |
+| 置顶 / 收藏 | `--pin` 紫（暗 `#a78bfa` / 浅 `#7c3aed`）vs `--warning` 金 vs `--danger` 红；`action-pinned` ≠ `action-active` |
 | 置顶分组 | 「置顶」标签 + 与普通列表之间的细分割线（两组都有时） |
 | 标签侧栏 | 0 计数收进「更多」；`is_auto` 用 sparkles + tooltip「自动打标规则创建」 |
 | 托盘左键 | 后台可见 → 置前；已前台 → 隐藏；最小化/隐藏 → 显示（`toggle_main_panel`） |

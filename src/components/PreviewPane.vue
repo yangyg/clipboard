@@ -28,15 +28,6 @@
             <span :title="`从本应用粘贴次数：${record.copy_count}`">粘贴 {{ record.copy_count }} 次</span>
           </div>
         </div>
-        <button
-          v-if="record.is_favorite"
-          type="button"
-          class="preview-action-btn active"
-          @click="favorite"
-          title="取消收藏"
-          aria-label="取消收藏"
-          :aria-pressed="true"
-        ><AppIcon name="star" :size="13" fill="currentColor" /></button>
       </div>
     </div>
 
@@ -497,7 +488,7 @@ async function permanentDel() {
 
 /* Header */
 .preview-header {
-  padding: 16px 20px 12px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border-light, var(--border-subtle));
 }
 
@@ -580,39 +571,6 @@ async function permanentDel() {
   flex-shrink: 0;
   margin: 0 4px;
   opacity: 0.7;
-}
-
-.preview-action-btn {
-  font-size: 1rem;
-  color: var(--text-muted, var(--text-tertiary));
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 3px;
-  line-height: 1;
-  transition: color var(--transition-fast);
-}
-
-.preview-action-btn:hover {
-  color: var(--accent);
-}
-
-.preview-action-btn.active {
-  color: var(--warning);
-}
-
-.preview-action-btn.active:hover {
-  color: color-mix(in srgb, var(--warning) 75%, var(--text-primary));
-}
-
-.preview-more {
-  font-size: 1rem;
-  color: var(--text-muted, var(--text-tertiary));
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0 4px;
-  line-height: 1;
 }
 
 /* Sensitive Warning */

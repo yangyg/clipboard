@@ -46,8 +46,9 @@
   --success-soft: rgba(52, 211, 153, 0.12);
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, 0.12);
-  --pin: #f43f5e;
-  --pin-soft: rgba(244, 63, 94, 0.12);
+  /* Violet — distinct from --danger (red) and --warning (gold) */
+  --pin: #a78bfa;
+  --pin-soft: rgba(167, 139, 250, 0.14);
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.12);
   --code-bg: #12141c;
@@ -98,8 +99,8 @@ body.light-theme,
   --success-soft: rgba(22, 163, 74, 0.1);
   --warning: #d97706;
   --warning-soft: rgba(217, 119, 6, 0.1);
-  --pin: #e11d48;
-  --pin-soft: rgba(225, 29, 72, 0.1);
+  --pin: #7c3aed;
+  --pin-soft: rgba(124, 58, 237, 0.1);
   --danger: #dc2626;
   --danger-soft: rgba(220, 38, 38, 0.1);
   --code-bg: #f0f2f8;

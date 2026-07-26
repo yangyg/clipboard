@@ -730,6 +730,7 @@ pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
 
 /// Toggle main panel. Minimized windows count as "hidden" — restore + focus
 /// instead of hide (Windows keeps WS_VISIBLE while minimized).
+/// Visible but not foreground → bring to front (tray / shortcut expect activate).
 pub(crate) fn toggle_main_panel(app: &tauri::AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -740,8 +741,18 @@ pub(crate) fn toggle_main_panel(app: &tauri::AppHandle) {
         return;
     }
     if window.is_visible().unwrap_or(false) {
-        let _ = window.hide();
-        let _ = app.emit("toggle-panel", false);
+        let in_foreground = window
+            .hwnd()
+            .ok()
+            .map(|h| clipboard::is_foreground_hwnd(h.0 as isize))
+            .unwrap_or(false)
+            || window.is_focused().unwrap_or(false);
+        if in_foreground {
+            let _ = window.hide();
+            let _ = app.emit("toggle-panel", false);
+        } else {
+            show_main_panel(app);
+        }
     } else {
         show_main_panel(app);
     }

@@ -710,6 +710,25 @@ pub fn focus_window(_hwnd_id: isize) -> bool {
     false
 }
 
+/// Whether `hwnd_id` (or its root owner) is the current foreground window.
+#[cfg(windows)]
+pub fn is_foreground_hwnd(hwnd_id: isize) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, IsWindow};
+    unsafe {
+        let hwnd = hwnd_id as windows_sys::Win32::Foundation::HWND;
+        if hwnd.is_null() || IsWindow(hwnd) == 0 {
+            return false;
+        }
+        let fg = GetForegroundWindow();
+        !fg.is_null() && root_hwnd(fg) == root_hwnd(hwnd)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn is_foreground_hwnd(_hwnd_id: isize) -> bool {
+    false
+}
+
 /// Hide via Win32 so focus can leave us even if Tauri hide is delayed.
 #[cfg(windows)]
 pub fn hide_hwnd(hwnd_id: isize) {

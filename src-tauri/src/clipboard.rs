@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use image::{imageops::FilterType, RgbaImage};
 
 #[derive(Debug, Clone)]
@@ -80,9 +80,11 @@ impl ClipboardMonitor {
         let last_image_hash = self.last_image_hash.clone();
         let suppress_until = self.suppress_until.clone();
 
-        // Get initial clipboard content
+        // Baseline fingerprint so pre-existing clipboard content is not re-captured.
+        // A transient busy clipboard here just means "no baseline" — the first poll
+        // handles that case normally.
         if let Ok(mut clipboard) = Clipboard::new() {
-            if let Some(captured) = read_clipboard_text(&mut clipboard) {
+            if let Ok(Some(captured)) = read_clipboard_text(&mut clipboard) {
                 *last_text_fp.lock() = Some(captured.fingerprint());
             }
         }
@@ -92,6 +94,12 @@ impl ClipboardMonitor {
             let poll_interval = Duration::from_millis(250);
             // Reuse handle across polls; recreate only after open failure
             let mut clipboard_slot: Option<Clipboard> = Clipboard::new().ok();
+            info!(
+                "Clipboard monitor started (poll every {}ms)",
+                poll_interval.as_millis()
+            );
+            // Log a busy clipboard once per episode, not every 250ms tick.
+            let mut busy_logged = false;
 
             while running.load(Ordering::SeqCst) {
                 // Always refresh paste destination while user works in other apps.
@@ -103,7 +111,11 @@ impl ClipboardMonitor {
                     thread::sleep(poll_interval);
                     continue;
                 }
-                last_seq.store(seq, Ordering::Relaxed);
+                // Do NOT advance `last_seq` yet. The watermark is committed only
+                // after the clipboard is successfully opened below; otherwise a
+                // transient `ClipboardOccupied` failure would consume this sequence
+                // transition and the copy would be lost forever (the next poll sees
+                // an unchanged sequence and skips).
 
                 if clipboard_slot.is_none() {
                     clipboard_slot = Clipboard::new().ok();
@@ -113,12 +125,30 @@ impl ClipboardMonitor {
                     continue;
                 };
 
+                // First open of this tick. If another process holds the clipboard
+                // (common right after login/startup), leave the watermark untouched
+                // so the next poll retries this same sequence transition.
+                let text = match read_clipboard_text(clipboard) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        if !busy_logged {
+                            warn!("Clipboard busy, deferring capture: {e}");
+                            busy_logged = true;
+                        }
+                        thread::sleep(poll_interval);
+                        continue;
+                    }
+                };
+                // The sequence watermark is committed only after ALL clipboard
+                // reads for this tick succeed. If any read hits ClipboardOccupied
+                // we leave the watermark untouched so the next poll retries this
+                // same sequence transition.
+
                 let suppressed = is_capture_suppressed(&suppress_until);
 
-                // Read text first. Skip get_image() (full RGBA copy) when:
+                // Text was read first (above). Skip get_image() (full RGBA copy) when:
                 // - meaningful share text wins over a co-existing thumb, or
                 // - the clipboard has no bitmap/DIB formats at all.
-                let text = read_clipboard_text(clipboard);
                 let prefer_text = text
                     .as_ref()
                     .map(|t| is_meaningful_share_text(&t.text))
@@ -128,6 +158,8 @@ impl ClipboardMonitor {
                     if let Some(captured) = text {
                         maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                     }
+                    busy_logged = false;
+                    last_seq.store(seq, Ordering::Relaxed);
                     thread::sleep(poll_interval);
                     continue;
                 }
@@ -136,7 +168,19 @@ impl ClipboardMonitor {
                     // Windows often keeps BOTH a bitmap and text:
                     // - Screenshots: image + empty/stub text → keep image
                     // - Browser "Copy image": image + URL-only text → keep image
-                    if let Some(img) = clipboard.get_image().ok() {
+                    let image = match clipboard.get_image() {
+                        Err(e @ arboard::Error::ClipboardOccupied) => {
+                            if !busy_logged {
+                                warn!("Clipboard busy during image read, deferring: {e}");
+                                busy_logged = true;
+                            }
+                            thread::sleep(poll_interval);
+                            continue;
+                        }
+                        Err(_) => None,
+                        Ok(img) => Some(img),
+                    };
+                    if let Some(img) = image {
                         // Cheap fingerprint first — avoid full SHA-256 when bitmap unchanged
                         let quick = image_quick_fingerprint(&img);
                         let unchanged = {
@@ -156,30 +200,30 @@ impl ClipboardMonitor {
                                 "Suppressed self-write image capture {}x{}",
                                 img.width, img.height
                             );
-                    } else {
-                        let width = img.width as u32;
-                        let height = img.height as u32;
-                        // Prefer moving owned buffer; only copy when Cow is borrowed
-                        let raw = match img.bytes {
-                            std::borrow::Cow::Owned(v) => v,
-                            std::borrow::Cow::Borrowed(b) => b.to_vec(),
-                        };
-                        // SHA-256 of full RGBA is done on the capture worker —
-                        // poll only needs the cheap quick fingerprint for change detection.
-                        *last_image_hash.lock() = Some(quick);
-                        // Cap very large bitmaps BEFORE they enter the bounded channel:
-                        // raw RGBA at 8K ≈ 660MB. We only need a 2560px-max edge for
-                        // preview + paste; store_clipboard_image() also targets MAX_EDGE.
-                        let (rgba, width, height) =
-                            downscale_captured_rgba_if_large(raw, width, height);
-                        debug!("Clipboard changed (image): {}x{}", width, height);
-                        on_change(ClipboardEvent::Image(CapturedImage {
-                            rgba,
-                            width,
-                            height,
-                            hash: String::new(),
-                        }));
-                    }
+                        } else {
+                            let width = img.width as u32;
+                            let height = img.height as u32;
+                            // Prefer moving owned buffer; only copy when Cow is borrowed
+                            let raw = match img.bytes {
+                                std::borrow::Cow::Owned(v) => v,
+                                std::borrow::Cow::Borrowed(b) => b.to_vec(),
+                            };
+                            // SHA-256 of full RGBA is done on the capture worker —
+                            // poll only needs the cheap quick fingerprint for change detection.
+                            *last_image_hash.lock() = Some(quick);
+                            // Cap very large bitmaps BEFORE they enter the bounded channel:
+                            // raw RGBA at 8K ≈ 660MB. We only need a 2560px-max edge for
+                            // preview + paste; store_clipboard_image() also targets MAX_EDGE.
+                            let (rgba, width, height) =
+                                downscale_captured_rgba_if_large(raw, width, height);
+                            debug!("Clipboard changed (image): {}x{}", width, height);
+                            on_change(ClipboardEvent::Image(CapturedImage {
+                                rgba,
+                                width,
+                                height,
+                                hash: String::new(),
+                            }));
+                        }
                     } else if let Some(captured) = text {
                         maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                     }
@@ -187,6 +231,9 @@ impl ClipboardMonitor {
                     maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
                 }
 
+                // All reads for this tick succeeded — commit the watermark.
+                busy_logged = false;
+                last_seq.store(seq, Ordering::Relaxed);
                 thread::sleep(poll_interval);
             }
 
@@ -333,15 +380,30 @@ fn downscale_captured_rgba_if_large(
     (out.into_raw(), nw, nh)
 }
 
-fn read_clipboard_text(clipboard: &mut Clipboard) -> Option<CapturedText> {
-    let text = clipboard.get_text().ok()?;
-    let html = clipboard
-        .get()
-        .html()
-        .ok()
-        .map(|h| h.trim().to_string())
-        .filter(|h| !h.is_empty());
-    Some(CapturedText { text, html })
+/// Read plain text (+ optional HTML) from the clipboard.
+///
+/// Returns `Err` only for a *transient* failure — the clipboard is held by
+/// another process (`ClipboardOccupied`) — so the caller can keep the sequence
+/// watermark and retry on the next tick. A clipboard that opened fine but holds
+/// no usable text (image-only, empty, …) is `Ok(None)`, not an error.
+fn read_clipboard_text(clipboard: &mut Clipboard) -> Result<Option<CapturedText>, arboard::Error> {
+    match clipboard.get_text() {
+        Ok(text) => {
+            let html = clipboard
+                .get()
+                .html()
+                .ok()
+                .map(|h| h.trim().to_string())
+                .filter(|h| !h.is_empty());
+            Ok(Some(CapturedText { text, html }))
+        }
+        // Transient: another process holds the clipboard open (arboard retries
+        // ~5×5ms internally before giving up). Propagate so the poll loop defers
+        // this sequence transition instead of dropping it.
+        Err(e @ arboard::Error::ClipboardOccupied) => Err(e),
+        // ContentNotAvailable / conversion errors: accessible but no text.
+        Err(_) => Ok(None),
+    }
 }
 
 /// Prefer text over a co-existing bitmap only for real share/snippets.

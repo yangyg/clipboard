@@ -439,6 +439,74 @@ pub fn run() {
             let monitor = monitor_for_setup.clone();
             let capture_paused_thread = capture_paused_for_setup.clone();
 
+            // ── Capture pipeline (start first to minimise the startup blind spot) ──
+            // Clipboard monitor only enqueues; separate workers handle text (fast)
+            // and image (slow: PNG encode + thumbnail) so a large image capture
+            // never blocks subsequent text captures.
+            let media_root = db.media_root().to_path_buf();
+
+            // Text worker: detect + hash + DB insert (<5ms per job).
+            let (text_tx, text_rx) = mpsc::sync_channel::<TextCaptureJob>(4);
+            let db_text = db.clone();
+            let app_text = app_handle.clone();
+            std::thread::spawn(move || {
+                while let Ok(job) = text_rx.recv() {
+                    process_text_job(job, &db_text, &app_text);
+                }
+            });
+
+            // Image worker: RGBA → PNG encode → thumbnail → DB insert (50-300ms).
+            // Capacity 2: at most 2 queued + 1 in-flight; full queue drops (poll
+            // thread must not block). Pre-channel downscaling caps RGBA at ~26MB.
+            let (image_tx, image_rx) = mpsc::sync_channel::<ImageCaptureJob>(2);
+            let db_image = db.clone();
+            let app_image = app_handle.clone();
+            let media_root_image = media_root.clone();
+            std::thread::spawn(move || {
+                while let Ok(job) = image_rx.recv() {
+                    process_image_job(job, &db_image, &media_root_image, &app_image);
+                }
+            });
+
+            std::thread::spawn(move || {
+                monitor.write().start(move |event| {
+                    if *capture_paused_thread.read() {
+                        return;
+                    }
+                    let (source_window, source_app) = clipboard::get_foreground_window_info();
+                    // Dispatch to the appropriate worker: text (fast) or image (slow).
+                    // Non-blocking: a full queue must not stall the poll thread.
+                    match event {
+                        ClipboardEvent::Text(captured) => {
+                            let job = TextCaptureJob { captured, source_app, source_window };
+                            match text_tx.try_send(job) {
+                                Ok(()) => {}
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    warn!("Text capture queue full; dropping event");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    warn!("Text capture worker stopped");
+                                }
+                            }
+                        }
+                        ClipboardEvent::Image(captured) => {
+                            let job = ImageCaptureJob { captured, source_app, source_window };
+                            match image_tx.try_send(job) {
+                                Ok(()) => {}
+                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                                    warn!("Image capture queue full; dropping event");
+                                }
+                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                                    warn!("Image capture worker stopped");
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+
+            // ── Non-critical setup (autostart, shortcut, tray, theme, window) ──
+
             // Sync OS autostart with persisted setting; skip if settings cannot be loaded
             match db.get_settings() {
                 Ok(startup_settings) => {
@@ -490,34 +558,6 @@ pub fn run() {
                 }
             }
 
-            // Clipboard monitor only enqueues; separate workers handle text (fast)
-            // and image (slow: PNG encode + thumbnail) so a large image capture
-            // never blocks subsequent text captures.
-            let media_root = db.media_root().to_path_buf();
-
-            // Text worker: detect + hash + DB insert (<5ms per job).
-            let (text_tx, text_rx) = mpsc::sync_channel::<TextCaptureJob>(4);
-            let db_text = db.clone();
-            let app_text = app_handle.clone();
-            std::thread::spawn(move || {
-                while let Ok(job) = text_rx.recv() {
-                    process_text_job(job, &db_text, &app_text);
-                }
-            });
-
-            // Image worker: RGBA → PNG encode → thumbnail → DB insert (50-300ms).
-            // Capacity 2: at most 2 queued + 1 in-flight; full queue drops (poll
-            // thread must not block). Pre-channel downscaling caps RGBA at ~26MB.
-            let (image_tx, image_rx) = mpsc::sync_channel::<ImageCaptureJob>(2);
-            let db_image = db.clone();
-            let app_image = app_handle.clone();
-            let media_root_image = media_root.clone();
-            std::thread::spawn(move || {
-                while let Ok(job) = image_rx.recv() {
-                    process_image_job(job, &db_image, &media_root_image, &app_image);
-                }
-            });
-
             // Periodic cleanup off the capture path — stamp only after success.
             let db_cleanup = db.clone();
             let app_cleanup = app_handle.clone();
@@ -532,43 +572,6 @@ pub fn run() {
                         Err(e) => warn!("Periodic cleanup failed: {}", e),
                     }
                 }
-            });
-
-            std::thread::spawn(move || {
-                monitor.write().start(move |event| {
-                    if *capture_paused_thread.read() {
-                        return;
-                    }
-                    let (source_window, source_app) = clipboard::get_foreground_window_info();
-                    // Dispatch to the appropriate worker: text (fast) or image (slow).
-                    // Non-blocking: a full queue must not stall the poll thread.
-                    match event {
-                        ClipboardEvent::Text(captured) => {
-                            let job = TextCaptureJob { captured, source_app, source_window };
-                            match text_tx.try_send(job) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    warn!("Text capture queue full; dropping event");
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    warn!("Text capture worker stopped");
-                                }
-                            }
-                        }
-                        ClipboardEvent::Image(captured) => {
-                            let job = ImageCaptureJob { captured, source_app, source_window };
-                            match image_tx.try_send(job) {
-                                Ok(()) => {}
-                                Err(std::sync::mpsc::TrySendError::Full(_)) => {
-                                    warn!("Image capture queue full; dropping event");
-                                }
-                                Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
-                                    warn!("Image capture worker stopped");
-                                }
-                            }
-                        }
-                    }
-                });
             });
 
             info!("ClipVault setup complete");

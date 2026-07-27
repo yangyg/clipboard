@@ -75,6 +75,13 @@ describe("settingsStore system theme tracking", () => {
 
   afterEach(() => {
     window.matchMedia = originalMatchMedia;
+    // Keep the shared Tauri mocks pristine for the next test: drop recorded
+    // calls (so handler lookups only see the current test's store) and any
+    // unconsumed mockResolvedValueOnce, then restore the base implementation
+    // installed in src/test/setup.ts.
+    vi.mocked(listen).mockClear();
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
   });
 
   it("applies dark-theme when the system prefers dark", () => {
@@ -138,7 +145,11 @@ describe("settingsStore system theme tracking", () => {
     expect(document.body.classList.contains("dark-theme")).toBe(true);
   });
 
-  /** Handler the store registered for the Rust-side "system-theme-changed" event. */
+  /**
+   * Handler the store registered for the Rust-side "system-theme-changed"
+   * event. Safe to scan the whole mock call list: afterEach clears it, so it
+   * only ever contains the current test's registrations.
+   */
   function lastNativeThemeHandler(): (e: { payload: boolean }) => void {
     const calls = vi.mocked(listen).mock.calls;
     for (let i = calls.length - 1; i >= 0; i--) {
@@ -176,5 +187,45 @@ describe("settingsStore system theme tracking", () => {
     expect(document.body.classList.contains("oled-theme")).toBe(true);
     expect(document.body.classList.contains("light-theme")).toBe(false);
     expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("ignores native OS theme events while the default dark theme is active", () => {
+    mockSystemTheme(true);
+    const store = useSettingsStore();
+    expect(store.settings.theme).toBe("dark");
+
+    lastNativeThemeHandler()({ payload: false });
+    // Default dark theme renders via base CSS — no theme class is added.
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("keeps the native-reported theme across a runtime loadSettings (stale matchMedia)", async () => {
+    const { mql } = mockSystemTheme(false); // matchMedia stuck on light (stale)
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+
+    lastNativeThemeHandler()({ payload: true }); // authoritative: dark
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+
+    // A runtime loadSettings (e.g. after a WebDAV sync) must not revert to
+    // the stale matchMedia value.
+    vi.mocked(invoke).mockResolvedValueOnce({ theme: "system" } as unknown as Settings);
+    await store.loadSettings();
+    expect(mql.matches).toBe(false); // still stale — proves the cache was used
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+  });
+
+  it("re-applies the cached system theme when switching back from a fixed theme", () => {
+    mockSystemTheme(false); // stale light
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    lastNativeThemeHandler()({ payload: true }); // authoritative: dark
+
+    store.updateSetting("theme", "light");
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
   });
 });

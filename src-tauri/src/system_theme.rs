@@ -12,16 +12,30 @@
 //! On change we emit `system-theme-changed` (payload: `dark: bool`) to every
 //! webview; frontends apply it only when the user chose the "system" theme.
 
-use std::sync::atomic::{AtomicI8, AtomicIsize, Ordering};
+#[cfg(windows)]
+use std::sync::atomic::{AtomicBool, AtomicI8, AtomicIsize, Ordering};
+#[cfg(windows)]
 use std::sync::OnceLock;
 
 /// -1 = unknown, 0 = light, 1 = dark — used to dedupe repeated broadcasts.
+#[cfg(windows)]
 static LAST_DARK: AtomicI8 = AtomicI8::new(-1);
+#[cfg(windows)]
 static WATCHER_HWND: AtomicIsize = AtomicIsize::new(0);
+/// Double-start guard (same pattern as tray::RESUME_WATCHER_STARTED).
+#[cfg(windows)]
+static WATCHER_STARTED: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
 static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 #[cfg(windows)]
 pub(crate) fn start_system_theme_watcher(app: tauri::AppHandle) {
+    if WATCHER_STARTED
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
     let _ = APP_HANDLE.set(app);
     let _ = std::thread::Builder::new()
         .name("system-theme-watcher".into())
@@ -66,7 +80,10 @@ fn watcher_thread() {
             lpszMenuName: std::ptr::null(),
             lpszClassName: class_name.as_ptr(),
         };
-        RegisterClassW(&wc);
+        if RegisterClassW(&wc) == 0 {
+            tracing::warn!("system theme watcher: RegisterClassW failed");
+            return;
+        }
 
         // Invisible *top-level* window: message-only windows (HWND_MESSAGE)
         // do not receive broadcast WM_SETTINGCHANGE, so we must not use one.

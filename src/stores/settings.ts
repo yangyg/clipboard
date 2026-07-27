@@ -102,6 +102,13 @@ export const useSettingsStore = defineStore("settings", () => {
   // OS changes, without ever registering twice or leaking into fixed themes.
   let systemThemeMql: MediaQueryList | null = null;
   let systemThemeHandler: ((e: MediaQueryListEvent) => void) | null = null;
+  // Latest authoritative OS dark-mode signal (native watcher event, with the
+  // matchMedia change event as a secondary source). matchMedia can stay stale
+  // in a hidden WebView2, so any re-application of the "system" theme (e.g.
+  // loadSettings after a WebDAV sync) must prefer this cache over a fresh
+  // matchMedia read; `null` means no signal yet (fall back to matchMedia,
+  // which is fresh at webview creation).
+  let lastKnownSystemDark: boolean | null = null;
 
   function stopSystemThemeWatch() {
     if (systemThemeMql && systemThemeHandler) {
@@ -123,8 +130,15 @@ export const useSettingsStore = defineStore("settings", () => {
     document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
     if (theme === "system") {
       const mql = window.matchMedia("(prefers-color-scheme: dark)");
-      applySystemThemeClass(mql.matches);
-      systemThemeHandler = (e: MediaQueryListEvent) => applySystemThemeClass(e.matches);
+      applySystemThemeClass(lastKnownSystemDark ?? mql.matches);
+      systemThemeHandler = (e: MediaQueryListEvent) => {
+        // Cache first (mirrors the native-event handler): even if this fires
+        // while a fixed theme is active, the cache must stay fresh so a later
+        // switch back to "system" starts from the latest OS state.
+        lastKnownSystemDark = e.matches;
+        if (settings.value.theme !== "system") return;
+        applySystemThemeClass(e.matches);
+      };
       systemThemeMql = mql;
       mql.addEventListener("change", systemThemeHandler);
     } else if (theme !== "dark") {
@@ -137,6 +151,9 @@ export const useSettingsStore = defineStore("settings", () => {
   // the panel window is hidden, so this is the primary "follow system"
   // driver on Windows; the matchMedia listener above is only a fallback.
   void listen<boolean>("system-theme-changed", (event) => {
+    // Always refresh the cache — even under a fixed theme — so switching
+    // back to "system" later starts from the latest OS state.
+    lastKnownSystemDark = event.payload;
     if (settings.value.theme !== "system") return;
     applySystemThemeClass(event.payload);
   }).catch((e) => console.error("Failed to listen for system-theme-changed:", e));

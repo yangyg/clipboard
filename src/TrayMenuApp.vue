@@ -49,12 +49,17 @@ const appWindow = getCurrentWindow();
 const unlisteners: UnlistenFn[] = [];
 
 let currentTheme = "dark";
+// Latest authoritative OS dark-mode signal from the native watcher. matchMedia
+// can stay stale in this (mostly hidden) webview, so re-applying the "system"
+// theme on menu open must prefer the cache; null = no signal yet.
+let lastKnownSystemDark: boolean | null = null;
 
 function applyTheme(theme: string) {
   currentTheme = theme;
   document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
   if (theme === "system") {
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const prefersDark =
+      lastKnownSystemDark ?? window.matchMedia("(prefers-color-scheme: dark)").matches;
     document.body.classList.add(prefersDark ? "dark-theme" : "light-theme");
   } else if (theme !== "dark") {
     document.body.classList.add(`${theme}-theme`);
@@ -182,6 +187,7 @@ onMounted(async () => {
   // hidden WebView2); only relevant while following the system theme.
   unlisteners.push(
     await listen<boolean>("system-theme-changed", (event) => {
+      lastKnownSystemDark = event.payload;
       if (currentTheme !== "system") return;
       document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
       document.body.classList.add(event.payload ? "dark-theme" : "light-theme");

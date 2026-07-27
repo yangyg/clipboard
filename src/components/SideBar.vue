@@ -126,10 +126,10 @@
         aria-haspopup="menu"
         :aria-expanded="quickMenu.visible"
         :aria-label="$t('sidebar.quickMenu')"
-        :title="$t('sidebar.themeAndCapture')"
+        :title="$t('sidebar.quickMenu')"
         @click="toggleQuickMenu"
       >
-        <AppIcon name="menu" :size="15" />
+        <AppIcon name="zap" :size="15" />
       </button>
       <button
         type="button"

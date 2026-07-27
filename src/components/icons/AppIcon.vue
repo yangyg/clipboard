@@ -47,7 +47,7 @@ import {
   CloudUpload,
   CloudDownload,
   RefreshCw,
-  Menu,
+  Zap,
   ArrowUp,
 } from "lucide-vue-next";
 
@@ -97,7 +97,7 @@ const ICONS = {
   cloudUpload: CloudUpload,
   cloudDownload: CloudDownload,
   refresh: RefreshCw,
-  menu: Menu,
+  zap: Zap,
   arrowUp: ArrowUp,
 } as const;
 

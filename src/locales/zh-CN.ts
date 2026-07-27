@@ -143,7 +143,6 @@ export default {
     collapse: '收起',
     more: '更多',
     quickMenu: '快捷菜单',
-    themeAndCapture: '主题与监控',
     settings: '设置',
     appearance: '外观',
     light: '浅色',

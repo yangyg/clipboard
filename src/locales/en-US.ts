@@ -143,7 +143,6 @@ export default {
     collapse: 'Collapse',
     more: 'More',
     quickMenu: 'Quick menu',
-    themeAndCapture: 'Theme & capture',
     settings: 'Settings',
     appearance: 'Appearance',
     light: 'Light',

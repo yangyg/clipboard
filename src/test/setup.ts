@@ -20,3 +20,9 @@ if (!window.matchMedia) {
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
 }));
+
+// Same for backend event subscriptions: record listeners, resolve a no-op
+// unlisten. Tests can pull registered handlers off the mock when needed.
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn().mockResolvedValue(() => {}),
+}));

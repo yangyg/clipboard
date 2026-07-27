@@ -6,6 +6,7 @@ mod commands;
 mod window;
 mod tray;
 mod security;
+mod system_theme;
 mod webdav;
 
 use db::{ClipboardDb, ContentType, ImageMeta};
@@ -472,6 +473,11 @@ pub fn run() {
             tray::build_tray(app.handle(), capture_paused_for_setup.clone())?;
             tray::start_resume_watcher(app.handle().clone());
 
+            // Native OS light/dark watcher → "system-theme-changed" events.
+            // WebView2 matchMedia change events are unreliable while the panel
+            // window is hidden, so "follow system" needs this native signal.
+            system_theme::start_system_theme_watcher(app.handle().clone());
+
             // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_shadow(false);
@@ -603,6 +609,9 @@ pub fn run() {
             // Windows sleep/wake is primarily handled by tray::start_resume_watcher.
             if let tauri::RunEvent::Resumed = event {
                 tray::recover_after_resume(app_handle);
+            }
+            if matches!(event, tauri::RunEvent::Exit) {
+                system_theme::stop_system_theme_watcher();
             }
         });
 }

@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES } from "../types";
 
@@ -97,15 +98,48 @@ export const useSettingsStore = defineStore("settings", () => {
     }, SAVE_DEBOUNCE_MS);
   }
 
+  // Tracks the active prefers-color-scheme listener so "system" theme follows
+  // OS changes, without ever registering twice or leaking into fixed themes.
+  let systemThemeMql: MediaQueryList | null = null;
+  let systemThemeHandler: ((e: MediaQueryListEvent) => void) | null = null;
+
+  function stopSystemThemeWatch() {
+    if (systemThemeMql && systemThemeHandler) {
+      systemThemeMql.removeEventListener("change", systemThemeHandler);
+    }
+    systemThemeMql = null;
+    systemThemeHandler = null;
+  }
+
+  function applySystemThemeClass(prefersDark: boolean) {
+    document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
+    document.body.classList.add(prefersDark ? "dark-theme" : "light-theme");
+  }
+
   function applyTheme(theme: Settings["theme"]) {
+    // Detach any previous OS-theme listener: fixed themes must not be
+    // overridden by system changes, and re-entry must not double-register.
+    stopSystemThemeWatch();
     document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
     if (theme === "system") {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      document.body.classList.add(prefersDark ? "dark-theme" : "light-theme");
+      const mql = window.matchMedia("(prefers-color-scheme: dark)");
+      applySystemThemeClass(mql.matches);
+      systemThemeHandler = (e: MediaQueryListEvent) => applySystemThemeClass(e.matches);
+      systemThemeMql = mql;
+      mql.addEventListener("change", systemThemeHandler);
     } else if (theme !== "dark") {
       document.body.classList.add(`${theme}-theme`);
     }
   }
+
+  // Authoritative OS theme signal from the Rust backend (WM_SETTINGCHANGE +
+  // registry). WebView2 often does not fire matchMedia change events while
+  // the panel window is hidden, so this is the primary "follow system"
+  // driver on Windows; the matchMedia listener above is only a fallback.
+  void listen<boolean>("system-theme-changed", (event) => {
+    if (settings.value.theme !== "system") return;
+    applySystemThemeClass(event.payload);
+  }).catch((e) => console.error("Failed to listen for system-theme-changed:", e));
 
   const lastAppliedRadius = ref<number | null>(null);
 

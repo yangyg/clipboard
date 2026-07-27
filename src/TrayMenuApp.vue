@@ -48,7 +48,10 @@ const appWindow = getCurrentWindow();
 
 const unlisteners: UnlistenFn[] = [];
 
+let currentTheme = "dark";
+
 function applyTheme(theme: string) {
+  currentTheme = theme;
   document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
   if (theme === "system") {
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -172,6 +175,16 @@ onMounted(async () => {
         console.error("get_tray_menu_state failed:", e);
       }
       await fitWindowToContent();
+    }),
+  );
+
+  // Native OS light/dark change from Rust (matchMedia is unreliable in a
+  // hidden WebView2); only relevant while following the system theme.
+  unlisteners.push(
+    await listen<boolean>("system-theme-changed", (event) => {
+      if (currentTheme !== "system") return;
+      document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
+      document.body.classList.add(event.payload ? "dark-theme" : "light-theme");
     }),
   );
 

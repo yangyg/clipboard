@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useSettingsStore } from "@/stores/settings";
+import type { Settings } from "@/types";
 
 describe("settingsStore (smoke)", () => {
   beforeEach(() => {
@@ -30,5 +33,148 @@ describe("settingsStore (smoke)", () => {
     expect(document.body.classList.contains("light-theme")).toBe(true);
     store.updateSetting("theme", "dark");
     expect(document.body.classList.contains("light-theme")).toBe(false);
+  });
+});
+
+describe("settingsStore system theme tracking", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  /**
+   * Installs a controllable prefers-color-scheme mock and returns helpers to
+   * simulate the OS switching between light and dark mode.
+   */
+  function mockSystemTheme(initialDark: boolean) {
+    type ChangeHandler = (e: { matches: boolean }) => void;
+    const handlers = new Set<ChangeHandler>();
+    const mql = {
+      matches: initialDark,
+      media: "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn((_event: string, handler: ChangeHandler) => {
+        handlers.add(handler);
+      }),
+      removeEventListener: vi.fn((_event: string, handler: ChangeHandler) => {
+        handlers.delete(handler);
+      }),
+    };
+    window.matchMedia = vi.fn().mockReturnValue(mql as unknown as MediaQueryList);
+    return {
+      mql,
+      handlers,
+      /** Simulates the OS toggling night mode / dark mode. */
+      setSystemDark(dark: boolean) {
+        mql.matches = dark;
+        for (const h of handlers) h({ matches: dark });
+      },
+    };
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.className = "";
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+  });
+
+  it("applies dark-theme when the system prefers dark", () => {
+    mockSystemTheme(true);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+  });
+
+  it("applies light-theme when the system prefers light", () => {
+    mockSystemTheme(false);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("follows live OS color-scheme changes while theme is system", () => {
+    const { setSystemDark } = mockSystemTheme(false);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+
+    setSystemDark(true);
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+
+    setSystemDark(false);
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("stops following OS changes after switching to a fixed theme", () => {
+    const { mql, setSystemDark } = mockSystemTheme(false);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    store.updateSetting("theme", "light");
+    expect(mql.removeEventListener).toHaveBeenCalledWith("change", expect.any(Function));
+
+    setSystemDark(true);
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("does not register duplicate listeners when re-applying system theme", () => {
+    const { mql, handlers } = mockSystemTheme(true);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    store.updateSetting("theme", "system");
+    expect(mql.addEventListener).toHaveBeenCalledTimes(2);
+    expect(handlers.size).toBe(1);
+  });
+
+  it("applies the saved system theme on loadSettings (app start)", async () => {
+    mockSystemTheme(true);
+    vi.mocked(invoke).mockResolvedValueOnce({ theme: "system" } as unknown as Settings);
+    const store = useSettingsStore();
+    await store.loadSettings();
+    expect(store.settings.theme).toBe("system");
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+  });
+
+  /** Handler the store registered for the Rust-side "system-theme-changed" event. */
+  function lastNativeThemeHandler(): (e: { payload: boolean }) => void {
+    const calls = vi.mocked(listen).mock.calls;
+    for (let i = calls.length - 1; i >= 0; i--) {
+      if (calls[i][0] === "system-theme-changed") {
+        return calls[i][1] as unknown as (e: { payload: boolean }) => void;
+      }
+    }
+    throw new Error("system-theme-changed listener was not registered");
+  }
+
+  it("applies the OS theme reported by the native watcher while theme is system", () => {
+    mockSystemTheme(false);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+
+    // Rust reports the OS flipped to dark (even though matchMedia, which is
+    // stale in a hidden WebView2, still says light).
+    lastNativeThemeHandler()({ payload: true });
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+
+    lastNativeThemeHandler()({ payload: false });
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("ignores native OS theme events when a fixed theme is active", () => {
+    mockSystemTheme(true);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    store.updateSetting("theme", "oled");
+
+    lastNativeThemeHandler()({ payload: false });
+    expect(document.body.classList.contains("oled-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
   });
 });

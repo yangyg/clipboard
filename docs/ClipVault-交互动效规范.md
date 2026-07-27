@@ -106,7 +106,7 @@
 
 ## 附录：Token 复用
 
-ClipVault **默认暗色主题**（另有浅色 / OLED），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。视觉语义摘要见 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」。
+ClipVault **默认暗色主题**（另有浅色 / OLED / 跟随系统），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。视觉语义摘要见 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」。
 
 动效时长与缓动对齐现有 token（本规范文中的 `duration-*` / `ease-*` 按此映射，不另立一套）：
 

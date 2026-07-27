@@ -85,6 +85,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - `commands.rs` — Tauri commands (CRUD, paste, settings, import/export, stats, mode switch, `tray_menu_action` / `get_tray_menu_state`)
 - `window.rs` — adaptive / remembered size, round corners, resize persistence. **Window mode** min width **760** (SideBar+List+Preview ≥740); floating stays compact.
 - `tray.rs` — tray icon (no native menu); right-click shows `tray-menu` window; left-click → `toggle_main_panel` (see Custom tray menu); **Windows power-resume** rebuilds tray + reloads webviews
+- `system_theme.rs` — Windows OS light/dark watcher: invisible top-level window receives the `WM_SETTINGCHANGE`("ImmersiveColorSet") broadcast, reads the `AppsUseLightTheme` registry value, emits `system-theme-changed` (ADR-0002)
 - `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**); capture downscale ≤2560 edge
 - `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
 - `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
@@ -94,7 +95,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 
 ### State Management (Pinia)
 - `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection
-- `settingsStore` — debounced auto-save (200ms); theme / appearance; `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
+- `settingsStore` — debounced auto-save (200ms); theme / appearance (**"system" theme follows the OS**: native `system-theme-changed` event primary, matchMedia fallback; `lastKnownSystemDark` cache outranks stale matchMedia — ADR-0002); `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
 
 ### Key Design Decisions
 - **Brand:** Product name **ClipVault** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.
@@ -103,6 +104,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **List sort (window mode):** Toolbar `<select>` → `clipboardStore.listSort` → `get_records` / `search_records` `sort` param. Whitelist: `updated_desc` (default), `updated_asc`, `created_desc`, `copies_desc`. Non-trash: `is_pinned DESC` first. Session-only. `onNewRecord` prepends only for `updated_desc`; other sorts reload (debounced ~400ms).
 - **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
 - **Source badge:** List + preview show a 14px letter avatar + short name via `SourceBadge` / `sourceBadge.ts`. Empty source →「系统剪贴板」/「剪」/ gray. Real exe icons later via optional `iconSrc`.
+- **Follow-system theme (Windows):** WebView2 does not reliably fire matchMedia change events while its window is hidden — and the panel is hidden most of the time. A Rust watcher (invisible top-level window + `WM_SETTINGCHANGE`/`ImmersiveColorSet` + `AppsUseLightTheme` registry) emits `system-theme-changed`; frontends apply it only when `theme === "system"`, and the `lastKnownSystemDark` cache outranks stale matchMedia on any re-application (ADR-0002). Windows「夜间模式」(night light) is undetectable and not covered.
 - **Theming / tokens:** CSS vars on `:root` (incl. `--type-*`, `--pin` / `--pin-soft`, `--text-xs`…`--text-xl`, `--space-*`, `--win-close-hover`). Themes: `.light-theme` / `.oled-theme`. SideBar can toggle dark↔light.
   - **Accent:** Fluent blue `--accent: #0078d4` (dark + light). Hover/light variants: dark `#1b86d9` / `#60cdff`; light hover `#106ebe`. Focus rings / primary CTA /「全部」nav use accent.
   - **Column surfaces:** SideBar `--bg-elevated`; list + preview share `--bg-surface` (content band). Separated by a single list `border-right`.
@@ -111,7 +113,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
   - **Pinned list chrome:** 「置顶」section label (pin color) + hairline divider before the first unpinned row when both groups exist (virtual-list `divider` item).
   - **Tag palette:** `themeColors.ts` resolves 12 presets from `--accent` / `--type-*` / status tokens at runtime; no free-form color picker. Existing SQLite hex values are left as-is.
 - **Blur:** Setting `enable_blur` defaults **false**. When on, `backdrop-filter: blur(8px)` **only in floating mode**. Window mode always skips blur (`body.mode-window`).
-- **Custom tray menu:** Separate `tray-menu` WebView (Vite multi-page). Right-click anchors above tray icon; theme/blur follow settings. **Left-click** → `toggle_main_panel`: hidden/minimized → show + focus; visible but not foreground → bring to front (`show_main_panel` / `focus_window`); already foreground → hide. After sleep/wake, power watcher rebuilds tray + reloads webviews.
+- **Custom tray menu:** Separate `tray-menu` WebView (Vite multi-page). Right-click anchors above tray icon; theme/blur follow settings (incl. live `system-theme-changed` events while following the OS). **Left-click** → `toggle_main_panel`: hidden/minimized → show + focus; visible but not foreground → bring to front (`show_main_panel` / `focus_window`); already foreground → hide. After sleep/wake, power watcher rebuilds tray + reloads webviews.
 - **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Prefer `rem` / `--text-*` so Settings / dialogs scale with the user preference. Virtual list row height scales with `font_size`.
 - **Responsive (window):** `@media (max-width: 720px)` — SideBar / settings nav → icon rail; preview actions denser grid; theme cards 2×2.
 - **A11y (baseline):** Record list `role="listbox"` / `option` + roving tabindex; dialogs via `BaseDialog` (Esc + focus trap); `ContextMenu` keyboard + clamp; global `:focus-visible`; theme cards `role="radio"`; form `aria-label`s on search / ranges / ignore-app input. Tertiary text colors raised for WCAG-ish contrast.
@@ -141,7 +143,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Paste focus:** On panel show, remember previous foreground HWND. Paste writes clipboard (PNG bytes preferred for images), focuses target while still holding FG, then floating hide / window minimize when auto-close, Ctrl+V. No valid target → clipboard only. `auto_close_on_paste` false → restore panel (unminimize/show) without stealing focus.
 - **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.
-- **Architecture decisions:** [`docs/adr/`](docs/adr/) — ADR-0001 covers the virtual-list composable extraction and the responsive grid-column single-source-of-truth rule.
+- **Architecture decisions:** [`docs/adr/`](docs/adr/) — ADR-0001 covers the virtual-list composable extraction and the responsive grid-column single-source-of-truth rule; ADR-0002 covers the native OS-theme watcher behind "follow system".
 - **Tray / onboarding specs:** [`docs/superpowers/specs/`](docs/superpowers/specs/).
 
 ## Agent skills

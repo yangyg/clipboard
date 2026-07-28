@@ -362,7 +362,7 @@ async function webdavSync() {
   if (!isWebDavConfigured()) {
     toast(t('sidebar.webdavNotConfigured'), "warning");
     quickMenu.visible = false;
-    emit("openSettings", "data");
+    emit("openSettings", "sync");
     return;
   }
   webdavSyncing.value = true;
@@ -376,7 +376,7 @@ async function webdavSync() {
   } catch (e) {
     toast(t('sidebar.webdavSyncFailed', { error: String(e) }), "error");
     quickMenu.visible = false;
-    emit("openSettings", "data");
+    emit("openSettings", "sync");
   } finally {
     webdavSyncing.value = false;
     quickMenu.visible = false;

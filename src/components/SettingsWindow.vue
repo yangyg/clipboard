@@ -46,6 +46,7 @@
           <SettingsPrivacy v-else-if="activeSection === 'privacy'" />
           <SettingsStats v-else-if="activeSection === 'stats'" />
           <SettingsData v-else-if="activeSection === 'data'" />
+          <SettingsSync v-else-if="activeSection === 'sync'" />
           <SettingsSystem v-else-if="activeSection === 'system'" />
           <SettingsHelp v-else-if="activeSection === 'help'" />
           <SettingsAbout v-else-if="activeSection === 'about'" />
@@ -68,6 +69,7 @@ import SettingsTags from "./settings/SettingsTags.vue";
 import SettingsPrivacy from "./settings/SettingsPrivacy.vue";
 import SettingsStats from "./settings/SettingsStats.vue";
 import SettingsData from "./settings/SettingsData.vue";
+import SettingsSync from "./settings/SettingsSync.vue";
 import SettingsSystem from "./settings/SettingsSystem.vue";
 import SettingsHelp from "./settings/SettingsHelp.vue";
 import SettingsAbout from "./settings/SettingsAbout.vue";
@@ -92,6 +94,7 @@ const SECTIONS: { key: string; icon: AppIconName; labelKey: string }[] = [
   { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy" },
   { key: "system", icon: "settings", labelKey: "settings.nav.system" },
   { key: "data", icon: "package", labelKey: "settings.nav.data" },
+  { key: "sync", icon: "cloud", labelKey: "settings.nav.sync" },
   { key: "stats", icon: "stats", labelKey: "settings.nav.stats" },
   { key: "help", icon: "help", labelKey: "settings.nav.help" },
   { key: "about", icon: "info", labelKey: "settings.nav.about" },

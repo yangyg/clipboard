@@ -32,26 +32,6 @@
       </div>
     </div>
   </div>
-
-  <div class="settings-section">
-    <div class="settings-section-title">{{ $t('settings.stats.storage') }}</div>
-    <div class="data-card storage-card">
-      <div class="storage-card-main">
-        <div class="setting-label">{{ $t('settings.stats.localStorage') }}</div>
-        <div class="setting-desc">
-          {{ $t('settings.stats.storageDesc') }}
-        </div>
-        <div
-          v-if="stats?.data_path"
-          class="storage-path"
-          :title="stats.data_path"
-        >
-          {{ stats.data_path }}
-        </div>
-      </div>
-      <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
-    </div>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -87,11 +67,6 @@ const typeDistribution = computed(() => {
   });
 });
 
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
 </script>
 
 <style scoped>
@@ -154,25 +129,4 @@ function formatBytes(bytes: number) {
   background: var(--accent);
 }
 
-.storage-card {
-  align-items: flex-start;
-}
-
-.storage-card-main {
-  min-width: 0;
-  flex: 1;
-}
-
-.storage-path {
-  margin-top: 8px;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-active);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  font-family: var(--font-mono);
-  line-height: 1.4;
-  word-break: break-all;
-  user-select: text;
-}
 </style>

@@ -56,15 +56,15 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows.
 ```
 App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; ToastHost, ConfirmDialog
 ├── FloatingPanel.vue            # Floating UI; filters; CaptureStatus; BatchBar; useBatchActions + useClipboardHotkeys
-├── WindowApp.vue                # Window UI; SideBar; hotkeys
+├── WindowApp.vue                # Window UI; SideBar; hotkeys; sidebar resizer (useColumnResize)
 │   ├── SearchBar.vue            # aria-label; / or Ctrl+K focus
-│   ├── RecordList.vue           # Virtual listbox (useVirtualList); cards/grid; ContextMenu; BatchBar; AliasDialog
+│   ├── RecordList.vue           # Virtual listbox (useVirtualList); cards/grid; ContextMenu; BatchBar; AliasDialog; list/preview resizer
 │   │   ├── ListToolbar.vue      # Window-only chrome: category title, sort select, list/grid toggle, empty-trash
 │   │   ├── ListEmptyState.vue   # Loading / empty state
 │   │   └── PreviewPane.vue      # Paste primary CTA; icon-only delete; tags; trash
 │   └── SideBar.vue              # Categories; trash; tags; ContextMenu; ≤720px icon rail
 ├── SettingsWindow.vue           # Nav + section router; shortcut-recording window listener; ≤720px icon nav
-│   └── settings/Settings*.vue   # 10 sections (shortcuts/appearance/history/tags/privacy/stats/data/system/help/about)
+│   └── settings/Settings*.vue   # 11 sections (shortcuts/appearance/history/tags/privacy/stats/data/sync/system/help/about)
 │                                #   shared store access via composables/useSettings.ts; primitives in styles/settings.css
 ├── WelcomeDialog.vue            # First-run welcome (BaseDialog); onboarding_completed
 ├── BatchBar.vue                 # Shared batch actions (floating + window)
@@ -76,7 +76,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 ├── WindowControls.vue
 ├── ToastHost.vue
 ├── TrayMenuApp.vue              # Custom tray-menu window entry (Vite multi-page)
-├── composables/useVirtualList.ts · useSettings.ts · useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts · pasteFocusLock.ts
+├── composables/useVirtualList.ts · useColumnResize.ts · useSettings.ts · useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts · pasteFocusLock.ts
 └── utils/mediaUrl.ts · sanitizeHtml.ts · trayMenuItems.ts
 ```
 
@@ -90,6 +90,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
 - `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers
+- `webdav/` — WebDAV cloud sync (`client.rs` HTTP client; `sync.rs` pull/merge/push orchestration). Protocol `clipvault-webdav-v1`; manifest + JSONL bundle; media files synced alongside. Settings page: **Sync** (`SettingsSync.vue`). Default remote dir `ClipVaultSync`.
 - `security.rs` — media path must resolve under media root; export/import JSON path checks; import normalizes `content_type` and allows only http(s) links + safe media rel-paths
 - `main.rs` — `clipboard_lib::run()`
 
@@ -115,7 +116,8 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Blur:** Setting `enable_blur` defaults **false**. When on, `backdrop-filter: blur(8px)` **only in floating mode**. Window mode always skips blur (`body.mode-window`).
 - **Custom tray menu:** Separate `tray-menu` WebView (Vite multi-page). Right-click anchors above tray icon; theme/blur follow settings (incl. live `system-theme-changed` events while following the OS). **Left-click** → `toggle_main_panel`: hidden/minimized → show + focus; visible but not foreground → bring to front (`show_main_panel` / `focus_window`); already foreground → hide. After sleep/wake, power watcher rebuilds tray + reloads webviews.
 - **Font size:** Root `font-size` = setting (default **16px**). Rem baseline is **16px** (`--ui-font-scale = font_size/16`). Prefer `rem` / `--text-*` so Settings / dialogs scale with the user preference. Virtual list row height scales with `font_size`.
-- **Responsive (window):** `@media (max-width: 720px)` — SideBar / settings nav → icon rail; preview actions denser grid; theme cards 2×2.
+- **Responsive (window):** `@media (max-width: 720px)` — SideBar / settings nav → icon rail (sidebar resizer hidden); preview actions denser grid; theme cards 2×2.
+- **Column resize:** SideBar width and list-column width are user-draggable (`useColumnResize` composable: pointer events + rAF throttle). Widths persist in localStorage (`clipboard-sidebar-width`, `clipboard-list-col-width`). List column always uses its stored width (no jump on preview open/close); first run captures the natural flex width via DOM measurement. Sidebar resize disabled ≤720px (icon-rail mode).
 - **A11y (baseline):** Record list `role="listbox"` / `option` + roving tabindex; dialogs via `BaseDialog` (Esc + focus trap); `ContextMenu` keyboard + clamp; global `:focus-visible`; theme cards `role="radio"`; form `aria-label`s on search / ranges / ignore-app input. Tertiary text colors raised for WCAG-ish contrast.
 - **Preview actions:** 「粘贴」is `action-primary` (solid accent); delete is icon-only. Pin and favorite are on the bottom action bar / hotkey / context menu / list row (not in preview header).
 - **Sensitive detection** (text only): `password|passwd|pwd`; 4–8 digits + `验证码|code|Code`; `sk-`+≥20 alnum; 16–19 digits with len≤25. Default expire 600s. `is_sensitive` is a **bool**, not a `content_type` (ContentType = text|code|link|image|file only).
@@ -131,7 +133,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Record alias:** Optional short `alias` (max 80 chars) for display only — does **not** change paste content / hash / HTML. List title prefers alias (hover `title` = content preview). Edit via preview header or context menu (`set_record_alias`). Hash-dedup re-copy keeps existing alias. Import/export include `alias` (serde default `""`).
 - **Auto-tag:** Settings `enable_auto_tag` (default **true**) + `auto_tag_rules`. Per-rule match is OR. No per-tag FTS triggers — refresh FTS once after batch tag writes (**FTS v4**). Defaults: 链接←`link`; 部署 / 前端←keywords. UI: Settings → 标签 (local draft + 400ms commit). `scheduleLoadTags` 350ms.
 - **Search:** FTS5 trigram (**≥3 chars**) on content / alias / source_app / source_window / tags. **1–2 chars:** single-pass `instr(...)` (incl. `alias`) + tag `EXISTS` (no `LIKE '%X%'`). FTS update trigger is **`OF content` only** so hash-dedup source updates do not rebuild FTS. Tag / alias changes call `refresh_record_fts`. **FTS delete:** `DELETE FROM records_fts WHERE rowid=…` (not FTS5 `'delete'` command — broken on Windows SQLite).
-- **Stats storage:** `storage_bytes` ≈ `SUM(content_len)` (+ HTML lengths) + cached `media/` dir size. `data_path` is the absolute app data dir on the stats page.
+- **Stats storage:** `storage_bytes` ≈ `SUM(content_len)` (+ HTML lengths) + cached `media/` dir size. `data_path` is the absolute app data dir; displayed on the **Data** settings page (moved from Stats).
 - **Sets in Vue:** Never mutate `Set` in place — assign a new `Set`.
 - **Global shortcut:** From `settings.global_shortcut` at startup; re-bound in `save_settings`.
 - **Pause capture:** Frontend + tray both update Rust; tray emits `capture-paused`.

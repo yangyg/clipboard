@@ -3,7 +3,7 @@
     <!-- Title Bar -->
     <div class="titlebar" data-tauri-drag-region @dblclick="onTitlebarDblClick">
       <div class="titlebar-left">
-        <span class="titlebar-title">Clipboard</span>
+        <span class="titlebar-title">{{ $t('common.appName') }}</span>
       </div>
 
       <div class="titlebar-center" data-tauri-drag-region>

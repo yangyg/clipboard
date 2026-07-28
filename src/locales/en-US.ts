@@ -25,6 +25,7 @@ export default {
     restoreWindow: 'Restore',
     or: 'or',
     backToTop: 'Back to top',
+    appName: 'Clipboard',
   },
   capture: {
     capturing: 'Capturing clipboard',

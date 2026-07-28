@@ -25,6 +25,7 @@ export default {
     restoreWindow: '还原',
     or: '或',
     backToTop: '回到顶部',
+    appName: '剪贴板',
   },
   capture: {
     capturing: '正在捕获剪贴板',

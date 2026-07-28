@@ -22,7 +22,8 @@ function toast(message: string, kind: ToastKind = 'info') {
   const id = nextId++
   const next = [...toasts.value, { id, message, kind }]
   toasts.value = next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next
-  window.setTimeout(() => dismiss(id), 1500)
+  const duration = kind === 'error' ? 4000 : 1500
+  window.setTimeout(() => dismiss(id), duration)
 }
 
 export function useToast() {

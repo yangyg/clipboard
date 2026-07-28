@@ -1,6 +1,10 @@
 <template>
   <div class="record-list-wrapper">
-    <div class="list-column">
+    <div
+      ref="listColRef"
+      class="list-column"
+      :style="{ width: listColWidth + 'px', minWidth: listColWidth + 'px', maxWidth: 'none', flex: 'none' }"
+    >
       <!-- Middle-column chrome (window mode): matches design list toolbar -->
       <template v-if="showListChrome">
         <ListToolbar :list-layout="listLayout" @set-layout="setListLayout" />
@@ -193,8 +197,16 @@
       </Transition>
     </div>
 
+    <!-- Resizer between list and preview -->
+    <div
+      v-if="previewVisible"
+      class="resizer"
+      :class="{ active: listColDragging }"
+      @pointerdown="startListColResize"
+    />
+
     <!-- Preview Pane (right side) -->
-    <PreviewPane v-if="clipboardStore.selectedRecord && !clipboardStore.batchMode" />
+    <PreviewPane v-if="previewVisible" />
 
     <!-- Context Menu -->
     <ContextMenu
@@ -216,7 +228,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, nextTick, shallowRef } from "vue";
+import { computed, reactive, ref, watch, nextTick, shallowRef, onMounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
@@ -234,6 +246,7 @@ import type { ClipboardRecord } from "../types";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useVirtualList, type ListLayout } from "../composables/useVirtualList";
+import { useColumnResize } from "../composables/useColumnResize";
 import { useI18n } from "vue-i18n";
 import {
   escapeHtml,
@@ -247,6 +260,32 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const { t } = useI18n();
 const listRef = ref<HTMLElement | null>(null);
+
+// --- List / Preview column resize ---
+const previewVisible = computed(
+  () => !!clipboardStore.selectedRecord && !clipboardStore.batchMode
+);
+const {
+  width: listColWidth,
+  isDragging: listColDragging,
+  isDefault: listColIsDefault,
+  startResize: startListColResize,
+  setWidth: setListColWidth,
+} = useColumnResize({
+  storageKey: "clipboard-list-col-width",
+  defaultWidth: 400,
+  min: 280,
+  max: 720,
+});
+const listColRef = ref<HTMLElement | null>(null);
+
+// On first run (no stored width), capture the list column's natural flex
+// width so the fixed-width mode matches what the user already sees.
+onMounted(() => {
+  if (listColIsDefault.value && listColRef.value) {
+    setListColWidth(listColRef.value.offsetWidth);
+  }
+});
 
 /** Optimistic pin icon before list reorders (spec §3.3). */
 const pinOverride = shallowRef(new Map<number, boolean>());
@@ -651,6 +690,20 @@ function closeContextMenu() {
   display: flex;
   overflow: hidden;
   min-height: 0;
+}
+
+.resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  touch-action: none;
+}
+
+.resizer:hover,
+.resizer.active {
+  background: var(--accent);
 }
 
 .list-column {

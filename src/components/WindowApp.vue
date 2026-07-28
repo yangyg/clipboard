@@ -18,6 +18,7 @@
     <!-- Three-Column Layout -->
     <div class="window-body">
       <SideBar
+        :style="!isNarrow ? { width: sidebarWidth + 'px', minWidth: sidebarWidth + 'px' } : undefined"
         :activeCategory="activeCategory"
         :activeTag="clipboardStore.activeTag"
         @update:activeCategory="onCategoryChange"
@@ -26,6 +27,12 @@
         @addTag="onAddTag"
         @editTag="onEditTag"
         @deleteTag="onDeleteTag"
+      />
+      <div
+        v-if="!isNarrow"
+        class="resizer"
+        :class="{ active: sidebarDragging }"
+        @pointerdown="startSidebarResize"
       />
 
       <div class="center-column">
@@ -44,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import SideBar from "./SideBar.vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
@@ -56,6 +63,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useColumnResize } from "../composables/useColumnResize";
 import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
@@ -69,6 +77,27 @@ defineEmits<{
 }>();
 
 useClipboardHotkeys({ allowCloseOnEscape: false });
+
+// --- Sidebar column resize ---
+const narrowMq = window.matchMedia("(max-width: 720px)");
+const isNarrow = ref(narrowMq.matches);
+function onMqChange(e: MediaQueryListEvent) {
+  isNarrow.value = e.matches;
+}
+onMounted(() => narrowMq.addEventListener("change", onMqChange));
+onUnmounted(() => narrowMq.removeEventListener("change", onMqChange));
+
+const {
+  width: sidebarWidth,
+  isDragging: sidebarDragging,
+  startResize: startSidebarResize,
+} = useColumnResize({
+  storageKey: "clipboard-sidebar-width",
+  defaultWidth: 200,
+  min: 120,
+  max: 360,
+  disabled: isNarrow,
+});
 
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"create" | "assign" | "edit">("create");
@@ -210,6 +239,20 @@ async function onDeleteTag(tag: Tag) {
   display: flex;
   overflow: hidden;
   min-height: 0;
+}
+
+.resizer {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  flex-shrink: 0;
+  transition: background 0.15s;
+  touch-action: none;
+}
+
+.resizer:hover,
+.resizer.active {
+  background: var(--accent);
 }
 
 .center-column {

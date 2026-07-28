@@ -352,7 +352,7 @@ pub fn run() {
     std::fs::create_dir_all(&app_data_dir).ok();
 
     setup_logging(&app_data_dir);
-    info!("ClipVault starting up...");
+    info!("Clipboard starting up...");
 
     let db_path = app_data_dir.join("clipvault.db");
     media::ensure_dirs(&app_data_dir).ok();
@@ -574,7 +574,7 @@ pub fn run() {
                 }
             });
 
-            info!("ClipVault setup complete");
+            info!("Clipboard setup complete");
             Ok(())
         })
         .on_window_event(|window, event| {

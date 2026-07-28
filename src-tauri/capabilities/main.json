@@ -1,6 +1,6 @@
 {
   "identifier": "main-capability",
-  "description": "Main capability for ClipVault",
+  "description": "Main capability for Clipboard",
   "windows": ["main", "tray-menu"],
   "permissions": [
     "core:default",

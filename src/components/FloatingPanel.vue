@@ -4,7 +4,7 @@
     <div class="panel-header">
       <div class="panel-title-row">
         <div>
-          <div class="panel-title">ClipVault</div>
+          <div class="panel-title">Clipboard</div>
           <CaptureStatus compact />
         </div>
         <div class="header-actions">

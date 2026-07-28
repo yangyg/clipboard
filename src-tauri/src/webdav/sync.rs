@@ -1,4 +1,4 @@
-//! Pull / merge / push orchestration for ClipVault WebDAV sync.
+//! Pull / merge / push orchestration for Clipboard WebDAV sync.
 
 use std::collections::HashMap;
 use std::fs;

@@ -27,7 +27,7 @@ npx tauri icon app-icon.png -o src-tauri/icons
 
 ## Architecture
 
-ClipVault is a **Tauri v2** desktop clipboard manager for Windows.
+Clipboard is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Stack
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia; Lucide icons; DOMPurify for rich-text preview
@@ -91,14 +91,14 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers
 - `security.rs` — media path must resolve under media root; export/import JSON path checks; import normalizes `content_type` and allows only http(s) links + safe media rel-paths
-- `main.rs` — `clipvault_lib::run()`
+- `main.rs` — `clipboard_lib::run()`
 
 ### State Management (Pinia)
 - `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection
 - `settingsStore` — debounced auto-save (200ms); theme / appearance (**"system" theme follows the OS**: native `system-theme-changed` event primary, matchMedia fallback; `lastKnownSystemDark` cache outranks stale matchMedia — ADR-0002); `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
 
 ### Key Design Decisions
-- **Brand:** Product name **ClipVault** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.
+- **Brand:** Product name **Clipboard** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.
 - **First-run onboarding:** `WelcomeDialog` when `onboarding_completed` is false. New install Default=`false`; **upgrade** JSON missing the field deserializes to `true` (skip). Dismiss / Esc sets true and saves. Spec: `docs/superpowers/specs/2026-07-24-onboarding-design.md`.
 - **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur; panel kept mounted with `v-show`. Window: SideBar + `WindowControls` + list-toolbar; `mode_size_bounds` min width **760**. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size`. Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields (`SIZE_SAVE_GEN`).
 - **List sort (window mode):** Toolbar `<select>` → `clipboardStore.listSort` → `get_records` / `search_records` `sort` param. Whitelist: `updated_desc` (default), `updated_asc`, `created_desc`, `copies_desc`. Non-trash: `is_pinned DESC` first. Session-only. `onNewRecord` prepends only for `updated_desc`; other sorts reload (debounced ~400ms).
@@ -137,7 +137,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Pause capture:** Frontend + tray both update Rust; tray emits `capture-paused`.
 - **Cleanup:** Independent background thread (~60s): `cleanup_expired` + `cleanup_retention`. Not on the capture hot path. Frontend expire sweep + `records-expired` event sync the list.
 - **File type detect:** Path heuristic only (no `Path::exists` on monitor thread).
-- **Dedup:** SHA-256 of text fingerprint (plain+html) or full image bytes. Check + update/insert under the **same write Mutex**. Hash match updates `updated_at` / source (active rows only) — does **not** bump `copy_count`. `copy_count` starts at **0** and increments only on paste from ClipVault.
+- **Dedup:** SHA-256 of text fingerprint (plain+html) or full image bytes. Check + update/insert under the **same write Mutex**. Hash match updates `updated_at` / source (active rows only) — does **not** bump `copy_count`. `copy_count` starts at **0** and increments only on paste from Clipboard.
 - **Source app:** Foreground process via `QueryFullProcessImageNameW` + `PROCESS_QUERY_LIMITED_INFORMATION` (not `GetModuleFileNameW`, which only works for the current process). Empty `source_app` falls back to UI label「系统剪贴板」.
 - **Paste self-write:** `paste_record` suppresses monitor emits ~1.5s. While suppressed, **do not advance** `last_text_fp` / `last_image_hash` — otherwise a real copy in that window is permanently lost. Re-capture of our own paste after the window is OK (DB hash dedupes).
 - **Paste focus:** On panel show, remember previous foreground HWND. Paste writes clipboard (PNG bytes preferred for images), focuses target while still holding FG, then floating hide / window minimize when auto-close, Ctrl+V. No valid target → clipboard only. `auto_close_on_paste` false → restore panel (unminimize/show) without stealing focus.

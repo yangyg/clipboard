@@ -2,9 +2,9 @@
   <div class="settings-section">
     <div class="about-content">
       <div class="about-logo">
-        <img :src="appIconUrl" alt="ClipVault" width="48" height="48" draggable="false" />
+        <img :src="appIconUrl" alt="Clipboard" width="48" height="48" draggable="false" />
       </div>
-      <div class="about-name">ClipVault</div>
+      <div class="about-name">Clipboard</div>
       <div class="about-version">{{ $t('settings.about.version') }}</div>
       <div class="about-desc">{{ $t('settings.about.desc') }}</div>
     </div>

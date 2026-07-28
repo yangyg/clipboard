@@ -202,7 +202,7 @@ export default {
     openImageFailed: 'Cannot open in system viewer',
   },
   welcome: {
-    title: 'Welcome to ClipVault',
+    title: 'Welcome to Clipboard',
     step1: 'Press {shortcut} to open the panel',
     step2: 'Select a record, press Enter or click Paste',
     step3: 'Right-click tray icon: Open panel / Settings / Quit',
@@ -356,7 +356,7 @@ export default {
     data: {
       title: 'Data Management',
       exportTitle: 'Export Records',
-      exportDesc: 'Save as ClipVault JSON backup file, can be re-imported',
+      exportDesc: 'Save as Clipboard JSON backup file, can be re-imported',
       exportBtn: 'Choose save location',
       exporting: 'Exporting…',
       exportDone: 'Export complete, backup file saved.',

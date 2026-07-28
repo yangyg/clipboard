@@ -71,8 +71,8 @@ async function exportData() {
   isExporting.value = true;
   try {
     const path = await save({
-      defaultPath: `clipvault-export-${new Date().toISOString().slice(0, 10)}.json`,
-      filters: [{ name: "ClipVault JSON", extensions: ["json"] }],
+      defaultPath: `clipboard-export-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "Clipboard JSON", extensions: ["json"] }],
     });
     if (!path) return;
     // Backend streams JSON to disk — avoids holding the full export in JS/Rust heap.
@@ -95,7 +95,7 @@ async function importData() {
   try {
     const path = await open({
       multiple: false,
-      filters: [{ name: "ClipVault JSON", extensions: ["json"] }],
+      filters: [{ name: "Clipboard JSON", extensions: ["json"] }],
     });
     if (!path || Array.isArray(path)) return;
     const imported = await invoke<number>("import_data_from_path", { path });

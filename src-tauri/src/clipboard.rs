@@ -516,7 +516,7 @@ pub fn simulate_paste() {
     warn!("Paste simulation not available on this platform");
 }
 
-/// Paste target HWND: last non-ClipVault foreground window (kept fresh by tracker).
+/// Paste target HWND: last non-Clipboard foreground window (kept fresh by tracker).
 static PASTE_TARGET_HWND: parking_lot::Mutex<Option<isize>> = parking_lot::Mutex::new(None);
 /// Our main window HWND (tao/WebView2 top-level). Needed because FG may be owned by
 /// the WebView2 process (different PID) yet still be our UI.

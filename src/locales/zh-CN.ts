@@ -202,7 +202,7 @@ export default {
     openImageFailed: '无法用系统查看器打开',
   },
   welcome: {
-    title: '欢迎使用 ClipVault',
+    title: '欢迎使用 Clipboard',
     step1: '用全局快捷键 {shortcut} 唤起面板',
     step2: '选一条记录，回车或点粘贴',
     step3: '托盘图标右键：打开面板 / 设置 / 退出',
@@ -356,7 +356,7 @@ export default {
     data: {
       title: '数据管理',
       exportTitle: '导出记录',
-      exportDesc: '保存为 ClipVault JSON 备份文件，可再次导入',
+      exportDesc: '保存为 Clipboard JSON 备份文件，可再次导入',
       exportBtn: '选择保存位置',
       exporting: '导出中…',
       exportDone: '导出完成，备份文件已保存。',

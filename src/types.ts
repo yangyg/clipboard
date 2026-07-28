@@ -1,5 +1,5 @@
 // ============================================================
-// ClipVault — TypeScript Types
+// Clipboard — TypeScript Types
 // NOTE: Keep in sync with Rust structs in src-tauri/src/lib.rs:
 //   ClipboardRecord, Settings, StatsData, TagInfo, SearchResult
 // ============================================================

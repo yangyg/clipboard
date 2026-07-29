@@ -540,6 +540,10 @@ pub fn run() {
             // Setup system tray
             tray::build_tray(app.handle(), capture_paused_for_setup.clone())?;
             tray::start_resume_watcher(app.handle().clone());
+            // Fix CSS cursor: pointer on the transparent WebView2 popup (WM_SETCURSOR reset).
+            if let Some(tray_win) = app.get_webview_window("tray-menu") {
+                tray::hook_tray_menu_cursor(&tray_win);
+            }
 
             // Native OS light/dark watcher → "system-theme-changed" events.
             // WebView2 matchMedia change events are unreliable while the panel

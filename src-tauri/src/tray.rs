@@ -263,6 +263,47 @@ fn windows_power_watch_loop() {
     }
 }
 
+/// Subclass the tray-menu window so CSS `cursor: pointer` works.
+///
+/// WebView2 calls `SetCursor` internally when the pointer moves over
+/// interactive elements, but the top-level `WM_SETCURSOR` handling
+/// (`DefWindowProc`) immediately resets it to the class arrow — most
+/// visible on transparent, decoration-less popup windows. Returning
+/// TRUE for client-area cursor requests lets WebView2's own `SetCursor`
+/// persist.
+#[cfg(windows)]
+pub(crate) fn hook_tray_menu_cursor(window: &tauri::WebviewWindow) {
+    use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+    use windows_sys::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{HTCLIENT, WM_SETCURSOR};
+
+    unsafe extern "system" fn subclass_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+        _id: usize,
+        _data: usize,
+    ) -> LRESULT {
+        if msg == WM_SETCURSOR && (lparam as u32 & 0xFFFF) == HTCLIENT as u32 {
+            return 1; // WebView2 manages the cursor in its client area.
+        }
+        DefSubclassProc(hwnd, msg, wparam, lparam)
+    }
+
+    let Ok(hwnd) = window.hwnd() else {
+        warn!("tray-menu hwnd unavailable; cursor hook skipped");
+        return;
+    };
+    let ok = unsafe { SetWindowSubclass(hwnd.0 as HWND, Some(subclass_proc), 1, 0) };
+    if ok == 0 {
+        warn!("Failed to subclass tray-menu window for cursor handling");
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn hook_tray_menu_cursor(_window: &tauri::WebviewWindow) {}
+
 fn show_tray_menu(app: &AppHandle, position: PhysicalPosition<f64>, icon_rect: Rect) {
     let Some(window) = app.get_webview_window("tray-menu") else {
         warn!("tray-menu window missing; attempting resume recovery");

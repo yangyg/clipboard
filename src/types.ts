@@ -66,6 +66,7 @@ export interface Settings {
   panel_opacity: number;
   panel_radius: number;
   enable_blur: boolean;
+  blur_strength: number;
   enable_animation: boolean;
   font_size: number;
   // Behavior

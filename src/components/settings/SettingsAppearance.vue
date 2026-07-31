@@ -72,6 +72,25 @@
       />
     </div>
     <div class="setting-row">
+      <div>
+        <div class="setting-label">{{ $t('settings.appearance.blurStrength') }}</div>
+        <div class="setting-desc">{{ $t('settings.appearance.blurStrengthDesc') }}</div>
+      </div>
+      <div class="slider-row">
+        <input
+          type="range"
+          min="30"
+          max="80"
+          :disabled="!settings.enable_blur"
+          :aria-label="$t('settings.appearance.blurStrength')"
+          :aria-valuetext="`${settings.blur_strength}%`"
+          :value="settings.blur_strength"
+          @input="(e) => update('blur_strength', Number((e.target as HTMLInputElement).value))"
+        />
+        <span class="slider-value">{{ settings.blur_strength }}%</span>
+      </div>
+    </div>
+    <div class="setting-row">
       <div class="setting-label">{{ $t('settings.appearance.animation') }}</div>
       <ToggleSwitch
         :model-value="settings.enable_animation"

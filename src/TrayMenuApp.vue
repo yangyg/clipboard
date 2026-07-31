@@ -33,6 +33,7 @@ interface TrayMenuState {
   paused: boolean;
   theme: string;
   enable_blur: boolean;
+  blur_strength: number;
   enable_animation: boolean;
   panel_opacity: number;
   language: string;
@@ -72,8 +73,16 @@ function applyChrome(state: TrayMenuState) {
     "--panel-opacity",
     String(state.panel_opacity / 100),
   );
+  document.documentElement.style.setProperty(
+    "--panel-blur-opacity",
+    String((100 - state.blur_strength) / 100),
+  );
   document.body.classList.toggle("blur-enabled", state.enable_blur);
   document.body.classList.toggle("anim-disabled", !state.enable_animation);
+  // Apply native DWM acrylic to this window too (fresh window per tray right-click).
+  invoke("set_window_backdrop", { enabled: state.enable_blur }).catch((e) => {
+    console.error("set_window_backdrop failed:", e);
+  });
 }
 
 function applyPaused(paused: boolean) {
@@ -239,8 +248,9 @@ onUnmounted(() => {
 }
 
 :global(body.blur-enabled) .tray-menu {
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  /* Native DWM acrylic backdrop (set via set_window_backdrop); keep the surface
+     translucent so the blurred desktop shows through instead of being covered. */
+  background: color-mix(in srgb, var(--bg-surface) calc(var(--panel-blur-opacity, 0.55) * 100%), transparent);
 }
 
 .item {

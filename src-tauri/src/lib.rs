@@ -110,6 +110,11 @@ fn default_webdav_remote_path() -> String {
     "ClipVaultSync".to_string()
 }
 
+/// Missing `blur_strength` in saved JSON (upgrade from pre-0.x) → 45%.
+fn default_blur_strength() -> i32 {
+    45
+}
+
 fn default_language() -> String {
     "system".to_string()
 }
@@ -168,6 +173,10 @@ pub struct Settings {
     pub panel_radius: i32,
     #[serde(rename = "enable_blur")]
     pub enable_blur: bool,
+    /// Frosted-glass intensity (0-100): how much blurred desktop shows through
+    /// when 毛玻璃 is on. Surface tint opacity = 100 - blur_strength.
+    #[serde(default = "default_blur_strength", rename = "blur_strength")]
+    pub blur_strength: i32,
     #[serde(rename = "enable_animation")]
     pub enable_animation: bool,
     #[serde(rename = "font_size")]
@@ -238,6 +247,7 @@ impl Default for Settings {
             panel_opacity: 94,
             panel_radius: 20,
             enable_blur: false,
+            blur_strength: 45,
             enable_animation: true,
             font_size: 16,
             app_mode: "floating".to_string(),
@@ -425,6 +435,7 @@ pub fn run() {
             commands::get_stats,
             commands::switch_app_mode,
             commands::set_window_corner_radius,
+            commands::set_window_backdrop,
             commands::get_all_tags,
             commands::create_tag,
             commands::delete_tag,
@@ -573,6 +584,14 @@ pub fn run() {
                     .unwrap_or(20);
                 if let Err(e) = window::apply_window_round_corners(&window, radius) {
                     warn!("Failed to apply window round corners: {}", e);
+                }
+            }
+
+            // Apply native frosted-glass backdrop from persisted 毛玻璃 setting.
+            let blur_enabled = db.get_settings().map(|s| s.enable_blur).unwrap_or(false);
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(e) = window::apply_window_backdrop(&window, blur_enabled) {
+                    warn!("Failed to apply window backdrop: {}", e);
                 }
             }
 

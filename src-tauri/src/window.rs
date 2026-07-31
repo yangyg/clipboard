@@ -196,3 +196,38 @@ pub(crate) fn apply_window_round_corners(
         Ok(())
     }
 }
+
+/// Windows native frosted-glass backdrop (acrylic) behind a transparent window.
+/// CSS `backdrop-filter` cannot blur the OS desktop behind a transparent WebView2
+/// window (there is no web content to sample), so 毛玻璃 must come from DWM.
+/// `Effect::Acrylic` maps to window-vibrancy: DWMSBT_TRANSIENTWINDOW on Win11,
+/// SetWindowCompositionAttribute(ACCENT_ENABLE_ACRYLICBLURBEHIND) on Win10.
+pub(crate) fn apply_window_backdrop(
+    window: &tauri::WebviewWindow,
+    enabled: bool,
+) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use tauri::window::{Effect, EffectsBuilder};
+
+        let effects = if enabled {
+            Some(
+                EffectsBuilder::new()
+                    .effect(Effect::Acrylic)
+                    .build(),
+            )
+        } else {
+            None
+        };
+        window
+            .as_ref()
+            .window()
+            .set_effects(effects)
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (window, enabled);
+        Ok(())
+    }
+}

@@ -528,6 +528,7 @@ pub struct TrayMenuState {
     pub paused: bool,
     pub theme: String,
     pub enable_blur: bool,
+    pub blur_strength: i32,
     pub enable_animation: bool,
     pub panel_opacity: i32,
     pub language: String,
@@ -540,6 +541,7 @@ pub async fn get_tray_menu_state(state: State<'_, AppState>) -> Result<TrayMenuS
         paused: *state.capture_paused.read(),
         theme: settings.theme.clone(),
         enable_blur: settings.enable_blur,
+        blur_strength: settings.blur_strength,
         enable_animation: settings.enable_animation,
         panel_opacity: settings.panel_opacity,
         language: settings.language.clone(),
@@ -767,6 +769,19 @@ pub async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), 
 pub async fn set_window_corner_radius(app: tauri::AppHandle, radius: i32) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("window not found")?;
     crate::window::apply_window_round_corners(&window, radius)
+}
+
+/// Enable/disable native DWM frosted-glass backdrop (acrylic) on all app windows.
+/// Applied by the frontend from the 毛玻璃 toggle; the same command is re-run
+/// when the tray-menu window is (re)created so it follows settings too.
+#[tauri::command]
+pub async fn set_window_backdrop(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    for label in ["main", "tray-menu"] {
+        if let Some(window) = app.get_webview_window(label) {
+            crate::window::apply_window_backdrop(&window, enabled)?;
+        }
+    }
+    Ok(())
 }
 
 // === WebDAV sync ===

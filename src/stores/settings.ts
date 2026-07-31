@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS: Settings = {
   panel_opacity: 94,
   panel_radius: 20,
   enable_blur: false,
+  blur_strength: 45,
   enable_animation: true,
   font_size: 16,
   app_mode: "floating",
@@ -159,6 +160,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }).catch((e) => console.error("Failed to listen for system-theme-changed:", e));
 
   const lastAppliedRadius = ref<number | null>(null);
+  const lastAppliedBlur = ref<boolean | null>(null);
 
   function applyAppearance() {
     const s = settings.value;
@@ -179,15 +181,28 @@ export const useSettingsStore = defineStore("settings", () => {
       });
     }
 
+    // Native frosted-glass backdrop (DWM acrylic) — CSS backdrop-filter can't
+    // blur the OS desktop behind a transparent WebView2 window.
+    if (lastAppliedBlur.value !== s.enable_blur) {
+      lastAppliedBlur.value = s.enable_blur;
+      void invoke("set_window_backdrop", { enabled: s.enable_blur }).catch((e) => {
+        console.error("Failed to set window backdrop:", e);
+      });
+    }
+
     // Panel opacity (used as CSS variable)
     root.style.setProperty("--panel-opacity", String(s.panel_opacity / 100));
+
+    // Frosted-glass surface tint opacity (100 - strength): higher strength →
+    // more blurred desktop shows through when 毛玻璃 is enabled.
+    root.style.setProperty("--panel-blur-opacity", String((100 - s.blur_strength) / 100));
 
     // App mode class (used for blur / layout performance gates)
     document.body.classList.toggle("mode-window", s.app_mode === "window");
     document.body.classList.toggle("mode-floating", s.app_mode !== "window");
 
-    // Blur: floating only — full-viewport blur in window mode is too expensive
-    if (s.enable_blur && s.app_mode !== "window") {
+    // Blur: applies to .panel-surface chrome in both floating and window mode
+    if (s.enable_blur) {
       document.body.classList.add("blur-enabled");
     } else {
       document.body.classList.remove("blur-enabled");
@@ -208,7 +223,7 @@ export const useSettingsStore = defineStore("settings", () => {
     }
     // Apply appearance changes immediately for real-time preview
     if (
-      ["font_size", "panel_radius", "panel_opacity", "enable_blur", "enable_animation", "app_mode"].includes(
+      ["font_size", "panel_radius", "panel_opacity", "enable_blur", "blur_strength", "enable_animation", "app_mode"].includes(
         key as string,
       )
     ) {

@@ -240,15 +240,11 @@ input {
   transition: background var(--transition-smooth), border-color var(--transition-smooth);
 }
 
+/* Frosted glass: the DWM acrylic backdrop (set via set_window_backdrop in Rust)
+   lives behind the transparent window; the panel background must be translucent
+   here or it would fully cover the blurred desktop. Tint opacity = 100 - strength. */
 body.blur-enabled .panel-surface {
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-/* Window mode: never pay full-viewport blur cost even if setting is on */
-body.mode-window.blur-enabled .panel-surface {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  background: color-mix(in srgb, var(--bg-surface) calc(var(--panel-blur-opacity, 0.55) * 100%), transparent);
 }
 
 /* Disable animations globally */

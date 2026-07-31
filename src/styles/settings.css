@@ -112,6 +112,16 @@
   cursor: pointer;
 }
 
+.settings-body input[type="range"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.settings-body input[type="range"]:disabled::-webkit-slider-thumb {
+  background: var(--text-tertiary);
+  cursor: not-allowed;
+}
+
 /* Keyboard hint display (shortcuts + stats) */
 .kbd-display {
   background: var(--bg-active);

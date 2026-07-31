@@ -226,17 +226,17 @@ input {
    Appearance Classes (applied via settings)
    ============================================================ */
 
-/* Shared panel chrome (floating + window + settings) */
+/* Shared panel chrome (floating + window + settings).
+   Opacity is applied at the element level so every surface (titlebar, sidebar,
+   nav, list/preview band, cards) fades together uniformly — inner elements keep
+   their own solid backgrounds and composite as one translucent layer. */
 .panel-surface {
   overflow: hidden;
-  background: color-mix(
-    in srgb,
-    var(--bg-surface) calc(var(--panel-opacity, 0.94) * 100%),
-    transparent
-  );
+  background: var(--bg-surface);
   border: 1px solid var(--border-default, var(--border-subtle));
   border-radius: var(--panel-radius, 20px);
   box-shadow: var(--shadow-lg);
+  opacity: var(--panel-opacity, 0.94);
   transition: background var(--transition-smooth), border-color var(--transition-smooth);
 }
 

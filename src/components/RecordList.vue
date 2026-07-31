@@ -66,7 +66,7 @@
           :data-record-id="item.record!.id"
           @click="onItemClick(item.record!.id)"
           @contextmenu.prevent="showContextMenu($event, item.record!)"
-          @keydown.enter.prevent="onItemActivate(item.record!.id)"
+          @keydown.enter.prevent.stop="onItemActivate(item.record!.id)"
           @keydown.space.prevent="onItemClick(item.record!.id)"
         >
           <div

@@ -40,7 +40,7 @@ const TAG_PALETTE_FALLBACKS: Record<(typeof TAG_PALETTE_TOKEN_KEYS)[number], str
   "--warning": "#f59e0b",
   "--danger": "#f87171",
   "--sensitive": "#fb923c",
-  "--type-link": "#2563eb",
+  "--type-link": "#60a5fa",
   "--type-file": "#eab308",
   "--text-secondary": "#8b8fa6",
 };
@@ -88,7 +88,7 @@ export function resolveKnownTagColors(): Record<string, string> {
   return {
     部署: cssColorVar("--type-code", "#34d399"),
     前端: cssColorVar("--accent", "#0078d4"),
-    链接: cssColorVar("--type-link", "#2563eb"),
+    链接: cssColorVar("--type-link", "#60a5fa"),
     重要: cssColorVar("--danger", "#f87171"),
     设计: cssColorVar("--accent-light", "#60cdff"),
   };

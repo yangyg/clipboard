@@ -9,7 +9,6 @@
         role="menu"
         :style="{ left: pos.x + 'px', top: pos.y + 'px', width: width + 'px' }"
         @click.stop
-        @keydown="onKeydown"
       >
         <template v-for="(item, index) in items" :key="item.id">
           <div v-if="item.separatorBefore" class="ctx-sep" role="separator" />
@@ -116,25 +115,31 @@ function select(id: string) {
 
 function onKeydown(e: KeyboardEvent) {
   if (!props.visible || props.items.length === 0) return;
+  // Handle keys only in the capture phase: stopPropagation keeps other window
+  // keydown listeners (paste/selection/Escape) from also reacting to menu keys.
   if (e.key === "Escape") {
     e.preventDefault();
+    e.stopPropagation();
     emit("close");
     return;
   }
   if (e.key === "ArrowDown") {
     e.preventDefault();
+    e.stopPropagation();
     focusIndex.value = (focusIndex.value + 1) % props.items.length;
     focusItem();
     return;
   }
   if (e.key === "ArrowUp") {
     e.preventDefault();
+    e.stopPropagation();
     focusIndex.value = (focusIndex.value - 1 + props.items.length) % props.items.length;
     focusItem();
     return;
   }
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
+    e.stopPropagation();
     const item = props.items[focusIndex.value];
     if (item) select(item.id);
   }

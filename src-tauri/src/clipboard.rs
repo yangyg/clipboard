@@ -117,6 +117,16 @@ impl ClipboardMonitor {
                 // transition and the copy would be lost forever (the next poll sees
                 // an unchanged sequence and skips).
 
+                // Paste-suppression window: the clipboard holds our own paste.
+                // Skip ALL reads AND the sequence watermark — if a real copy lands
+                // in this window, the first poll after it expires sees a fresh
+                // sequence and captures it instead of skipping it forever. Our own
+                // paste is re-read once then and absorbed by DB hash-dedup.
+                if is_capture_suppressed(&suppress_until) {
+                    thread::sleep(poll_interval);
+                    continue;
+                }
+
                 if clipboard_slot.is_none() {
                     clipboard_slot = Clipboard::new().ok();
                 }
@@ -144,8 +154,6 @@ impl ClipboardMonitor {
                 // we leave the watermark untouched so the next poll retries this
                 // same sequence transition.
 
-                let suppressed = is_capture_suppressed(&suppress_until);
-
                 // Text was read first (above). Skip get_image() (full RGBA copy) when:
                 // - meaningful share text wins over a co-existing thumb, or
                 // - the clipboard has no bitmap/DIB formats at all.
@@ -156,7 +164,7 @@ impl ClipboardMonitor {
 
                 if prefer_text {
                     if let Some(captured) = text {
-                        maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
+                        maybe_emit_text(&last_text_fp, captured, &on_change);
                     }
                     busy_logged = false;
                     last_seq.store(seq, Ordering::Relaxed);
@@ -191,15 +199,8 @@ impl ClipboardMonitor {
                         if unchanged {
                             // Stale bitmap + new text (common on Windows) → still emit text.
                             if let Some(captured) = text {
-                                maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
+                                maybe_emit_text(&last_text_fp, captured, &on_change);
                             }
-                        } else if suppressed {
-                            // Same rule as text: do not advance fingerprints while
-                            // suppressing, or a real copy in the window is lost forever.
-                            debug!(
-                                "Suppressed self-write image capture {}x{}",
-                                img.width, img.height
-                            );
                         } else {
                             let width = img.width as u32;
                             let height = img.height as u32;
@@ -225,10 +226,10 @@ impl ClipboardMonitor {
                             }));
                         }
                     } else if let Some(captured) = text {
-                        maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
+                        maybe_emit_text(&last_text_fp, captured, &on_change);
                     }
                 } else if let Some(captured) = text {
-                    maybe_emit_text(&last_text_fp, captured, suppressed, &on_change);
+                    maybe_emit_text(&last_text_fp, captured, &on_change);
                 }
 
                 // All reads for this tick succeeded — commit the watermark.
@@ -447,7 +448,6 @@ fn is_primarily_url(t: &str) -> bool {
 fn maybe_emit_text(
     last_text_fp: &parking_lot::Mutex<Option<String>>,
     captured: CapturedText,
-    suppressed: bool,
     on_change: &impl Fn(ClipboardEvent),
 ) {
     let fp = captured.fingerprint();
@@ -458,18 +458,6 @@ fn maybe_emit_text(
             _ => !captured.text.trim().is_empty(),
         }
     };
-    // During paste suppress: skip emit but do NOT advance last_text_fp.
-    // Advancing it would permanently drop a real copy that lands in the window
-    // (fingerprint already matches "seen", so it never emits after suppress ends).
-    // Re-capture of our own paste after the window is fine — DB hash dedupes it.
-    if should_notify && suppressed {
-        debug!(
-            "Suppressed self-write text capture: {} chars, html={}",
-            captured.text.len(),
-            captured.html.is_some()
-        );
-        return;
-    }
     if should_notify {
         *last_text_fp.lock() = Some(fp);
         debug!(
@@ -497,22 +485,8 @@ pub fn simulate_paste_keys() {
     }
 }
 
-/// Focus delay + key simulation (blocking). Prefer async sleep + [`simulate_paste_keys`]
-/// on the Tauri command path so the blocking pool is not held during sleep.
-#[cfg(windows)]
-#[allow(dead_code)]
-pub fn simulate_paste() {
-    thread::sleep(Duration::from_millis(80));
-    simulate_paste_keys();
-}
-
 #[cfg(not(windows))]
 pub fn simulate_paste_keys() {
-    warn!("Paste simulation not available on this platform");
-}
-
-#[cfg(not(windows))]
-pub fn simulate_paste() {
     warn!("Paste simulation not available on this platform");
 }
 
@@ -657,17 +631,6 @@ pub fn remember_paste_target(our_hwnd: Option<isize>) {
 
 #[cfg(not(windows))]
 pub fn remember_paste_target(_our_hwnd: Option<isize>) {}
-
-#[cfg(windows)]
-#[allow(dead_code)]
-pub fn paste_target_hwnd() -> Option<isize> {
-    *PASTE_TARGET_HWND.lock()
-}
-
-#[cfg(not(windows))]
-pub fn paste_target_hwnd() -> Option<isize> {
-    None
-}
 
 /// After we hide, Windows may already restore the previous app — enough for Ctrl+V.
 #[cfg(windows)]

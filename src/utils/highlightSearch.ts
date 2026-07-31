@@ -46,7 +46,7 @@ export function sliceAroundMatch(text: string, query: string, maxLen: number): s
   const hitLen = terms[0]?.length ?? 0;
   const pad = Math.max(8, Math.floor((maxLen - hitLen) / 3));
   let start = Math.max(0, idx - pad);
-  let end = Math.min(text.length, start + maxLen);
+  const end = Math.min(text.length, start + maxLen);
   if (end - start < maxLen) start = Math.max(0, end - maxLen);
 
   const prefix = start > 0 ? "…" : "";

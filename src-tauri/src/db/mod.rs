@@ -204,6 +204,9 @@ impl ClipboardDb {
                 FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
             );
 
+            -- tag_id lookups (delete_tag, auto-tag refresh) scan record_tags.
+            CREATE INDEX IF NOT EXISTS idx_record_tags_tag_id ON record_tags(tag_id);
+
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -573,12 +576,46 @@ impl ClipboardDb {
     }
 
     fn purge_media_pairs(&self, pairs: &[(Option<String>, Option<String>)]) {
-        for (media_path, thumb_path) in pairs {
-            media::delete_media_files(
-                &self.media_root,
-                media_path.as_deref(),
-                thumb_path.as_deref(),
-            );
+        if pairs.is_empty() {
+            return;
+        }
+        // Dedup only matches ACTIVE rows, so a trashed + an active record can
+        // reference the same media/{hash}.png. Reference-count: delete a file
+        // only when no remaining row (any state) points at it, otherwise the
+        // surviving record's preview/paste would break.
+        let mut files: Vec<String> = Vec::new();
+        for p in pairs
+            .iter()
+            .flat_map(|(media_path, thumb_path)| [media_path.as_deref(), thumb_path.as_deref()])
+            .flatten()
+        {
+            if !p.is_empty() {
+                files.push(p.to_string());
+            }
+        }
+        files.sort();
+        files.dedup();
+        if files.is_empty() {
+            return;
+        }
+
+        let conn = self.lock_read();
+        let unreferenced: Vec<String> = files
+            .into_iter()
+            .filter(|p| {
+                conn.query_row(
+                    "SELECT 1 FROM records WHERE media_path = ?1 OR thumb_path = ?1 LIMIT 1",
+                    [p.as_str()],
+                    |row| row.get::<_, i64>(0),
+                )
+                .unwrap_or(0)
+                    == 0
+            })
+            .collect();
+        drop(conn);
+
+        for rel in unreferenced {
+            media::delete_media_files(&self.media_root, Some(&rel), None);
         }
     }
 
@@ -1032,25 +1069,6 @@ impl ClipboardDb {
         Ok(())
     }
 
-    pub fn delete_records_batch(&self, ids: &[i64]) -> SqlResult<usize> {
-        if ids.is_empty() {
-            return Ok(0);
-        }
-        let conn = self.conn.lock();
-        let media = self.fetch_media_paths_by_ids(&conn, ids)?;
-        let placeholders = Self::id_placeholders(ids.len());
-        let sql = format!(
-            "DELETE FROM records WHERE id IN ({})",
-            placeholders
-        );
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
-        let count = conn.execute(&sql, params.as_slice())?;
-        drop(conn);
-        self.purge_media_pairs(&media);
-        Ok(count)
-    }
-
     // === Trash / Soft-delete (keep media until permanent delete) ===
 
     pub fn trash_record(&self, id: i64) -> SqlResult<()> {
@@ -1131,16 +1149,6 @@ impl ClipboardDb {
     pub fn get_trash_count(&self) -> SqlResult<i64> {
         let conn = self.lock_read();
         conn.query_row("SELECT COUNT(*) FROM records WHERE is_trashed = 1", [], |row| row.get(0))
-    }
-
-    pub fn increment_copy_count(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        let now = chrono::Utc::now().to_rfc3339();
-        conn.execute(
-            "UPDATE records SET copy_count = copy_count + 1, updated_at = ? WHERE id = ?",
-            params![now, id],
-        )?;
-        Ok(())
     }
 
     pub fn toggle_favorite(&self, id: i64) -> SqlResult<bool> {
@@ -1239,7 +1247,10 @@ impl ClipboardDb {
     }
 
     pub fn save_settings(&self, settings: &Settings) -> SqlResult<()> {
-        let json = serde_json::to_string(settings).unwrap_or_default();
+        // A serialize failure must not write "" — the next load would silently
+        // reset every setting to defaults. Fail loud instead.
+        let json = serde_json::to_string(settings)
+            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
         {
             let conn = self.conn.lock();
             conn.execute(
@@ -1370,7 +1381,13 @@ impl ClipboardDb {
                 }
             }
             // Cap HTML blob size from malicious imports
-            let content_html = record.content_html.as_deref().filter(|h| h.len() <= 512 * 1024);
+            let content_html = record
+                .content_html
+                .as_deref()
+                .filter(|h| h.len() <= 512 * 1024)
+                // Untrusted boundary: drop HTML that could execute on re-paste
+                // into a rich-text editor (import + WebDAV share this path).
+                .filter(|h| crate::security::is_safe_import_html(h));
 
             // Skip empty text records; image records may have empty content with media_path
             let is_image = content_type == "image";

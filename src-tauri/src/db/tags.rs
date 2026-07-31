@@ -24,7 +24,8 @@ impl ClipboardDb {
 
         if favorites_only {
             sql.push_str(" AND r.is_favorite = 1");
-        } else if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
+        }
+        if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
             sql.push_str(" AND r.content_type = ?");
             params.push(Box::new(ct.to_string()));
         }

@@ -13,6 +13,16 @@ use crate::{
     AppState, ClipboardRecord, RecordsPage, SearchResult, Settings, StatsData, TagInfo,
 };
 
+/// Upper bound for page-size IPC args — a compromised webview must not be able
+/// to materialize every record (incl. sensitive) in a single call.
+const MAX_PAGE_SIZE: i32 = 200;
+/// Upper bound for batch id args, keeps placeholders / SQL bounded.
+const MAX_BATCH_IDS: usize = 1000;
+
+fn cap_ids(ids: Vec<i64>) -> Vec<i64> {
+    ids.into_iter().take(MAX_BATCH_IDS).collect()
+}
+
 #[tauri::command(rename_all = "snake_case")]
 pub async fn get_records(
     state: State<'_, AppState>,
@@ -28,7 +38,8 @@ pub async fn get_records(
     before_id: Option<i64>,
 ) -> Result<RecordsPage, String> {
     // Cleanup runs on the periodic thread — keep list reads off the hot path.
-    let limit = limit.unwrap_or(60).max(1);
+    // Bound `limit` so a compromised webview can't materialize every record.
+    let limit = limit.unwrap_or(60).max(1).min(MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
         .db
@@ -61,7 +72,7 @@ pub async fn search_records(
     sort: Option<String>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
-    let limit = limit.unwrap_or(60).max(1);
+    let limit = limit.unwrap_or(60).max(1).min(MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
         .db
@@ -340,7 +351,7 @@ pub async fn delete_record(state: State<'_, AppState>, id: i64) -> Result<(), St
 
 #[tauri::command]
 pub async fn delete_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
-    state.db.trash_records_batch(&ids).map_err(|e| e.to_string())
+    state.db.trash_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -350,7 +361,7 @@ pub async fn restore_record(state: State<'_, AppState>, id: i64) -> Result<(), S
 
 #[tauri::command]
 pub async fn restore_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
-    state.db.restore_records_batch(&ids).map_err(|e| e.to_string())
+    state.db.restore_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -386,7 +397,7 @@ pub async fn batch_set_favorite(
 ) -> Result<usize, String> {
     state
         .db
-        .batch_set_favorite(&ids, favorite)
+        .batch_set_favorite(&cap_ids(ids), favorite)
         .map_err(|e| e.to_string())
 }
 
@@ -714,7 +725,7 @@ pub async fn set_record_tags(
 ) -> Result<(), String> {
     state
         .db
-        .set_record_tags(record_id, &tag_ids)
+        .set_record_tags(record_id, &cap_ids(tag_ids))
         .map_err(|e| e.to_string())
 }
 

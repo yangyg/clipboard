@@ -18,8 +18,10 @@ impl WebDavClient {
         if base.is_empty() {
             return Err("WebDAV URL 不能为空".into());
         }
-        if !(base.starts_with("https://") || base.starts_with("http://")) {
-            return Err("WebDAV URL 必须以 http:// 或 https:// 开头".into());
+        // HTTPS only: Basic auth + the whole clipboard bundle would otherwise
+        // be sent in cleartext and sniffable on the network.
+        if !base.starts_with("https://") {
+            return Err("WebDAV 必须使用 https://（明文 http 会泄露密码与剪贴板内容）".into());
         }
         let client = Client::builder()
             .timeout(Duration::from_secs(120))

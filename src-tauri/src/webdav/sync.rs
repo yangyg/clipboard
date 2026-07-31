@@ -176,6 +176,14 @@ fn load_all_export(db: &ClipboardDb) -> Result<Vec<ClipboardRecord>, String> {
     Ok(all)
 }
 
+/// Server-supplied media rels must satisfy the same strict hash-path rule as
+/// imports (`security::is_allowed_media_rel`). `media::absolute` alone strips
+/// `..`, but a Windows drive-letter segment (`C:x`) still escapes the media
+/// root — never let one reach `fs::write` / `fs::read`.
+fn safe_media_rel(rel: &str) -> bool {
+    crate::security::is_allowed_media_rel(rel)
+}
+
 async fn download_media_if_needed(
     client: &WebDavClient,
     root: &str,
@@ -186,30 +194,24 @@ async fn download_media_if_needed(
         return Ok(false);
     }
     let mut downloaded = false;
-    if let Some(rel) = entry.media_path.as_deref().filter(|p| !p.is_empty()) {
-        let abs = media::absolute(media_root, rel);
-        if !abs.exists() {
-            let remote = join_remote(root, rel);
-            if let Some(bytes) = client.get_bytes(&remote).await? {
-                if let Some(parent) = abs.parent() {
-                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                }
-                fs::write(&abs, bytes).map_err(|e| e.to_string())?;
-                downloaded = true;
-            }
+    for rel in [entry.media_path.as_deref(), entry.thumb_path.as_deref()] {
+        let Some(rel) = rel.filter(|p| !p.is_empty()) else {
+            continue;
+        };
+        if !safe_media_rel(rel) {
+            continue;
         }
-    }
-    if let Some(rel) = entry.thumb_path.as_deref().filter(|p| !p.is_empty()) {
         let abs = media::absolute(media_root, rel);
-        if !abs.exists() {
-            let remote = join_remote(root, rel);
-            if let Some(bytes) = client.get_bytes(&remote).await? {
-                if let Some(parent) = abs.parent() {
-                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                }
-                fs::write(&abs, bytes).map_err(|e| e.to_string())?;
-                downloaded = true;
+        if abs.exists() {
+            continue;
+        }
+        let remote = join_remote(root, rel);
+        if let Some(bytes) = client.get_bytes(&remote).await? {
+            if let Some(parent) = abs.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
+            fs::write(&abs, bytes).map_err(|e| e.to_string())?;
+            downloaded = true;
         }
     }
     Ok(downloaded)
@@ -225,6 +227,12 @@ async fn upload_media_if_needed(
     let Some(media_rel) = rec.media_path.as_deref().filter(|p| !p.is_empty()) else {
         return Ok((false, false));
     };
+    // Rels can be server-supplied (remote records flow through the catalog) —
+    // enforce the strict hash-path rule before any fs::read to block
+    // remote-directed file exfiltration.
+    if !safe_media_rel(media_rel) {
+        return Ok((false, false));
+    }
     let abs = media::absolute(media_root, media_rel);
     if !abs.exists() {
         return Ok((false, false));
@@ -235,15 +243,17 @@ async fn upload_media_if_needed(
         let mut skipped = true;
         let mut uploaded = false;
         if let Some(thumb_rel) = rec.thumb_path.as_deref().filter(|p| !p.is_empty()) {
-            let thumb_abs = media::absolute(media_root, thumb_rel);
-            let thumb_remote = join_remote(root, thumb_rel);
-            if thumb_abs.exists() && !client.exists(&thumb_remote).await? {
-                let bytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
-                client
-                    .put_bytes(&thumb_remote, bytes, "image/jpeg")
-                    .await?;
-                uploaded = true;
-                skipped = false;
+            if safe_media_rel(thumb_rel) {
+                let thumb_abs = media::absolute(media_root, thumb_rel);
+                let thumb_remote = join_remote(root, thumb_rel);
+                if thumb_abs.exists() && !client.exists(&thumb_remote).await? {
+                    let bytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
+                    client
+                        .put_bytes(&thumb_remote, bytes, "image/jpeg")
+                        .await?;
+                    uploaded = true;
+                    skipped = false;
+                }
             }
         }
         return Ok((uploaded, skipped));
@@ -258,14 +268,16 @@ async fn upload_media_if_needed(
     };
     client.put_bytes(&remote, bytes, ct).await?;
     if let Some(thumb_rel) = rec.thumb_path.as_deref().filter(|p| !p.is_empty()) {
-        let thumb_abs = media::absolute(media_root, thumb_rel);
-        if thumb_abs.exists() {
-            let thumb_remote = join_remote(root, thumb_rel);
-            if !client.exists(&thumb_remote).await? {
-                let tbytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
-                client
-                    .put_bytes(&thumb_remote, tbytes, "image/jpeg")
-                    .await?;
+        if safe_media_rel(thumb_rel) {
+            let thumb_abs = media::absolute(media_root, thumb_rel);
+            if thumb_abs.exists() {
+                let thumb_remote = join_remote(root, thumb_rel);
+                if !client.exists(&thumb_remote).await? {
+                    let tbytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
+                    client
+                        .put_bytes(&thumb_remote, tbytes, "image/jpeg")
+                        .await?;
+                }
             }
         }
     }
@@ -374,7 +386,10 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
         .map(|r| (r.hash.clone(), r.clone()))
         .collect();
 
-    // Add-only: keep remote-only records in the published catalog
+    // Add-only: keep remote-only records in the published catalog. On a hash
+    // collision (same content) keep the NEWER updated_at — a push without a
+    // prior pull must not roll back a fresher timestamp published by another
+    // device (a local copy would silently regress it).
     let mut catalog: HashMap<String, ClipboardRecord> = HashMap::new();
     for r in remote_records {
         if settings.webdav_sync_sensitive || !r.is_sensitive {
@@ -382,7 +397,14 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
         }
     }
     for r in local {
-        catalog.insert(r.hash.clone(), strip_abs_paths(r));
+        let r = strip_abs_paths(r);
+        let regress = catalog
+            .get(&r.hash)
+            .map(|existing| existing.updated_at.as_str() >= r.updated_at.as_str())
+            .unwrap_or(false);
+        if !regress {
+            catalog.insert(r.hash.clone(), r);
+        }
     }
 
     let mut media_uploaded = 0;

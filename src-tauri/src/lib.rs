@@ -451,7 +451,15 @@ pub fn run() {
             let app_text = app_handle.clone();
             std::thread::spawn(move || {
                 while let Ok(job) = text_rx.recv() {
-                    process_text_job(job, &db_text, &app_text);
+                    // A panic here (DB error, malformed data) must not kill capture:
+                    // recover, log, and keep draining the queue.
+                    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        process_text_job(job, &db_text, &app_text);
+                    }))
+                    .is_err()
+                    {
+                        warn!("Text capture worker recovered from panic");
+                    }
                 }
             });
 
@@ -464,7 +472,13 @@ pub fn run() {
             let media_root_image = media_root.clone();
             std::thread::spawn(move || {
                 while let Ok(job) = image_rx.recv() {
-                    process_image_job(job, &db_image, &media_root_image, &app_image);
+                    if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        process_image_job(job, &db_image, &media_root_image, &app_image);
+                    }))
+                    .is_err()
+                    {
+                        warn!("Image capture worker recovered from panic");
+                    }
                 }
             });
 
@@ -783,14 +797,33 @@ fn run_periodic_cleanup(db: &ClipboardDb) -> Result<Vec<i64>, String> {
     Ok(expired)
 }
 
+/// Match an ignore pattern against the captured source app.
+///
+/// `source_app` is the foreground process exe path (from
+/// `QueryFullProcessImageNameW`). Patterns are usually exe names
+/// (`1Password.exe`), so we compare against the basename, tolerating a missing
+/// or extra `.exe` suffix. An explicit full path (case-insensitive) is also
+/// honoured. Deliberately NO substring matching — `contains` made a pattern
+/// like `git` silently ignore unrelated apps whose path merely contains it.
 fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {
     if source_app.is_empty() || ignored.is_empty() {
         return false;
     }
     let app_lower = source_app.to_lowercase();
+    let basename = source_app
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(source_app)
+        .to_lowercase();
+    let basename_noext = basename.strip_suffix(".exe").unwrap_or(&basename);
+
     ignored.iter().any(|pat| {
         let p = pat.trim().to_lowercase();
-        !p.is_empty() && (app_lower == p || app_lower.ends_with(&p) || app_lower.contains(&p))
+        if p.is_empty() {
+            return false;
+        }
+        let p_noext = p.strip_suffix(".exe").unwrap_or(p.as_str());
+        basename_noext == p_noext || app_lower == p
     })
 }
 
@@ -889,5 +922,37 @@ mod settings_onboarding_tests {
         let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"data_path":"","auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(s.onboarding_completed);
+    }
+}
+
+#[cfg(test)]
+mod ignored_app_tests {
+    use super::is_ignored_app;
+
+    fn ignored(patterns: &[&str]) -> Vec<String> {
+        patterns.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn matches_exe_basename_with_or_without_extension() {
+        let list = ignored(&["1Password.exe"]);
+        assert!(is_ignored_app("C:\\Program Files\\1Password\\1Password.exe", &list));
+        let noext = ignored(&["chrome"]);
+        assert!(is_ignored_app("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", &noext));
+    }
+
+    #[test]
+    fn does_not_substring_match_unrelated_apps() {
+        // Regression: `contains` made pattern "git" match any path containing it.
+        let list = ignored(&["git"]);
+        assert!(!is_ignored_app("C:\\Users\\me\\AppData\\Roaming\\digit\\app.exe", &list));
+        assert!(!is_ignored_app("C:\\Windows\\System32\\notepad.exe", &list));
+    }
+
+    #[test]
+    fn matches_full_path_when_entered() {
+        let list = ignored(&["C:\\Tools\\Keepass\\keepassxc.exe"]);
+        assert!(is_ignored_app("C:\\Tools\\Keepass\\keepassxc.exe", &list));
+        assert!(!is_ignored_app("C:\\Tools\\Other\\keepassxc.exe", &list));
     }
 }

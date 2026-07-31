@@ -15,10 +15,10 @@
         @click="update('theme', t.key)"
         @keydown.enter.prevent="update('theme', t.key)"
         @keydown.space.prevent="update('theme', t.key)"
-        @keydown.arrowright.prevent="focusTheme(idx + 1)"
-        @keydown.arrowleft.prevent="focusTheme(idx - 1)"
-        @keydown.arrowdown.prevent="focusTheme(idx + 1)"
-        @keydown.arrowup.prevent="focusTheme(idx - 1)"
+        @keydown.right.prevent="focusTheme(idx + 1)"
+        @keydown.left.prevent="focusTheme(idx - 1)"
+        @keydown.down.prevent="focusTheme(idx + 1)"
+        @keydown.up.prevent="focusTheme(idx - 1)"
       >
         <div class="theme-preview" :class="`theme-${t.key}`" aria-hidden="true"></div>
         <div class="theme-name"><AppIcon :name="t.icon" :size="13" /> {{ $t(t.labelKey) }}</div>

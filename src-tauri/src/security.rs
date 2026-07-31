@@ -9,7 +9,56 @@ static MEDIA_REL_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)^media/(?:thumbs/)?[a-f0-9]{64}\.(?:png|jpe?g)$").unwrap()
 });
 
+// Event-handler attributes that could execute when the HTML is pasted into a
+// rich-text editor. Scoped to known handler names so plain text like "one="
+// never triggers a false positive.
+static HTML_HANDLER_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\bon(?:click|dblclick|mousedown|mouseup|mouseover|mouseout|mousemove|mouseenter|mouseleave|load|error|unload|focus|blur|change|submit|keydown|keypress|keyup|drag|dragstart|dragend|dragover|drop|input|scroll|wheel|pointerdown|pointerup|pointerover|pointerout|touchstart|touchend|contextmenu|select|toggle|animationstart|transitionend|auxclick)\s*=",
+    )
+    .unwrap()
+});
+
 const ALLOWED_CONTENT_TYPES: &[&str] = &["text", "code", "link", "image", "file"];
+
+/// Conservative guard for `content_html` arriving from untrusted boundaries
+/// (JSON import / WebDAV pull). Local capture is always the user's own clipboard
+/// and skips this. Returns false → the DB layer drops HTML (keeps plain text),
+/// so the blob can never be re-pasted into a rich-text editor. False positives
+/// only cost formatting, never content.
+pub fn is_safe_import_html(html: &str) -> bool {
+    if html.is_empty() {
+        return true;
+    }
+    let lower = html.to_lowercase();
+    const BLOCKED_TAGS: &[&str] = &[
+        "<script",
+        "<style",
+        "<iframe",
+        "<object",
+        "<embed",
+        "<form",
+        "<base",
+        "<link",
+        "<meta",
+        "<svg",
+        "<math",
+        "<template",
+    ];
+    if BLOCKED_TAGS.iter().any(|t| lower.contains(t)) {
+        return false;
+    }
+    if HTML_HANDLER_RE.is_match(&lower) {
+        return false;
+    }
+    if lower.contains("javascript:")
+        || lower.contains("vbscript:")
+        || lower.contains("file:")
+    {
+        return false;
+    }
+    true
+}
 
 /// Relative media keys we accept in DB / import (hash-named files only).
 pub fn is_allowed_media_rel(rel: &str) -> bool {
@@ -117,12 +166,34 @@ mod tests {
     }
 
     #[test]
+    fn media_rel_rejects_drive_letter_segment() {
+        // `media::absolute` joins segment-by-segment; on Windows a `C:x` segment
+        // replaces the accumulated path and resolves against the process CWD,
+        // escaping the media root — the strict hash-path regex must reject it.
+        assert!(!is_allowed_media_rel("media/C:evil.txt"));
+        assert!(!is_allowed_media_rel("media/thumbs/C:\\evil.jpg"));
+        assert!(!is_allowed_media_rel("C:evil.txt"));
+        assert!(!is_allowed_media_rel("media/D:\\outside.png"));
+    }
+
+    #[test]
     fn http_url_filter() {
         assert!(is_safe_http_url("https://example.com/a"));
         assert!(is_safe_http_url("http://example.com"));
         assert!(!is_safe_http_url("javascript:alert(1)"));
         assert!(!is_safe_http_url("data:text/html,hi"));
         assert!(!is_safe_http_url("file:///c:/x"));
+    }
+
+    #[test]
+    fn import_html_rejects_executable_markup() {
+        assert!(is_safe_import_html("<p>hello <b>world</b></p>"));
+        assert!(is_safe_import_html("<p>set one=2 and two=3</p>"));
+        assert!(!is_safe_import_html("<p>x<script>alert(1)</script></p>"));
+        assert!(!is_safe_import_html("<img src=x onerror=alert(1)>"));
+        assert!(!is_safe_import_html("<a href=\"javascript:alert(1)\">x</a>"));
+        assert!(!is_safe_import_html("<iframe src=\"https://evil\"></iframe>"));
+        assert!(!is_safe_import_html("<svg onload=alert(1)>"));
     }
 
     #[test]

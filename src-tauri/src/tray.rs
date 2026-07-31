@@ -70,8 +70,16 @@ pub(crate) fn build_tray(
 ) -> tauri::Result<()> {
     let _capture_paused = capture_paused;
 
-    let _tray = TrayIconBuilder::with_id("main-tray")
-        .icon(app.default_window_icon().unwrap().clone())
+    // A missing default icon must not abort the whole app at startup.
+    let tray_builder = TrayIconBuilder::with_id("main-tray");
+    let tray_builder = match app.default_window_icon() {
+        Some(icon) => tray_builder.icon(icon.clone()),
+        None => {
+            warn!("No default window icon for tray; using icon-less tray");
+            tray_builder
+        }
+    };
+    let _tray = tray_builder
         .tooltip("剪贴板管理")
         .on_tray_icon_event(|tray, event| {
             let app = tray.app_handle();

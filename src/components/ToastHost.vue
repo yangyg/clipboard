@@ -2,22 +2,18 @@
   <Teleport to="body">
     <div class="toast-host">
       <TransitionGroup name="toast">
-        <div
+        <button
           v-for="item in toasts"
           :key="item.id"
+          type="button"
           class="toast-item"
           :class="`toast-${item.kind}`"
           :aria-live="item.kind === 'error' ? 'assertive' : 'polite'"
-          role="status"
+          :aria-label="item.message"
+          @click="dismiss(item.id)"
         >
-          <span class="toast-message">{{ item.message }}</span>
-          <button
-            type="button"
-            class="toast-dismiss"
-            :aria-label="$t('common.close')"
-            @click="dismiss(item.id)"
-          >×</button>
-        </div>
+          {{ item.message }}
+        </button>
       </TransitionGroup>
     </div>
   </Teleport>
@@ -48,10 +44,7 @@ const { toasts, dismiss } = useToast()
 
 .toast-item {
   pointer-events: auto;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
@@ -59,33 +52,11 @@ const { toasts, dismiss } = useToast()
   box-shadow: var(--shadow-md);
   font-size: var(--text-base);
   line-height: 1.4;
+  cursor: pointer;
+  transition: all var(--transition-smooth);
   text-align: left;
   word-break: break-word;
-}
-
-.toast-message {
-  flex: 1;
-  min-width: 0;
-}
-
-.toast-dismiss {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  margin: -2px -2px 0 0;
-  border: none;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--text-tertiary);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
   font-family: inherit;
-}
-
-.toast-dismiss:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
 }
 
 .toast-item.toast-info {

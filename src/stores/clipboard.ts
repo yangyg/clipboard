@@ -599,6 +599,30 @@ export const useClipboardStore = defineStore("clipboard", () => {
     }
   }
 
+  async function permanentlyDeleteRecordsBatch(ids: number[]) {
+    try {
+      await invoke("permanently_delete_records_batch", { ids });
+      const idSet = new Set(ids);
+      records.value = records.value.filter((r) => !idSet.has(r.id));
+      for (const id of ids) {
+        if (recordDetails.value.has(id)) {
+          const next = new Map(recordDetails.value);
+          next.delete(id);
+          recordDetails.value = next;
+        }
+      }
+      if (selectedId.value !== null && selectedIds.value.has(selectedId.value)) {
+        selectedId.value = null;
+      }
+      selectedIds.value = new Set();
+      batchMode.value = false;
+      await loadTrashCount();
+    } catch (e) {
+      console.error("Batch permanent delete failed:", e);
+      throw e;
+    }
+  }
+
   /** Remove expired sensitive records from DB + local list; reschedule next sweep. */
   function removeExpiredFromList(ids: number[]) {
     if (ids.length === 0) return;
@@ -1050,6 +1074,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     restoreRecord,
     restoreRecordsBatch,
     permanentlyDeleteRecord,
+    permanentlyDeleteRecordsBatch,
     purgeExpiredRecords,
     removeExpiredFromList,
     emptyTrash,

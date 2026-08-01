@@ -5,15 +5,25 @@
       {{ $t('batch.selected', { count: clipboardStore.selectedIds.size }) }}
     </div>
     <div class="batch-actions">
-      <button type="button" class="batch-btn" @click="batchCopy">
-        <AppIcon name="copy" :size="13" /> {{ $t('batch.copy') }}
-      </button>
-      <button type="button" class="batch-btn" @click="batchFavorite">
-        <AppIcon name="star" :size="13" /> {{ $t('batch.favorite') }}
-      </button>
-      <button type="button" class="batch-btn danger" @click="batchDelete">
-        <AppIcon name="trash" :size="13" /> {{ $t('batch.delete') }}
-      </button>
+      <template v-if="clipboardStore.trashFilter">
+        <button type="button" class="batch-btn" @click="batchRestore">
+          <AppIcon name="restore" :size="13" /> {{ $t('common.restore') }}
+        </button>
+        <button type="button" class="batch-btn danger" @click="batchDelete">
+          <AppIcon name="trash" :size="13" /> {{ $t('record.permanentDelete') }}
+        </button>
+      </template>
+      <template v-else>
+        <button type="button" class="batch-btn" @click="batchCopy">
+          <AppIcon name="copy" :size="13" /> {{ $t('batch.copy') }}
+        </button>
+        <button type="button" class="batch-btn" @click="batchFavorite">
+          <AppIcon name="star" :size="13" /> {{ $t('batch.favorite') }}
+        </button>
+        <button type="button" class="batch-btn danger" @click="batchDelete">
+          <AppIcon name="trash" :size="13" /> {{ $t('batch.delete') }}
+        </button>
+      </template>
       <button type="button" class="batch-btn" :aria-label="$t('batch.exit')" @click="toggleBatchMode">
         <AppIcon name="close" :size="13" />
       </button>
@@ -27,7 +37,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useBatchActions } from "../composables/useBatchActions";
 
 const clipboardStore = useClipboardStore();
-const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActions();
+const { toggleBatchMode, batchCopy, batchFavorite, batchDelete, batchRestore } = useBatchActions();
 </script>
 
 <style scoped>

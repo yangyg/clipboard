@@ -95,6 +95,7 @@ export default {
     pasteFailed: '粘贴失败',
     deleted: '已移到回收站',
     deletedPermanently: '已永久删除',
+    restored: '已恢复',
     imageLabel: '图片 {w}×{h}',
     imageOnly: '图片',
     justNow: '刚刚',

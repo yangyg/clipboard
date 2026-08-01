@@ -1129,6 +1129,27 @@ impl ClipboardDb {
         Ok(())
     }
 
+    pub fn permanently_delete_records_batch(&self, ids: &[i64]) -> SqlResult<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let conn = self.conn.lock();
+        let media = self.fetch_media_paths_by_ids(&conn, ids)?;
+        let placeholders = Self::id_placeholders(ids.len());
+        let sql = format!(
+            "DELETE FROM records WHERE is_trashed = 1 AND id IN ({})",
+            placeholders
+        );
+        let params: Vec<&dyn rusqlite::types::ToSql> =
+            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let count = conn.execute(&sql, params.as_slice())?;
+        drop(conn);
+        if count > 0 {
+            self.purge_media_pairs(&media);
+        }
+        Ok(count)
+    }
+
     pub fn empty_trash(&self) -> SqlResult<usize> {
         let conn = self.conn.lock();
         let ids: Vec<i64> = {

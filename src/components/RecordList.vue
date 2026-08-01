@@ -150,37 +150,54 @@
           </div>
 
           <div class="record-actions" @click.stop>
-            <button
-              v-if="!clipboardStore.trashFilter"
-              type="button"
-              class="record-action-btn"
-              :aria-label="$t('record.pasteLabel')"
-              :title="$t('record.pasteLabel')"
-              @click="quickPaste(item.record!.id)"
-            ><AppIcon name="paste" :size="13" /></button>
-            <button
-              type="button"
-              class="record-action-btn"
-              :class="{ starred: item.record!.is_favorite }"
-              :aria-label="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
-              :title="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
-              @click="onRowFavorite(item.record!.id)"
-            ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
-            <button
-              type="button"
-              class="record-action-btn"
-              :class="{ active: isPinned(item.record!) }"
-              :aria-label="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
-              :title="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
-              @click="scheduleTogglePin(item.record!)"
-            ><AppIcon name="pin" :size="13" :fill="isPinned(item.record!) ? 'currentColor' : 'none'" /></button>
-            <button
-              type="button"
-              class="record-action-btn danger"
-              :aria-label="clipboardStore.trashFilter ? $t('record.permanentDelete') : $t('record.deleteRecord')"
-              :title="clipboardStore.trashFilter ? $t('record.permanentDelete') : $t('record.deleteRecord')"
-              @click="quickDelete(item.record!)"
-            ><AppIcon name="trash" :size="13" /></button>
+            <template v-if="clipboardStore.trashFilter">
+              <button
+                type="button"
+                class="record-action-btn"
+                :aria-label="$t('record.restoreRecord')"
+                :title="$t('record.restoreRecord')"
+                @click="onRowRestore(item.record!.id)"
+              ><AppIcon name="restore" :size="13" /></button>
+              <button
+                type="button"
+                class="record-action-btn danger"
+                :aria-label="$t('record.permanentDelete')"
+                :title="$t('record.permanentDelete')"
+                @click="quickDelete(item.record!)"
+              ><AppIcon name="trash" :size="13" /></button>
+            </template>
+            <template v-else>
+              <button
+                type="button"
+                class="record-action-btn"
+                :aria-label="$t('record.pasteLabel')"
+                :title="$t('record.pasteLabel')"
+                @click="quickPaste(item.record!.id)"
+              ><AppIcon name="paste" :size="13" /></button>
+              <button
+                type="button"
+                class="record-action-btn"
+                :class="{ starred: item.record!.is_favorite }"
+                :aria-label="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
+                :title="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
+                @click="onRowFavorite(item.record!.id)"
+              ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
+              <button
+                type="button"
+                class="record-action-btn"
+                :class="{ active: isPinned(item.record!) }"
+                :aria-label="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
+                :title="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
+                @click="scheduleTogglePin(item.record!)"
+              ><AppIcon name="pin" :size="13" :fill="isPinned(item.record!) ? 'currentColor' : 'none'" /></button>
+              <button
+                type="button"
+                class="record-action-btn danger"
+                :aria-label="$t('record.deleteRecord')"
+                :title="$t('record.deleteRecord')"
+                @click="quickDelete(item.record!)"
+              ><AppIcon name="trash" :size="13" /></button>
+            </template>
           </div>
         </div>
       </template>
@@ -608,6 +625,14 @@ async function quickPaste(id: number) {
 async function onRowFavorite(id: number) {
   const next = await clipboardStore.toggleFavorite(id);
   if (next == null) toast(t('common.operationFailed'), "error");
+}
+
+async function onRowRestore(id: number) {
+  try {
+    await clipboardStore.restoreRecord(id);
+  } catch {
+    toast(t('common.operationFailed'), "error");
+  }
 }
 
 function onListColResizeKey(e: KeyboardEvent) {

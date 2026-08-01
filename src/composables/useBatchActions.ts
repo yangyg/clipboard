@@ -2,11 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "vue-i18n";
 import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
+import { useConfirm } from "./useConfirm";
 
 /** Shared batch bar actions for FloatingPanel and WindowApp. */
 export function useBatchActions() {
   const clipboardStore = useClipboardStore();
   const { toast } = useToast();
+  const { confirm } = useConfirm();
   const { t } = useI18n();
 
   function toggleBatchMode() {
@@ -88,12 +90,38 @@ export function useBatchActions() {
       return;
     }
     try {
-      await clipboardStore.deleteBatch(ids);
-      toast(t("record.deleted"), "success");
+      if (clipboardStore.trashFilter) {
+        const ok = await confirm({
+          title: t("record.permanentDelete"),
+          message: t("record.permanentDeleteMsg"),
+          confirmText: t("record.permanentDelete"),
+          danger: true,
+        });
+        if (!ok) return;
+        await clipboardStore.permanentlyDeleteRecordsBatch(ids);
+        toast(t("record.deletedPermanently"), "success");
+      } else {
+        await clipboardStore.deleteBatch(ids);
+        toast(t("record.deleted"), "success");
+      }
     } catch {
       toast(t("common.operationFailed"), "error");
     }
   }
 
-  return { toggleBatchMode, batchCopy, batchFavorite, batchDelete };
+  async function batchRestore() {
+    const ids = Array.from(clipboardStore.selectedIds);
+    if (!ids.length) {
+      toast(t("batch.selectFirst"), "warning");
+      return;
+    }
+    try {
+      await clipboardStore.restoreRecordsBatch(ids);
+      toast(t("record.restored"), "success");
+    } catch {
+      toast(t("common.operationFailed"), "error");
+    }
+  }
+
+  return { toggleBatchMode, batchCopy, batchFavorite, batchDelete, batchRestore };
 }

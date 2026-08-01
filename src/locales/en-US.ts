@@ -95,6 +95,7 @@ export default {
     pasteFailed: 'Paste failed',
     deleted: 'Moved to trash',
     deletedPermanently: 'Permanently deleted',
+    restored: 'Restored',
     imageLabel: 'Image {w}×{h}',
     imageOnly: 'Image',
     justNow: 'Just now',

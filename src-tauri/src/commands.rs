@@ -370,6 +370,11 @@ pub async fn permanently_delete_record(state: State<'_, AppState>, id: i64) -> R
 }
 
 #[tauri::command]
+pub async fn permanently_delete_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
+    state.db.permanently_delete_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn cleanup_expired(state: State<'_, AppState>) -> Result<Vec<i64>, String> {
     state.db.cleanup_expired().map_err(|e| e.to_string())
 }

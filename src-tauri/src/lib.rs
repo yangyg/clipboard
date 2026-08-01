@@ -412,6 +412,7 @@ pub fn run() {
             commands::restore_record,
             commands::restore_records_batch,
             commands::permanently_delete_record,
+            commands::permanently_delete_records_batch,
             commands::empty_trash,
             commands::cleanup_expired,
             commands::get_trash_count,

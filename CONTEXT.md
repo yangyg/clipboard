@@ -45,10 +45,6 @@ See `docs/adr/` for immutable decision records:
 - Media: `%LOCALAPPDATA%/ClipVault/media/`
 - Log: `%LOCALAPPDATA%/ClipVault/clipvault.log`
 
-## Feature Design Specs
-
-See `docs/superpowers/specs/` for feature-level designs: tray menu, onboarding, source badge, WebDAV sync, i18n.
-
 ## Motion & Animation
 
 See `docs/Clipboard-交互动效规范.md` for the animation design spec. Key rule: never `transition: all` — always explicit property list. Prefer compositor-friendly props (`opacity` / `transform`).

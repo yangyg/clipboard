@@ -7,7 +7,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm run dev          # Start Vite dev server (port 1420)
 npm run build        # vue-tsc type-check + vite build
-npm run preview      # Preview the built frontend
 npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
 npm test             # Run Vitest once (Pinia store smoke tests, jsdom)
 npm run lint         # Run ESLint over src (.ts + .vue)
@@ -92,7 +91,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - `system_theme.rs` — Windows OS light/dark watcher: invisible top-level window receives the `WM_SETTINGCHANGE`("ImmersiveColorSet") broadcast, reads the `AppsUseLightTheme` registry value, emits `system-theme-changed` (ADR-0002)
 - `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**); capture downscale ≤2560 edge
 - `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
-- `db/` — SQLite layer (`mod.rs` core CRUD/schema/FTS; `tags.rs` tag CRUD + auto-tag; `stats.rs` aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
+- `db/` — SQLite layer: `mod.rs` (types, pool, constructor); `records.rs` (CRUD/search/trash/favorites/import/export); `schema.rs` (FTS5 management + schema version); `settings.rs` (settings + cleanup); `tags.rs` (tag CRUD + auto-tag); `stats.rs` (aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers
 - `webdav/` — WebDAV cloud sync (`client.rs` HTTP client; `sync.rs` pull/merge/push orchestration). Protocol `clipvault-webdav-v1`; manifest + JSONL bundle; media files synced alongside. Settings page: **Sync** (`SettingsSync.vue`). Default remote dir `ClipVaultSync`.
 - `security.rs` — media path must resolve under media root; export/import JSON path checks; import normalizes `content_type` and allows only http(s) links + safe media rel-paths
@@ -104,7 +103,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 
 ### Key Design Decisions
 - **Brand:** Product name **Clipboard** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.
-- **First-run onboarding:** `WelcomeDialog` when `onboarding_completed` is false. New install Default=`false`; **upgrade** JSON missing the field deserializes to `true` (skip). Dismiss / Esc sets true and saves. Spec: `docs/superpowers/specs/2026-07-24-onboarding-design.md`.
+- **First-run onboarding:** `WelcomeDialog` when `onboarding_completed` is false. New install Default=`false`; **upgrade** JSON missing the field deserializes to `true` (skip). Dismiss / Esc sets true and saves.
 - **Floating vs window:** Both borderless, `transparent: true`, `shadow: false`. Floating: always-on-top, hide on blur; panel kept mounted with `v-show`. Window: SideBar + `WindowControls` + list-toolbar; `mode_size_bounds` min width **760**. Shared `.panel-surface` chrome. **Size:** `resolve_panel_size` prefers last user resize (`floating_*` / `window_*` in settings); if unset (0), falls back to `adaptive_panel_size`. Resize is debounced ~400ms into SQLite; maximized sizes are not saved. Frontend `save_settings` never overwrites size fields (`SIZE_SAVE_GEN`).
 - **List sort (window mode):** Toolbar `<select>` → `clipboardStore.listSort` → `get_records` / `search_records` `sort` param. Whitelist: `updated_desc` (default), `updated_asc`, `created_desc`, `copies_desc`. Non-trash: `is_pinned DESC` first. Session-only. `onNewRecord` prepends only for `updated_desc`; other sorts reload (debounced ~400ms).
 - **True round corners (Windows):** CSS `border-radius` alone leaves black rectangular corners on transparent WebView2. Clip HWND with `SetWindowRgn` from `panel_radius` × DPI. Command: `set_window_corner_radius`.
@@ -151,7 +150,6 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Hide-on-close / single instance / autostart:** tray minimize, single-instance focus, OS Run-key sync.
 - **WebView noise:** `Chrome_WidgetWin_0` Error 1412 on exit is harmless.
 - **Architecture decisions:** [`docs/adr/`](docs/adr/) — ADR-0001 covers the virtual-list composable extraction and the responsive grid-column single-source-of-truth rule; ADR-0002 covers the native OS-theme watcher behind "follow system".
-- **Tray / onboarding specs:** [`docs/superpowers/specs/`](docs/superpowers/specs/).
 
 ## Agent skills
 

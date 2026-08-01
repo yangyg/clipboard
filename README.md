@@ -46,12 +46,16 @@ npm run build            # 类型检查 + 前端构建
 npm run tauri build      # 打包桌面应用
 npm test                 # 前端 Vitest（Pinia store 冒烟测试）
 npm run lint             # ESLint 检查 src（.ts + .vue）
+npm run doctor           # 环境诊断：Node / Rust / WebView2 / SQLite，异常时给出修复建议
+npm run clippy           # Rust clippy 检查（-D warnings，与 CI 一致）
 npx tauri icon app-icon.png -o src-tauri/icons   # 从源图生成全套图标
 
 cargo test --manifest-path src-tauri/Cargo.toml  # Rust 后端测试
 ```
 
 修改 Rust 代码（`src-tauri/src/*.rs`）后，运行 `cargo test --manifest-path src-tauri/Cargo.toml` 验证后端测试仍全部通过。
+
+CI（`.github/workflows/ci.yml`）在 push / PR 时自动运行前端 lint、类型检查、Vitest，以及 Rust clippy（`-D warnings`）与测试；Rust 侧在 `windows-latest` 上执行（代码依赖 Windows API）。
 
 ## 数据位置
 

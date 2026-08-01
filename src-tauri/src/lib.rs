@@ -13,7 +13,7 @@ use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
 use detect::{detect_content_type, detect_sensitive, sha256_hash, sha256_hash_bytes};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::mpsc;
 use std::sync::Arc;
 use parking_lot::RwLock;
@@ -739,7 +739,7 @@ fn process_text_job(
 fn process_image_job(
     job: ImageCaptureJob,
     db: &ClipboardDb,
-    media_root: &PathBuf,
+    media_root: &Path,
     app: &tauri::AppHandle,
 ) {
     let ImageCaptureJob { captured, source_app, source_window } = job;

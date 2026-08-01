@@ -11,6 +11,8 @@ npm run preview      # Preview the built frontend
 npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
 npm test             # Run Vitest once (Pinia store smoke tests, jsdom)
 npm run lint         # Run ESLint over src (.ts + .vue)
+npm run doctor       # 环境诊断：Node / Rust / WebView2 / SQLite，异常时输出修复建议
+npm run clippy       # Rust clippy（-D warnings，与 CI 一致）
 
 cargo test --manifest-path src-tauri/Cargo.toml   # Run Rust backend tests
 ```
@@ -18,6 +20,8 @@ cargo test --manifest-path src-tauri/Cargo.toml   # Run Rust backend tests
 The full Tauri dev command is `npm run tauri dev` (starts both Vite + Rust backend).
 
 **After modifying Rust code** (`src-tauri/src/*.rs`), run `cargo test --manifest-path src-tauri/Cargo.toml` to verify the backend still passes its tests.
+
+CI (`.github/workflows/ci.yml`) runs on every push / PR: frontend lint, type-check + build and vitest on Ubuntu; Rust `cargo clippy -- -D warnings` and `cargo test` on Windows (`windows-latest`, because the Rust code is Windows-gated). Run `npm run lint` / `npm test` / `npm run clippy` locally before pushing.
 
 Regenerate app icons from a source image (PNG preferred; JPEG renamed as `.png` must be converted first):
 

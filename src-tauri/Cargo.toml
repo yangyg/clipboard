@@ -54,6 +54,13 @@ windows-sys = { version = "0.59", features = [
   "Win32_Graphics_Gdi",
 ] }
 
+# Clippy policy: the DB/IPC layers intentionally pass SQL/command parameters
+# positionally (up to 11 args) because they mirror IPC payloads 1:1. Restructure
+# into parameter structs only when the parameter list itself changes; keep all
+# other lints at deny level (enforced locally via `npm run clippy` and in CI).
+[lints.clippy]
+too_many_arguments = "allow"
+
 [profile.release]
 strip = true
 lto = true

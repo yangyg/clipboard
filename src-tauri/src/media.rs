@@ -53,9 +53,7 @@ pub fn store_clipboard_image(
 
     // Already stored (dedup hit at file level) — no size-cache bump.
     if media_abs.exists() && thumb_abs.exists() {
-        let (w, h) = image::image_dimensions(&media_abs)
-            .map(|(w, h)| (w, h))
-            .unwrap_or((width, height));
+        let (w, h) = image::image_dimensions(&media_abs).unwrap_or((width, height));
         return Ok(StoredImage {
             media_path: media_rel,
             thumb_path: thumb_rel,

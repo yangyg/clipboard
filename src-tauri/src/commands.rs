@@ -40,7 +40,7 @@ pub async fn get_records(
 ) -> Result<RecordsPage, String> {
     // Cleanup runs on the periodic thread — keep list reads off the hot path.
     // Bound `limit` so a compromised webview can't materialize every record.
-    let limit = limit.unwrap_or(60).max(1).min(MAX_PAGE_SIZE);
+    let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
         .db
@@ -73,7 +73,7 @@ pub async fn search_records(
     sort: Option<String>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
-    let limit = limit.unwrap_or(60).max(1).min(MAX_PAGE_SIZE);
+    let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let records = state
         .db

@@ -204,7 +204,7 @@ fn windows_power_watch_loop() {
         lparam: LPARAM,
     ) -> LRESULT {
         if msg == WM_POWERBROADCAST {
-            let event = wparam as usize;
+            let event = wparam;
             if matches!(
                 event,
                 PBT_APMRESUMESUSPEND | PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMECRITICAL
@@ -293,7 +293,7 @@ pub(crate) fn hook_tray_menu_cursor(window: &tauri::WebviewWindow) {
         _id: usize,
         _data: usize,
     ) -> LRESULT {
-        if msg == WM_SETCURSOR && (lparam as u32 & 0xFFFF) == HTCLIENT as u32 {
+        if msg == WM_SETCURSOR && (lparam as u32 & 0xFFFF) == HTCLIENT {
             return 1; // WebView2 manages the cursor in its client area.
         }
         DefSubclassProc(hwnd, msg, wparam, lparam)

@@ -33,14 +33,17 @@ async function openRepo() {
 
 <style scoped>
 .about-content {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
   padding: 20px;
 }
 
 .about-logo {
   display: flex;
   justify-content: center;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 
 .about-logo img {
@@ -54,26 +57,25 @@ async function openRepo() {
 .about-name {
   font-size: 1.375rem;
   font-weight: 600;
-  margin-bottom: 4px;
 }
 
 .about-version {
   font-size: var(--text-md);
   color: var(--accent-text);
   font-family: var(--font-mono);
-  margin-bottom: 8px;
 }
 
 .about-desc {
   font-size: var(--text-md);
   color: var(--text-tertiary);
+  text-align: center;
 }
 
 .about-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  margin-top: 14px;
+  margin-top: 6px;
   padding: 6px 14px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

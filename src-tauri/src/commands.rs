@@ -5,6 +5,7 @@
 use std::sync::atomic::Ordering as AtomicOrdering;
 
 use tauri::{Emitter, Manager, State};
+use url::Url;
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tracing::{info, warn};
 
@@ -151,6 +152,21 @@ fn open_path_with_default_app(path: &std::path::Path) -> Result<(), String> {
         .spawn()
         .map_err(|e| format!("打开失败: {e}"))?;
     Ok(())
+}
+
+/// Open an http(s) URL in the default browser (whitelist only; see security).
+#[tauri::command]
+pub async fn open_url(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("https://") && !trimmed.starts_with("http://") {
+        return Err("仅允许打开 http(s) 链接".into());
+    }
+    let mut value = Url::parse(trimmed).map_err(|e| format!("无效链接: {e}"))?;
+    if !matches!(value.scheme(), "http" | "https") {
+        return Err("仅允许打开 http(s) 链接".into());
+    }
+    value.set_query(None);
+    open_path_with_default_app(std::path::Path::new(value.as_str()))
 }
 
 /// Remember the current foreground app as paste destination (safe no-op if FG is us).

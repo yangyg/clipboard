@@ -7,12 +7,28 @@
       <div class="about-name">Clipboard</div>
       <div class="about-version">{{ $t('settings.about.version') }}</div>
       <div class="about-desc">{{ $t('settings.about.desc') }}</div>
+      <button class="about-link" type="button" @click="openRepo">
+        <Github class="about-link-icon" :size="14" />
+        <span>{{ $t('settings.about.repoLink') }}</span>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { invoke } from "@tauri-apps/api/core";
+import { Github } from "lucide-vue-next";
 import appIconUrl from "../../assets/app-icon-128.png";
+
+const REPO_URL = "https://github.com/yangyg/clipboard";
+
+async function openRepo() {
+  try {
+    await invoke("open_url", { url: REPO_URL });
+  } catch (e) {
+    console.error("Failed to open repo link", e);
+  }
+}
 </script>
 
 <style scoped>
@@ -51,5 +67,29 @@ import appIconUrl from "../../assets/app-icon-128.png";
 .about-desc {
   font-size: var(--text-md);
   color: var(--text-tertiary);
+}
+
+.about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--accent-text);
+  font-size: var(--text-md);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.about-link:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.about-link-icon {
+  color: var(--accent);
 }
 </style>

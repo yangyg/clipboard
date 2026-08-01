@@ -446,6 +446,7 @@ export default {
     about: {
       version: '版本 0.1.0',
       desc: 'Windows 剪贴板管理工具 · Tauri + Vue 3 + Rust',
+      repoLink: 'GitHub 仓库',
     },
   },
 }

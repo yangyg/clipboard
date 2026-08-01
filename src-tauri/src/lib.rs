@@ -405,6 +405,7 @@ pub fn run() {
             commands::search_records,
             commands::get_record,
             commands::open_record_media,
+            commands::open_url,
             commands::capture_paste_target,
             commands::paste_record,
             commands::delete_record,

@@ -446,6 +446,7 @@ export default {
     about: {
       version: 'Version 0.1.0',
       desc: 'Windows Clipboard Manager · Tauri + Vue 3 + Rust',
+      repoLink: 'GitHub Repository',
     },
   },
 }

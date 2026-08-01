@@ -1173,8 +1173,9 @@ mod tests {
 
     #[test]
     fn large_image_is_downscaled() {
-        let w = 5000u32;
-        let h = 4000u32;
+        // Big enough to exceed CAPTURE_MAX_EDGE (2560) without an 80MB buffer.
+        let w = 3000u32;
+        let h = 1000u32;
         let rgba = vec![128u8; (w * h * 4) as usize];
         let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
         // Both edges must be <= CAPTURE_MAX_EDGE
@@ -1183,6 +1184,34 @@ mod tests {
         // Output buffer matches dimensions
         assert_eq!(out.len(), (ow * oh * 4) as usize);
         assert!(!out.is_empty());
+    }
+
+    #[test]
+    fn large_image_with_stride_padding_is_normalized() {
+        // arboard buffers can carry trailing stride padding (len > w*h*4);
+        // the function must truncate to the expected size before resize.
+        let w = 3000u32;
+        let h = 100u32;
+        let expected = (w * h * 4) as usize;
+        let rgba = vec![128u8; expected + 64];
+        let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
+        assert!(ow <= CAPTURE_MAX_EDGE);
+        assert!(oh <= CAPTURE_MAX_EDGE);
+        assert_eq!(out.len(), (ow * oh * 4) as usize);
+    }
+
+    #[test]
+    fn large_image_with_short_buffer_is_padded() {
+        // Some sources return a short buffer (len < w*h*4); the function must
+        // pad to the expected size before handing it to the image crate.
+        let w = 3000u32;
+        let h = 100u32;
+        let expected = (w * h * 4) as usize;
+        let rgba = vec![128u8; expected - 64];
+        let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
+        assert!(ow <= CAPTURE_MAX_EDGE);
+        assert!(oh <= CAPTURE_MAX_EDGE);
+        assert_eq!(out.len(), (ow * oh * 4) as usize);
     }
 
     // --- image_quick_fingerprint ---
@@ -1226,5 +1255,31 @@ mod tests {
             bytes: std::borrow::Cow::Owned(vec![0u8; 32 * 32 * 4]),
         };
         assert_ne!(image_quick_fingerprint(&a), image_quick_fingerprint(&b));
+    }
+
+    #[test]
+    fn quick_fp_ignores_middle_only_changes() {
+        // Cheap-fp contract: only the head (first 2048 bytes) and tail (last
+        // 2048 bytes) are sampled; a middle-only change must NOT alter the
+        // fingerprint (the worker still hashes the full bytes via SHA-256).
+        let len = 64 * 64 * 4;
+        let a = vec![1u8; len];
+        let mut b = a.clone();
+        b[len / 2] = 99; // outside both sampled windows
+        let img_a = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(a) };
+        let img_b = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(b) };
+        assert_eq!(image_quick_fingerprint(&img_a), image_quick_fingerprint(&img_b));
+    }
+
+    #[test]
+    fn quick_fp_detects_tail_changes() {
+        // The last 2048 bytes ARE sampled — a tail-only change must differ.
+        let len = 64 * 64 * 4;
+        let a = vec![1u8; len];
+        let mut b = a.clone();
+        *b.last_mut().unwrap() = 2;
+        let img_a = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(a) };
+        let img_b = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(b) };
+        assert_ne!(image_quick_fingerprint(&img_a), image_quick_fingerprint(&img_b));
     }
 }

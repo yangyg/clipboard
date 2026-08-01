@@ -17,16 +17,21 @@
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "vue-i18n";
 import { Github } from "lucide-vue-next";
+import { useToast } from "../../composables/useToast";
 import appIconUrl from "../../assets/app-icon-128.png";
 
 const REPO_URL = "https://github.com/yangyg/clipboard";
+const { t } = useI18n();
+const { toast } = useToast();
 
 async function openRepo() {
   try {
     await invoke("open_url", { url: REPO_URL });
   } catch (e) {
     console.error("Failed to open repo link", e);
+    toast(t("settings.about.openRepoFailed"), "error");
   }
 }
 </script>

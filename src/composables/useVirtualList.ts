@@ -1,7 +1,6 @@
 import {
   computed,
   nextTick,
-  onMounted,
   onUnmounted,
   ref,
   shallowRef,
@@ -454,27 +453,21 @@ export function useVirtualList(
   }
 
   // The list element mounts late when the initial render shows the loading /
-  // empty state (v-if). Initialize measurements + observer once it appears
-  // (and re-observe if the element is swapped after a v-if cycle).
-  watch(listRef, (el) => {
-    if (!el) return;
-    viewportHeight.value = el.clientHeight;
-    scrollTop.value = el.scrollTop;
-    ensureResizeObserver(el);
-    updateGridCols();
-    void fillViewportIfNeeded();
-  });
-
-  onMounted(() => {
-    const el = listRef.value;
-    if (el) {
+  // empty state (v-if). A single watcher covers both mount orders: `immediate`
+  // no-ops while the element is still null, then fires whenever the element
+  // appears or is swapped after a v-if cycle (no onMounted duplicate).
+  watch(
+    listRef,
+    (el) => {
+      if (!el) return;
       viewportHeight.value = el.clientHeight;
       scrollTop.value = el.scrollTop;
       ensureResizeObserver(el);
-    }
-    void fillViewportIfNeeded();
-    updateGridCols();
-  });
+      updateGridCols();
+      void fillViewportIfNeeded();
+    },
+    { immediate: true }
+  );
 
   onUnmounted(() => {
     if (scrollRaf) cancelAnimationFrame(scrollRaf);

@@ -31,12 +31,12 @@
            CSS animations resume/complete on their own and never gate mounting. -->
       <ListEmptyState v-if="isEmptyOrLoading" />
 
-        <!-- Record List (windowed: only mount rows near the viewport) -->
-        <div
-          v-else
-          class="list-body list-body--enter"
-          :style="{ paddingTop: clipboardStore.batchMode ? batchBarHeight + 'px' : 0 }"
-        >
+      <!-- Record List (windowed: only mount rows near the viewport) -->
+      <div
+        v-else
+        class="list-body list-body--enter"
+        :style="{ paddingTop: clipboardStore.batchMode ? batchBarHeight + 'px' : 0 }"
+      >
         <div
           v-if="isListReloading"
           class="list-reload-bar"

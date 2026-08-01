@@ -104,6 +104,19 @@
 
 ---
 
+## 八、工程约束（实现规范）
+
+以下为已落地的动效工程约束，新增 / 修改代码时必须遵守（`CLAUDE.md`「Motion / animation」同源）。
+
+- **禁用 `transition: all`**：必须写显式属性列表（如 `transition: background var(--transition-fast), color var(--transition-fast)`），避免无关属性意外参与过渡、保证性能可预期。
+- **合成器友好优先**：动画尽量用 `opacity` / `transform`（走 GPU 合成，不触发重绘）。避免逐帧动画 `background` / `border` 等 paint 属性；layout 属性（`padding` / `margin` / `height` / `grid-template-rows`）不用于连续动画。例：新条目 row-flash 用 `::before` 覆盖层 + `opacity` 关键帧，而不是 `background` 渐变。
+- **时长全部走 token**：一律用 `--transition-instant / fast / normal / smooth`，禁止硬编码 `0.15s` 之类数值。窗口控件（最小化/最大化/关闭）与列宽拖拽条的 hover 也走 `--transition-fast`。
+- **BatchBar 悬浮**：`batch-bar-holder` 绝对定位于列表上方（脱离文档流），切换批量模式**不回流**列表；宿主用 `useBatchBarHeight`（ResizeObserver）实测 bar 高度，以过渡 `padding-top` 预留空间避免首行被遮挡。进入 / 离开 = `opacity` + `translateY(-8px)` 淡入淡出（`--transition-smooth`）。
+- **列宽拖拽条**：`div.resizer` 用负边距悬浮（`margin-left: -4px` + `position: relative; z-index: 10`）叠到相邻列边缘，不占用 flex 空间，同时保证 hover / 拖拽命中区仍可命中（z-index 需高于相邻列的定位内容）。
+- **加载 / 空状态**：与列表切换用 `<Transition name="fade" mode="out-in">` 淡入淡出，不做硬切。
+
+---
+
 ## 附录：Token 复用
 
 Clipboard **默认暗色主题**（另有浅色 / OLED / 跟随系统），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。视觉语义摘要见 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」。

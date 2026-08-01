@@ -1076,7 +1076,10 @@ pub fn get_foreground_window_info() -> (String, String) {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_meaningful_share_text, is_primarily_url};
+    use super::*;
+    use std::time::Duration;
+
+    // --- is_primarily_url / is_meaningful_share_text (existing) ---
 
     #[test]
     fn url_only_is_primarily_url() {
@@ -1098,5 +1101,130 @@ mod tests {
         assert!(!is_meaningful_share_text("   "));
         assert!(!is_meaningful_share_text("short"));
         assert!(!is_meaningful_share_text("https://example.com/some/long/path"));
+    }
+
+    // --- CapturedText::fingerprint ---
+
+    #[test]
+    fn fingerprint_is_deterministic() {
+        let ct = CapturedText {
+            text: "hello".into(),
+            html: Some("<b>hello</b>".into()),
+        };
+        assert_eq!(ct.fingerprint(), ct.fingerprint());
+    }
+
+    #[test]
+    fn fingerprint_changes_with_text() {
+        let a = CapturedText { text: "hello".into(), html: None };
+        let b = CapturedText { text: "world".into(), html: None };
+        assert_ne!(a.fingerprint(), b.fingerprint());
+    }
+
+    #[test]
+    fn fingerprint_changes_with_html() {
+        let a = CapturedText { text: "hello".into(), html: None };
+        let b = CapturedText { text: "hello".into(), html: Some("<p>hi</p>".into()) };
+        assert_ne!(a.fingerprint(), b.fingerprint());
+    }
+
+    // --- is_capture_suppressed ---
+
+    #[test]
+    fn suppress_active_within_window() {
+        let suppress = parking_lot::Mutex::new(Some(Instant::now() + Duration::from_secs(5)));
+        assert!(is_capture_suppressed(&suppress));
+    }
+
+    #[test]
+    fn suppress_expired_clears_value() {
+        let suppress = parking_lot::Mutex::new(Some(Instant::now() - Duration::from_secs(1)));
+        assert!(!is_capture_suppressed(&suppress));
+        // After expiry the slot should be cleared to None
+        assert!(suppress.lock().is_none());
+    }
+
+    #[test]
+    fn suppress_none_is_not_suppressed() {
+        let suppress = parking_lot::Mutex::new(None);
+        assert!(!is_capture_suppressed(&suppress));
+    }
+
+    // --- downscale_captured_rgba_if_large ---
+
+    #[test]
+    fn small_image_passes_through_unchanged() {
+        let w = 100u32;
+        let h = 50u32;
+        let rgba = vec![0u8; (w * h * 4) as usize];
+        let (out_rgba, out_w, out_h) = downscale_captured_rgba_if_large(rgba.clone(), w, h);
+        assert_eq!(out_w, w);
+        assert_eq!(out_h, h);
+        assert_eq!(out_rgba, rgba);
+    }
+
+    #[test]
+    fn zero_size_passes_through() {
+        let (out, ow, oh) = downscale_captured_rgba_if_large(vec![], 0, 0);
+        assert_eq!(ow, 0);
+        assert_eq!(oh, 0);
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn large_image_is_downscaled() {
+        let w = 5000u32;
+        let h = 4000u32;
+        let rgba = vec![128u8; (w * h * 4) as usize];
+        let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
+        // Both edges must be <= CAPTURE_MAX_EDGE
+        assert!(ow <= CAPTURE_MAX_EDGE);
+        assert!(oh <= CAPTURE_MAX_EDGE);
+        // Output buffer matches dimensions
+        assert_eq!(out.len(), (ow * oh * 4) as usize);
+        assert!(!out.is_empty());
+    }
+
+    // --- image_quick_fingerprint ---
+
+    #[test]
+    fn quick_fp_is_deterministic() {
+        let pixels = vec![42u8; 64 * 64 * 4];
+        let img = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(pixels),
+        };
+        assert_eq!(image_quick_fingerprint(&img), image_quick_fingerprint(&img));
+    }
+
+    #[test]
+    fn quick_fp_differs_for_different_images() {
+        let a = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(vec![0u8; 64 * 64 * 4]),
+        };
+        let b = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(vec![255u8; 64 * 64 * 4]),
+        };
+        assert_ne!(image_quick_fingerprint(&a), image_quick_fingerprint(&b));
+    }
+
+    #[test]
+    fn quick_fp_differs_for_different_sizes() {
+        let a = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(vec![0u8; 64 * 64 * 4]),
+        };
+        let b = ImageData {
+            width: 32,
+            height: 32,
+            bytes: std::borrow::Cow::Owned(vec![0u8; 32 * 32 * 4]),
+        };
+        assert_ne!(image_quick_fingerprint(&a), image_quick_fingerprint(&b));
     }
 }

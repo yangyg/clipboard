@@ -2,7 +2,7 @@
 /**
  * check-schema.mjs — SQLite schema compatibility checker
  *
- * Parses the Rust source (src-tauri/src/db/mod.rs) and verifies:
+ * Parses the Rust source (src-tauri/src/db/mod.rs + schema.rs) and verifies:
  *   1. SCHEMA_VERSION constant exists and is a positive integer.
  *   2. All columns in RECORD_COLS / RECORD_COLS_LIST exist in the
  *      CREATE TABLE IF NOT EXISTS records block.
@@ -19,7 +19,9 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_MOD = resolve(__dirname, '..', 'src-tauri', 'src', 'db', 'mod.rs');
+const DB_DIR = resolve(__dirname, '..', 'src-tauri', 'src', 'db');
+const DB_MOD = resolve(DB_DIR, 'mod.rs');
+const DB_SCHEMA = resolve(DB_DIR, 'schema.rs');
 
 let exitCode = 0;
 function fail(msg) {
@@ -33,9 +35,10 @@ function pass(msg) {
 console.log('Schema compatibility check\n');
 
 const src = readFileSync(DB_MOD, 'utf-8');
+const schemaSrc = readFileSync(DB_SCHEMA, 'utf-8');
 
 // ── 1. SCHEMA_VERSION ──────────────────────────────────────────────
-const versionMatch = src.match(/const\s+SCHEMA_VERSION\s*:\s*i64\s*=\s*(\d+)/);
+const versionMatch = schemaSrc.match(/const\s+SCHEMA_VERSION\s*:\s*i64\s*=\s*(\d+)/);
 if (!versionMatch) {
   fail('SCHEMA_VERSION constant not found');
 } else {

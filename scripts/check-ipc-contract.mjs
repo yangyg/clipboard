@@ -45,7 +45,11 @@ function parseRustCommands(content) {
     }
     
     // Parse parameters
-    const params = parseParams(paramsStr);
+    const rawParams = parseParams(paramsStr);
+    // Tauri v2 default: without rename_all, frontend sends camelCase params
+    const params = renameAll === 'snake_case'
+      ? rawParams
+      : rawParams.map(toCamelCase);
     
     commands.set(cmdName, {
       fnName,
@@ -108,6 +112,13 @@ function splitTopLevel(str, delim) {
   }
   if (current.trim()) result.push(current);
   return result;
+}
+
+/**
+ * Convert snake_case to camelCase
+ */
+function toCamelCase(str) {
+  return str.replace(/_([a-z])/g, (_, ch) => ch.toUpperCase());
 }
 
 /**

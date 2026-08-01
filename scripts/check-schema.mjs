@@ -142,6 +142,7 @@ if (!recordColsMatch || !recordColsListMatch) {
     if (col === 'id' || createCols.has(col)) continue;
     // Some RECORD_COLS entries are expressions like "substr(content, 1, 400) as content"
     // Already handled by the AS alias extraction above
+    fail(`RECORD_COLS references column '${col}' which is NOT in the CREATE TABLE block`);
   }
 }
 
@@ -155,7 +156,7 @@ const expectedIndexes = [
   'idx_records_trashed_pinned_updated',
   'idx_records_hash_active',
   'idx_records_auto_expire',
-  'idx_recordtags_tag_id',
+  'idx_record_tags_tag_id',
 ];
 
 for (const idx of expectedIndexes) {

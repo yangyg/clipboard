@@ -58,8 +58,8 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   create_tag: { params: ["name", "color"] },
   delete_tag: { params: ["id"] },
   update_tag: { params: ["id", "name", "color"] },
-  add_tag_to_record: { params: ["record_id", "tag_id"] },
-  remove_tag_from_record: { params: ["record_id", "tag_id"] },
+  add_tag_to_record: { params: ["recordId", "tagId"] },
+  remove_tag_from_record: { params: ["recordId", "tagId"] },
   set_record_tags: { params: ["record_id", "tag_ids"] },
 
   // ── settings.ts ──
@@ -352,22 +352,22 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
     expect(call![1]).toEqual({ id: 3, name: "renamed", color: "#00ff00" });
   });
 
-  it("addTagToRecord → add_tag_to_record with { record_id, tag_id }", async () => {
+  it("addTagToRecord → add_tag_to_record with { recordId, tagId }", async () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 10 })];
     await store.addTagToRecord(10, 1, "vue");
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "add_tag_to_record");
     expect(call).toBeTruthy();
-    expect(call![1]).toEqual({ record_id: 10, tag_id: 1 });
+    expect(call![1]).toEqual({ recordId: 10, tagId: 1 });
   });
 
-  it("removeTagFromRecord → remove_tag_from_record with { record_id, tag_id }", async () => {
+  it("removeTagFromRecord → remove_tag_from_record with { recordId, tagId }", async () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 10, tags: ["vue"] })];
     await store.removeTagFromRecord(10, 1, "vue");
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "remove_tag_from_record");
     expect(call).toBeTruthy();
-    expect(call![1]).toEqual({ record_id: 10, tag_id: 1 });
+    expect(call![1]).toEqual({ recordId: 10, tagId: 1 });
   });
 
   it("setRecordTags → set_record_tags with { record_id, tag_ids }", async () => {

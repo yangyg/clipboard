@@ -31,8 +31,8 @@ export function mountWithPlugins(
   return mount(component, {
     ...options,
     global: {
-      plugins: [i18n, pinia, ...(options.global?.plugins ?? [])],
       ...(options.global ?? {}),
+      plugins: [i18n, pinia, ...(options.global?.plugins ?? [])],
     },
   } as any);
 }

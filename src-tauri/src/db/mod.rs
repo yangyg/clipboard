@@ -1716,7 +1716,7 @@ mod tests {
                 FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE,
                 FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
             );
-            CREATE INDEX IF NOT EXISTS idx_recordtags_tag_id ON record_tags(tag_id);
+            CREATE INDEX IF NOT EXISTS idx_record_tags_tag_id ON record_tags(tag_id);
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -1748,7 +1748,7 @@ mod tests {
         "idx_records_trashed_pinned_updated",
         "idx_records_hash_active",
         "idx_records_auto_expire",
-        "idx_recordtags_tag_id",
+        "idx_record_tags_tag_id",
     ];
 
     #[test]

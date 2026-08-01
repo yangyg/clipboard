@@ -16,7 +16,8 @@
     "typecheck": "vue-tsc --noEmit",
     "cargo-test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "check:ipc-contract": "node scripts/check-ipc-contract.mjs",
-    "validate": "npm run lint && npm run typecheck && npm run check:ipc-contract && npm run test && npm run clippy && npm run cargo-test"
+    "check:schema": "node scripts/check-schema.mjs",
+    "validate": "npm run lint && npm run typecheck && npm run check:ipc-contract && npm run check:schema && npm run test && npm run clippy && npm run cargo-test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",

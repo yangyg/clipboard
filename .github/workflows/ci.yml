@@ -54,5 +54,8 @@ jobs:
       - name: Clippy (warnings as errors)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
+      - name: Schema compatibility check
+        run: npm run check:schema
+
       - name: Tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

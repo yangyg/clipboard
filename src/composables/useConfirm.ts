@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { i18n } from '../locales'
 
 export interface ConfirmOptions {
   title: string
@@ -33,8 +34,8 @@ function confirm(options: ConfirmOptions): Promise<boolean> {
   current.value = {
     title: options.title,
     message: options.message,
-    confirmText: options.confirmText ?? '确定',
-    cancelText: options.cancelText ?? '取消',
+    confirmText: options.confirmText ?? i18n.global.t('common.confirm'),
+    cancelText: options.cancelText ?? i18n.global.t('common.cancel'),
     danger: options.danger ?? false,
   }
 

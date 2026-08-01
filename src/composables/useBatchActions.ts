@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from "vue-i18n";
 import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
 
@@ -6,6 +7,7 @@ import { useToast } from "./useToast";
 export function useBatchActions() {
   const clipboardStore = useClipboardStore();
   const { toast } = useToast();
+  const { t } = useI18n();
 
   function toggleBatchMode() {
     clipboardStore.toggleBatchMode();
@@ -14,7 +16,7 @@ export function useBatchActions() {
   async function batchCopy() {
     const idSet = clipboardStore.selectedIds;
     if (!idSet.size) {
-      toast("请先选择条目", "warning");
+      toast(t("batch.selectFirst"), "warning");
       return;
     }
     const selected = clipboardStore.records.filter((r) => idSet.has(r.id));
@@ -25,17 +27,17 @@ export function useBatchActions() {
       if (images.length === 1) {
         try {
           await clipboardStore.pasteRecord(images[0].id, "original");
-          toast("已粘贴图片", "success");
+          toast(t("batch.pastedImage"), "success");
         } catch {
-          toast("粘贴失败", "error");
+          toast(t("record.pasteFailed"), "error");
         }
         return;
       }
-      toast("批量复制暂不支持多张图片，请单条粘贴", "warning");
+      toast(t("batch.multiImageUnsupported"), "warning");
       return;
     }
     if (images.length > 0) {
-      toast("已跳过图片，仅复制文本内容", "warning");
+      toast(t("batch.skippedImages"), "warning");
     }
     const textIds = selected
       .filter((r) => r.content_type !== "image")
@@ -50,35 +52,47 @@ export function useBatchActions() {
         if (full?.content) fullTexts.push(full.content);
       }
     } catch {
-      toast("读取全文失败", "error");
+      toast(t("batch.readFullFailed"), "error");
       return;
     }
     const text = fullTexts.join("\n\n");
     if (!text.trim()) {
-      toast("没有可复制的文本", "warning");
+      toast(t("batch.noText"), "warning");
       return;
     }
-    await navigator.clipboard.writeText(text);
-    toast(`已复制 ${fullTexts.length} 项到剪贴板`, "success");
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(t("batch.copied", { n: fullTexts.length }), "success");
+    } catch {
+      toast(t("batch.copyFailed"), "error");
+    }
   }
 
   async function batchFavorite() {
     const ids = Array.from(clipboardStore.selectedIds);
     if (!ids.length) {
-      toast("请先选择条目", "warning");
+      toast(t("batch.selectFirst"), "warning");
       return;
     }
-    await clipboardStore.batchFavorite(ids);
+    try {
+      await clipboardStore.batchFavorite(ids);
+    } catch {
+      toast(t("common.operationFailed"), "error");
+    }
   }
 
   async function batchDelete() {
     const ids = Array.from(clipboardStore.selectedIds);
     if (!ids.length) {
-      toast("请先选择条目", "warning");
+      toast(t("batch.selectFirst"), "warning");
       return;
     }
-    await clipboardStore.deleteBatch(ids);
-    toast("已移到回收站", "success");
+    try {
+      await clipboardStore.deleteBatch(ids);
+      toast(t("record.deleted"), "success");
+    } catch {
+      toast(t("common.operationFailed"), "error");
+    }
   }
 
   return { toggleBatchMode, batchCopy, batchFavorite, batchDelete };

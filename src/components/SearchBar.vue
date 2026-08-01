@@ -15,11 +15,16 @@
     />
     <span
       v-if="!query"
-      class="search-kbd"
+      class="kbd search-kbd"
       :class="{ dimmed: isFocused }"
       aria-hidden="true"
     >{{ searchHint }}</span>
-    <span v-if="clipboardStore.isSearching" class="search-spinner" :aria-label="$t('search.searching')"></span>
+    <span
+      v-if="clipboardStore.isSearching"
+      class="loading-spinner small search-spinner"
+      role="status"
+      :aria-label="$t('search.searching')"
+    ></span>
     <Transition name="fade-instant">
       <button
         v-if="query"
@@ -160,7 +165,7 @@ onUnmounted(() => {
 }
 
 .search-row.focused .search-icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .search-box {
@@ -185,12 +190,6 @@ onUnmounted(() => {
 }
 
 .search-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border-default);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
   flex-shrink: 0;
 }
 
@@ -199,13 +198,6 @@ onUnmounted(() => {
   right: var(--space-2);
   top: 50%;
   transform: translateY(-50%);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-  background: var(--bg-active);
-  border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  padding: 1px 6px;
   pointer-events: none;
   transition: opacity var(--transition-fast);
 }

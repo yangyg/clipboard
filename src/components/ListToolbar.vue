@@ -250,7 +250,7 @@ async function onEmptyTrash() {
 .list-tool-btn.active {
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .view-toggle {
@@ -284,7 +284,7 @@ async function onEmptyTrash() {
 }
 
 .view-toggle-btn.active {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 

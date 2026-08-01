@@ -87,11 +87,11 @@ const typeDistribution = computed(() => {
 .stats-value {
   font-family: var(--font-mono);
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
 }
 
-.stats-value.accent { color: var(--accent); }
+.stats-value.accent { color: var(--accent-text); }
 .stats-value.success { color: var(--success); }
 .stats-value.warning { color: var(--warning); }
 .stats-value.sensitive { color: var(--sensitive); }

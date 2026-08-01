@@ -13,11 +13,11 @@
       <p :id="messageId" class="dialog-message">{{ current?.message }}</p>
     </div>
     <div class="dialog-footer">
-      <button class="btn-cancel" type="button" @click="settle(false)">
+      <button class="btn btn-secondary btn-lg" type="button" @click="settle(false)">
         {{ current?.cancelText }}
       </button>
       <button
-        class="btn-confirm"
+        class="btn btn-primary btn-lg"
         :class="{ danger: current?.danger }"
         type="button"
         @click="settle(true)"

@@ -110,7 +110,7 @@ const PASTE_MODES = [
 .shortcut-btn.recording {
   border-color: var(--accent);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   animation: pulse-border 1.2s ease-in-out infinite;
 }
 

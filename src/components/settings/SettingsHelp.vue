@@ -76,7 +76,7 @@ const { settings } = useSettings();
 }
 
 .guide-heading .app-icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .guide-text {
@@ -86,11 +86,7 @@ const { settings } = useSettings();
 }
 
 .guide-kbd {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--bg-active);
-  font-family: var(--font-mono);
+  /* extends global .kbd */
   font-size: var(--text-sm);
   color: var(--text-primary);
 }

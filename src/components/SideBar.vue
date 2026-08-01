@@ -442,7 +442,7 @@ async function webdavSync() {
 
 .nav-item.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Type / favorites: active uses category color instead of accent */
@@ -512,7 +512,7 @@ async function webdavSync() {
 
 .tag-item.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .tag-dot {
@@ -535,7 +535,7 @@ async function webdavSync() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--accent);
+  color: var(--accent-text);
   opacity: 0.9;
 }
 
@@ -602,7 +602,7 @@ async function webdavSync() {
 
 .tag-add:hover {
   background: var(--bg-hover);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .sidebar-bottom {

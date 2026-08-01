@@ -36,11 +36,13 @@ import { useClipboardStore } from "./stores/clipboard";
 import { useSettingsStore } from "./stores/settings";
 import { storeToRefs } from "pinia";
 import { isPasteFocusLock, setPasteFocusLock } from "./composables/pasteFocusLock";
+import { useConfirm } from "./composables/useConfirm";
 import { setLocale, resolveLocale } from "./locales";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { settings } = storeToRefs(settingsStore);
+const { current: confirmOpen, settle: settleConfirm } = useConfirm();
 
 const panelVisible = ref(false);
 const settingsVisible = ref(false);
@@ -97,6 +99,8 @@ async function hidePanel() {
     await appWindow.show();
     return;
   }
+  // Settle any open confirm so its promise does not hang across hide/show.
+  if (confirmOpen.value) settleConfirm(false);
   panelVisible.value = false;
   settingsVisible.value = false;
   await appWindow.hide();

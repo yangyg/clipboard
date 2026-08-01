@@ -1,5 +1,17 @@
 <template>
   <div class="preview-pane" v-if="record">
+    <!-- Drawer close when parent hosts preview as overlay -->
+    <button
+      v-if="drawer"
+      type="button"
+      class="preview-drawer-close"
+      :aria-label="$t('common.close')"
+      :title="$t('common.close')"
+      @click="clipboardStore.clearSelection()"
+    >
+      <AppIcon name="close" :size="14" />
+    </button>
+
     <!-- Header -->
     <div class="preview-header">
       <div class="preview-type-row">
@@ -111,9 +123,13 @@
             :alt="$t('preview.clipboardImage')"
             class="image-thumb"
             :title="$t('preview.clickToOpen')"
+            tabindex="0"
+            role="button"
             loading="lazy"
             decoding="async"
             @click.stop="openImageExternally"
+            @keydown.enter.prevent="openImageExternally"
+            @keydown.space.prevent="openImageExternally"
           />
           <div v-else class="image-placeholder"><AppIcon name="image" :size="28" /> {{ $t('preview.noImageData') }}</div>
         </div>
@@ -133,8 +149,10 @@
           <span class="tag-dot" :style="{ background: getTagColor(tag) }"></span>
           {{ tag }}
           <button
+            type="button"
             class="tag-remove"
             @click.stop="removeTag(tag)"
+            :aria-label="$t('preview.removeTag')"
             :title="$t('preview.removeTag')"
           ><AppIcon name="close" :size="10" /></button>
         </span>
@@ -220,6 +238,14 @@ import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 import { escapeHtml, highlightSearchHtml } from "../utils/highlightSearch";
 import { parseClipboardColor } from "../utils/clipboardColor";
 import { useI18n } from "vue-i18n";
+
+withDefaults(
+  defineProps<{
+    /** When true, show a close control (parent is hosting as overlay drawer). */
+    drawer?: boolean;
+  }>(),
+  { drawer: false },
+);
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -462,7 +488,12 @@ async function pin() {
   if (!record.value) return;
   const id = record.value.id;
   pinOverride.value = !pinnedDisplay.value;
-  await new Promise((r) => setTimeout(r, 150));
+  if (
+    settingsStore.settings.enable_animation &&
+    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ) {
+    await new Promise((r) => setTimeout(r, 150));
+  }
   if (clipboardStore.selectedId !== id) {
     pinOverride.value = null;
     return;
@@ -474,13 +505,21 @@ async function pin() {
 
 async function del() {
   if (!record.value) return;
-  await clipboardStore.deleteRecord(record.value.id);
-  toast(t('record.deleted'), "success");
+  try {
+    await clipboardStore.deleteRecord(record.value.id);
+    toast(t('record.deleted'), "success");
+  } catch {
+    toast(t('common.operationFailed'), "error");
+  }
 }
 
 async function restore() {
   if (!record.value) return;
-  await clipboardStore.restoreRecord(record.value.id);
+  try {
+    await clipboardStore.restoreRecord(record.value.id);
+  } catch {
+    toast(t('common.operationFailed'), "error");
+  }
 }
 
 async function permanentDel() {
@@ -492,22 +531,52 @@ async function permanentDel() {
     danger: true,
   });
   if (ok) {
-    await clipboardStore.permanentlyDeleteRecord(record.value.id);
-    toast(t('record.deletedPermanently'), "success");
+    try {
+      await clipboardStore.permanentlyDeleteRecord(record.value.id);
+      toast(t('record.deletedPermanently'), "success");
+    } catch {
+      toast(t('common.operationFailed'), "error");
+    }
   }
 }
 </script>
 
 <style scoped>
 .preview-pane {
-  flex: 1.15;
-  min-width: 280px;
-  width: auto;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
   background: var(--bg-surface);
   border-left: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.preview-drawer-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: var(--shadow-sm);
+}
+
+.preview-drawer-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 /* Header */
@@ -547,7 +616,7 @@ async function permanentDel() {
 
 .preview-name {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -575,7 +644,7 @@ async function permanentDel() {
 }
 
 .preview-alias-btn:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .preview-alias-btn.has-alias {
@@ -740,12 +809,12 @@ async function permanentDel() {
 
 .link-title {
   font-size: var(--text-base);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
 .link-url {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-md);
   word-break: break-all;
   text-decoration: none;
@@ -794,7 +863,7 @@ async function permanentDel() {
   padding: var(--space-5);
   background: var(--bg-elevated);
   border-radius: var(--radius-md, 10px);
-  font-size: 2rem;
+  font-size: var(--text-3xl);
   opacity: 0.5;
 }
 
@@ -814,7 +883,7 @@ async function permanentDel() {
 
 .tags-label {
   font-size: var(--text-md);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   margin-bottom: var(--space-2);
 }
@@ -878,7 +947,7 @@ async function permanentDel() {
 }
 
 .tag-add-btn:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent);
 }
 
@@ -916,7 +985,7 @@ async function permanentDel() {
 
 .action-btn:hover .action-label,
 .action-btn:hover .action-icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .action-btn.action-primary {
@@ -1008,7 +1077,7 @@ async function permanentDel() {
 }
 
 .action-icon {
-  font-size: 1.125rem;
+  font-size: var(--text-2xl);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1025,10 +1094,21 @@ async function permanentDel() {
 
 @media (max-width: 720px) {
   .preview-actions:not(.trash-actions) {
+    grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .preview-pane {
+    min-width: 0;
+  }
+
+  .preview-actions:not(.trash-actions) {
     grid-template-columns: 1.4fr 1fr 1fr auto;
   }
 
-  .preview-actions:not(.trash-actions) .action-btn:nth-child(4) {
+  /* Keep pin reachable via hotkey (Ctrl+T) / context menu when space is tight */
+  .preview-actions:not(.trash-actions) .action-btn:nth-child(4) .action-label {
     display: none;
   }
 }

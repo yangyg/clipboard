@@ -115,7 +115,7 @@ const emptyState = computed(() => {
 }
 
 .clear-link {
-  color: var(--accent);
+  color: var(--accent-text);
   cursor: pointer;
   text-decoration: underline;
 }

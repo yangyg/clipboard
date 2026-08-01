@@ -18,7 +18,7 @@
       </ol>
     </div>
     <div class="dialog-footer">
-      <button class="btn-confirm" type="button" @click="emit('complete')">
+      <button class="btn btn-primary btn-lg" type="button" @click="emit('complete')">
         {{ $t('welcome.start') }}
       </button>
     </div>
@@ -51,15 +51,5 @@ const emit = defineEmits<{
   margin-top: 0.5rem;
 }
 
-.kbd {
-  display: inline-block;
-  margin: 0 0.15em;
-  padding: 0.1em 0.4em;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: var(--text-sm, 0.85em);
-  color: var(--text-primary);
-  background: var(--bg-hover);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm, 6px);
-}
+
 </style>

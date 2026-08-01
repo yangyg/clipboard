@@ -42,10 +42,10 @@ const BASE_LABEL_HEIGHT = 28;
 const BASE_DIVIDER_HEIGHT = 17;
 const OVERSCAN = 6;
 
-// === Grid virtualization constants ===
+// === Grid virtualization constants (base @ font_size=16; CSS scales via --ui-font-scale) ===
 export const GRID_GAP = 8; // px, matches CSS .view-grid gap
-const GRID_CARD_HEIGHT = 132; // px, matches CSS .view-grid .record-item height
-const GRID_IMAGE_HEIGHT = 140; // px, matches CSS .view-grid .record-item.is-image height
+const BASE_GRID_CARD_HEIGHT = 132;
+const BASE_GRID_IMAGE_HEIGHT = 140;
 /** Minimum card width used to derive the responsive grid column count. */
 const GRID_MIN_CARD_WIDTH = 200;
 
@@ -77,6 +77,12 @@ export function useVirtualList(
   const dividerHeight = computed(() =>
     Math.round(BASE_DIVIDER_HEIGHT * (settingsStore.settings.font_size / 16))
   );
+  const gridCardHeight = computed(() =>
+    Math.round(BASE_GRID_CARD_HEIGHT * (settingsStore.settings.font_size / 16))
+  );
+  const gridImageHeight = computed(() =>
+    Math.round(BASE_GRID_IMAGE_HEIGHT * (settingsStore.settings.font_size / 16))
+  );
 
   const scrollTop = ref(0);
   const viewportHeight = ref(480);
@@ -106,15 +112,18 @@ export function useVirtualList(
     if (!el || !clipboardStore.hasMore || clipboardStore.isLoadingMore) return;
     viewportHeight.value = el.clientHeight;
     let rounds = 0;
+    const maxRounds = 20;
     while (
-      rounds < 3 &&
+      rounds < maxRounds &&
       clipboardStore.hasMore &&
       !clipboardStore.isLoadingMore &&
       el.scrollHeight <= el.clientHeight + 40
     ) {
       rounds += 1;
+      const before = clipboardStore.records.length;
       await clipboardStore.loadMore();
       await nextTick();
+      if (clipboardStore.records.length === before) break;
     }
   }
 
@@ -126,6 +135,23 @@ export function useVirtualList(
     }
   );
 
+  /** When a new row is prepended while scrolled, keep the viewport anchored. */
+  watch(
+    () => clipboardStore.lastIncomingId,
+    async (id) => {
+      if (id == null) return;
+      const el = listRef.value;
+      if (!el || el.scrollTop <= 4) return;
+      const delta =
+        listLayout.value === "grid"
+          ? gridCardHeight.value + GRID_GAP
+          : rowHeight.value;
+      await nextTick();
+      el.scrollTop += delta;
+      scrollTop.value = el.scrollTop;
+    }
+  );
+
   function gridItemHeight(item: FlatItem): number {
     if (item.type === "label") return item.height;
     if (item.type === "divider") return item.height;
@@ -133,7 +159,7 @@ export function useVirtualList(
     const records = clipboardStore.filteredRecords;
     const idx = recordIndexById.value.get(item.id!);
     const r = idx !== undefined ? records[idx] : undefined;
-    return r && r.content_type === "image" ? GRID_IMAGE_HEIGHT : GRID_CARD_HEIGHT;
+    return r && r.content_type === "image" ? gridImageHeight.value : gridCardHeight.value;
   }
 
   /** Group flatItems into grid rows (gridCols records per row; labels/dividers solo). */

@@ -295,7 +295,7 @@ onUnmounted(() => {
 
 .nav-item.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   border-left-color: var(--accent);
 }
 

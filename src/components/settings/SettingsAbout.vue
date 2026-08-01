@@ -37,13 +37,13 @@ import appIconUrl from "../../assets/app-icon-128.png";
 
 .about-name {
   font-size: 1.375rem;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 4px;
 }
 
 .about-version {
   font-size: var(--text-md);
-  color: var(--accent);
+  color: var(--accent-text);
   font-family: var(--font-mono);
   margin-bottom: 8px;
 }

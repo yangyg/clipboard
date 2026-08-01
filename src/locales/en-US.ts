@@ -63,6 +63,14 @@ export default {
     favorite: 'Favorite',
     delete: 'Delete',
     exit: 'Exit batch mode',
+    selectFirst: 'Select items first',
+    pastedImage: 'Image pasted',
+    multiImageUnsupported: 'Batch copy does not support multiple images — paste one at a time',
+    skippedImages: 'Skipped images; copied text only',
+    readFullFailed: 'Failed to load full text',
+    noText: 'No text to copy',
+    copied: 'Copied {n} items to clipboard',
+    copyFailed: 'Failed to write clipboard',
   },
   record: {
     pin: 'Pin',
@@ -97,6 +105,8 @@ export default {
     countLoaded: '{n}+ loaded',
     sourceTooltip: 'Source: {app}',
     systemClipboard: 'System Clipboard',
+    resizeList: 'Resize list column',
+    resizeSidebar: 'Resize sidebar',
   },
   emptyState: {
     noResults: 'No matching results',
@@ -252,6 +262,7 @@ export default {
   settings: {
     title: 'Settings',
     back: 'Back',
+    saveFailed: 'Failed to save settings; restored last saved values',
     nav: {
       appearance: 'Appearance',
       shortcuts: 'Shortcuts',

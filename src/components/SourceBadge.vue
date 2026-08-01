@@ -67,7 +67,7 @@ const resolvedTitle = computed(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: var(--text-xs);
   font-weight: 600;
   line-height: 1;
   color: #fff;

@@ -19,6 +19,10 @@ function dismiss(id: number) {
 }
 
 function toast(message: string, kind: ToastKind = 'info') {
+  const existing = toasts.value.find((t) => t.message === message && t.kind === kind)
+  if (existing) {
+    dismiss(existing.id)
+  }
   const id = nextId++
   const next = [...toasts.value, { id, message, kind }]
   toasts.value = next.length > MAX_TOASTS ? next.slice(next.length - MAX_TOASTS) : next

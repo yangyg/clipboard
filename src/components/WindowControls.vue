@@ -1,6 +1,6 @@
 <template>
   <div class="window-controls">
-    <button type="button" class="win-btn" :title="$t('common.minimize')" @click.stop="minimize">
+    <button type="button" class="win-btn" :aria-label="$t('common.minimize')" :title="$t('common.minimize')" @click.stop="minimize">
       <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
         <path d="M1 5h8" stroke="currentColor" stroke-width="1.2" fill="none" />
       </svg>
@@ -8,6 +8,7 @@
     <button
       type="button"
       class="win-btn"
+      :aria-label="maximized ? $t('common.restoreWindow') : $t('common.maximize')"
       :title="maximized ? $t('common.restoreWindow') : $t('common.maximize')"
       @click.stop="toggleMaximize"
     >
@@ -25,7 +26,7 @@
         <rect x="1.5" y="1.5" width="7" height="7" stroke="currentColor" stroke-width="1.2" fill="none" />
       </svg>
     </button>
-    <button type="button" class="win-btn win-btn-close" :title="$t('common.close')" @click.stop="close">
+    <button type="button" class="win-btn win-btn-close" :aria-label="$t('common.close')" :title="$t('common.close')" @click.stop="close">
       <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
         <path d="M2 2l6 6M8 2L2 8" stroke="currentColor" stroke-width="1.2" fill="none" />
       </svg>

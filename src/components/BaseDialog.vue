@@ -89,6 +89,7 @@ function onWindowKeydown(e: KeyboardEvent) {
   if (!props.open) return;
   if (e.key === "Escape") {
     e.preventDefault();
+    e.stopPropagation();
     emit("close");
   }
 }
@@ -120,7 +121,7 @@ onUnmounted(() => {
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--overlay-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -148,7 +149,7 @@ onUnmounted(() => {
 
 .dialog-title {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -183,62 +184,7 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-subtle);
 }
 
-.dialog-footer .btn-cancel,
-.dialog-card > .dialog-footer .btn-cancel,
-button.btn-cancel {
-  height: var(--btn-height-lg);
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--text-secondary);
-  font-size: var(--text-md);
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--border-subtle);
-  transition: all var(--transition-fast);
-  font-family: inherit;
-}
-
-button.btn-cancel:hover {
-  background: var(--bg-hover);
-}
-
-button.btn-cancel:active,
-button.btn-confirm:active {
-  transform: scale(0.97);
-  filter: brightness(0.94);
-}
-
-button.btn-confirm {
-  height: var(--btn-height-lg);
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: #fff;
-  font-size: var(--text-md);
-  font-weight: 600;
-  cursor: pointer;
-  border: none;
-  transition: all var(--transition-fast);
-  font-family: inherit;
-}
-
-button.btn-confirm:hover {
-  background: var(--accent-hover);
-}
-
-button.btn-confirm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-button.btn-confirm.danger {
-  background: var(--danger);
-}
-
-button.btn-confirm.danger:hover {
-  filter: brightness(1.08);
-}
+/* Dialog footers use global .btn.btn-lg (+ .btn-primary / .btn-secondary) */
 
 .modal-enter-active,
 .modal-leave-active {

@@ -37,10 +37,10 @@
         </div>
       </div>
       <div class="dialog-footer">
-        <button type="button" class="btn-cancel" @click="$emit('close')">{{ $t('common.cancel') }}</button>
+        <button type="button" class="btn btn-secondary btn-lg" @click="$emit('close')">{{ $t('common.cancel') }}</button>
         <button
           type="button"
-          class="btn-confirm"
+          class="btn btn-primary btn-lg"
           :disabled="!tagName.trim()"
           @click="confirmForm"
         >{{ mode === 'edit' ? $t('common.save') : $t('common.create') }}</button>
@@ -51,7 +51,7 @@
       <div class="dialog-body assign-body">
         <div v-if="availableTags.length === 0" class="assign-empty">
           <p>{{ $t('tagDialog.noTags') }}</p>
-          <button type="button" class="btn-create-inline" @click="$emit('switchToCreate')">{{ $t('tagDialog.createTag') }}</button>
+          <button type="button" class="btn btn-primary btn-create-inline" @click="$emit('switchToCreate')">{{ $t('tagDialog.createTag') }}</button>
         </div>
         <label
           v-for="tag in availableTags"
@@ -59,22 +59,23 @@
           class="assign-item"
           :class="{ checked: assignedIds.has(tag.id) }"
         >
-          <span class="assign-dot" :style="{ background: tag.color }"></span>
-          <span class="assign-name">{{ tag.name }}</span>
-          <span class="assign-check">
-            <span v-if="assignedIds.has(tag.id)">✓</span>
-          </span>
           <input
             type="checkbox"
+            class="assign-checkbox"
             :checked="assignedIds.has(tag.id)"
+            :aria-label="tag.name"
             @change="toggleTag(tag.id)"
-            hidden
           />
+          <span class="assign-dot" :style="{ background: tag.color }" aria-hidden="true"></span>
+          <span class="assign-name">{{ tag.name }}</span>
+          <span class="assign-check" aria-hidden="true">
+            <span v-if="assignedIds.has(tag.id)">✓</span>
+          </span>
         </label>
       </div>
       <div class="dialog-footer">
-        <button type="button" class="btn-cancel" @click="$emit('close')">{{ $t('common.cancel') }}</button>
-        <button type="button" class="btn-confirm" @click="confirmAssign">{{ $t('common.confirm') }}</button>
+        <button type="button" class="btn btn-secondary btn-lg" @click="$emit('close')">{{ $t('common.cancel') }}</button>
+        <button type="button" class="btn btn-primary btn-lg" @click="confirmAssign">{{ $t('common.confirm') }}</button>
       </div>
     </template>
   </BaseDialog>
@@ -265,11 +266,12 @@ async function confirmAssign() {
 .swatch-check {
   color: #fff;
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .assign-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -281,6 +283,22 @@ async function confirmAssign() {
 
 .assign-item:hover {
   background: var(--bg-hover);
+}
+
+.assign-checkbox {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.assign-item:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .assign-dot {
@@ -328,7 +346,8 @@ async function confirmAssign() {
 }
 
 .btn-create-inline {
-  height: 30px;
+  /* styled via .btn.btn-primary in template if present; keep compact fallback */
+  height: var(--btn-height-md);
   padding: 0 14px;
   border-radius: var(--radius-sm);
   font-size: var(--text-md);
@@ -336,9 +355,11 @@ async function confirmAssign() {
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+  border: none;
+  font-family: inherit;
 }
 
 .btn-create-inline:hover {
-  background: var(--accent-hover);
+  background: var(--accent-pressed);
 }
 </style>

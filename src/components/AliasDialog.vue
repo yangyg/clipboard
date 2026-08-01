@@ -21,8 +21,8 @@
       <p class="field-hint">{{ $t('alias.hint') }}</p>
     </div>
     <div class="dialog-footer">
-      <button type="button" class="btn-cancel" @click="$emit('close')">{{ $t('common.cancel') }}</button>
-      <button type="button" class="btn-confirm" @click="confirm">{{ $t('common.save') }}</button>
+      <button type="button" class="btn btn-secondary btn-lg" @click="$emit('close')">{{ $t('common.cancel') }}</button>
+      <button type="button" class="btn btn-primary btn-lg" @click="confirm">{{ $t('common.save') }}</button>
     </div>
   </BaseDialog>
 </template>
@@ -88,7 +88,7 @@ async function confirm() {
 
 .dialog-title {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -154,34 +154,4 @@ async function confirm() {
   padding: var(--space-3) var(--space-4) var(--space-4);
 }
 
-.btn-cancel,
-.btn-confirm {
-  height: var(--btn-height-lg);
-  padding: 0 var(--space-4);
-  border-radius: var(--radius-sm);
-  font-family: inherit;
-  font-size: var(--text-base);
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--border-default);
-}
-
-.btn-cancel {
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.btn-cancel:hover {
-  background: var(--bg-hover);
-}
-
-.btn-confirm {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.btn-confirm:hover {
-  background: var(--accent-hover);
-}
 </style>

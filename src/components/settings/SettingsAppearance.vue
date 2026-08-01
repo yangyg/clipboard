@@ -101,7 +101,7 @@
     <div class="setting-row">
       <div class="setting-label">{{ $t('settings.appearance.fontSize') }}</div>
       <div class="slider-row">
-        <input type="range" min="11" max="18" :aria-label="$t('settings.appearance.fontSize')" :aria-valuetext="`${settings.font_size}px`" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
+        <input type="range" min="11" max="22" :aria-label="$t('settings.appearance.fontSize')" :aria-valuetext="`${settings.font_size}px`" :value="settings.font_size" @input="(e) => update('font_size', Number((e.target as HTMLInputElement).value))" />
         <span class="slider-value">{{ settings.font_size }}px</span>
       </div>
     </div>
@@ -190,10 +190,13 @@ const APP_MODES = [
   margin-bottom: var(--space-2);
 }
 
-.theme-dark { background: linear-gradient(135deg, #181a22, #1e2130); }
-.theme-light { background: linear-gradient(135deg, #ffffff, #f0f2f8); border: 1px solid rgba(0,0,0,0.06); }
+.theme-dark { background: linear-gradient(135deg, var(--bg-surface), var(--bg-elevated)); }
+.theme-light {
+  background: linear-gradient(135deg, #ffffff, #f0f2f8);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
 .theme-oled { background: #000000; }
-.theme-system { background: linear-gradient(135deg, #181a22 50%, #ffffff 50%); }
+.theme-system { background: linear-gradient(135deg, var(--bg-surface) 50%, #ffffff 50%); }
 
 .theme-name {
   font-size: var(--text-sm);
@@ -236,7 +239,7 @@ const APP_MODES = [
 
 .mode-icon {
   display: flex;
-  color: var(--accent);
+  color: var(--accent-text);
   line-height: 1;
 }
 

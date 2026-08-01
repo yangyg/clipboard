@@ -32,7 +32,15 @@
         v-if="!isNarrow"
         class="resizer"
         :class="{ active: sidebarDragging }"
+        role="separator"
+        aria-orientation="vertical"
+        :aria-valuenow="sidebarWidth"
+        :aria-valuemin="120"
+        :aria-valuemax="360"
+        tabindex="0"
+        :aria-label="$t('record.resizeSidebar')"
         @pointerdown="startSidebarResize"
+        @keydown="onSidebarResizeKey"
       />
 
       <div class="center-column">
@@ -91,6 +99,7 @@ const {
   width: sidebarWidth,
   isDragging: sidebarDragging,
   startResize: startSidebarResize,
+  setWidth: setSidebarWidth,
 } = useColumnResize({
   storageKey: "clipboard-sidebar-width",
   defaultWidth: 200,
@@ -98,6 +107,23 @@ const {
   max: 360,
   disabled: isNarrow,
 });
+
+function onSidebarResizeKey(e: KeyboardEvent) {
+  const step = e.shiftKey ? 40 : 16;
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    setSidebarWidth(sidebarWidth.value - step);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    setSidebarWidth(sidebarWidth.value + step);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    setSidebarWidth(120);
+  } else if (e.key === "End") {
+    e.preventDefault();
+    setSidebarWidth(360);
+  }
+}
 
 const tagDialogVisible = ref(false);
 const tagDialogMode = ref<"create" | "assign" | "edit">("create");
@@ -211,7 +237,7 @@ async function onDeleteTag(tag: Tag) {
 }
 
 .titlebar-title {
-  font-weight: 700;
+  font-weight: 600;
   font-size: var(--text-lg);
   letter-spacing: -0.02em;
   color: var(--text-primary);

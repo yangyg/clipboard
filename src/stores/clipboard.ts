@@ -428,7 +428,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     try {
       await invoke("paste_record", { id, mode });
       const row = records.value.find((r) => r.id === id);
-      if (row) row.copy_count += 1;
+      if (row) patchRecord(id, { copy_count: row.copy_count + 1 });
       const detail = recordDetails.value.get(id);
       if (detail) {
         const next = new Map(recordDetails.value);
@@ -458,6 +458,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       scheduleLoadStats();
     } catch (e) {
       console.error("Batch favorite failed:", e);
+      throw e;
     }
   }
 
@@ -475,6 +476,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await loadTrashCount();
     } catch (e) {
       console.error("Delete failed:", e);
+      throw e;
     }
   }
 
@@ -543,6 +545,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await loadTrashCount();
     } catch (e) {
       console.error("Batch delete failed:", e);
+      throw e;
     }
   }
 
@@ -557,6 +560,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await loadTrashCount();
     } catch (e) {
       console.error("Restore failed:", e);
+      throw e;
     }
   }
 
@@ -574,6 +578,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await loadTrashCount();
     } catch (e) {
       console.error("Batch restore failed:", e);
+      throw e;
     }
   }
 
@@ -590,6 +595,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       await loadTrashCount();
     } catch (e) {
       console.error("Permanent delete failed:", e);
+      throw e;
     }
   }
 

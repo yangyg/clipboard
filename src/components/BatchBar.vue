@@ -43,7 +43,7 @@ const { toggleBatchMode, batchCopy, batchFavorite, batchDelete } = useBatchActio
 
 .batch-info {
   font-size: var(--text-sm);
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 500;
   display: flex;
   align-items: center;

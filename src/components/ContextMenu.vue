@@ -16,7 +16,8 @@
             type="button"
             class="ctx-item"
             :class="{ danger: item.danger, focused: index === focusIndex }"
-            role="menuitem"
+            :role="item.toggle || item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
+            :aria-checked="item.toggle ? item.toggle.value : item.checked !== undefined ? !!item.checked : undefined"
             :tabindex="index === focusIndex ? 0 : -1"
             @click="select(item.id)"
             @mouseenter="focusIndex = index"
@@ -25,7 +26,7 @@
               <AppIcon :name="item.icon" :size="14" />
             </span>
             {{ item.label }}
-            <span v-if="item.toggle" class="ctx-toggle">
+            <span v-if="item.toggle" class="ctx-toggle" aria-hidden="true">
               <span class="ctx-toggle-opt" :class="{ active: !item.toggle.value }">{{ item.toggle.labels[0] }}</span>
               <span class="ctx-toggle-opt" :class="{ active: item.toggle.value }">{{ item.toggle.labels[1] }}</span>
             </span>
@@ -80,6 +81,7 @@ const emit = defineEmits<{
 const menuRef = ref<HTMLElement | null>(null);
 const focusIndex = ref(0);
 const pos = reactive({ x: 0, y: 0 });
+let previousFocus: HTMLElement | null = null;
 
 function clamp() {
   const el = menuRef.value;
@@ -163,12 +165,16 @@ watch(
   () => props.visible,
   async (v) => {
     if (v) {
+      previousFocus = (document.activeElement as HTMLElement) ?? null;
       focusIndex.value = 0;
       pos.x = props.x;
       pos.y = props.y;
       await nextTick();
       clamp();
       focusItem();
+    } else if (previousFocus) {
+      previousFocus.focus?.();
+      previousFocus = null;
     }
   },
 );
@@ -264,7 +270,7 @@ onUnmounted(() => {
   margin-left: auto;
   display: flex;
   align-items: center;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .ctx-toggle {

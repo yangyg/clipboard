@@ -4,6 +4,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES } from "../types";
+import { useToast } from "../composables/useToast";
+import { i18n } from "../locales";
 
 const DEFAULT_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V",
@@ -87,6 +89,7 @@ export const useSettingsStore = defineStore("settings", () => {
       } finally {
         isLoaded.value = true;
       }
+      useToast().toast(i18n.global.t("settings.saveFailed"), "error");
     }
   }
 

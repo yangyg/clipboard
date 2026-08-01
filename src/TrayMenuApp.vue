@@ -1,13 +1,22 @@
 <template>
-  <div class="tray-shell" ref="root" tabindex="0" @keydown="onKeydown">
-    <div class="tray-menu" ref="menuEl" role="menu">
+  <div
+    class="tray-shell"
+    ref="root"
+    tabindex="0"
+    role="menu"
+    :aria-activedescendant="activeDescendantId"
+    @keydown="onKeydown"
+  >
+    <div class="tray-menu" ref="menuEl">
       <template v-for="(item, index) in items" :key="item.id">
         <div v-if="item.separatorBefore" class="sep" role="separator" />
         <button
+          :id="`tray-item-${item.id}`"
           type="button"
           class="item"
           :class="{ danger: item.danger, focused: index === focusIndex }"
           role="menuitem"
+          :tabindex="index === focusIndex ? 0 : -1"
           @click="onSelect(item.id)"
           @mouseenter="focusIndex = index"
         >
@@ -20,7 +29,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { LogicalSize } from "@tauri-apps/api/dpi";
@@ -46,8 +55,22 @@ const menuEl = ref<HTMLElement | null>(null);
 const items = ref<TrayMenuItemDef[]>([]);
 const focusIndex = ref(0);
 const appWindow = getCurrentWindow();
+const activeDescendantId = computed(() => {
+  const item = items.value[focusIndex.value];
+  return item ? `tray-item-${item.id}` : undefined;
+});
 
 const unlisteners: UnlistenFn[] = [];
+
+function focusActiveItem() {
+  void nextTick(() => {
+    const item = items.value[focusIndex.value];
+    if (!item) return;
+    document.getElementById(`tray-item-${item.id}`)?.focus();
+  });
+}
+
+watch(focusIndex, () => focusActiveItem());
 
 let currentTheme = "dark";
 // Latest authoritative OS dark-mode signal from the native watcher. matchMedia
@@ -136,11 +159,13 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === "ArrowDown") {
     e.preventDefault();
     focusIndex.value = (focusIndex.value + 1) % items.value.length;
+    focusActiveItem();
     return;
   }
   if (e.key === "ArrowUp") {
     e.preventDefault();
     focusIndex.value = (focusIndex.value - 1 + items.value.length) % items.value.length;
+    focusActiveItem();
     return;
   }
   if (e.key === "Enter" || e.key === " ") {
@@ -159,6 +184,7 @@ async function onOpened() {
   focusIndex.value = 0;
   await fitWindowToContent();
   await focusRoot();
+  focusActiveItem();
 }
 
 onMounted(async () => {
@@ -171,6 +197,7 @@ onMounted(async () => {
   focusIndex.value = 0;
   await fitWindowToContent();
   await focusRoot();
+  focusActiveItem();
 
   unlisteners.push(await listen("tray-menu-opened", () => void onOpened()));
 

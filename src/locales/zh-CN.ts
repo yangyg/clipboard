@@ -63,6 +63,14 @@ export default {
     favorite: '收藏',
     delete: '删除',
     exit: '退出批量',
+    selectFirst: '请先选择条目',
+    pastedImage: '已粘贴图片',
+    multiImageUnsupported: '批量复制暂不支持多张图片，请单条粘贴',
+    skippedImages: '已跳过图片，仅复制文本内容',
+    readFullFailed: '读取全文失败',
+    noText: '没有可复制的文本',
+    copied: '已复制 {n} 项到剪贴板',
+    copyFailed: '复制到剪贴板失败',
   },
   record: {
     pin: '置顶',
@@ -97,6 +105,8 @@ export default {
     countLoaded: '已加载 {n}+ 条',
     sourceTooltip: '来源：{app}',
     systemClipboard: '系统剪贴板',
+    resizeList: '调整列表宽度',
+    resizeSidebar: '调整侧栏宽度',
   },
   emptyState: {
     noResults: '没有找到匹配的结果',
@@ -252,6 +262,7 @@ export default {
   settings: {
     title: '设置',
     back: '返回',
+    saveFailed: '设置保存失败，已恢复为上次成功保存的值',
     nav: {
       appearance: '外观',
       shortcuts: '快捷键',

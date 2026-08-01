@@ -1,9 +1,14 @@
 <template>
-  <div class="record-list-wrapper">
+  <div ref="wrapperRef" class="record-list-wrapper">
     <div
       ref="listColRef"
       class="list-column"
-      :style="{ width: listColWidth + 'px', minWidth: listColWidth + 'px', maxWidth: 'none', flex: 'none' }"
+      :class="{ 'list-column--full': usePreviewDrawer }"
+      :style="
+        usePreviewDrawer
+          ? undefined
+          : { width: listColWidth + 'px', minWidth: listColWidth + 'px', maxWidth: 'none', flex: 'none' }
+      "
     >
       <!-- Middle-column chrome (window mode): matches design list toolbar -->
       <template v-if="showListChrome">
@@ -20,16 +25,29 @@
       <!-- Record List (windowed: only mount rows near the viewport) -->
       <div
         v-else
-        class="record-list"
-        :class="{ 'view-grid': listLayout === 'grid' }"
-        :style="listLayout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
-        ref="listRef"
-        role="listbox"
-        :aria-label="$t('record.clipboardRecords')"
-        :aria-activedescendant="activeDescendantId"
-        tabindex="-1"
-        @scroll="onListScroll"
+        class="list-body"
       >
+        <div
+          v-if="isListReloading"
+          class="list-reload-bar"
+          role="status"
+          :aria-label="$t('common.loading')"
+        >
+          <span class="loading-spinner small"></span>
+          <span>{{ $t('common.loading') }}</span>
+        </div>
+        <div
+          class="record-list"
+          :class="{ 'view-grid': listLayout === 'grid', reloading: isListReloading }"
+          :style="listLayout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
+          ref="listRef"
+          role="listbox"
+          :aria-label="$t('record.clipboardRecords')"
+          :aria-activedescendant="activeDescendantId"
+          :aria-busy="isListReloading"
+          tabindex="-1"
+          @scroll="onListScroll"
+        >
       <div
         class="virtual-spacer"
         :class="{ 'grid-span': listLayout === 'grid' }"
@@ -146,7 +164,7 @@
               :class="{ starred: item.record!.is_favorite }"
               :aria-label="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
               :title="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
-              @click="clipboardStore.toggleFavorite(item.record!.id)"
+              @click="onRowFavorite(item.record!.id)"
             ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
             <button
               type="button"
@@ -180,6 +198,7 @@
         </span>
         <span v-else>{{ $t('common.scrollForMore') }}</span>
       </div>
+        </div>
       </div>
 
       <!-- Back to top: floats over the list column, scrolls only the list area -->
@@ -197,16 +216,35 @@
       </Transition>
     </div>
 
-    <!-- Resizer between list and preview -->
+    <!-- Resizer between list and preview (side-by-side only) -->
     <div
-      v-if="previewVisible"
+      v-if="previewVisible && !usePreviewDrawer"
       class="resizer"
       :class="{ active: listColDragging }"
+      role="separator"
+      aria-orientation="vertical"
+      :aria-valuenow="listColWidth"
+      :aria-valuemin="280"
+      :aria-valuemax="720"
+      tabindex="0"
+      :aria-label="$t('record.resizeList')"
       @pointerdown="startListColResize"
+      @keydown="onListColResizeKey"
     />
 
-    <!-- Preview Pane (right side) -->
-    <PreviewPane v-if="previewVisible" />
+    <!-- Preview Pane: side-by-side (wide) or overlay drawer (tight host) -->
+    <div
+      v-if="previewVisible && usePreviewDrawer"
+      class="preview-drawer-backdrop"
+      @click="clipboardStore.clearSelection()"
+    />
+    <div
+      v-if="previewVisible"
+      class="preview-host"
+      :class="{ 'preview-host--drawer': usePreviewDrawer }"
+    >
+      <PreviewPane :drawer="usePreviewDrawer" />
+    </div>
 
     <!-- Context Menu -->
     <ContextMenu
@@ -228,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, nextTick, shallowRef, onMounted } from "vue";
+import { computed, reactive, ref, watch, nextTick, shallowRef, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
@@ -285,6 +323,18 @@ onMounted(() => {
   if (listColIsDefault.value && listColRef.value) {
     setListColWidth(listColRef.value.offsetWidth);
   }
+  if (wrapperRef.value) {
+    wrapperWidth.value = wrapperRef.value.clientWidth;
+    wrapperRo = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w != null) wrapperWidth.value = w;
+    });
+    wrapperRo.observe(wrapperRef.value);
+  }
+});
+onUnmounted(() => {
+  wrapperRo?.disconnect();
+  wrapperRo = null;
 });
 
 /** Optimistic pin icon before list reorders (spec §3.3). */
@@ -297,6 +347,8 @@ function isPinned(record: ClipboardRecord): boolean {
 }
 
 function sleep(ms: number): Promise<void> {
+  if (!settingsStore.settings.enable_animation) return Promise.resolve();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -359,6 +411,20 @@ const isEmptyOrLoading = computed(
     (clipboardStore.filteredRecords.length === 0 && !clipboardStore.isLoading)
 );
 
+/** Filter/sort reload with existing rows still on screen — show top bar, keep list. */
+const isListReloading = computed(
+  () => clipboardStore.isLoading && clipboardStore.records.length > 0
+);
+
+/** Host width too tight for list+preview side-by-side → drawer overlay. */
+const PREVIEW_DRAWER_BREAKPOINT = 560;
+const wrapperRef = ref<HTMLElement | null>(null);
+const wrapperWidth = ref(0);
+let wrapperRo: ResizeObserver | null = null;
+const usePreviewDrawer = computed(
+  () => previewVisible.value && wrapperWidth.value > 0 && wrapperWidth.value < PREVIEW_DRAWER_BREAKPOINT
+);
+
 /** Back-to-top: reveal once scrolled past a fixed threshold (~1 viewport). */
 const BACK_TO_TOP_THRESHOLD = 400;
 
@@ -369,7 +435,9 @@ const showBackToTop = computed(
 function scrollToTop() {
   const el = listRef.value;
   if (!el) return;
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reduceMotion =
+    !settingsStore.settings.enable_animation ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
 }
 
@@ -480,7 +548,7 @@ const contextMenuItems = computed<ContextMenuItem[]>(() => {
       label: rec?.alias?.trim() ? t('record.editAlias') : t('record.setAlias'),
       icon: "edit",
     },
-    { id: "delete", label: t('common.delete'), icon: "trash", shortcut: "Del", danger: true, separatorBefore: true },
+    { id: "delete", label: t('common.delete'), icon: "trash", shortcut: "Del / ⌫", danger: true, separatorBefore: true },
   ];
 });
 
@@ -537,6 +605,28 @@ async function quickPaste(id: number) {
   }
 }
 
+async function onRowFavorite(id: number) {
+  const next = await clipboardStore.toggleFavorite(id);
+  if (next == null) toast(t('common.operationFailed'), "error");
+}
+
+function onListColResizeKey(e: KeyboardEvent) {
+  const step = e.shiftKey ? 40 : 16;
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    setListColWidth(listColWidth.value - step);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    setListColWidth(listColWidth.value + step);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    setListColWidth(280);
+  } else if (e.key === "End") {
+    e.preventDefault();
+    setListColWidth(720);
+  }
+}
+
 async function quickDelete(record: ClipboardRecord) {
   if (clipboardStore.trashFilter) {
     const ok = await confirm({
@@ -546,8 +636,12 @@ async function quickDelete(record: ClipboardRecord) {
       danger: true,
     });
     if (ok) {
-      await clipboardStore.permanentlyDeleteRecord(record.id);
-      toast(t('record.deletedPermanently'), "success");
+      try {
+        await clipboardStore.permanentlyDeleteRecord(record.id);
+        toast(t('record.deletedPermanently'), "success");
+      } catch {
+        toast(t('common.operationFailed'), "error");
+      }
     }
     return;
   }
@@ -556,11 +650,16 @@ async function quickDelete(record: ClipboardRecord) {
   nextLeave.add(record.id);
   leavingIds.value = nextLeave;
   await sleep(160);
-  await clipboardStore.deleteRecord(record.id);
-  const cleared = new Set(leavingIds.value);
-  cleared.delete(record.id);
-  leavingIds.value = cleared;
-  toast(t('record.deleted'), "success");
+  try {
+    await clipboardStore.deleteRecord(record.id);
+    toast(t('record.deleted'), "success");
+  } catch {
+    toast(t('common.operationFailed'), "error");
+  } finally {
+    const cleared = new Set(leavingIds.value);
+    cleared.delete(record.id);
+    leavingIds.value = cleared;
+  }
 }
 
 let cachedNow = Date.now();
@@ -603,7 +702,11 @@ async function onItemActivate(id: number) {
     return;
   }
   if (clipboardStore.trashFilter) {
-    await clipboardStore.restoreRecord(id);
+    try {
+      await clipboardStore.restoreRecord(id);
+    } catch {
+      toast(t('common.operationFailed'), "error");
+    }
     return;
   }
   try {
@@ -673,8 +776,12 @@ async function onContextSelect(id: string) {
       danger: true,
     });
     if (ok) {
-      await clipboardStore.permanentlyDeleteRecord(record.id);
-      toast(t('record.deletedPermanently'), "success");
+      try {
+        await clipboardStore.permanentlyDeleteRecord(record.id);
+        toast(t('record.deletedPermanently'), "success");
+      } catch {
+        toast(t('common.operationFailed'), "error");
+      }
     }
   }
 }
@@ -690,6 +797,94 @@ function closeContextMenu() {
   display: flex;
   overflow: hidden;
   min-height: 0;
+  position: relative;
+}
+
+.list-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.list-reload-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  border-bottom: 1px solid var(--border-subtle);
+  pointer-events: none;
+}
+
+.record-list.reloading {
+  opacity: 0.72;
+  transition: opacity var(--transition-fast);
+}
+
+.preview-host {
+  flex: 1.15;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.preview-host--drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(100%, 420px);
+  max-width: 100%;
+  z-index: 20;
+  flex: none;
+  box-shadow: var(--shadow-lg);
+  border-left: 1px solid var(--border-subtle);
+  animation: preview-drawer-in var(--transition-smooth);
+}
+
+:global(body.anim-disabled) .preview-host--drawer,
+:global(body.anim-disabled) .preview-drawer-backdrop {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-host--drawer,
+  .preview-drawer-backdrop {
+    animation: none;
+  }
+}
+
+.preview-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  background: var(--overlay-bg);
+  animation: fade-in var(--transition-fast);
+}
+
+@keyframes preview-drawer-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .resizer {
@@ -708,7 +903,7 @@ function closeContextMenu() {
 
 .list-column {
   flex: 1.35;
-  min-width: 280px;
+  min-width: 200px;
   max-width: 520px;
   display: flex;
   flex-direction: column;
@@ -717,6 +912,19 @@ function closeContextMenu() {
   /* Same surface as preview — sidebar stays elevated for nav hierarchy. */
   background: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
+}
+
+.list-column--full {
+  flex: 1;
+  max-width: none;
+  width: auto;
+  min-width: 0;
+  border-right: none;
+}
+
+.resizer:focus-visible {
+  background: var(--accent);
+  outline: none;
 }
 
 .record-list {
@@ -756,9 +964,9 @@ function closeContextMenu() {
   /* padding/gap/height coupled to GRID_CARD_HEIGHT in script — keep in sync */
   padding: 10px;
   gap: 6px;
-  /* Cap height so long text cannot blow out the grid track */
-  height: 132px;
-  max-height: 132px;
+  /* Scale with --ui-font-scale (matches useVirtualList gridCardHeight) */
+  height: calc(132px * var(--ui-font-scale, 1));
+  max-height: calc(132px * var(--ui-font-scale, 1));
   box-sizing: border-box;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -778,8 +986,8 @@ function closeContextMenu() {
 }
 
 .view-grid .record-item.is-image {
-  height: 140px;
-  max-height: 140px;
+  height: calc(140px * var(--ui-font-scale, 1));
+  max-height: calc(140px * var(--ui-font-scale, 1));
 }
 
 .view-grid .record-item.batch-mode {
@@ -1211,7 +1419,7 @@ function closeContextMenu() {
 
 .record-action-btn:hover {
   background: var(--bg-hover);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .record-action-btn:focus-visible {
@@ -1279,7 +1487,7 @@ function closeContextMenu() {
 
 .back-to-top-btn:hover {
   background: var(--bg-hover);
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 

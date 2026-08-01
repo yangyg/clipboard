@@ -1,4 +1,5 @@
 import { onMounted, onUnmounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import { useToast } from "./useToast";
@@ -27,6 +28,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
   const settingsStore = useSettingsStore();
   const { toast } = useToast();
   const { confirm, current: confirmOpen } = useConfirm();
+  const { t } = useI18n();
 
   async function pasteSelected(mode?: "original" | "plain") {
     const id = clipboardStore.selectedId;
@@ -36,10 +38,10 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
       (settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original");
     try {
       await clipboardStore.pasteRecord(id, pasteMode);
-      toast(pasteMode === "plain" ? "已粘贴为纯文本" : "已粘贴", "success");
+      toast(pasteMode === "plain" ? t("record.pastedPlain") : t("record.pasted"), "success");
       // Floating hide is handled in Rust (focus restore). Don't double-hide here.
     } catch {
-      toast("粘贴失败", "error");
+      toast(t("record.pasteFailed"), "error");
     }
   }
 
@@ -48,19 +50,26 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
     if (id == null) return;
     if (clipboardStore.trashFilter) {
       const ok = await confirm({
-        title: "永久删除",
-        message: "确定要永久删除这条记录吗？此操作不可恢复。",
-        confirmText: "永久删除",
+        title: t("record.permanentDelete"),
+        message: t("record.permanentDeleteMsg"),
+        confirmText: t("record.permanentDelete"),
         danger: true,
       });
-      if (ok) {
+      if (!ok) return;
+      try {
         await clipboardStore.permanentlyDeleteRecord(id);
-        toast("已永久删除", "success");
+        toast(t("record.deletedPermanently"), "success");
+      } catch {
+        toast(t("common.operationFailed"), "error");
       }
       return;
     }
-    await clipboardStore.deleteRecord(id);
-    toast("已移到回收站", "success");
+    try {
+      await clipboardStore.deleteRecord(id);
+      toast(t("record.deleted"), "success");
+    } catch {
+      toast(t("common.operationFailed"), "error");
+    }
   }
 
   function onKeyDown(e: KeyboardEvent) {
@@ -100,7 +109,12 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
           ? Math.min(currentIdx + 1, list.length - 1)
           : Math.max(currentIdx - 1, 0);
       if (currentIdx === -1) nextIdx = 0;
-      clipboardStore.selectRecord(list[nextIdx].id);
+      const nextId = list[nextIdx].id;
+      clipboardStore.selectRecord(nextId);
+      // Move real focus so aria-activedescendant + screen readers stay in sync
+      requestAnimationFrame(() => {
+        document.getElementById(`record-option-${nextId}`)?.focus({ preventScroll: true });
+      });
       return;
     }
 
@@ -126,7 +140,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
       e.preventDefault();
       void (async () => {
         const next = await clipboardStore.toggleFavorite(clipboardStore.selectedId!);
-        if (next == null) toast("操作失败", "error");
+        if (next == null) toast(t("common.operationFailed"), "error");
       })();
       return;
     }
@@ -136,7 +150,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
       e.preventDefault();
       void (async () => {
         const next = await clipboardStore.togglePin(clipboardStore.selectedId!);
-        if (next == null) toast("操作失败", "error");
+        if (next == null) toast(t("common.operationFailed"), "error");
       })();
       return;
     }

@@ -72,7 +72,7 @@
 
 .segment-btn.selected {
   background: var(--bg-elevated);
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: 0 0 0 1px var(--border-subtle);
 }
 
@@ -86,7 +86,7 @@
 .slider-value {
   font-size: var(--text-md);
   font-family: var(--font-mono);
-  color: var(--accent);
+  color: var(--accent-text);
   min-width: 50px;
   text-align: right;
 }
@@ -94,7 +94,10 @@
 /* Range inputs only exist inside the settings body — scope defensively. */
 .settings-body input[type="range"] {
   -webkit-appearance: none;
-  width: 140px;
+  flex: 1 1 120px;
+  min-width: 80px;
+  max-width: 200px;
+  width: auto;
   height: 4px;
   background: var(--bg-active);
   border-radius: 2px;
@@ -124,13 +127,16 @@
 
 /* Keyboard hint display (shortcuts + stats) */
 .kbd-display {
+  display: inline-block;
   background: var(--bg-active);
   padding: 3px 8px;
-  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
   font-size: var(--text-sm);
   font-family: var(--font-mono);
   color: var(--text-secondary);
   white-space: nowrap;
+  line-height: 1.4;
 }
 
 /* Card row (data + stats) */
@@ -152,7 +158,7 @@
   padding: 8px 10px;
   border-radius: var(--radius-sm);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: var(--text-sm);
 }
 

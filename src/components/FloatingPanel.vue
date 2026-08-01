@@ -16,7 +16,7 @@
           :aria-label="$t('panel.batch')"
           :aria-pressed="clipboardStore.batchMode"
           @click="toggleBatchMode"
-        ><AppIcon name="batch" :size="15" /></button>
+        ><AppIcon name="batch" :size="ICON_MD" /></button>
         <button
           type="button"
           class="icon-btn"
@@ -25,7 +25,7 @@
           :aria-label="$t('panel.favorites')"
           :aria-pressed="clipboardStore.activeFilter === 'favorites'"
           @click="clipboardStore.setFilter(clipboardStore.activeFilter === 'favorites' ? 'all' : 'favorites')"
-        ><AppIcon name="star" :size="15" :fill="clipboardStore.activeFilter === 'favorites' ? 'currentColor' : 'none'" /></button>
+        ><AppIcon name="star" :size="ICON_MD" :fill="clipboardStore.activeFilter === 'favorites' ? 'currentColor' : 'none'" /></button>
         <button
           type="button"
           class="icon-btn"
@@ -34,8 +34,8 @@
           :aria-label="$t('panel.trash')"
           :aria-pressed="clipboardStore.trashFilter"
           @click="toggleTrash"
-        ><AppIcon name="trash" :size="15" /></button>
-        <button type="button" class="icon-btn" :title="$t('panel.settings')" :aria-label="$t('panel.settings')" @click="emit('openSettings')"><AppIcon name="settings" :size="15" /></button>
+        ><AppIcon name="trash" :size="ICON_MD" /></button>
+        <button type="button" class="icon-btn" :title="$t('panel.settings')" :aria-label="$t('panel.settings')" @click="emit('openSettings')"><AppIcon name="settings" :size="ICON_MD" /></button>
         </div>
       </div>
       <SearchBar />
@@ -89,6 +89,9 @@ import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
+
+/** Toolbar icon size: sm 13 / md 15 / lg 18 */
+const ICON_MD = 15;
 
 const emit = defineEmits<{
   openSettings: [];
@@ -169,7 +172,7 @@ async function onEmptyTrash() {
 
 .panel-title {
   font-size: var(--text-lg);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -203,12 +206,12 @@ async function onEmptyTrash() {
 
 .filter-tab:hover {
   background: var(--bg-hover);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .filter-tab.active {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .filter-count {
@@ -221,7 +224,7 @@ async function onEmptyTrash() {
 
 .filter-tab.active .filter-count {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .trash-banner {

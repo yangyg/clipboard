@@ -112,7 +112,7 @@ function removeIgnoredApp(app: string) {
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 3px;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .ignore-remove:hover {

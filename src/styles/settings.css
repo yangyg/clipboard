@@ -63,7 +63,7 @@
   padding: 4px 10px;
   border-radius: calc(var(--radius-sm) - 1px);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .segment-btn:hover {

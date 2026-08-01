@@ -943,7 +943,7 @@ async function permanentDel() {
   cursor: pointer;
   border: 1px dashed var(--border-default, var(--border-subtle));
   background: transparent;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), border-color var(--transition-fast);
 }
 
 .tag-add-btn:hover {
@@ -970,7 +970,7 @@ async function permanentDel() {
   border: 1px solid var(--border-default, var(--border-subtle));
   background: var(--bg-card, var(--bg-surface));
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
   font-family: inherit;
 }
 

@@ -269,10 +269,16 @@ async function onDeleteTag(tag: Tag) {
 
 .resizer {
   width: 4px;
+  /* Overlay the left column's right edge instead of reserving flex space,
+     keeping the layout fully compact. z-index keeps it above the column's
+     positioned content so it still receives hover/drag pointer events. */
+  margin-left: -4px;
+  position: relative;
+  z-index: 10;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background var(--transition-fast);
   touch-action: none;
 }
 

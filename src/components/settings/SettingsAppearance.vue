@@ -166,7 +166,7 @@ const APP_MODES = [
   padding: 10px;
   cursor: pointer;
   text-align: center;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
 }
 
 .theme-card:hover {
@@ -221,7 +221,7 @@ const APP_MODES = [
   padding: 14px;
   cursor: pointer;
   text-align: center;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast);
   display: flex;
   flex-direction: column;
   align-items: center;

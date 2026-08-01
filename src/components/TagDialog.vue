@@ -325,7 +325,7 @@ async function confirmAssign() {
   font-size: var(--text-xs);
   color: transparent;
   flex-shrink: 0;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
 .assign-item.checked .assign-check {

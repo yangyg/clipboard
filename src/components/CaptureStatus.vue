@@ -66,7 +66,7 @@ const clipboardStore = useClipboardStore();
   color: var(--success);
   border: 1px solid color-mix(in srgb, var(--success) 18%, transparent);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
   font-family: inherit;
 }
 

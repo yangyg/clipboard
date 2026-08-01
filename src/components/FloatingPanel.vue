@@ -64,9 +64,14 @@
     </div>
 
     <!-- Body -->
-    <div class="panel-body">
-      <Transition name="fade">
-        <BatchBar v-if="clipboardStore.batchMode" />
+    <div
+      class="panel-body"
+      :style="{ paddingTop: clipboardStore.batchMode ? batchBarHeight + 'px' : 0 }"
+    >
+      <Transition name="batch-bar">
+        <div v-if="clipboardStore.batchMode" ref="batchBarRef" class="batch-bar-holder">
+          <BatchBar />
+        </div>
       </Transition>
 
       <RecordList />
@@ -80,10 +85,12 @@ import RecordList from "./RecordList.vue";
 import CaptureStatus from "./CaptureStatus.vue";
 import BatchBar from "./BatchBar.vue";
 import AppIcon from "./icons/AppIcon.vue";
+import { ref } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import type { FilterTab } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useBatchActions } from "../composables/useBatchActions";
+import { useBatchBarHeight } from "../composables/useBatchBarHeight";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
@@ -102,6 +109,9 @@ const clipboardStore = useClipboardStore();
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const { toggleBatchMode } = useBatchActions();
+
+const batchBarRef = ref<HTMLElement | null>(null);
+const { height: batchBarHeight } = useBatchBarHeight(batchBarRef);
 
 useClipboardHotkeys({
   onClose: () => emit("close"),
@@ -197,7 +207,7 @@ async function onEmptyTrash() {
   font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -256,5 +266,6 @@ async function onEmptyTrash() {
   overflow: hidden;
   min-height: 0;
   position: relative;
+  transition: padding-top var(--transition-smooth);
 }
 </style>

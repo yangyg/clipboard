@@ -295,7 +295,7 @@ body.anim-disabled *::after {
   justify-content: center;
   font-size: var(--text-lg);
   color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
   cursor: pointer;
   border: none;
   background: transparent;
@@ -433,7 +433,12 @@ body.anim-disabled *::after {
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   font-weight: 500;
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    filter var(--transition-fast),
+    transform var(--transition-fast);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -490,6 +495,26 @@ body.anim-disabled *::after {
 }
 .fade-enter-from,
 .fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* Batch bar floats over the list (absolute, out of flow) so toggling batch
+   mode never reflows the list. Hosts reserve its height as top padding and
+   the bar fades/slides in over that space. */
+.batch-bar-holder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+}
+.batch-bar-enter-active,
+.batch-bar-leave-active {
+  transition: opacity var(--transition-smooth), transform var(--transition-smooth);
+}
+.batch-bar-enter-from,
+.batch-bar-leave-to {
   opacity: 0;
   transform: translateY(-8px);
 }

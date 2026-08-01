@@ -45,6 +45,7 @@ const { toggleBatchMode, batchCopy, batchFavorite, batchDelete, batchRestore } =
   padding: var(--space-2) var(--space-4);
   background: var(--accent-soft);
   border-bottom: 1px solid color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: var(--shadow-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -77,7 +78,11 @@ const { toggleBatchMode, batchCopy, batchFavorite, batchDelete, batchRestore } =
   background: var(--bg-surface);
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
-  transition: all var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    filter var(--transition-fast);
   cursor: pointer;
   font-family: inherit;
 }

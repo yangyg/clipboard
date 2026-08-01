@@ -99,7 +99,7 @@ onUnmounted(() => {
   cursor: pointer;
   border-radius: 0;
   padding: 0;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .win-btn:hover {

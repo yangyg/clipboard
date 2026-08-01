@@ -226,7 +226,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
   background: transparent;
   border: none;
   font-family: inherit;
@@ -289,7 +289,7 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text-tertiary);
   border-radius: 3px;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
   line-height: 1.5;
 }
 

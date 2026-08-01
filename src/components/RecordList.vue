@@ -12,21 +12,27 @@
     >
       <!-- Middle-column chrome (window mode): matches design list toolbar -->
       <template v-if="showListChrome">
-        <ListToolbar :list-layout="listLayout" @set-layout="setListLayout" />
+        <div class="list-chrome">
+          <ListToolbar :list-layout="listLayout" @set-layout="setListLayout" />
 
-        <Transition name="fade">
-          <BatchBar v-if="clipboardStore.batchMode" />
-        </Transition>
+          <Transition name="batch-bar">
+            <div v-if="clipboardStore.batchMode" ref="batchBarRef" class="batch-bar-holder">
+              <BatchBar />
+            </div>
+          </Transition>
+        </div>
       </template>
 
-      <!-- Loading / Empty -->
-      <ListEmptyState v-if="isEmptyOrLoading" />
+      <!-- Loading / Empty → Record List (fade between the two states) -->
+      <Transition name="fade" mode="out-in">
+        <ListEmptyState v-if="isEmptyOrLoading" />
 
-      <!-- Record List (windowed: only mount rows near the viewport) -->
-      <div
-        v-else
-        class="list-body"
-      >
+        <!-- Record List (windowed: only mount rows near the viewport) -->
+        <div
+          v-else
+          class="list-body"
+          :style="{ paddingTop: clipboardStore.batchMode ? batchBarHeight + 'px' : 0 }"
+        >
         <div
           v-if="isListReloading"
           class="list-reload-bar"
@@ -217,6 +223,7 @@
       </div>
         </div>
       </div>
+      </Transition>
 
       <!-- Back to top: floats over the list column, scrolls only the list area -->
       <Transition name="back-top">
@@ -302,6 +309,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useVirtualList, type ListLayout } from "../composables/useVirtualList";
 import { useColumnResize } from "../composables/useColumnResize";
+import { useBatchBarHeight } from "../composables/useBatchBarHeight";
 import { useI18n } from "vue-i18n";
 import {
   escapeHtml,
@@ -315,6 +323,10 @@ const { confirm } = useConfirm();
 const { toast } = useToast();
 const { t } = useI18n();
 const listRef = ref<HTMLElement | null>(null);
+
+// --- Floating batch bar (window mode): reserve its height as list padding ---
+const batchBarRef = ref<HTMLElement | null>(null);
+const { height: batchBarHeight } = useBatchBarHeight(batchBarRef);
 
 // --- List / Preview column resize ---
 const previewVisible = computed(
@@ -831,6 +843,16 @@ function closeContextMenu() {
   display: flex;
   flex-direction: column;
   position: relative;
+  transition: padding-top var(--transition-smooth);
+}
+
+/* Window-mode toolbar block: the batch bar floats just below it. */
+.list-chrome {
+  position: relative;
+  flex-shrink: 0;
+}
+.list-chrome .batch-bar-holder {
+  top: 100%;
 }
 
 .list-reload-bar {
@@ -914,10 +936,16 @@ function closeContextMenu() {
 
 .resizer {
   width: 4px;
+  /* Overlay the list column's right edge instead of reserving flex space,
+     keeping the list/preview layout fully compact. z-index keeps it above
+     the column's positioned rows so hover/drag pointer events still land. */
+  margin-left: -4px;
+  position: relative;
+  z-index: 10;
   cursor: col-resize;
   background: transparent;
   flex-shrink: 0;
-  transition: background 0.15s;
+  transition: background var(--transition-fast);
   touch-action: none;
 }
 
@@ -1251,17 +1279,25 @@ function closeContextMenu() {
   pointer-events: none;
 }
 
-/* Freshly captured row: brief accent flash as capture confirmation. */
-.record-item.is-new {
-  animation: row-flash 900ms ease-out;
+/* Freshly captured row: brief accent flash as capture confirmation.
+   Animated on an overlay via opacity (compositor-friendly) instead of
+   repainting the row background on every frame. */
+.record-item.is-new::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+  animation: row-flash 900ms ease-out forwards;
 }
 
 @keyframes row-flash {
   from {
-    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    opacity: 1;
   }
   to {
-    background: transparent;
+    opacity: 0;
   }
 }
 
@@ -1287,7 +1323,7 @@ function closeContextMenu() {
   justify-content: center;
   font-size: var(--text-xs);
   color: transparent;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
   flex-shrink: 0;
 }
 

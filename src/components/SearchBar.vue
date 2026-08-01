@@ -218,7 +218,7 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .clear-btn:hover {

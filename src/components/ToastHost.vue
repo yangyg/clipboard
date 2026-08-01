@@ -53,7 +53,7 @@ const { toasts, dismiss } = useToast()
   font-size: var(--text-base);
   line-height: 1.4;
   cursor: pointer;
-  transition: all var(--transition-smooth);
+  transition: border-color var(--transition-smooth);
   text-align: left;
   word-break: break-word;
   font-family: inherit;

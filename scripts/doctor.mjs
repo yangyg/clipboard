@@ -213,6 +213,28 @@ console.log("== Clipboard 环境诊断 ==");
         console.log(`      ${sqlite3.stdout || sqlite3.stderr}`);
         console.log("      修复: 退出应用，使用 sqlite3 的 .recover 导出并重建数据库，或从备份恢复");
       }
+
+      // --- Schema 版本校验 ---
+      // 期望: settings 表中存在 key='schema_version' 且值为正整数。
+      // 缺失意味着数据库由旧版本（无版本控制）创建，应用启动时会自动补全。
+      const schemaVer = run("sqlite3", [dbPath, "SELECT value FROM settings WHERE key='schema_version';"]);
+      if (schemaVer.error) {
+        notes.push("schema_version 检查跳过（sqlite3 CLI 不可用）");
+        console.log("  [-] schema_version 检查跳过（sqlite3 CLI 不可用）");
+      } else if (schemaVer.status !== 0) {
+        warnings.push("schema_version 查询失败");
+        console.log("  [!] schema_version 查询失败，数据库可能损坏");
+        console.log(`      ${schemaVer.stderr}`);
+      } else {
+        const ver = schemaVer.stdout.trim();
+        if (ver === "" || isNaN(Number(ver)) || Number(ver) < 1) {
+          warnings.push("schema_version 缺失或无效");
+          console.log(`  [!] schema_version 缺失或无效（值: "${ver || '(空)'}"）`);
+          console.log("      说明: 数据库由旧版本创建，下次启动应用时将自动补全版本标记");
+        } else {
+          console.log(`  [OK] SQLite schema_version = ${ver}`);
+        }
+      }
     }
   }
 

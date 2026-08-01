@@ -95,6 +95,11 @@ pub struct ClipboardDb {
 
 const READ_POOL_SIZE: usize = 3;
 
+/// Increment when adding tables, columns, or indexes that older DBs must migrate.
+/// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
+/// the on-disk schema matches what this binary expects.
+const SCHEMA_VERSION: i64 = 1;
+
 impl ClipboardDb {
     fn configure_connection(conn: &Connection, query_only: bool) -> SqlResult<()> {
         conn.execute_batch(
@@ -239,6 +244,11 @@ impl ClipboardDb {
                 [],
             );
         }
+
+        // --- Schema version gate ---
+        // All migrations above are idempotent (CREATE IF NOT EXISTS / ALTER … .ok()).
+        // After they run, stamp the expected version so doctor can verify it.
+        Self::apply_schema_version(&conn)?;
 
         Self::ensure_fts(&conn)?;
 
@@ -497,6 +507,34 @@ impl ClipboardDb {
             [FTS_VERSION],
         )?;
         Ok(())
+    }
+
+    /// Write `schema_version` into the settings table so external tools (doctor)
+    /// and future migration gates can verify the on-disk schema.
+    fn apply_schema_version(conn: &Connection) -> SqlResult<()> {
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)",
+            [SCHEMA_VERSION.to_string().as_str()],
+        )?;
+        Ok(())
+    }
+
+    /// Read the schema version stored in the database. Returns `None` when the
+    /// key is absent (database created before versioning was introduced).
+    pub fn read_schema_version(conn: &Connection) -> Option<i64> {
+        conn.query_row(
+            "SELECT value FROM settings WHERE key = 'schema_version'",
+            [],
+            |row| {
+                let s: String = row.get(0)?;
+                Ok(s.parse::<i64>().unwrap_or(0))
+            },
+        )
+        .ok()
+    }
+
+    pub fn schema_version() -> i64 {
+        SCHEMA_VERSION
     }
 
     /// Rebuild one FTS row (tags / source) without per-tag triggers.

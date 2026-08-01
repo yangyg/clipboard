@@ -36,6 +36,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
     ],
   },
   get_record: { params: ["id"] },
+  open_record_media: { params: ["id"] },
   paste_record: { params: ["id", "mode"] },
   delete_record: { params: ["id"] },
   delete_records_batch: { params: ["ids"] },
@@ -66,6 +67,20 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   save_settings: { params: ["settings"] },
   set_window_corner_radius: { params: ["radius"] },
   set_window_backdrop: { params: ["enabled"] },
+
+  // ── Components / App.vue ──
+  open_url: { params: ["url"] },
+  capture_paste_target: { params: [] },
+  switch_app_mode: { params: ["mode"] },
+  get_tray_menu_state: { params: [] },
+  tray_menu_action: { params: ["action"] },
+  export_data: { params: ["path"] },
+  import_data_from_path: { params: ["path"] },
+  clear_history: { params: [] },
+  webdav_test_connection: { params: [] },
+  webdav_pull: { params: [] },
+  webdav_push: { params: [] },
+  webdav_sync: { params: [] },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -337,22 +352,22 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
     expect(call![1]).toEqual({ id: 3, name: "renamed", color: "#00ff00" });
   });
 
-  it("addTagToRecord → add_tag_to_record with { recordId, tagId }", async () => {
+  it("addTagToRecord → add_tag_to_record with { record_id, tag_id }", async () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 10 })];
     await store.addTagToRecord(10, 1, "vue");
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "add_tag_to_record");
     expect(call).toBeTruthy();
-    expect(call![1]).toEqual({ recordId: 10, tagId: 1 });
+    expect(call![1]).toEqual({ record_id: 10, tag_id: 1 });
   });
 
-  it("removeTagFromRecord → remove_tag_from_record with { recordId, tagId }", async () => {
+  it("removeTagFromRecord → remove_tag_from_record with { record_id, tag_id }", async () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 10, tags: ["vue"] })];
     await store.removeTagFromRecord(10, 1, "vue");
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "remove_tag_from_record");
     expect(call).toBeTruthy();
-    expect(call![1]).toEqual({ recordId: 10, tagId: 1 });
+    expect(call![1]).toEqual({ record_id: 10, tag_id: 1 });
   });
 
   it("setRecordTags → set_record_tags with { record_id, tag_ids }", async () => {

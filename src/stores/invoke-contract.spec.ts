@@ -14,7 +14,7 @@ import { setActivePinia, createPinia } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "@/stores/clipboard";
 import { useSettingsStore } from "@/stores/settings";
-import type { ClipboardRecord, Settings, Tag, StatsData } from "@/types";
+import type { ClipboardRecord, Settings, StatsData } from "@/types";
 
 // ─── Contract Definition ─────────────────────────────────────────────────────
 // Each key is a Tauri command name; the value is the set of expected parameter
@@ -81,9 +81,6 @@ function makeRecord(overrides: Partial<ClipboardRecord> = {}): ClipboardRecord {
   };
 }
 
-function makeTag(overrides: Partial<Tag> = {}): Tag {
-  return { id: 1, name: "vue", color: "#42b883", is_auto: false, count: 0, ...overrides };
-}
 
 const MOCK_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V", max_records: 1000, retention_days: 30,

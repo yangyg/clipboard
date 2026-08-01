@@ -13,7 +13,6 @@ export default tseslint.config(
       "graphify-out/**",
       ".qoder/**",
       "prototype/**",
-      "scripts/**",
       "public/**",
     ],
   },
@@ -49,6 +48,15 @@ export default tseslint.config(
   },
   {
     files: ["**/*.spec.ts", "src/test/**/*.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
+    // Diagnostic / utility scripts run under Node.
+    files: ["scripts/**/*.{js,mjs}"],
     languageOptions: {
       globals: {
         ...globals.node,

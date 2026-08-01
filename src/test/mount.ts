@@ -9,9 +9,9 @@ import enUS from "../locales/en-US";
  * Mount a component with the global plugins (i18n + Pinia) that the app
  * provides in production.  Keeps component tests free of repetitive boilerplate.
  */
-export function mountWithPlugins<T extends Component>(
-  component: T,
-  options: MountingOptions<T> = {},
+export function mountWithPlugins(
+  component: Component,
+  options: MountingOptions<any> = {},
 ) {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -26,11 +26,13 @@ export function mountWithPlugins<T extends Component>(
     },
   });
 
+  // Spread + override produces a structurally valid but nominally distinct
+  // object; the cast keeps the public signature intact for callers.
   return mount(component, {
     ...options,
     global: {
       plugins: [i18n, pinia, ...(options.global?.plugins ?? [])],
       ...(options.global ?? {}),
     },
-  });
+  } as any);
 }

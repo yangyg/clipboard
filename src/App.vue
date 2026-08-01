@@ -87,9 +87,13 @@ async function showPanel() {
   } catch (e) {
     console.warn("[App] capture_paste_target failed:", e);
   }
-  await reloadPanelIfNeeded(false);
+  // Show the window BEFORE loading records: the list's <Transition mode="out-in">
+  // relies on requestAnimationFrame, which never fires in a hidden WebView2
+  // window — starting a transition while hidden leaves the list permanently
+  // unmounted (blank list on cold start).
   await appWindow.show();
   await appWindow.setFocus();
+  await reloadPanelIfNeeded(false);
 }
 
 async function hidePanel() {

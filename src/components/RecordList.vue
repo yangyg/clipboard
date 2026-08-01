@@ -23,14 +23,18 @@
         </div>
       </template>
 
-      <!-- Loading / Empty → Record List (fade between the two states) -->
-      <Transition name="fade" mode="out-in">
-        <ListEmptyState v-if="isEmptyOrLoading" />
+      <!-- Loading / Empty → Record List.
+           NOTE: deliberately NOT wrapped in a JS <Transition mode="out-in">: WebView2
+           drops requestAnimationFrame callbacks while its host window is hidden, which
+           stalls an out-in transition forever and leaves the list unmounted (blank list
+           on cold start). The fade-in is a pure CSS animation on .list-body instead —
+           CSS animations resume/complete on their own and never gate mounting. -->
+      <ListEmptyState v-if="isEmptyOrLoading" />
 
         <!-- Record List (windowed: only mount rows near the viewport) -->
         <div
           v-else
-          class="list-body"
+          class="list-body list-body--enter"
           :style="{ paddingTop: clipboardStore.batchMode ? batchBarHeight + 'px' : 0 }"
         >
         <div
@@ -223,7 +227,6 @@
       </div>
         </div>
       </div>
-      </Transition>
 
       <!-- Back to top: floats over the list column, scrolls only the list area -->
       <Transition name="back-top">
@@ -844,6 +847,31 @@ function closeContextMenu() {
   flex-direction: column;
   position: relative;
   transition: padding-top var(--transition-smooth);
+}
+
+/* Cold-start-safe fade-in: a pure CSS animation (not a JS <Transition>), so the
+   list is never held unmounted/invisible by a stalled transition while the window
+   is hidden (WebView2 drops rAF). CSS animations resume & complete on their own. */
+.list-body--enter {
+  animation: list-body-enter var(--transition-smooth) ease;
+}
+@keyframes list-body-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+:global(body.anim-disabled) .list-body--enter {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .list-body--enter {
+    animation: none;
+  }
 }
 
 /* Window-mode toolbar block: the batch bar floats just below it. */

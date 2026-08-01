@@ -437,23 +437,43 @@ export function useVirtualList(
 
   let resizeObserver: ResizeObserver | null = null;
 
+  /** Create the ResizeObserver once (idempotent — listRef may appear after mount). */
+  function ensureResizeObserver(el: HTMLElement) {
+    if (!resizeObserver) {
+      resizeObserver = new ResizeObserver(() => {
+        const e = listRef.value;
+        if (e) {
+          viewportHeight.value = e.clientHeight;
+          scrollTop.value = e.scrollTop;
+        }
+        updateGridCols();
+      });
+    }
+    resizeObserver.disconnect();
+    resizeObserver.observe(el);
+  }
+
+  // The list element mounts late when the initial render shows the loading /
+  // empty state (v-if). Initialize measurements + observer once it appears
+  // (and re-observe if the element is swapped after a v-if cycle).
+  watch(listRef, (el) => {
+    if (!el) return;
+    viewportHeight.value = el.clientHeight;
+    scrollTop.value = el.scrollTop;
+    ensureResizeObserver(el);
+    updateGridCols();
+    void fillViewportIfNeeded();
+  });
+
   onMounted(() => {
     const el = listRef.value;
     if (el) {
       viewportHeight.value = el.clientHeight;
       scrollTop.value = el.scrollTop;
+      ensureResizeObserver(el);
     }
     void fillViewportIfNeeded();
     updateGridCols();
-    resizeObserver = new ResizeObserver(() => {
-      const e = listRef.value;
-      if (e) {
-        viewportHeight.value = e.clientHeight;
-        scrollTop.value = e.scrollTop;
-      }
-      updateGridCols();
-    });
-    if (el) resizeObserver.observe(el);
   });
 
   onUnmounted(() => {

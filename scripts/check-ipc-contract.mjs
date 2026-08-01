@@ -12,7 +12,10 @@
  */
 
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const COMMANDS_RS = 'src-tauri/src/commands.rs';
 const CONTRACT_SPEC = 'src/stores/invoke-contract.spec.ts';
@@ -222,8 +225,8 @@ function validateContracts(rustCommands, tsContracts) {
  */
 function main() {
   try {
-    const commandsPath = join(process.cwd(), COMMANDS_RS);
-    const contractPath = join(process.cwd(), CONTRACT_SPEC);
+    const commandsPath = join(__dirname, '..', COMMANDS_RS);
+    const contractPath = join(__dirname, '..', CONTRACT_SPEC);
     
     const rustContent = readFileSync(commandsPath, 'utf-8');
     const tsContent = readFileSync(contractPath, 'utf-8');

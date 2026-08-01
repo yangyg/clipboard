@@ -26,6 +26,7 @@ Thumbs.db
 .env.local
 
 graphify-out/
+.code-review-graph/
 
 # Local git worktrees
 .worktrees/

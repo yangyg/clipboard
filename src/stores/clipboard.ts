@@ -3,6 +3,7 @@ import { ref, computed, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from "../types";
 import { setPasteFocusLock } from "../composables/pasteFocusLock";
+import { createTagActions } from "./clipboardTagActions";
 
 export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
 export type ListSort =
@@ -48,8 +49,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   let loadSeq = 0;
   let expireSweepTimer: ReturnType<typeof setTimeout> | null = null;
   let expireSweepRunning = false;
-  let tagsLoadTimer: ReturnType<typeof setTimeout> | null = null;
-  const TAGS_DEBOUNCE_MS = 350;
+
 
   /** Soft cap for in-memory list (onNewRecord prepend without bound was a leak). */
   const LIST_SOFT_CAP = PAGE_SIZE * 2;
@@ -884,151 +884,30 @@ export const useClipboardStore = defineStore("clipboard", () => {
     return imported;
   }
 
-  // === Tag Actions ===
-
-  /** Coalesce rapid get_all_tags calls (filter flips, auto-tag bursts, assign dialog). */
-  function scheduleLoadTags() {
-    if (tagsLoadTimer) clearTimeout(tagsLoadTimer);
-    tagsLoadTimer = setTimeout(() => {
-      tagsLoadTimer = null;
-      void loadTags();
-    }, TAGS_DEBOUNCE_MS);
-  }
-
-  async function loadTags() {
-    try {
-      const favoritesOnly = !trashFilter.value && activeFilter.value === "favorites";
-      const contentType =
-        !trashFilter.value && !favoritesOnly && activeFilter.value !== "all"
-          ? activeFilter.value
-          : null;
-      tags.value = await invoke<Tag[]>("get_all_tags", {
-        content_type: contentType,
-        favorites_only: favoritesOnly,
-      });
-    } catch (e) {
-      console.error("Failed to load tags:", e);
-    }
-  }
-
-  async function createTag(name: string, color: string) {
-    try {
-      await invoke<Tag>("create_tag", { name, color });
-      scheduleLoadTags();
-    } catch (e) {
-      console.error("Failed to create tag:", e);
-    }
-  }
-
-  async function deleteTag(id: number) {
-    try {
-      const existing = tags.value.find((t) => t.id === id);
-      await invoke("delete_tag", { id });
-      if (existing) {
-        const patches = new Map<number, Partial<ClipboardRecord>>();
-        for (const record of records.value) {
-          if (record.tags.includes(existing.name)) {
-            patches.set(record.id, { tags: record.tags.filter((t) => t !== existing.name) });
-          }
-        }
-        patchRecordsBatch(patches);
-        if (activeTag.value === existing.name) {
-          activeTag.value = null;
-        }
-      }
-      scheduleLoadTags();
-    } catch (e) {
-      console.error("Failed to delete tag:", e);
-      throw e;
-    }
-  }
-
-  async function updateTag(id: number, name: string, color: string) {
-    try {
-      const existing = tags.value.find((t) => t.id === id);
-      const oldName = existing?.name;
-      await invoke("update_tag", { id, name, color });
-      if (oldName && oldName !== name) {
-        const patches = new Map<number, Partial<ClipboardRecord>>();
-        for (const record of records.value) {
-          const idx = record.tags.indexOf(oldName);
-          if (idx !== -1) {
-            const nextTags = [...record.tags];
-            nextTags[idx] = name;
-            patches.set(record.id, { tags: nextTags });
-          }
-        }
-        patchRecordsBatch(patches);
-        if (activeTag.value === oldName) {
-          activeTag.value = name;
-        }
-      }
-      scheduleLoadTags();
-    } catch (e) {
-      console.error("Failed to update tag:", e);
-      throw e;
-    }
-  }
-
-  async function addTagToRecord(recordId: number, tagId: number, tagName: string) {
-    try {
-      await invoke("add_tag_to_record", { recordId, tagId });
-      const record = records.value.find((r) => r.id === recordId);
-      if (record && !record.tags.includes(tagName)) {
-        patchRecord(recordId, { tags: [...record.tags, tagName] });
-      }
-      scheduleLoadTags();
-    } catch (e) {
-      console.error("Failed to add tag to record:", e);
-    }
-  }
-
-  async function removeTagFromRecord(recordId: number, tagId: number, tagName: string) {
-    try {
-      await invoke("remove_tag_from_record", { recordId, tagId });
-      const record = records.value.find((r) => r.id === recordId);
-      if (record) {
-        patchRecord(recordId, {
-          tags: record.tags.filter((t) => t !== tagName),
-        });
-      }
-      scheduleLoadTags();
-    } catch (e) {
-      console.error("Failed to remove tag from record:", e);
-    }
-  }
-
-  /** Replace all tags on a record in one IPC/DB transaction. */
-  async function setRecordTags(recordId: number, tagIds: number[], tagNames: string[]) {
-    try {
-      await invoke("set_record_tags", { record_id: recordId, tag_ids: tagIds });
-      const record = records.value.find((r) => r.id === recordId);
-      if (record) {
-        patchRecord(recordId, { tags: [...tagNames] });
-      }
-      const detail = recordDetails.value.get(recordId);
-      if (detail) {
-        const next = new Map(recordDetails.value);
-        next.set(recordId, { ...detail, tags: [...tagNames] });
-        recordDetails.value = next;
-      }
-      scheduleLoadTags();
-    } catch (e) {
-      console.error("Failed to set record tags:", e);
-      throw e;
-    }
-  }
-
-  function filterByTag(tagName: string | null) {
-    // Toggle off when clicking the same tag again; keep type/favorites filter.
-    if (tagName && activeTag.value === tagName) {
-      activeTag.value = null;
-    } else {
-      activeTag.value = tagName;
-    }
-    selectedId.value = null;
-    reloadList();
-  }
+  // === Tag Actions (extracted to clipboardTagActions.ts) ===
+  const tagActions = createTagActions({
+    tags,
+    records,
+    activeTag,
+    activeFilter,
+    trashFilter,
+    selectedId,
+    recordDetails,
+    patchRecord,
+    patchRecordsBatch,
+    reloadList,
+  });
+  const {
+    scheduleLoadTags,
+    loadTags,
+    createTag,
+    deleteTag,
+    updateTag,
+    addTagToRecord,
+    removeTagFromRecord,
+    setRecordTags,
+    filterByTag,
+  } = tagActions;
 
   return {
     // State

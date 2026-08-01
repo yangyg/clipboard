@@ -35,6 +35,9 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Schema compatibility check
+        run: npm run check:schema
+
   backend:
     name: Rust (clippy · test)
     # The app targets Windows (clipboard polling, DWM/tray/theme APIs are
@@ -53,13 +56,6 @@ jobs:
 
       - name: Clippy (warnings as errors)
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Schema compatibility check
-        run: npm run check:schema
 
       - name: Tests
         run: cargo test --manifest-path src-tauri/Cargo.toml

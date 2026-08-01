@@ -106,7 +106,7 @@
 
 ## 八、工程约束（实现规范）
 
-以下为已落地的动效工程约束，新增 / 修改代码时必须遵守（`CLAUDE.md`「Motion / animation」同源）。
+以下为已落地的动效工程约束，新增 / 修改代码时必须遵守。
 
 - **禁用 `transition: all`**：必须写显式属性列表（如 `transition: background var(--transition-fast), color var(--transition-fast)`），避免无关属性意外参与过渡、保证性能可预期。
 - **合成器友好优先**：动画尽量用 `opacity` / `transform`（走 GPU 合成，不触发重绘）。避免逐帧动画 `background` / `border` 等 paint 属性；layout 属性（`padding` / `margin` / `height` / `grid-template-rows`）不用于连续动画。例：新条目 row-flash 用 `::before` 覆盖层 + `opacity` 关键帧，而不是 `background` 渐变。
@@ -119,7 +119,7 @@
 
 ## 附录：Token 复用
 
-Clipboard **默认暗色主题**（另有浅色 / OLED / 跟随系统），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。视觉语义摘要见 [`CLAUDE.md`](../CLAUDE.md)「Theming / tokens」。
+Clipboard **默认暗色主题**（另有浅色 / OLED / 跟随系统），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。
 
 动效时长与缓动对齐现有 token（本规范文中的 `duration-*` / `ease-*` 按此映射，不另立一套）：
 

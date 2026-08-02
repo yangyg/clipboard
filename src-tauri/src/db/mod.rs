@@ -332,6 +332,19 @@ mod tests {
     }
 
     #[test]
+    fn fts_match_expr_excludes_tags_when_disabled() {
+        assert_eq!(
+            ClipboardDb::build_fts_match_expr("abc", true),
+            Some("\"abc\"".to_string())
+        );
+        assert_eq!(
+            ClipboardDb::build_fts_match_expr("abc", false),
+            Some("{content alias source_app source_window}: \"abc\"".to_string())
+        );
+        assert_eq!(ClipboardDb::build_fts_match_expr("ab", false), None);
+    }
+
+    #[test]
     fn placeholders_join_count() {
         assert_eq!(ClipboardDb::id_placeholders(0), "");
         assert_eq!(ClipboardDb::id_placeholders(1), "?");

@@ -26,30 +26,58 @@ impl ClipboardDb {
         Some(format!("\"{}\"", q.replace('"', "\"\"")))
     }
 
-    /// Short (1–2 char) search: one `instr` pass over records + tag EXISTS.
+    /// Short (1–2 char) search: one `instr` pass over records (+ optional tag EXISTS).
     /// Avoids leading-wildcard `LIKE '%X%'` which cannot use indexes and multiplies scans.
     pub(super) fn push_short_query_predicate(
         sql: &mut String,
         params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
         query: &str,
+        include_tags: bool,
     ) {
-        sql.push_str(
-            "instr(content, ?) > 0
-             OR instr(alias, ?) > 0
-             OR instr(source_app, ?) > 0
-             OR instr(source_window, ?) > 0
-             OR EXISTS (
-                SELECT 1 FROM record_tags rt
-                INNER JOIN tags t ON t.id = rt.tag_id
-                WHERE rt.record_id = records.id AND instr(t.name, ?) > 0
-             )",
-        );
-        let q = query.to_string();
-        params.push(Box::new(q.clone()));
-        params.push(Box::new(q.clone()));
-        params.push(Box::new(q.clone()));
-        params.push(Box::new(q.clone()));
-        params.push(Box::new(q));
+        if include_tags {
+            sql.push_str(
+                "instr(content, ?) > 0
+                 OR instr(alias, ?) > 0
+                 OR instr(source_app, ?) > 0
+                 OR instr(source_window, ?) > 0
+                 OR EXISTS (
+                    SELECT 1 FROM record_tags rt
+                    INNER JOIN tags t ON t.id = rt.tag_id
+                    WHERE rt.record_id = records.id AND instr(t.name, ?) > 0
+                 )",
+            );
+            let q = query.to_string();
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q));
+        } else {
+            sql.push_str(
+                "instr(content, ?) > 0
+                 OR instr(alias, ?) > 0
+                 OR instr(source_app, ?) > 0
+                 OR instr(source_window, ?) > 0",
+            );
+            let q = query.to_string();
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q.clone()));
+            params.push(Box::new(q));
+        }
+    }
+
+    /// FTS MATCH token. When `include_tags` is false, limit columns so tag names are not searchable.
+    pub(super) fn build_fts_match_expr(query: &str, include_tags: bool) -> Option<String> {
+        let token = Self::build_fts_match(query)?;
+        if include_tags {
+            Some(token)
+        } else {
+            // Column filter excludes the FTS `tags` column.
+            Some(format!(
+                "{{content alias source_app source_window}}: {token}"
+            ))
+        }
     }
 
     /// Whitelist sort keys → ORDER BY fragment. Unknown values fall back to updated_desc.
@@ -255,6 +283,7 @@ impl ClipboardDb {
         before_pinned: Option<i32>,
         before_updated_at: Option<&str>,
         before_id: Option<i64>,
+        include_tags: bool,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.lock_read();
         let mut sql = format!(
@@ -270,15 +299,17 @@ impl ClipboardDb {
         if favorites_only {
             sql.push_str(" AND is_favorite = 1");
         }
-        if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
-            sql.push_str(
-                " AND id IN (
-                    SELECT rt.record_id FROM record_tags rt
-                    INNER JOIN tags t ON t.id = rt.tag_id
-                    WHERE t.name = ?
-                )",
-            );
-            params.push(Box::new(tag.to_string()));
+        if include_tags {
+            if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
+                sql.push_str(
+                    " AND id IN (
+                        SELECT rt.record_id FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE t.name = ?
+                    )",
+                );
+                params.push(Box::new(tag.to_string()));
+            }
         }
 
         // Keyset for default newest-first (+ pinned). Avoids OFFSET drift when
@@ -324,11 +355,13 @@ impl ClipboardDb {
             .filter_map(|r| r.ok())
             .collect();
 
-        let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
-        let tags_map = self.load_tags_batch(&conn, &ids)?;
-        for record in &mut records {
-            if let Some(tags) = tags_map.get(&record.id) {
-                record.tags = tags.clone();
+        if include_tags {
+            let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
+            let tags_map = self.load_tags_batch(&conn, &ids)?;
+            for record in &mut records {
+                if let Some(tags) = tags_map.get(&record.id) {
+                    record.tags = tags.clone();
+                }
             }
         }
 
@@ -554,6 +587,7 @@ impl ClipboardDb {
         favorites_only: bool,
         tag_name: Option<&str>,
         sort: Option<&str>,
+        include_tags: bool,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let query = query.trim();
         if query.is_empty() {
@@ -568,11 +602,11 @@ impl ClipboardDb {
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         // ≥3 chars: FTS5 trigram. Shorter: single-pass instr (no LIKE '%…%').
-        if let Some(fts_match) = Self::build_fts_match(query) {
+        if let Some(fts_match) = Self::build_fts_match_expr(query, include_tags) {
             sql.push_str("id IN (SELECT rowid FROM records_fts WHERE records_fts MATCH ?)");
             params.push(Box::new(fts_match));
         } else {
-            Self::push_short_query_predicate(&mut sql, &mut params, query);
+            Self::push_short_query_predicate(&mut sql, &mut params, query, include_tags);
         }
         sql.push(')');
 
@@ -583,15 +617,17 @@ impl ClipboardDb {
         if favorites_only {
             sql.push_str(" AND is_favorite = 1");
         }
-        if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
-            sql.push_str(
-                " AND id IN (
-                    SELECT rt.record_id FROM record_tags rt
-                    INNER JOIN tags t ON t.id = rt.tag_id
-                    WHERE t.name = ?
-                )",
-            );
-            params.push(Box::new(tag.to_string()));
+        if include_tags {
+            if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
+                sql.push_str(
+                    " AND id IN (
+                        SELECT rt.record_id FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE t.name = ?
+                    )",
+                );
+                params.push(Box::new(tag.to_string()));
+            }
         }
         sql.push_str(" ORDER BY ");
         sql.push_str(Self::order_by_clause(false, sort));
@@ -608,11 +644,13 @@ impl ClipboardDb {
             .filter_map(|r| r.ok())
             .collect();
 
-        let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
-        let tags_map = self.load_tags_batch(&conn, &ids)?;
-        for record in &mut records {
-            if let Some(tags) = tags_map.get(&record.id) {
-                record.tags = tags.clone();
+        if include_tags {
+            let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
+            let tags_map = self.load_tags_batch(&conn, &ids)?;
+            for record in &mut records {
+                if let Some(tags) = tags_map.get(&record.id) {
+                    record.tags = tags.clone();
+                }
             }
         }
 

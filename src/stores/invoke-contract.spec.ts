@@ -110,6 +110,7 @@ const MOCK_SETTINGS: Settings = {
   webdav_url: "", webdav_username: "", webdav_password: "",
   webdav_remote_path: "ClipVaultSync", webdav_sync_sensitive: false,
   webdav_device_id: "", webdav_last_sync_at: null,
+  features: { tags: true, batch: true, sync: true, stats: true },
 };
 
 const MOCK_STATS: StatsData = {

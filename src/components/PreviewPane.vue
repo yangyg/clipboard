@@ -137,7 +137,7 @@
     </div>
 
     <!-- Tags -->
-    <div class="preview-tags">
+    <div v-if="tagsEnabled" class="preview-tags">
       <div class="tags-label">{{ $t('preview.tags') }}</div>
       <div class="tags-list">
         <span
@@ -162,6 +162,7 @@
 
     <!-- Tag Dialog (for assigning tags to this record) -->
     <TagDialog
+      v-if="tagsEnabled"
       :visible="tagDialogVisible"
       :mode="tagDialogMode"
       :recordId="record.id"
@@ -232,12 +233,15 @@ import TypeIcon from "./icons/TypeIcon.vue";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useSettingsStore } from "../stores/settings";
+import { useFeature } from "../features/capabilities";
 import { invoke } from "@tauri-apps/api/core";
 import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 import { escapeHtml, highlightSearchHtml } from "../utils/highlightSearch";
 import { parseClipboardColor } from "../utils/clipboardColor";
 import { useI18n } from "vue-i18n";
+
+const tagsEnabled = useFeature("tags");
 
 withDefaults(
   defineProps<{

@@ -49,6 +49,7 @@
     </div>
 
     <TagDialog
+      v-if="tagsEnabled"
       :visible="tagDialogVisible"
       :mode="tagDialogMode"
       :editTag="editingTag"
@@ -67,6 +68,7 @@ import TagDialog from "./TagDialog.vue";
 import WindowControls from "./WindowControls.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
+import { useFeature } from "../features/capabilities";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
@@ -75,6 +77,7 @@ import { useColumnResize } from "../composables/useColumnResize";
 import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
+const tagsEnabled = useFeature("tags");
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const { t } = useI18n();
@@ -173,12 +176,14 @@ function onTagChange(tagName: string | null) {
 }
 
 function onAddTag() {
+  if (!tagsEnabled.value) return;
   editingTag.value = null;
   tagDialogMode.value = "create";
   tagDialogVisible.value = true;
 }
 
 function onEditTag(tag: Tag) {
+  if (!tagsEnabled.value) return;
   editingTag.value = tag;
   tagDialogMode.value = "edit";
   tagDialogVisible.value = true;

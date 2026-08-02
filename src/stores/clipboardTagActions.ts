@@ -5,6 +5,8 @@
 import type { Ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, Tag } from "../types";
+import { isFeatureEnabled } from "../features/capabilities";
+import { useSettingsStore } from "./settings";
 
 export interface TagActionsCtx {
   tags: Ref<Tag[]>;
@@ -24,8 +26,13 @@ const TAGS_DEBOUNCE_MS = 350;
 export function createTagActions(ctx: TagActionsCtx) {
   let tagsLoadTimer: ReturnType<typeof setTimeout> | null = null;
 
+  function tagsEnabled() {
+    return isFeatureEnabled(useSettingsStore().settings.features, "tags");
+  }
+
   /** Coalesce rapid get_all_tags calls (filter flips, auto-tag bursts, assign dialog). */
   function scheduleLoadTags() {
+    if (!tagsEnabled()) return;
     if (tagsLoadTimer) clearTimeout(tagsLoadTimer);
     tagsLoadTimer = setTimeout(() => {
       tagsLoadTimer = null;
@@ -34,6 +41,10 @@ export function createTagActions(ctx: TagActionsCtx) {
   }
 
   async function loadTags() {
+    if (!tagsEnabled()) {
+      ctx.tags.value = [];
+      return;
+    }
     try {
       const favoritesOnly = !ctx.trashFilter.value && ctx.activeFilter.value === "favorites";
       const contentType =

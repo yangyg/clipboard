@@ -48,7 +48,7 @@
     </nav>
 
     <!-- Tags Section -->
-    <div class="sidebar-section sidebar-tags-section">
+    <div v-if="tagsEnabled" class="sidebar-section sidebar-tags-section">
       <div class="sidebar-label">{{ $t('sidebar.tagManagement') }}</div>
       <div class="tags-list" role="list">
         <button
@@ -171,12 +171,16 @@ import { computed, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
+import { useFeature } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
 import type { WebDavSyncResult } from "../types";
 import { useI18n } from "vue-i18n";
+
+const tagsEnabled = useFeature("tags");
+const syncEnabled = useFeature("sync");
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -285,34 +289,40 @@ const webdavSyncing = ref(false);
 
 const quickMenuAnchorEl = ref<HTMLElement | null>(null);
 
-const quickMenuItems = computed<ContextMenuItem[]>(() => [
-  {
-    id: "theme-toggle",
-    label: t('sidebar.appearance'),
-    icon: "palette",
-    toggle: {
-      value: settingsStore.settings.theme !== "dark",
-      labels: [t('sidebar.dark'),t('sidebar.light')],
+const quickMenuItems = computed<ContextMenuItem[]>(() => {
+  const items: ContextMenuItem[] = [
+    {
+      id: "theme-toggle",
+      label: t('sidebar.appearance'),
+      icon: "palette",
+      toggle: {
+        value: settingsStore.settings.theme !== "dark",
+        labels: [t('sidebar.dark'), t('sidebar.light')],
+      },
     },
-  },
-  {
-    id: "capture-toggle",
-    label: clipboardStore.pauseCapture ? t('sidebar.resumeCapture') : t('sidebar.pauseCapture'),
-    icon: (clipboardStore.pauseCapture ? "play" : "pause") as AppIconName,
-    separatorBefore: true,
-  },
-  {
-    id: "webdav-sync",
-    label: webdavSyncing.value ? t('sidebar.syncing') : t('sidebar.webdavSync'),
-    icon: "cloud",
-    separatorBefore: true,
-  },
-  {
+    {
+      id: "capture-toggle",
+      label: clipboardStore.pauseCapture ? t('sidebar.resumeCapture') : t('sidebar.pauseCapture'),
+      icon: (clipboardStore.pauseCapture ? "play" : "pause") as AppIconName,
+      separatorBefore: true,
+    },
+  ];
+  if (syncEnabled.value) {
+    items.push({
+      id: "webdav-sync",
+      label: webdavSyncing.value ? t('sidebar.syncing') : t('sidebar.webdavSync'),
+      icon: "cloud",
+      separatorBefore: true,
+    });
+  }
+  items.push({
     id: "help",
     label: t('sidebar.help'),
     icon: "help",
-  },
-]);
+    separatorBefore: !syncEnabled.value,
+  });
+  return items;
+});
 
 function toggleQuickMenu(e: MouseEvent) {
   if (quickMenu.visible) {

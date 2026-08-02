@@ -99,7 +99,8 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 
 ### State Management (Pinia)
 - `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection
-- `settingsStore` — debounced auto-save (200ms); theme / appearance (**"system" theme follows the OS**: native `system-theme-changed` event primary, matchMedia fallback; `lastKnownSystemDark` cache outranks stale matchMedia — ADR-0002); `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
+- `settingsStore` — debounced auto-save (200ms); theme / appearance (**"system" theme follows the OS**: native `system-theme-changed` event primary, matchMedia fallback; `lastKnownSystemDark` cache outranks stale matchMedia — ADR-0002); `features` capability flags (`tags`/`batch`/`sync`/`stats`, default all on); `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
+- **Feature capabilities:** `settings.features` + `src/features/capabilities.ts` / Rust `features.rs`. Off → hide UI, skip capture hooks, reject related commands, keep data. Tags off also disables tag filter/search (`include_tags` on list/search SQL + FTS column filter).
 
 ### Key Design Decisions
 - **Brand:** Product name **Clipboard** everywhere (title bar, floating panel, about, `tauri.conf` window title). Version lives on the About page only.

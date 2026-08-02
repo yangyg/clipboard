@@ -70,7 +70,7 @@ export function nearestPaletteColor(color: string): string {
   const rgb = parseHexRgb(color);
   if (!rgb) return TAG_PALETTE_HEX[0];
 
-  let best = TAG_PALETTE_HEX[0];
+  let best: string = TAG_PALETTE_HEX[0];
   let bestDist = Infinity;
   for (const swatch of TAG_PALETTE_HEX) {
     const s = parseHexRgb(swatch);

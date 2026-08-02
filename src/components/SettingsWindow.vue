@@ -18,7 +18,7 @@
           </button>
           <div class="nav-divider" aria-hidden="true"></div>
           <button
-            v-for="section in SECTIONS"
+            v-for="section in visibleSections"
             :key="section.key"
             type="button"
             class="nav-item"
@@ -44,6 +44,7 @@
           <SettingsHistory v-else-if="activeSection === 'history'" />
           <SettingsTags v-else-if="activeSection === 'tags'" />
           <SettingsPrivacy v-else-if="activeSection === 'privacy'" />
+          <SettingsFeatures v-else-if="activeSection === 'features'" />
           <SettingsStats v-else-if="activeSection === 'stats'" />
           <SettingsData v-else-if="activeSection === 'data'" />
           <SettingsSync v-else-if="activeSection === 'sync'" />
@@ -57,9 +58,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useSettingsStore } from "../stores/settings";
 import { useClipboardStore } from "../stores/clipboard";
+import { isFeatureEnabled, type FeatureId } from "../features/capabilities";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
 import SettingsShortcuts from "./settings/SettingsShortcuts.vue";
@@ -67,6 +69,7 @@ import SettingsAppearance from "./settings/SettingsAppearance.vue";
 import SettingsHistory from "./settings/SettingsHistory.vue";
 import SettingsTags from "./settings/SettingsTags.vue";
 import SettingsPrivacy from "./settings/SettingsPrivacy.vue";
+import SettingsFeatures from "./settings/SettingsFeatures.vue";
 import SettingsStats from "./settings/SettingsStats.vue";
 import SettingsData from "./settings/SettingsData.vue";
 import SettingsSync from "./settings/SettingsSync.vue";
@@ -86,19 +89,41 @@ const isWindowMode = computed(() => settings.app_mode === "window");
 const activeSection = ref(props.initialSection ?? "appearance");
 const isRecordingShortcut = ref(false);
 
-const SECTIONS: { key: string; icon: AppIconName; labelKey: string }[] = [
+const ALL_SECTIONS: {
+  key: string;
+  icon: AppIconName;
+  labelKey: string;
+  feature?: FeatureId;
+}[] = [
   { key: "appearance", icon: "palette", labelKey: "settings.nav.appearance" },
   { key: "shortcuts", icon: "keyboard", labelKey: "settings.nav.shortcuts" },
   { key: "history", icon: "history", labelKey: "settings.nav.history" },
-  { key: "tags", icon: "tag", labelKey: "settings.nav.tags" },
+  { key: "tags", icon: "tag", labelKey: "settings.nav.tags", feature: "tags" },
   { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy" },
   { key: "system", icon: "settings", labelKey: "settings.nav.system" },
+  { key: "features", icon: "zap", labelKey: "settings.nav.features" },
   { key: "data", icon: "package", labelKey: "settings.nav.data" },
-  { key: "sync", icon: "cloud", labelKey: "settings.nav.sync" },
-  { key: "stats", icon: "stats", labelKey: "settings.nav.stats" },
+  { key: "sync", icon: "cloud", labelKey: "settings.nav.sync", feature: "sync" },
+  { key: "stats", icon: "stats", labelKey: "settings.nav.stats", feature: "stats" },
   { key: "help", icon: "help", labelKey: "settings.nav.help" },
   { key: "about", icon: "info", labelKey: "settings.nav.about" },
 ];
+
+const visibleSections = computed(() =>
+  ALL_SECTIONS.filter(
+    (s) => !s.feature || isFeatureEnabled(settings.features, s.feature),
+  ),
+);
+
+watch(
+  visibleSections,
+  (sections) => {
+    if (!sections.some((s) => s.key === activeSection.value)) {
+      activeSection.value = sections[0]?.key ?? "appearance";
+    }
+  },
+  { immediate: true },
+);
 
 const KEY_ALIASES: Record<string, string> = {
   " ": "Space",

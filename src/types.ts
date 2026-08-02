@@ -55,6 +55,14 @@ export interface AutoTagRule {
   content_types: string[];
 }
 
+/** Optional product capabilities — keep in sync with Rust `FeatureFlags`. */
+export interface FeatureFlags {
+  tags: boolean;
+  batch: boolean;
+  sync: boolean;
+  stats: boolean;
+}
+
 export interface Settings {
   // Shortcuts
   global_shortcut: string;
@@ -103,6 +111,8 @@ export interface Settings {
   webdav_sync_sensitive: boolean;
   webdav_device_id: string;
   webdav_last_sync_at: string | null;
+  /** Optional modules; missing keys default true on load. */
+  features: FeatureFlags;
 }
 
 export interface WebDavSyncResult {

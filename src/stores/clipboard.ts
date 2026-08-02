@@ -3,6 +3,8 @@ import { ref, computed, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from "../types";
 import { setPasteFocusLock } from "../composables/pasteFocusLock";
+import { isFeatureEnabled } from "../features/capabilities";
+import { useSettingsStore } from "./settings";
 import { createTagActions } from "./clipboardTagActions";
 
 export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
@@ -22,6 +24,16 @@ export const LIST_SORT_OPTIONS: { value: ListSort; labelKey: string }[] = [
 const PAGE_SIZE = 60;
 
 export const useClipboardStore = defineStore("clipboard", () => {
+  function tagsEnabled() {
+    return isFeatureEnabled(useSettingsStore().settings.features, "tags");
+  }
+  function batchEnabled() {
+    return isFeatureEnabled(useSettingsStore().settings.features, "batch");
+  }
+  function statsEnabled() {
+    return isFeatureEnabled(useSettingsStore().settings.features, "stats");
+  }
+
   // === State ===
   const records = ref<ClipboardRecord[]>([]);
   const selectedId = ref<number | null>(null);
@@ -140,7 +152,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
           ? activeFilter.value
           : null,
       favorites_only: favoritesOnly,
-      tag: !trashFilter.value ? activeTag.value : null,
+      tag: tagsEnabled() && !trashFilter.value ? activeTag.value : null,
       sort: listSort.value,
       before_pinned: cursor?.before_pinned ?? null,
       before_updated_at: cursor?.before_updated_at ?? null,
@@ -155,7 +167,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       content_type:
         !favoritesOnly && activeFilter.value !== "all" ? activeFilter.value : null,
       favorites_only: favoritesOnly,
-      tag: activeTag.value,
+      tag: tagsEnabled() ? activeTag.value : null,
       sort: listSort.value,
     };
   }
@@ -718,6 +730,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
 
   /** Debounce 800ms while idle; max-wait 5s so continuous copy still refreshes stats. */
   function scheduleLoadStats() {
+    if (!statsEnabled()) return;
     if (statsDebounceTimer) clearTimeout(statsDebounceTimer);
     statsDebounceTimer = setTimeout(() => {
       statsDebounceTimer = null;
@@ -779,6 +792,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   function toggleBatchMode() {
+    if (!batchEnabled()) {
+      batchMode.value = false;
+      selectedIds.value = new Set();
+      return;
+    }
     batchMode.value = !batchMode.value;
     if (!batchMode.value) selectedIds.value = new Set();
   }
@@ -871,6 +889,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   async function loadStats() {
+    if (!statsEnabled()) return;
     try {
       stats.value = await invoke<StatsData>("get_stats");
     } catch (e) {

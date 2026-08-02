@@ -45,6 +45,7 @@
         ><AppIcon name="grid" :size="14" /></button>
       </div>
       <button
+        v-if="batchEnabled"
         type="button"
         class="list-tool-btn"
         :class="{ active: clipboardStore.batchMode }"
@@ -64,6 +65,7 @@ import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/c
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useBatchActions } from "../composables/useBatchActions";
+import { useFeature } from "../features/capabilities";
 import type { ListLayout } from "../composables/useVirtualList";
 import AppIcon from "./icons/AppIcon.vue";
 
@@ -76,6 +78,7 @@ const emit = defineEmits<{
 }>();
 
 const clipboardStore = useClipboardStore();
+const batchEnabled = useFeature("batch");
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const { toggleBatchMode } = useBatchActions();

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES } from "../types";
+import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
 import { i18n } from "../locales";
 
@@ -46,12 +47,26 @@ const DEFAULT_SETTINGS: Settings = {
   webdav_sync_sensitive: false,
   webdav_device_id: "",
   webdav_last_sync_at: null,
+  features: { ...DEFAULT_FEATURES },
 };
+
+function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...(raw ?? {}),
+    features: mergeFeatures(raw?.features),
+    auto_tag_rules: (raw?.auto_tag_rules ?? DEFAULT_SETTINGS.auto_tag_rules).map((r) => ({
+      ...r,
+      keywords: [...r.keywords],
+      content_types: [...r.content_types],
+    })),
+  };
+}
 
 const SAVE_DEBOUNCE_MS = 200;
 
 export const useSettingsStore = defineStore("settings", () => {
-  const settings = ref<Settings>({ ...DEFAULT_SETTINGS });
+  const settings = ref<Settings>(normalizeSettings(DEFAULT_SETTINGS));
   const isLoaded = ref(false);
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let saveGeneration = 0;
@@ -59,7 +74,7 @@ export const useSettingsStore = defineStore("settings", () => {
   async function loadSettings() {
     try {
       const saved = await invoke<Settings>("get_settings");
-      settings.value = { ...DEFAULT_SETTINGS, ...saved };
+      settings.value = normalizeSettings(saved);
     } catch (e) {
       console.error("Failed to load settings:", e);
     } finally {
@@ -71,7 +86,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
   async function saveSettings() {
     const generation = ++saveGeneration;
-    const snapshot = { ...settings.value };
+    const snapshot = normalizeSettings(settings.value);
     try {
       await invoke("save_settings", { settings: snapshot });
     } catch (e) {
@@ -81,7 +96,7 @@ export const useSettingsStore = defineStore("settings", () => {
       isLoaded.value = false;
       try {
         const saved = await invoke<Settings>("get_settings");
-        settings.value = { ...DEFAULT_SETTINGS, ...saved };
+        settings.value = normalizeSettings(saved);
         applyTheme(settings.value.theme);
         applyAppearance();
       } catch (reloadErr) {

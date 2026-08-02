@@ -3,11 +3,14 @@ mod clipboard;
 mod media;
 mod detect;
 mod commands;
+mod features;
 mod window;
 mod tray;
 mod security;
 mod system_theme;
 mod webdav;
+
+pub use features::{require_feature, FeatureFlags, FeatureId};
 
 use db::{ClipboardDb, ContentType, ImageMeta};
 use clipboard::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
@@ -235,6 +238,9 @@ pub struct Settings {
     pub webdav_device_id: String,
     #[serde(default, rename = "webdav_last_sync_at")]
     pub webdav_last_sync_at: Option<String>,
+    /// Optional product capabilities (tags / batch / sync / stats). Missing → all on.
+    #[serde(default, rename = "features")]
+    pub features: FeatureFlags,
 }
 
 impl Default for Settings {
@@ -277,6 +283,7 @@ impl Default for Settings {
             webdav_sync_sensitive: false,
             webdav_device_id: String::new(),
             webdav_last_sync_at: None,
+            features: FeatureFlags::default(),
         }
     }
 }
@@ -709,7 +716,7 @@ fn process_text_job(
         captured.html.as_deref(),
     ) {
         Ok((id, is_new, mut record)) => {
-            if is_new && settings.enable_auto_tag {
+            if is_new && settings.features.tags && settings.enable_auto_tag {
                 if let Err(e) = db.apply_auto_tags(
                     id,
                     &captured.text,
@@ -781,7 +788,7 @@ fn process_image_job(
                 None,
             ) {
                 Ok((id, is_new, mut record)) => {
-                    if is_new && settings.enable_auto_tag {
+                    if is_new && settings.features.tags && settings.enable_auto_tag {
                         if let Err(e) = db.apply_auto_tags(
                             id,
                             &label,

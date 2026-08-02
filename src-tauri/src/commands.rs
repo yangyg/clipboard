@@ -11,8 +11,14 @@ use tracing::{info, warn};
 
 use crate::{clipboard, media};
 use crate::{
-    AppState, ClipboardRecord, RecordsPage, SearchResult, Settings, StatsData, TagInfo,
+    require_feature, AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult, Settings,
+    StatsData, TagInfo,
 };
+
+fn settings_features(state: &State<'_, AppState>) -> Result<crate::FeatureFlags, String> {
+    let s = state.db.get_settings().map_err(|e| e.to_string())?;
+    Ok(s.features.clone())
+}
 
 /// Upper bound for page-size IPC args — a compromised webview must not be able
 /// to materialize every record (incl. sensitive) in a single call.
@@ -42,6 +48,7 @@ pub async fn get_records(
     // Bound `limit` so a compromised webview can't materialize every record.
     let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
+    let include_tags = settings_features(&state)?.tags;
     let records = state
         .db
         .get_records(
@@ -55,6 +62,7 @@ pub async fn get_records(
             before_pinned,
             before_updated_at.as_deref(),
             before_id,
+            include_tags,
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
@@ -75,6 +83,7 @@ pub async fn search_records(
     let start = std::time::Instant::now();
     let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
+    let include_tags = settings_features(&state)?.tags;
     let records = state
         .db
         .search_records(
@@ -85,6 +94,7 @@ pub async fn search_records(
             favorites_only.unwrap_or(false),
             tag.as_deref(),
             sort.as_deref(),
+            include_tags,
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;
@@ -367,6 +377,7 @@ pub async fn delete_record(state: State<'_, AppState>, id: i64) -> Result<(), St
 
 #[tauri::command]
 pub async fn delete_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
     state.db.trash_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
 }
 
@@ -377,6 +388,7 @@ pub async fn restore_record(state: State<'_, AppState>, id: i64) -> Result<(), S
 
 #[tauri::command]
 pub async fn restore_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
     state.db.restore_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
 }
 
@@ -387,6 +399,7 @@ pub async fn permanently_delete_record(state: State<'_, AppState>, id: i64) -> R
 
 #[tauri::command]
 pub async fn permanently_delete_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
     state.db.permanently_delete_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
 }
 
@@ -416,6 +429,7 @@ pub async fn batch_set_favorite(
     ids: Vec<i64>,
     favorite: bool,
 ) -> Result<usize, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
     state
         .db
         .batch_set_favorite(&cap_ids(ids), favorite)
@@ -696,6 +710,7 @@ pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Stats)?;
     // Cleanup stays on the periodic background thread — stats is a hot UI poll.
     state.db.get_stats().map_err(|e| e.to_string())
 }
@@ -708,6 +723,7 @@ pub async fn get_all_tags(
     content_type: Option<String>,
     favorites_only: Option<bool>,
 ) -> Result<Vec<TagInfo>, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     state
         .db
         .get_all_tags(content_type.as_deref(), favorites_only.unwrap_or(false))
@@ -716,27 +732,32 @@ pub async fn get_all_tags(
 
 #[tauri::command]
 pub async fn create_tag(state: State<'_, AppState>, name: String, color: String) -> Result<TagInfo, String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     let id = state.db.create_tag(&name, &color).map_err(|e| e.to_string())?;
     Ok(TagInfo { id, name, color, is_auto: false, count: 0 })
 }
 
 #[tauri::command]
 pub async fn delete_tag(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     state.db.delete_tag(id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn update_tag(state: State<'_, AppState>, id: i64, name: String, color: String) -> Result<(), String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     state.db.update_tag(id, &name, &color).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn add_tag_to_record(state: State<'_, AppState>, record_id: i64, tag_id: i64) -> Result<(), String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     state.db.add_tag_to_record(record_id, tag_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn remove_tag_from_record(state: State<'_, AppState>, record_id: i64, tag_id: i64) -> Result<(), String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     state.db.remove_tag_from_record(record_id, tag_id).map_err(|e| e.to_string())
 }
 
@@ -746,6 +767,7 @@ pub async fn set_record_tags(
     record_id: i64,
     tag_ids: Vec<i64>,
 ) -> Result<(), String> {
+    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Tags)?;
     state
         .db
         .set_record_tags(record_id, &cap_ids(tag_ids))
@@ -810,6 +832,7 @@ pub async fn set_window_backdrop(app: tauri::AppHandle, enabled: bool) -> Result
 #[tauri::command(rename_all = "snake_case")]
 pub async fn webdav_test_connection(state: State<'_, AppState>) -> Result<(), String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    require_feature(&settings, FeatureId::Sync)?;
     crate::webdav::webdav_test_connection(&settings).await
 }
 
@@ -818,6 +841,7 @@ pub async fn webdav_pull(
     state: State<'_, AppState>,
 ) -> Result<crate::webdav::WebDavSyncResult, String> {
     let mut settings = (*state.db.get_settings().map_err(|e| e.to_string())?).clone();
+    require_feature(&settings, FeatureId::Sync)?;
     crate::webdav::webdav_pull(&state.db, &mut settings).await
 }
 
@@ -826,6 +850,7 @@ pub async fn webdav_push(
     state: State<'_, AppState>,
 ) -> Result<crate::webdav::WebDavSyncResult, String> {
     let mut settings = (*state.db.get_settings().map_err(|e| e.to_string())?).clone();
+    require_feature(&settings, FeatureId::Sync)?;
     crate::webdav::webdav_push(&state.db, &mut settings).await
 }
 
@@ -834,5 +859,6 @@ pub async fn webdav_sync(
     state: State<'_, AppState>,
 ) -> Result<crate::webdav::WebDavSyncResult, String> {
     let mut settings = (*state.db.get_settings().map_err(|e| e.to_string())?).clone();
+    require_feature(&settings, FeatureId::Sync)?;
     crate::webdav::webdav_sync(&state.db, &mut settings).await
 }

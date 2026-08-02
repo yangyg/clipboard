@@ -9,6 +9,7 @@
         </div>
         <div class="header-actions">
         <button
+          v-if="batchEnabled"
           type="button"
           class="icon-btn"
           :class="{ active: clipboardStore.batchMode }"
@@ -91,6 +92,7 @@ import type { FilterTab } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useBatchActions } from "../composables/useBatchActions";
 import { useBatchBarHeight } from "../composables/useBatchBarHeight";
+import { useFeature } from "../features/capabilities";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
@@ -106,6 +108,7 @@ const emit = defineEmits<{
 }>();
 
 const clipboardStore = useClipboardStore();
+const batchEnabled = useFeature("batch");
 const { confirm } = useConfirm();
 const { toast } = useToast();
 const { toggleBatchMode } = useBatchActions();

@@ -68,7 +68,7 @@ import TagDialog from "./TagDialog.vue";
 import WindowControls from "./WindowControls.vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
-import { useFeature } from "../features/capabilities";
+import { useFeature } from "../composables/useFeature";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";

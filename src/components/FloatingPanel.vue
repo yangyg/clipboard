@@ -92,7 +92,7 @@ import type { FilterTab } from "../stores/clipboard";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useBatchActions } from "../composables/useBatchActions";
 import { useBatchBarHeight } from "../composables/useBatchBarHeight";
-import { useFeature } from "../features/capabilities";
+import { useFeature } from "../composables/useFeature";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";

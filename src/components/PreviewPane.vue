@@ -233,7 +233,7 @@ import TypeIcon from "./icons/TypeIcon.vue";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useSettingsStore } from "../stores/settings";
-import { useFeature } from "../features/capabilities";
+import { useFeature } from "../composables/useFeature";
 import { invoke } from "@tauri-apps/api/core";
 import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";

@@ -171,7 +171,7 @@ import { computed, reactive, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
-import { useFeature } from "../features/capabilities";
+import { useFeature } from "../composables/useFeature";
 import { useToast } from "../composables/useToast";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";

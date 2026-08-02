@@ -65,7 +65,7 @@ import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/c
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
 import { useBatchActions } from "../composables/useBatchActions";
-import { useFeature } from "../features/capabilities";
+import { useFeature } from "../composables/useFeature";
 import type { ListLayout } from "../composables/useVirtualList";
 import AppIcon from "./icons/AppIcon.vue";
 

@@ -13,27 +13,29 @@
       @input="onInput"
       @keydown.escape.stop.prevent="onEscapeInSearch"
     />
-    <span
-      v-if="!query"
-      class="kbd search-kbd"
-      :class="{ dimmed: isFocused }"
-      aria-hidden="true"
-    >{{ searchHint }}</span>
-    <span
-      v-if="clipboardStore.isSearching"
-      class="loading-spinner small search-spinner"
-      role="status"
-      :aria-label="$t('search.searching')"
-    ></span>
-    <Transition name="fade-instant">
-      <button
-        v-if="query"
-        type="button"
-        class="clear-btn"
-        :aria-label="$t('search.clear')"
-        @click="clearSearch"
-      ><AppIcon name="close" :size="11" /></button>
-    </Transition>
+    <div class="search-trailing">
+      <span
+        v-if="!query"
+        class="kbd search-kbd"
+        :class="{ dimmed: isFocused }"
+        aria-hidden="true"
+      >{{ searchHint }}</span>
+      <span
+        v-else-if="clipboardStore.isSearching"
+        class="loading-spinner small search-spinner"
+        role="status"
+        :aria-label="$t('search.searching')"
+      ></span>
+      <Transition name="fade-instant">
+        <button
+          v-if="query && !clipboardStore.isSearching"
+          type="button"
+          class="clear-btn"
+          :aria-label="$t('search.clear')"
+          @click="clearSearch"
+        ><AppIcon name="close" :size="11" /></button>
+      </Transition>
+    </div>
   </div>
 </template>
 
@@ -115,49 +117,25 @@ onUnmounted(() => {
 
 <style scoped>
 .search-row {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  position: relative;
+  width: 100%;
 }
 
 .search-row.compact {
-  width: 100%;
   max-width: 500px;
   min-width: 200px;
   flex-shrink: 1;
 }
 
-.search-row.compact .search-box {
-  height: 28px;
-  font-size: var(--text-md);
-  background: var(--bg-surface);
-  border-color: var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 0 var(--space-3) 0 32px;
-}
-
-.search-row.compact .search-box:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-softer);
-}
-
-.search-row.compact .search-icon {
-  left: 14px;
-  font-size: var(--text-md);
-}
-
-.search-row.compact .search-kbd {
-  right: 6px;
-  font-size: var(--text-xs);
-}
-
 .search-icon {
   position: absolute;
-  left: 26px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: var(--text-base);
+  display: flex;
+  align-items: center;
   color: var(--text-tertiary);
   pointer-events: none;
   z-index: 1;
@@ -170,34 +148,68 @@ onUnmounted(() => {
 
 .search-box {
   flex: 1;
-  height: 36px;
+  width: 100%;
+  height: 32px;
+  padding: 0 40px 0 34px;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 0 var(--space-3) 0 34px;
+  border-radius: var(--radius-md);
   font-size: var(--text-base);
   color: var(--text-primary);
-  transition: border-color var(--transition-fast), background var(--transition-smooth);
+  outline: none;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.search-box:hover {
+  border-color: var(--border-default);
 }
 
 .search-box:focus {
-  border-color: var(--border-focus);
+  border-color: var(--accent);
   background: var(--bg-surface);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+  outline: none;
+}
+
+.search-box:focus-visible {
+  outline: none;
 }
 
 .search-box::placeholder {
   color: var(--text-tertiary);
 }
 
-.search-spinner {
-  flex-shrink: 0;
+.search-row.compact .search-box {
+  height: 28px;
+  font-size: var(--text-md);
+  padding: 0 36px 0 32px;
+}
+
+.search-row.compact .search-icon {
+  left: 10px;
+}
+
+.search-trailing {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  z-index: 1;
+}
+
+.search-row.compact .search-trailing {
+  right: 6px;
 }
 
 .search-kbd {
-  position: absolute;
-  right: var(--space-2);
-  top: 50%;
-  transform: translateY(-50%);
   pointer-events: none;
   transition: opacity var(--transition-fast);
 }
@@ -206,23 +218,33 @@ onUnmounted(() => {
   opacity: 0.4;
 }
 
+.search-spinner {
+  flex-shrink: 0;
+}
+
 .clear-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  border: none;
   border-radius: var(--radius-pill);
   background: var(--bg-active);
   color: var(--text-tertiary);
-  font-size: var(--text-xs);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  flex-shrink: 0;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .clear-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
+}
+
+.clear-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 </style>

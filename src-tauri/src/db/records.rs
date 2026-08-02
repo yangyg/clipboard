@@ -34,35 +34,25 @@ impl ClipboardDb {
         query: &str,
         include_tags: bool,
     ) {
+        sql.push_str(
+            "instr(content, ?) > 0
+             OR instr(alias, ?) > 0
+             OR instr(source_app, ?) > 0
+             OR instr(source_window, ?) > 0",
+        );
+        let q = query.to_string();
+        params.push(Box::new(q.clone()));
+        params.push(Box::new(q.clone()));
+        params.push(Box::new(q.clone()));
+        params.push(Box::new(q.clone()));
         if include_tags {
             sql.push_str(
-                "instr(content, ?) > 0
-                 OR instr(alias, ?) > 0
-                 OR instr(source_app, ?) > 0
-                 OR instr(source_window, ?) > 0
-                 OR EXISTS (
+                " OR EXISTS (
                     SELECT 1 FROM record_tags rt
                     INNER JOIN tags t ON t.id = rt.tag_id
                     WHERE rt.record_id = records.id AND instr(t.name, ?) > 0
                  )",
             );
-            let q = query.to_string();
-            params.push(Box::new(q.clone()));
-            params.push(Box::new(q.clone()));
-            params.push(Box::new(q.clone()));
-            params.push(Box::new(q.clone()));
-            params.push(Box::new(q));
-        } else {
-            sql.push_str(
-                "instr(content, ?) > 0
-                 OR instr(alias, ?) > 0
-                 OR instr(source_app, ?) > 0
-                 OR instr(source_window, ?) > 0",
-            );
-            let q = query.to_string();
-            params.push(Box::new(q.clone()));
-            params.push(Box::new(q.clone()));
-            params.push(Box::new(q.clone()));
             params.push(Box::new(q));
         }
     }

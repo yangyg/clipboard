@@ -617,6 +617,7 @@ async function webdavSync() {
 
 .sidebar-bottom {
   padding: var(--space-2) var(--space-3) var(--space-3);
+  margin-top: auto;
   flex-shrink: 0;
   display: flex;
   flex-direction: row;

@@ -149,7 +149,7 @@ export default {
   },
   sidebar: {
     categories: '分类',
-    tagManagement: '标签管理',
+    tagManagement: '标签',
     trash: '回收站',
     newTag: '新建标签',
     collapse: '收起',

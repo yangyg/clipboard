@@ -101,7 +101,7 @@ const ALL_SECTIONS: {
   { key: "tags", icon: "tag", labelKey: "settings.nav.tags", feature: "tags" },
   { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy" },
   { key: "system", icon: "settings", labelKey: "settings.nav.system" },
-  { key: "features", icon: "zap", labelKey: "settings.nav.features" },
+  { key: "features", icon: "window", labelKey: "settings.nav.features" },
   { key: "data", icon: "package", labelKey: "settings.nav.data" },
   { key: "sync", icon: "cloud", labelKey: "settings.nav.sync", feature: "sync" },
   { key: "stats", icon: "stats", labelKey: "settings.nav.stats", feature: "stats" },

@@ -10,13 +10,6 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   stats: true,
 };
 
-/** Settings nav keys that disappear when the capability is off. */
-export const FEATURE_SETTINGS_SECTIONS: Partial<Record<FeatureId, string>> = {
-  tags: "tags",
-  sync: "sync",
-  stats: "stats",
-};
-
 export function mergeFeatures(partial?: Partial<FeatureFlags> | null): FeatureFlags {
   return {
     ...DEFAULT_FEATURES,

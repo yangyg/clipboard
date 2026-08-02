@@ -25,25 +25,23 @@
     </div>
     <div v-if="importStatus" class="status-line" :class="importStatusKind">{{ importStatus }}</div>
 
-    <template v-if="statsEnabled">
-      <div class="settings-section-title" style="margin-top: 1.25rem">{{ $t('settings.data.storage') }}</div>
-      <div class="data-card storage-card">
-        <div class="storage-card-main">
-          <div class="setting-label">{{ $t('settings.data.localStorage') }}</div>
-          <div class="setting-desc">
-            {{ $t('settings.data.storageDesc') }}
-          </div>
-          <div
-            v-if="stats?.data_path"
-            class="storage-path"
-            :title="stats.data_path"
-          >
-            {{ stats.data_path }}
-          </div>
+    <div class="settings-section-title" style="margin-top: 1.25rem">{{ $t('settings.data.storage') }}</div>
+    <div class="data-card storage-card">
+      <div class="storage-card-main">
+        <div class="setting-label">{{ $t('settings.data.localStorage') }}</div>
+        <div class="setting-desc">
+          {{ $t('settings.data.storageDesc') }}
         </div>
-        <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
+        <div
+          v-if="stats?.data_path"
+          class="storage-path"
+          :title="stats.data_path"
+        >
+          {{ stats.data_path }}
+        </div>
       </div>
-    </template>
+      <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
+    </div>
   </div>
 </template>
 
@@ -53,11 +51,9 @@ import { useI18n } from "vue-i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useClipboardStore } from "../../stores/clipboard";
-import { useFeature } from "../../composables/useFeature";
 import AppIcon from "../icons/AppIcon.vue";
 
 const clipboardStore = useClipboardStore();
-const statsEnabled = useFeature("stats");
 const { t } = useI18n();
 
 const stats = computed(() => clipboardStore.stats);

@@ -17,19 +17,22 @@
             <span class="nav-label">{{ $t('settings.back') }}</span>
           </button>
           <div class="nav-divider" aria-hidden="true"></div>
-          <button
-            v-for="section in visibleSections"
-            :key="section.key"
-            type="button"
-            class="nav-item"
-            :class="{ active: activeSection === section.key }"
-            :title="$t(section.labelKey)"
-            :aria-label="$t(section.labelKey)"
-            @click="activeSection = section.key"
-          >
-            <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
-            <span class="nav-label">{{ $t(section.labelKey) }}</span>
-          </button>
+          <template v-for="group in visibleGroups" :key="group.key">
+            <div class="nav-group-title">{{ $t(group.labelKey) }}</div>
+            <button
+              v-for="section in group.sections"
+              :key="section.key"
+              type="button"
+              class="nav-item"
+              :class="{ active: activeSection === section.key }"
+              :title="$t(section.labelKey)"
+              :aria-label="$t(section.labelKey)"
+              @click="activeSection = section.key"
+            >
+              <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
+              <span class="nav-label">{{ $t(section.labelKey) }}</span>
+            </button>
+          </template>
         </nav>
 
         <!-- Body -->
@@ -89,30 +92,57 @@ const isWindowMode = computed(() => settings.app_mode === "window");
 const activeSection = ref(props.initialSection ?? "appearance");
 const isRecordingShortcut = ref(false);
 
+type GroupId = "general" | "content" | "privacySystem" | "dataSync" | "infoSupport";
+
+const GROUPS: { key: GroupId; labelKey: string }[] = [
+  { key: "general", labelKey: "settings.navGroup.general" },
+  { key: "content", labelKey: "settings.navGroup.content" },
+  { key: "privacySystem", labelKey: "settings.navGroup.privacySystem" },
+  { key: "dataSync", labelKey: "settings.navGroup.dataSync" },
+  { key: "infoSupport", labelKey: "settings.navGroup.infoSupport" },
+];
+
 const ALL_SECTIONS: {
   key: string;
   icon: AppIconName;
   labelKey: string;
+  group: GroupId;
   feature?: FeatureId;
 }[] = [
-  { key: "appearance", icon: "palette", labelKey: "settings.nav.appearance" },
-  { key: "shortcuts", icon: "keyboard", labelKey: "settings.nav.shortcuts" },
-  { key: "history", icon: "history", labelKey: "settings.nav.history" },
-  { key: "tags", icon: "tag", labelKey: "settings.nav.tags", feature: "tags" },
-  { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy" },
-  { key: "system", icon: "settings2", labelKey: "settings.nav.system" },
-  { key: "features", icon: "component", labelKey: "settings.nav.features" },
-  { key: "data", icon: "package", labelKey: "settings.nav.data" },
-  { key: "sync", icon: "cloud", labelKey: "settings.nav.sync", feature: "sync" },
-  { key: "stats", icon: "stats", labelKey: "settings.nav.stats", feature: "stats" },
-  { key: "help", icon: "help", labelKey: "settings.nav.help" },
-  { key: "about", icon: "info", labelKey: "settings.nav.about" },
+  // 通用
+  { key: "appearance", icon: "palette", labelKey: "settings.nav.appearance", group: "general" },
+  { key: "shortcuts", icon: "keyboard", labelKey: "settings.nav.shortcuts", group: "general" },
+  { key: "features", icon: "component", labelKey: "settings.nav.features", group: "general" },
+  // 内容
+  { key: "tags", icon: "tag", labelKey: "settings.nav.tags", group: "content", feature: "tags" },
+  { key: "history", icon: "history", labelKey: "settings.nav.history", group: "content" },
+  // 隐私与系统
+  { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy", group: "privacySystem" },
+  { key: "system", icon: "settings2", labelKey: "settings.nav.system", group: "privacySystem" },
+  // 数据与同步
+  { key: "data", icon: "package", labelKey: "settings.nav.data", group: "dataSync" },
+  { key: "sync", icon: "cloud", labelKey: "settings.nav.sync", group: "dataSync", feature: "sync" },
+  // 信息与支持
+  { key: "stats", icon: "stats", labelKey: "settings.nav.stats", group: "infoSupport", feature: "stats" },
+  { key: "help", icon: "help", labelKey: "settings.nav.help", group: "infoSupport" },
+  { key: "about", icon: "info", labelKey: "settings.nav.about", group: "infoSupport" },
 ];
 
 const visibleSections = computed(() =>
   ALL_SECTIONS.filter(
     (s) => !s.feature || isFeatureEnabled(settings.features, s.feature),
   ),
+);
+
+const visibleGroups = computed(() =>
+  GROUPS.map((group) => ({
+    ...group,
+    sections: ALL_SECTIONS.filter(
+      (s) =>
+        s.group === group.key &&
+        (!s.feature || isFeatureEnabled(settings.features, s.feature)),
+    ),
+  })).filter((group) => group.sections.length > 0),
 );
 
 watch(
@@ -294,6 +324,16 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.nav-group-title {
+  padding: 14px 16px 4px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
 .nav-item {
   display: flex;
   align-items: center;
@@ -350,6 +390,10 @@ onUnmounted(() => {
   .settings-nav {
     width: 56px;
     padding: 8px 0 12px;
+  }
+
+  .nav-group-title {
+    display: none;
   }
 
   .settings-nav .nav-item {

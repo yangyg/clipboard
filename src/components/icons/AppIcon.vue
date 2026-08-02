@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { Component } from "vue";
+import type { Component as VueComponent } from "vue";
 import {
   ClipboardList,
   Search,
   Settings,
+  Settings2,
   Star,
   Pin,
   Trash2,
@@ -49,12 +50,14 @@ import {
   RefreshCw,
   Zap,
   ArrowUp,
+  Component,
 } from "lucide-vue-next";
 
 const ICONS = {
   clipboard: ClipboardList,
   search: Search,
   settings: Settings,
+  settings2: Settings2,
   star: Star,
   pin: Pin,
   trash: Trash2,
@@ -99,6 +102,7 @@ const ICONS = {
   refresh: RefreshCw,
   zap: Zap,
   arrowUp: ArrowUp,
+  component: Component,
 } as const;
 
 export type AppIconName = keyof typeof ICONS;
@@ -118,7 +122,7 @@ const props = withDefaults(
   }
 );
 
-const icon = computed<Component>(() => ICONS[props.name]);
+const icon = computed<VueComponent>(() => ICONS[props.name]);
 </script>
 
 <template>

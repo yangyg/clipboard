@@ -329,6 +329,42 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
     expect("favorites_only" in params).toBe(true);
   });
 
+  it("re-enabling the tags feature persists settings before reloading tags", async () => {
+    // Mirror the backend: get_all_tags is gated on the *persisted* settings,
+    // which lag behind the reactive store until save_settings completes.
+    let tagsEnabledOnBackend = false;
+    vi.mocked(invoke).mockImplementation((cmd: string, args?: unknown) => {
+      if (cmd === "save_settings") {
+        tagsEnabledOnBackend = (args as { settings: Settings }).settings.features.tags;
+        return Promise.resolve(undefined);
+      }
+      if (cmd === "get_all_tags") {
+        return tagsEnabledOnBackend
+          ? Promise.resolve([])
+          : Promise.reject(new Error("feature disabled: tags"));
+      }
+      return Promise.resolve(undefined);
+    });
+    const clip = useClipboardStore();
+    const settings = useSettingsStore();
+
+    // Tags start disabled; loading clears the in-memory tag list.
+    settings.updateSetting("features", { ...settings.settings.features, tags: false });
+    await clip.loadTags();
+    vi.mocked(invoke).mockClear();
+
+    // Re-enabling tags (as from Settings → Features) must refresh the list.
+    settings.updateSetting("features", { ...settings.settings.features, tags: true });
+    await vi.waitFor(() => {
+      const saveCall = vi.mocked(invoke).mock.calls.find((c) => c[0] === "save_settings");
+      const tagsCall = vi.mocked(invoke).mock.calls.find((c) => c[0] === "get_all_tags");
+      // get_all_tags must be issued only after the backend accepted tags:true.
+      expect(saveCall).toBeTruthy();
+      expect(tagsCall).toBeTruthy();
+      expect(tagsEnabledOnBackend).toBe(true);
+    });
+  });
+
   it("createTag → create_tag with { name, color }", async () => {
     const store = useClipboardStore();
     await store.createTag("new-tag", "#ff0000");

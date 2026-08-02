@@ -5,6 +5,7 @@ import type { ClipboardRecord, RecordsPage, SearchResult, StatsData, Tag } from 
 import { setPasteFocusLock } from "../composables/pasteFocusLock";
 import { featureEnabled } from "../composables/useFeature";
 import { createTagActions } from "./clipboardTagActions";
+import { useSettingsStore } from "./settings";
 
 export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
 export type ListSort =
@@ -916,6 +917,21 @@ export const useClipboardStore = defineStore("clipboard", () => {
     setRecordTags,
     filterByTag,
   } = tagActions;
+
+  // Re-enabling the tags feature (Settings → Features) must refresh the tag
+  // list: while disabled, tags were cleared and nothing else triggers a
+  // reload until the user happens to change a filter.
+  const settingsStore = useSettingsStore();
+  watch(
+    () => settingsStore.settings.features?.tags ?? false,
+    (enabled, wasEnabled) => {
+      if (!enabled || wasEnabled) return;
+      // The backend gates get_all_tags on its *persisted* settings, which lag
+      // behind the reactive store (autosave is debounced). Persist first, then
+      // reload, or the re-enabled request is rejected with "feature disabled".
+      void settingsStore.saveSettings().finally(() => loadTags());
+    },
+  );
 
   return {
     // State

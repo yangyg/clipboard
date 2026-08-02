@@ -216,11 +216,11 @@ impl ClipboardDb {
             );
 
             INSERT OR IGNORE INTO tags (name, color, is_auto) VALUES
-                ('部署', '#34d399', 1),
+                ('部署', '#22c55e', 1),
                 ('前端', '#6366f1', 1),
-                ('链接', '#fbbf24', 1),
-                ('重要', '#f87171', 0),
-                ('设计', '#a78bfa', 0);
+                ('链接', '#eab308', 1),
+                ('重要', '#ef4444', 0),
+                ('设计', '#a855f7', 0);
             "#,
         )?;
 
@@ -242,6 +242,9 @@ impl ClipboardDb {
                 [],
             );
         }
+
+        // Snap legacy tag hex values onto the fixed 12-color hue wheel.
+        tags::migrate_tag_palette_v2(&conn)?;
 
         // --- Schema version gate ---
         // All migrations above are idempotent (CREATE IF NOT EXISTS / ALTER … .ok()).

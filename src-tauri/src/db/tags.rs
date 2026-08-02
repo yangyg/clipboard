@@ -4,6 +4,109 @@ use rusqlite::{params, Connection, Result as SqlResult};
 use super::{ClipboardDb, ContentType};
 use crate::TagInfo;
 
+/// Fixed 12-color hue wheel (~30° steps). Must stay in sync with
+/// `TAG_PALETTE_HEX` in `src/utils/themeColors.ts`.
+pub const TAG_PALETTE: &[&str] = &[
+    "#ef4444", // red
+    "#f97316", // orange
+    "#eab308", // amber
+    "#84cc16", // lime
+    "#22c55e", // green
+    "#14b8a6", // teal
+    "#06b6d4", // cyan
+    "#0ea5e9", // sky
+    "#3b82f6", // blue
+    "#6366f1", // indigo
+    "#a855f7", // purple
+    "#ec4899", // pink
+];
+
+fn normalize_color_key(color: &str) -> String {
+    color.trim().to_ascii_lowercase()
+}
+
+fn parse_hex_rgb(color: &str) -> Option<(u8, u8, u8)> {
+    let mut h = color.trim().trim_start_matches('#').to_string();
+    if h.len() == 3 {
+        h = h.chars().flat_map(|c| [c, c]).collect();
+    }
+    if h.len() != 6 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let r = u8::from_str_radix(&h[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&h[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&h[4..6], 16).ok()?;
+    Some((r, g, b))
+}
+
+/// Snap any hex to the nearest palette swatch (RGB Euclidean). Invalid → first swatch.
+pub fn nearest_palette_color(color: &str) -> &'static str {
+    let key = normalize_color_key(color);
+    if let Some(exact) = TAG_PALETTE
+        .iter()
+        .copied()
+        .find(|c| normalize_color_key(c) == key)
+    {
+        return exact;
+    }
+    let Some((r, g, b)) = parse_hex_rgb(color) else {
+        return TAG_PALETTE[0];
+    };
+    let mut best = TAG_PALETTE[0];
+    let mut best_dist = u32::MAX;
+    for swatch in TAG_PALETTE {
+        let Some((sr, sg, sb)) = parse_hex_rgb(swatch) else {
+            continue;
+        };
+        let dr = r as i32 - sr as i32;
+        let dg = g as i32 - sg as i32;
+        let db = b as i32 - sb as i32;
+        let d = (dr * dr + dg * dg + db * db) as u32;
+        if d < best_dist {
+            best_dist = d;
+            best = swatch;
+        }
+    }
+    best
+}
+
+/// One-shot: map off-palette tag colors to the nearest swatch.
+pub fn migrate_tag_palette_v2(conn: &Connection) -> SqlResult<()> {
+    let done: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'tag_palette_v2'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    if done.as_deref() == Some("1") {
+        return Ok(());
+    }
+
+    let mut stmt = conn.prepare("SELECT id, color FROM tags")?;
+    let rows: Vec<(i64, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(stmt);
+
+    for (id, color) in rows {
+        let snapped = nearest_palette_color(&color);
+        if normalize_color_key(&color) != normalize_color_key(snapped) {
+            conn.execute(
+                "UPDATE tags SET color = ? WHERE id = ?",
+                params![snapped, id],
+            )?;
+        }
+    }
+
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('tag_palette_v2', '1')",
+        [],
+    )?;
+    Ok(())
+}
+
 impl ClipboardDb {
     // === Tag CRUD ===
 
@@ -61,9 +164,11 @@ impl ClipboardDb {
 
     fn auto_tag_color(name: &str) -> &'static str {
         match name {
-            "部署" => "#34d399",
+            "部署" => "#22c55e",
             "前端" => "#6366f1",
-            "链接" => "#fbbf24",
+            "链接" => "#eab308",
+            "重要" => "#ef4444",
+            "设计" => "#a855f7",
             _ => "#6366f1",
         }
     }
@@ -184,5 +289,49 @@ impl ClipboardDb {
         Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{nearest_palette_color, normalize_color_key, TAG_PALETTE};
+
+    #[test]
+    fn palette_has_12_unique_swatches() {
+        assert_eq!(TAG_PALETTE.len(), 12);
+        let mut keys: Vec<_> = TAG_PALETTE.iter().map(|c| normalize_color_key(c)).collect();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), 12);
+    }
+
+    #[test]
+    fn nearest_returns_exact_match() {
+        assert_eq!(nearest_palette_color("#3B82F6"), "#3b82f6");
+        assert_eq!(
+            normalize_color_key(nearest_palette_color("  #22C55E  ")),
+            "#22c55e"
+        );
+    }
+
+    #[test]
+    fn nearest_snaps_off_palette_onto_wheel() {
+        let palette: Vec<_> = TAG_PALETTE
+            .iter()
+            .map(|c| normalize_color_key(c))
+            .collect();
+        for legacy in ["#0078d4", "#60cdff", "#34d399", "#fbbf24", "#a78bfa"] {
+            let snapped = normalize_color_key(nearest_palette_color(legacy));
+            assert!(
+                palette.contains(&snapped),
+                "{legacy} snapped to {snapped} which is off-palette"
+            );
+        }
+    }
+
+    #[test]
+    fn nearest_invalid_falls_back() {
+        assert_eq!(nearest_palette_color("not-a-color"), TAG_PALETTE[0]);
+        assert_eq!(nearest_palette_color(""), TAG_PALETTE[0]);
     }
 }

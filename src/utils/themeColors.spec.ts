@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  nearestPaletteColor,
   normalizeColorKey,
   resolveTagPalette,
+  TAG_PALETTE_HEX,
   TAG_PALETTE_SIZE,
-  TAG_PALETTE_TOKEN_KEYS,
   uniqueColors,
 } from "./themeColors";
 
@@ -19,9 +20,9 @@ describe("themeColors palette", () => {
     expect(normalizeColorKey("  #AbCdEf  ")).toBe("#abcdef");
   });
 
-  it("has 12 token slots and no type-text", () => {
-    expect(TAG_PALETTE_TOKEN_KEYS).toHaveLength(TAG_PALETTE_SIZE);
-    expect(TAG_PALETTE_TOKEN_KEYS).not.toContain("--type-text");
+  it("has 12 unique hue-wheel swatches", () => {
+    expect(TAG_PALETTE_HEX).toHaveLength(TAG_PALETTE_SIZE);
+    expect(new Set(TAG_PALETTE_HEX.map(normalizeColorKey)).size).toBe(TAG_PALETTE_SIZE);
   });
 
   it("resolveTagPalette returns exactly 12 unique swatches", () => {
@@ -36,5 +37,23 @@ describe("themeColors palette", () => {
     expect(palette).toHaveLength(TAG_PALETTE_SIZE);
     expect(palette.map(normalizeColorKey)).toContain(normalizeColorKey(custom));
     expect(new Set(palette.map(normalizeColorKey)).size).toBe(TAG_PALETTE_SIZE);
+  });
+
+  it("nearestPaletteColor returns exact match unchanged", () => {
+    expect(nearestPaletteColor("#3B82F6")).toBe("#3b82f6");
+    expect(normalizeColorKey(nearestPaletteColor("  #22C55E  "))).toBe("#22c55e");
+  });
+
+  it("nearestPaletteColor snaps off-palette colors onto the wheel", () => {
+    const palette = new Set(TAG_PALETTE_HEX.map(normalizeColorKey));
+    for (const legacy of ["#0078d4", "#60cdff", "#34d399", "#fbbf24", "#a78bfa"]) {
+      const snapped = normalizeColorKey(nearestPaletteColor(legacy));
+      expect(palette.has(snapped)).toBe(true);
+    }
+  });
+
+  it("nearestPaletteColor falls back on invalid input", () => {
+    expect(nearestPaletteColor("not-a-color")).toBe(TAG_PALETTE_HEX[0]);
+    expect(nearestPaletteColor("")).toBe(TAG_PALETTE_HEX[0]);
   });
 });

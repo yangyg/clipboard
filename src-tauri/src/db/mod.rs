@@ -16,6 +16,11 @@ mod stats;
 mod tags;
 mod types;
 
+// Schema compatibility tests live in `schema_tests.rs` (test-only module) to
+// keep schema.rs under the 500-line cap.
+#[cfg(test)]
+mod schema_tests;
+
 pub use types::{ContentType, ImageMeta, ALIAS_MAX_CHARS, RECORD_COLS, RECORD_COLS_LIST};
 
 pub struct ClipboardDb {

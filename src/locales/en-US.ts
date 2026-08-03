@@ -450,7 +450,7 @@ export default {
       invokePanel: 'Open Panel',
       invokePanelText: 'Press the global shortcut {shortcut} in any app to open the clipboard panel; customize it in "Shortcuts".',
       autoRecord: 'Auto Record',
-      autoRecordText: 'Copy any text, link, code, image, or file — it automatically enters the history list, no manual save needed.',
+      autoRecordText: 'Copy any text, link (web URLs or download URIs such as magnet / ed2k / thunder), code, image, or file — it automatically enters the history list, no manual save needed.',
       pasteToApp: 'Paste to Current App',
       pasteToAppText: 'Press Enter, click the inline/bottom "Paste" button, or right-click menu "Paste" to write content back to the system clipboard (images prefer PNG format), return focus to the app that opened the panel, and simulate Ctrl+V; press Alt+V or select "Plain Text Paste" to strip formatting.',
       searchFilter: 'Search & Filter',

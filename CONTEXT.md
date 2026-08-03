@@ -8,6 +8,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 |---|---|
 | **Record** | A single clipboard capture entry — text (with optional rich HTML), image, link, code snippet, or file reference. Stored in SQLite with metadata (source app, timestamp, tags, copy count). |
 | **Category** | Top-level filter: 全部 (All), 文本 (Text), 代码 (Code), 链接 (Link), 图片 (Image), 文件 (File). Derived from `content_type`. |
+| **Openable link** | Whole-string clipboard URI whose scheme is in the whitelist (`http`/`https`/`ftp`/`magnet`/`ed2k`/`thunder`). Classified as `content_type: link`; opened via `open_url` → OS handler (`ShellExecuteW`). Not a separate content type. |
 | **Tag** | User-assigned or auto-assigned label on records. Tags support AND filtering with categories. |
 | **Auto-tag** | Rules (`auto_tag_rules`) that match record content type or keywords and assign tags automatically on insert. |
 | **Soft delete / Trash** | Deleted records move to trash first (recoverable). Permanent delete and empty-trash require confirmation. |
@@ -37,6 +38,7 @@ See `docs/adr/` for immutable decision records:
 - **FTS update is `OF content` only** — Hash-dedup source updates do not rebuild FTS. Tag/alias changes call `refresh_record_fts` explicitly.
 - **Loading/empty ↔ list transition is pure CSS** — Not `<Transition mode="out-in">`, because WebView2 drops `requestAnimationFrame` while hidden.
 - **Media open uses `ShellExecuteW`** — Not `cmd /c start` or `shell.open`.
+- **Link schemes are a shared whitelist** — `security::is_openable_link` is the single source for detect / `open_url` / import keep-as-link. WebView `<a href>` stays http(s)-only; other openable schemes go through Rust.
 - **Brand name** — Product name is **Clipboard** everywhere in UI. Machine-readable names use `clipboard`. Compatibility identifiers (bundle ID, data dir, DB filename) retain legacy `ClipVault` names.
 
 ## Data Paths

@@ -450,7 +450,7 @@ export default {
       invokePanel: '唤起面板',
       invokePanelText: '在任意应用中按下全局快捷键 {shortcut} 即可唤起剪贴板面板；可在"快捷键"中自定义。',
       autoRecord: '自动记录',
-      autoRecordText: '复制任意文本、链接、代码、图片或文件，内容会自动进入历史列表，无需手动保存。',
+      autoRecordText: '复制任意文本、链接（含网页与磁力链 / ed2k / 迅雷等下载链接）、代码、图片或文件，内容会自动进入历史列表，无需手动保存。',
       pasteToApp: '粘贴到当前应用',
       pasteToAppText: '按 Enter、点行内/底栏「粘贴」或右键菜单选"粘贴"，会把内容写回系统剪贴板（图片优先以 PNG 格式写入），并把焦点还给唤出面板前的应用，再模拟 Ctrl+V；按 Alt + V 或选"纯文本粘贴"则去除格式。',
       searchFilter: '搜索与筛选',

@@ -140,15 +140,15 @@
             <div
               v-else
               class="record-title"
-              :title="recordTitleAttr(item.record!)"
-              v-html="previewHtml(item.record!)"
+              :title="recordTitleAttr(item.record!, t)"
+              v-html="previewHtml(item.record!, clipboardStore.searchQuery, t)"
             ></div>
             <div class="record-meta">
-              <span class="record-time">{{ formatTime(item.record!.created_at) }}</span>
+              <span class="record-time">{{ formatTime(item.record!.created_at, t) }}</span>
               <span class="record-source">
                 <SourceBadge
                   :source-app="item.record!.source_app"
-                  :label-html="sourceLabelHtml(item.record!)"
+                  :label-html="sourceLabelHtml(item.record!, clipboardStore.searchQuery)"
                 />
               </span>
               <span
@@ -293,11 +293,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch, nextTick, shallowRef, onMounted, onUnmounted } from "vue";
+import { computed, ref, nextTick, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import PreviewPane from "./PreviewPane.vue";
-import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
+import ContextMenu from "./ContextMenu.vue";
 import AliasDialog from "./AliasDialog.vue";
 import BatchBar from "./BatchBar.vue";
 import SourceBadge from "./SourceBadge.vue";
@@ -305,25 +305,21 @@ import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import ListToolbar from "./ListToolbar.vue";
 import ListEmptyState from "./ListEmptyState.vue";
-import { sourceShortName } from "../utils/sourceBadge";
-import { parseClipboardColor } from "../utils/clipboardColor";
-import type { ClipboardRecord } from "../types";
-import { useConfirm } from "../composables/useConfirm";
-import { useToast } from "../composables/useToast";
 import { useVirtualList, type ListLayout } from "../composables/useVirtualList";
 import { useColumnResize } from "../composables/useColumnResize";
 import { useBatchBarHeight } from "../composables/useBatchBarHeight";
+import { useRecordActions } from "../composables/useRecordActions";
 import { useI18n } from "vue-i18n";
 import {
-  escapeHtml,
-  highlightSearchHtml,
-  highlightedPreview,
-} from "../utils/highlightSearch";
+  formatTime,
+  previewHtml,
+  recordTitleAttr,
+  rowColor,
+  sourceLabelHtml,
+} from "../utils/recordFormatting";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
-const { confirm } = useConfirm();
-const { toast } = useToast();
 const { t } = useI18n();
 const listRef = ref<HTMLElement | null>(null);
 
@@ -368,35 +364,6 @@ onUnmounted(() => {
   wrapperRo?.disconnect();
   wrapperRo = null;
 });
-
-/** Optimistic pin icon before list reorders (spec §3.3). */
-const pinOverride = shallowRef(new Map<number, boolean>());
-/** Rows fading out before soft-delete (spec §3.4, restrained). */
-const leavingIds = shallowRef(new Set<number>());
-
-function isPinned(record: ClipboardRecord): boolean {
-  return pinOverride.value.get(record.id) ?? record.is_pinned;
-}
-
-function sleep(ms: number): Promise<void> {
-  if (!settingsStore.settings.enable_animation) return Promise.resolve();
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return Promise.resolve();
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function scheduleTogglePin(record: ClipboardRecord) {
-  if (leavingIds.value.has(record.id)) return;
-  const next = !isPinned(record);
-  const pending = new Map(pinOverride.value);
-  pending.set(record.id, next);
-  pinOverride.value = pending;
-  await sleep(150);
-  const result = await clipboardStore.togglePin(record.id);
-  const cleared = new Map(pinOverride.value);
-  cleared.delete(record.id);
-  pinOverride.value = cleared;
-  if (result == null) toast(t('common.operationFailed'), "error");
-}
 
 const LAYOUT_KEY = "clipvault-list-layout";
 
@@ -457,198 +424,34 @@ const usePreviewDrawer = computed(
   () => previewVisible.value && wrapperWidth.value > 0 && wrapperWidth.value < PREVIEW_DRAWER_BREAKPOINT
 );
 
-/** Back-to-top: reveal once scrolled past a fixed threshold (~1 viewport). */
-const BACK_TO_TOP_THRESHOLD = 400;
-
-const showBackToTop = computed(
-  () => !isEmptyOrLoading.value && scrollTop.value > BACK_TO_TOP_THRESHOLD
-);
-
-function scrollToTop() {
-  const el = listRef.value;
-  if (!el) return;
-  const reduceMotion =
-    !settingsStore.settings.enable_animation ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
-}
-
-const activeDescendantId = computed(() =>
-  clipboardStore.selectedId != null ? `record-option-${clipboardStore.selectedId}` : undefined
-);
-
-const firstRecordId = computed(() => {
-  for (const it of flatItems.value) {
-    if (it.type === "record" && it.id != null) return it.id;
-  }
-  return null;
+const {
+  leavingIds,
+  isPinned,
+  scheduleTogglePin,
+  contextMenu,
+  contextMenuItems,
+  showContextMenu,
+  closeContextMenu,
+  onContextSelect,
+  aliasDialog,
+  closeAliasDialog,
+  quickPaste,
+  onRowFavorite,
+  onRowRestore,
+  quickDelete,
+  onItemClick,
+  onItemActivate,
+  showBackToTop,
+  scrollToTop,
+  activeDescendantId,
+  isOptionTabbable,
+} = useRecordActions({
+  listRef,
+  scrollTop,
+  flatItems: () => flatItems.value,
+  isEmptyOrLoading: () => isEmptyOrLoading.value,
+  selectedId: () => clipboardStore.selectedId,
 });
-
-function isOptionTabbable(id: number): boolean {
-  if (clipboardStore.selectedId === id) return true;
-  if (clipboardStore.selectedId == null && firstRecordId.value === id) return true;
-  return false;
-}
-
-function sourceLabelHtml(record: ClipboardRecord): string | undefined {
-  const q = clipboardStore.searchQuery.trim();
-  if (!q) return undefined;
-  return highlightSearchHtml(sourceShortName(record.source_app), q);
-}
-
-/** Text that is only a CSS color → list swatch instead of type icon. */
-function rowColor(record: ClipboardRecord): string | null {
-  if (record.content_type !== "text") return null;
-  return parseClipboardColor(record.content);
-}
-
-watch(
-  () => clipboardStore.selectedId,
-  async (id) => {
-    if (id == null) return;
-    await nextTick();
-    const list = listRef.value;
-    if (!list) return;
-    const mounted = list.querySelector(`[data-record-id="${id}"]`) as HTMLElement | null;
-    if (mounted) {
-      mounted.scrollIntoView({ block: "nearest" });
-      return;
-    }
-    // Selected row may be outside the virtual window — jump by layout offset.
-    const target = flatItems.value.find((it) => it.id === id);
-    if (!target) return;
-    const viewH = list.clientHeight;
-    const top = target.offset;
-    const bottom = top + target.height;
-    if (top < list.scrollTop) list.scrollTop = top;
-    else if (bottom > list.scrollTop + viewH) list.scrollTop = bottom - viewH;
-    scrollTop.value = list.scrollTop;
-  }
-);
-
-const contextMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-  record: null as ClipboardRecord | null,
-});
-
-const aliasDialog = reactive({
-  visible: false,
-  recordId: null as number | null,
-  initialAlias: "",
-});
-
-function openAliasDialog(record: ClipboardRecord) {
-  aliasDialog.recordId = record.id;
-  aliasDialog.initialAlias = record.alias ?? "";
-  aliasDialog.visible = true;
-}
-
-function closeAliasDialog() {
-  aliasDialog.visible = false;
-  aliasDialog.recordId = null;
-  aliasDialog.initialAlias = "";
-}
-
-const contextMenuItems = computed<ContextMenuItem[]>(() => {
-  if (clipboardStore.trashFilter) {
-    return [
-      { id: "restore", label: t('common.restore'), icon: "restore" },
-      { id: "permanentDelete", label: t('record.permanentDelete'), icon: "trash", danger: true, separatorBefore: true },
-    ];
-  }
-  const rec = contextMenu.record;
-  return [
-    { id: "paste", label: t('common.paste'), icon: "paste", shortcut: "Enter" },
-    { id: "pastePlain", label: t('common.pastePlain'), icon: "type", shortcut: "Alt+V" },
-    {
-      id: "favorite",
-      label: rec?.is_favorite ? t('record.unfavorite') : t('record.favorite'),
-      icon: "star",
-      shortcut: "Ctrl+D",
-      separatorBefore: true,
-    },
-    {
-      id: "pin",
-      label: rec?.is_pinned ? t('record.unpin') : t('record.pin'),
-      icon: "pin",
-      shortcut: "Ctrl+T",
-    },
-    {
-      id: "alias",
-      label: rec?.alias?.trim() ? t('record.editAlias') : t('record.setAlias'),
-      icon: "edit",
-    },
-    { id: "delete", label: t('common.delete'), icon: "trash", shortcut: "Del / ⌫", danger: true, separatorBefore: true },
-  ];
-});
-
-function recordAlias(record: ClipboardRecord): string {
-  return (record.alias ?? "").trim();
-}
-
-function contentPreview(record: ClipboardRecord): string {
-  if (record.content_type === "image") {
-    if (record.width && record.height) {
-      return t('record.imageLabel', { w: record.width, h: record.height });
-    }
-    return t('record.imageOnly');
-  }
-  const maxLen = 80;
-  if (record.content.length <= maxLen) return record.content;
-  return record.content.slice(0, maxLen) + "…";
-}
-
-/** List primary line: alias when set, otherwise content preview. */
-function getPreview(record: ClipboardRecord): string {
-  const alias = recordAlias(record);
-  if (alias) return alias.length > 80 ? alias.slice(0, 80) + "…" : alias;
-  return contentPreview(record);
-}
-
-/** Hover shows original content when an alias is displayed. */
-function recordTitleAttr(record: ClipboardRecord): string | undefined {
-  if (!recordAlias(record)) return undefined;
-  return contentPreview(record);
-}
-
-/** Safe HTML for list title — highlights search hits when querying. */
-function previewHtml(record: ClipboardRecord): string {
-  const alias = recordAlias(record);
-  const q = clipboardStore.searchQuery.trim();
-  if (alias) {
-    if (!q) return escapeHtml(getPreview(record));
-    return highlightedPreview(alias, q, 80);
-  }
-  if (record.content_type === "image") {
-    return escapeHtml(getPreview(record));
-  }
-  if (!q) return escapeHtml(getPreview(record));
-  return highlightedPreview(record.content, q, 80);
-}
-
-async function quickPaste(id: number) {
-  try {
-    await clipboardStore.pasteRecord(id);
-    toast(t('record.pasted'), "success");
-  } catch {
-    toast(t('record.pasteFailed'), "error");
-  }
-}
-
-async function onRowFavorite(id: number) {
-  const next = await clipboardStore.toggleFavorite(id);
-  if (next == null) toast(t('common.operationFailed'), "error");
-}
-
-async function onRowRestore(id: number) {
-  try {
-    await clipboardStore.restoreRecord(id);
-  } catch {
-    toast(t('common.operationFailed'), "error");
-  }
-}
 
 function onListColResizeKey(e: KeyboardEvent) {
   const step = e.shiftKey ? 40 : 16;
@@ -665,169 +468,6 @@ function onListColResizeKey(e: KeyboardEvent) {
     e.preventDefault();
     setListColWidth(720);
   }
-}
-
-async function quickDelete(record: ClipboardRecord) {
-  if (clipboardStore.trashFilter) {
-    const ok = await confirm({
-      title: t('record.permanentDelete'),
-      message: t('record.permanentDeleteMsg'),
-      confirmText: t('record.permanentDelete'),
-      danger: true,
-    });
-    if (ok) {
-      try {
-        await clipboardStore.permanentlyDeleteRecord(record.id);
-        toast(t('record.deletedPermanently'), "success");
-      } catch {
-        toast(t('common.operationFailed'), "error");
-      }
-    }
-    return;
-  }
-  if (leavingIds.value.has(record.id)) return;
-  const nextLeave = new Set(leavingIds.value);
-  nextLeave.add(record.id);
-  leavingIds.value = nextLeave;
-  await sleep(160);
-  try {
-    await clipboardStore.deleteRecord(record.id);
-    toast(t('record.deleted'), "success");
-  } catch {
-    toast(t('common.operationFailed'), "error");
-  } finally {
-    const cleared = new Set(leavingIds.value);
-    cleared.delete(record.id);
-    leavingIds.value = cleared;
-  }
-}
-
-let cachedNow = Date.now();
-let cachedNowTimer: ReturnType<typeof setTimeout> | null = null;
-
-function getNow(): number {
-  // Refresh the cached "now" at most once per 30s to avoid creating a Date
-  // object per row on every render.
-  if (!cachedNowTimer) {
-    cachedNowTimer = setTimeout(() => {
-      cachedNow = Date.now();
-      cachedNowTimer = null;
-    }, 30_000);
-  }
-  return cachedNow;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  const diffMs = getNow() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return t('record.justNow');
-  if (diffMin < 60) return t('record.minutesAgo', { n: diffMin });
-  if (diffMin < 1440) return t('record.hoursAgo', { n: Math.floor(diffMin / 60) });
-  return d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
-}
-
-function onItemClick(id: number) {
-  if (clipboardStore.batchMode) {
-    clipboardStore.toggleBatchSelect(id);
-    return;
-  }
-  clipboardStore.selectRecord(id);
-}
-
-/** Enter activates paste (or restore in trash). Double-click removed — easy to misfire. */
-async function onItemActivate(id: number) {
-  if (clipboardStore.batchMode) {
-    clipboardStore.toggleBatchSelect(id);
-    return;
-  }
-  if (clipboardStore.trashFilter) {
-    try {
-      await clipboardStore.restoreRecord(id);
-    } catch {
-      toast(t('common.operationFailed'), "error");
-    }
-    return;
-  }
-  try {
-    await clipboardStore.pasteRecord(id);
-    toast(t('record.pasted'), "success");
-  } catch {
-    toast(t('record.pasteFailed'), "error");
-  }
-}
-
-function showContextMenu(e: MouseEvent, record: ClipboardRecord) {
-  contextMenu.visible = true;
-  contextMenu.x = e.clientX;
-  contextMenu.y = e.clientY;
-  contextMenu.record = record;
-}
-
-async function onContextSelect(id: string) {
-  const record = contextMenu.record;
-  contextMenu.visible = false;
-  if (!record) return;
-
-  if (id === "paste") {
-    try {
-      await clipboardStore.pasteRecord(record.id);
-      toast(t('record.pasted'), "success");
-    } catch {
-      toast(t('record.pasteFailed'), "error");
-    }
-    return;
-  }
-  if (id === "pastePlain") {
-    try {
-      await clipboardStore.pasteRecord(record.id, "plain");
-      toast(t('record.pastedPlain'), "success");
-    } catch {
-      toast(t('record.pasteFailed'), "error");
-    }
-    return;
-  }
-  if (id === "favorite") {
-    const next = await clipboardStore.toggleFavorite(record.id);
-    if (next == null) toast(t('common.operationFailed'), "error");
-    return;
-  }
-  if (id === "pin") {
-    await scheduleTogglePin(record);
-    return;
-  }
-  if (id === "alias") {
-    openAliasDialog(record);
-    return;
-  }
-  if (id === "restore") {
-    await clipboardStore.restoreRecord(record.id);
-    return;
-  }
-  if (id === "delete") {
-    await quickDelete(record);
-    return;
-  }
-  if (id === "permanentDelete") {
-    const ok = await confirm({
-      title: t('record.permanentDelete'),
-      message: t('record.permanentDeleteMsg'),
-      confirmText: t('record.permanentDelete'),
-      danger: true,
-    });
-    if (ok) {
-      try {
-        await clipboardStore.permanentlyDeleteRecord(record.id);
-        toast(t('record.deletedPermanently'), "success");
-      } catch {
-        toast(t('common.operationFailed'), "error");
-      }
-    }
-  }
-}
-
-function closeContextMenu() {
-  contextMenu.visible = false;
 }
 </script>
 

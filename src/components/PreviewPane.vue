@@ -232,23 +232,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
+import { computed, ref, toRef } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import TagDialog from "./TagDialog.vue";
 import AliasDialog from "./AliasDialog.vue";
 import SourceBadge from "./SourceBadge.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
-import { useConfirm } from "../composables/useConfirm";
-import { useToast } from "../composables/useToast";
-import { useSettingsStore } from "../stores/settings";
 import { useFeature } from "../composables/useFeature";
-import { invoke } from "@tauri-apps/api/core";
 import { recordMediaSrc } from "../utils/mediaUrl";
 import { sanitizeClipboardHtml } from "../utils/sanitizeHtml";
 import { escapeHtml, highlightSearchHtml } from "../utils/highlightSearch";
 import { parseClipboardColor } from "../utils/clipboardColor";
 import { useI18n } from "vue-i18n";
+import { useExpireCountdown } from "../composables/useExpireCountdown";
+import { usePreviewFormatting } from "../composables/usePreviewFormatting";
+import { usePreviewActions } from "../composables/usePreviewActions";
 
 const tagsEnabled = useFeature("tags");
 
@@ -261,38 +260,9 @@ withDefaults(
 );
 
 const clipboardStore = useClipboardStore();
-const settingsStore = useSettingsStore();
-const { confirm } = useConfirm();
-const { toast } = useToast();
 const { t } = useI18n();
 const record = computed(() => clipboardStore.selectedRecord);
 const imageSrc = computed(() => (record.value ? recordMediaSrc(record.value) : null));
-
-/** Optimistic pin label/icon before list reorders. */
-const pinOverride = ref<boolean | null>(null);
-watch(
-  () => record.value?.id,
-  () => {
-    pinOverride.value = null;
-  },
-);
-
-const pinnedDisplay = computed(() => {
-  if (pinOverride.value !== null) return pinOverride.value;
-  return !!record.value?.is_pinned;
-});
-
-async function openImageExternally() {
-  const id = record.value?.id;
-  if (id == null) return;
-  try {
-    await invoke("open_record_media", { id });
-  } catch (e) {
-    console.error("Open image failed:", e);
-    const msg = typeof e === "string" ? e : t('preview.openImageFailed');
-    toast(msg, "error");
-  }
-}
 
 /**
  * Show rich HTML only when it adds real formatting (Word etc.).
@@ -365,18 +335,6 @@ const linkTitle = computed(() => {
   return t("preview.webLink");
 });
 
-async function openLinkExternally() {
-  const url = openableLinkUrl.value;
-  if (!url) return;
-  try {
-    await invoke("open_url", { url });
-  } catch (e) {
-    console.error("Open link failed:", e);
-    const msg = typeof e === "string" ? e : t("preview.openLinkFailed");
-    toast(msg, "error");
-  }
-}
-
 /** Plain content with optional search-term highlighting (escaped). */
 const plainContentHtml = computed(() => {
   const text = record.value?.content ?? "";
@@ -392,204 +350,28 @@ const clipboardColor = computed(() => {
   return parseClipboardColor(record.value.content);
 });
 
-const tagDialogVisible = ref(false);
-const tagDialogMode = ref<"assign" | "create">("assign");
+const { recordAlias, typeLabel, tagsByName, getTagBg, getTagColor, formatDateTime } =
+  usePreviewFormatting(record, toRef(clipboardStore, "tags"));
+const { formatExpireTime } = useExpireCountdown(record);
+const {
+  pinnedDisplay,
+  tagDialogVisible,
+  tagDialogMode,
+  openImageExternally,
+  openLinkExternally,
+  openTagAssign,
+  removeTag,
+  onTagCreated,
+  paste,
+  pastePlain,
+  favorite,
+  pin,
+  del,
+  restore,
+  permanentDel,
+} = usePreviewActions({ record, openableLinkUrl, tagsByName });
+
 const aliasDialogVisible = ref(false);
-
-const recordAlias = computed(() => (record.value?.alias ?? "").trim());
-
-const TYPE_LABEL_KEYS: Record<string, string> = {
-  text: "preview.typeText",
-  code: "preview.typeCode",
-  link: "preview.typeLink",
-  image: "preview.typeImage",
-  file: "preview.typeFile",
-  sensitive: "preview.typeSensitive",
-};
-
-const typeLabel = computed(() => {
-  if (!record.value) return "";
-  if (record.value.is_sensitive) return t('preview.typeSensitive');
-  return t(TYPE_LABEL_KEYS[record.value.content_type] ?? 'preview.typeDefault');
-});
-
-const tagsByName = computed(() => {
-  const map = new Map<string, (typeof clipboardStore.tags)[number]>();
-  for (const t of clipboardStore.tags) map.set(t.name, t);
-  return map;
-});
-
-function getTagBg(tagName: string): string {
-  const tag = tagsByName.value.get(tagName);
-  if (!tag) return "var(--bg-surface)";
-  // Normalize hex color for CSS color-mix
-  const hex = normalizeHex(tag.color);
-  return `color-mix(in srgb, ${hex} 10%, transparent)`;
-}
-
-function normalizeHex(color: string): string {
-  if (color.startsWith("#")) {
-    if (color.length === 4) {
-      // #abc -> #aabbcc
-      return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`;
-    }
-    return color; // #rrggbb or #rrggbbaa
-  }
-  return color; // rgb()/rgba() passed through as-is
-}
-
-function getTagColor(tagName: string): string {
-  return tagsByName.value.get(tagName)?.color ?? "var(--text-secondary)";
-}
-
-function openTagAssign() {
-  tagDialogMode.value = "assign";
-  tagDialogVisible.value = true;
-}
-
-async function removeTag(tagName: string) {
-  if (!record.value) return;
-  const tag = tagsByName.value.get(tagName);
-  if (tag) {
-    await clipboardStore.removeTagFromRecord(record.value.id, tag.id, tagName);
-  }
-}
-
-function onTagCreated() {
-  tagDialogMode.value = "assign";
-}
-
-const expireNow = ref(Date.now());
-let expireTimer: ReturnType<typeof setInterval> | null = null;
-
-function clearExpireTimer() {
-  if (expireTimer) {
-    clearInterval(expireTimer);
-    expireTimer = null;
-  }
-}
-
-watch(
-  () => record.value?.auto_expire_at ?? null,
-  (iso) => {
-    clearExpireTimer();
-    if (!iso) return;
-    expireNow.value = Date.now();
-    expireTimer = setInterval(() => {
-      expireNow.value = Date.now();
-    }, 1000);
-  },
-  { immediate: true }
-);
-
-onUnmounted(() => {
-  clearExpireTimer();
-});
-
-/** Live countdown — always include seconds so the UI visibly ticks. */
-function formatExpireTime(iso: string): string {
-  const ms = new Date(iso).getTime() - expireNow.value;
-  if (ms <= 0) return t('preview.expired');
-  const totalSec = Math.ceil(ms / 1000);
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  if (m > 0) return `${m}:${String(s).padStart(2, "0")}`;
-  return `${s}s`;
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-async function paste() {
-  if (!record.value) return;
-  const mode = settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original";
-  try {
-    await clipboardStore.pasteRecord(record.value.id, mode);
-    toast(mode === "plain" ? t('record.pastedPlain') : t('record.pasted'), "success");
-  } catch {
-    toast(t('record.pasteFailed'), "error");
-  }
-}
-
-async function pastePlain() {
-  if (!record.value) return;
-  try {
-    await clipboardStore.pasteRecord(record.value.id, "plain");
-    toast(t('record.pastedPlain'), "success");
-  } catch {
-    toast(t('record.pasteFailed'), "error");
-  }
-}
-
-async function favorite() {
-  if (!record.value) return;
-  const next = await clipboardStore.toggleFavorite(record.value.id);
-  if (next == null) toast(t('common.operationFailed'), "error");
-}
-
-async function pin() {
-  if (!record.value) return;
-  const id = record.value.id;
-  pinOverride.value = !pinnedDisplay.value;
-  if (
-    settingsStore.settings.enable_animation &&
-    !window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  ) {
-    await new Promise((r) => setTimeout(r, 150));
-  }
-  if (clipboardStore.selectedId !== id) {
-    pinOverride.value = null;
-    return;
-  }
-  const next = await clipboardStore.togglePin(id);
-  pinOverride.value = null;
-  if (next == null) toast(t('common.operationFailed'), "error");
-}
-
-async function del() {
-  if (!record.value) return;
-  try {
-    await clipboardStore.deleteRecord(record.value.id);
-    toast(t('record.deleted'), "success");
-  } catch {
-    toast(t('common.operationFailed'), "error");
-  }
-}
-
-async function restore() {
-  if (!record.value) return;
-  try {
-    await clipboardStore.restoreRecord(record.value.id);
-  } catch {
-    toast(t('common.operationFailed'), "error");
-  }
-}
-
-async function permanentDel() {
-  if (!record.value) return;
-  const ok = await confirm({
-    title: t('record.permanentDelete'),
-    message: t('record.permanentDeleteMsg'),
-    confirmText: t('record.permanentDelete'),
-    danger: true,
-  });
-  if (ok) {
-    try {
-      await clipboardStore.permanentlyDeleteRecord(record.value.id);
-      toast(t('record.deletedPermanently'), "success");
-    } catch {
-      toast(t('common.operationFailed'), "error");
-    }
-  }
-}
 </script>
 
 <style scoped>

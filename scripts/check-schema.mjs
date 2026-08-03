@@ -2,12 +2,14 @@
 /**
  * check-schema.mjs — SQLite schema compatibility checker
  *
- * Parses the Rust source (src-tauri/src/db/mod.rs + schema.rs) and verifies:
+ * Parses the Rust source (src-tauri/src/db/mod.rs + schema.rs + types.rs) and
+ * verifies:
  *   1. SCHEMA_VERSION constant exists and is a positive integer.
  *   2. All columns in RECORD_COLS / RECORD_COLS_LIST exist in the
  *      CREATE TABLE IF NOT EXISTS records block.
- *   3. Every ALTER TABLE ADD COLUMN migration references a column
- *      that is also present in the CREATE TABLE block (drift detection).
+ *   3. Every ALTER TABLE ADD COLUMN migration (literal statements or the
+ *      dynamic MIGRATE_COLUMNS array) references a column that is also present
+ *      in the CREATE TABLE block (drift detection).
  *   4. RECORD_COLS and RECORD_COLS_LIST have the same arity.
  *
  * Exit 0 = pass, exit 1 = schema drift detected.
@@ -22,6 +24,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_DIR = resolve(__dirname, '..', 'src-tauri', 'src', 'db');
 const DB_MOD = resolve(DB_DIR, 'mod.rs');
 const DB_SCHEMA = resolve(DB_DIR, 'schema.rs');
+const DB_TYPES = resolve(DB_DIR, 'types.rs');
 
 let exitCode = 0;
 function fail(msg) {
@@ -36,6 +39,7 @@ console.log('Schema compatibility check\n');
 
 const src = readFileSync(DB_MOD, 'utf-8');
 const schemaSrc = readFileSync(DB_SCHEMA, 'utf-8');
+const typesSrc = readFileSync(DB_TYPES, 'utf-8');
 
 // ── 1. SCHEMA_VERSION ──────────────────────────────────────────────
 const versionMatch = schemaSrc.match(/const\s+SCHEMA_VERSION\s*:\s*i64\s*=\s*(\d+)/);
@@ -76,11 +80,22 @@ for (const line of createBlock.split('\n')) {
 pass(`CREATE TABLE records defines ${createCols.size} columns`);
 
 // ── 3. Extract ALTER TABLE ADD COLUMN migrations ───────────────────
-const alterRegex = /ALTER\s+TABLE\s+records\s+ADD\s+COLUMN\s+(\w+)/gi;
+// Literal ALTER statements (legacy layout) plus the dynamic MIGRATE_COLUMNS
+// array in schema.rs (migrate_schema builds `ALTER TABLE records ADD COLUMN
+// {name} {ddl}` from it).
 const alterCols = [];
+const alterRegex = /ALTER\s+TABLE\s+records\s+ADD\s+COLUMN\s+(\w+)/gi;
 let m;
 while ((m = alterRegex.exec(src)) !== null) {
   alterCols.push(m[1]);
+}
+const migrateBlock = schemaSrc.match(/MIGRATE_COLUMNS\s*:\s*&\[\(&str,\s*&str\)\]\s*=\s*&\[([\s\S]*?)\];/);
+if (migrateBlock) {
+  const pairRegex = /\(\s*"(\w+)"\s*,\s*"/g;
+  let p;
+  while ((p = pairRegex.exec(migrateBlock[1])) !== null) {
+    alterCols.push(p[1]);
+  }
 }
 pass(`Found ${alterCols.length} ALTER TABLE ADD COLUMN migration(s)`);
 
@@ -97,10 +112,21 @@ if (exitCode === 0) {
 }
 
 // ── 4. RECORD_COLS / RECORD_COLS_LIST arity check ──────────────────
-const recordColsMatch = src.match(/const\s+RECORD_COLS\s*:\s*&str\s*=\s*"([\s\S]*?)"/);
-const recordColsListMatch = src.match(/const\s+RECORD_COLS_LIST\s*:\s*&str\s*=\s*"([\s\S]*?)"/);
+// Constants moved to db/types.rs during the module split; fall back to
+// mod.rs for older layouts.
+function extractConstString(source, name) {
+  const match = source.match(
+    new RegExp(`const\\s+${name}\\s*:\\s*&str\\s*=\\s*"([\\s\\S]*?)"`)
+  );
+  return match ? match[1] : null;
+}
+const recordCols =
+  extractConstString(typesSrc, 'RECORD_COLS') ?? extractConstString(src, 'RECORD_COLS');
+const recordColsList =
+  extractConstString(typesSrc, 'RECORD_COLS_LIST') ??
+  extractConstString(src, 'RECORD_COLS_LIST');
 
-if (!recordColsMatch || !recordColsListMatch) {
+if (!recordCols || !recordColsList) {
   fail('RECORD_COLS or RECORD_COLS_LIST constant not found');
 } else {
   const countCols = (s) => {
@@ -114,8 +140,8 @@ if (!recordColsMatch || !recordColsListMatch) {
     }
     return count;
   };
-  const fullArity = countCols(recordColsMatch[1]);
-  const listArity = countCols(recordColsListMatch[1]);
+  const fullArity = countCols(recordCols);
+  const listArity = countCols(recordColsList);
   if (fullArity !== listArity) {
     fail(
       `RECORD_COLS has ${fullArity} columns but RECORD_COLS_LIST has ${listArity}. ` +
@@ -138,7 +164,7 @@ if (!recordColsMatch || !recordColsListMatch) {
     }).filter(Boolean);
   };
 
-  const fullColNames = extractColNames(recordColsMatch[1]);
+  const fullColNames = extractColNames(recordCols);
   for (const col of fullColNames) {
     // Skip SQL functions/keywords that aren't raw column names
     if (/^(NULL|substr|id)$/i.test(col) && col.toLowerCase() === 'null') continue;

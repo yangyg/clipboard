@@ -199,7 +199,7 @@
       </button>
       <button
         type="button"
-        class="action-btn"
+        class="action-btn action-fav"
         :class="{ 'action-active': record.is_favorite }"
         @click="favorite"
       >
@@ -208,7 +208,7 @@
       </button>
       <button
         type="button"
-        class="action-btn"
+        class="action-btn action-pin"
         :class="{ 'action-pinned': pinnedDisplay }"
         @click="pin"
       >
@@ -1042,6 +1042,7 @@ button.link-url-btn:focus-visible {
   font-family: inherit;
 }
 
+/* Default / paste-plain: accent. Fav → gold, pin → violet, delete → danger (match list row). */
 .action-btn:hover {
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 25%, transparent);
@@ -1077,6 +1078,16 @@ button.link-url-btn:focus-visible {
   color: #fff;
 }
 
+.action-btn.action-fav:hover {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 20%, transparent);
+}
+
+.action-btn.action-fav:hover .action-label,
+.action-btn.action-fav:hover .action-icon {
+  color: var(--warning);
+}
+
 .action-btn.action-active {
   background: var(--warning-soft);
   border-color: color-mix(in srgb, var(--warning) 20%, transparent);
@@ -1087,14 +1098,19 @@ button.link-url-btn:focus-visible {
   color: var(--warning);
 }
 
-.action-btn.action-active:hover {
+.action-btn.action-fav.action-active:hover {
   background: color-mix(in srgb, var(--warning) 28%, transparent);
   border-color: color-mix(in srgb, var(--warning) 45%, transparent);
 }
 
-.action-btn.action-active:hover .action-label,
-.action-btn.action-active:hover .action-icon {
-  color: var(--warning);
+.action-btn.action-pin:hover {
+  background: var(--pin-soft);
+  border-color: color-mix(in srgb, var(--pin) 20%, transparent);
+}
+
+.action-btn.action-pin:hover .action-label,
+.action-btn.action-pin:hover .action-icon {
+  color: var(--pin);
 }
 
 .action-btn.action-pinned {
@@ -1107,14 +1123,9 @@ button.link-url-btn:focus-visible {
   color: var(--pin);
 }
 
-.action-btn.action-pinned:hover {
+.action-btn.action-pin.action-pinned:hover {
   background: color-mix(in srgb, var(--pin) 28%, transparent);
   border-color: color-mix(in srgb, var(--pin) 45%, transparent);
-}
-
-.action-btn.action-pinned:hover .action-label,
-.action-btn.action-pinned:hover .action-icon {
-  color: var(--pin);
 }
 
 .action-btn.action-icon-only {

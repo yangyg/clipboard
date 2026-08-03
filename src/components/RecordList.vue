@@ -186,7 +186,7 @@
               ><AppIcon name="paste" :size="13" /></button>
               <button
                 type="button"
-                class="record-action-btn"
+                class="record-action-btn action-fav"
                 :class="{ starred: item.record!.is_favorite }"
                 :aria-label="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
                 :title="item.record!.is_favorite ? $t('record.unfavorite') : $t('record.favorite')"
@@ -194,7 +194,7 @@
               ><AppIcon name="star" :size="13" :fill="item.record!.is_favorite ? 'currentColor' : 'none'" /></button>
               <button
                 type="button"
-                class="record-action-btn"
+                class="record-action-btn action-pin"
                 :class="{ active: isPinned(item.record!) }"
                 :aria-label="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
                 :title="isPinned(item.record!) ? $t('record.unpin') : $t('record.pin')"
@@ -1506,9 +1506,25 @@ function closeContextMenu() {
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 
+/* Semantic hover: paste/default → accent; fav → gold; pin → violet; delete → danger */
 .record-action-btn:hover {
-  background: var(--bg-hover);
+  background: var(--accent-soft);
   color: var(--accent-text);
+}
+
+.record-action-btn.action-fav:hover {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.record-action-btn.action-pin:hover {
+  background: var(--pin-soft);
+  color: var(--pin);
+}
+
+.record-action-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .record-action-btn:focus-visible {
@@ -1522,11 +1538,6 @@ function closeContextMenu() {
 
 .record-action-btn.starred {
   color: var(--warning);
-}
-
-.record-action-btn.danger:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
 }
 
 /* Always show active pin/star even when row not hovered */

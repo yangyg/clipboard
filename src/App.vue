@@ -21,10 +21,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { listen } from "@tauri-apps/api/event";
+import { ref, computed, onMounted, watch } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import FloatingPanel from "./components/FloatingPanel.vue";
 import WindowApp from "./components/WindowApp.vue";
@@ -35,8 +33,8 @@ import WelcomeDialog from "./components/WelcomeDialog.vue";
 import { useClipboardStore } from "./stores/clipboard";
 import { useSettingsStore } from "./stores/settings";
 import { storeToRefs } from "pinia";
-import { isPasteFocusLock, setPasteFocusLock } from "./composables/pasteFocusLock";
 import { useConfirm } from "./composables/useConfirm";
+import { useClipboardEvents } from "./composables/useClipboardEvents";
 import { setLocale, resolveLocale } from "./locales";
 
 const clipboardStore = useClipboardStore();
@@ -136,12 +134,16 @@ async function openSettings(section?: string) {
   await appWindow.setFocus();
 }
 
-// Track Tauri event listeners so they can be torn down on unmount. Without this,
-// dev HMR re-runs onMounted and would register duplicate listeners that leak.
-let unlisteners: Array<() => void> = [];
-onUnmounted(() => {
-  for (const off of unlisteners) off();
-  unlisteners = [];
+// Rust→frontend event wiring (owns its own onMounted/onUnmounted listener
+// lifecycle, so dev HMR cannot leak duplicate listeners).
+useClipboardEvents({
+  appWindow,
+  isWindowMode: () => isWindowMode.value,
+  panelVisible,
+  settingsVisible,
+  showPanel,
+  hidePanel,
+  openSettings,
 });
 
 onMounted(async () => {
@@ -158,92 +160,6 @@ onMounted(async () => {
   if (!settings.value.onboarding_completed) {
     welcomeOpen.value = true;
   }
-
-  // Reset (dev HMR re-runs onMounted); collected listeners are torn down by onUnmounted.
-  unlisteners = [];
-
-  // Listen for new clipboard records from Rust backend
-  unlisteners.push(
-    await listen<any>("clipboard-changed", (event) => {
-      if (!clipboardStore.pauseCapture) {
-        clipboardStore.onNewRecord(event.payload);
-      }
-    })
-  );
-
-  // Sensitive auto-expire deleted in Rust (periodic cleanup thread) → sync list
-  unlisteners.push(
-    await listen<number[]>("records-expired", (event) => {
-      clipboardStore.removeExpiredFromList(event.payload ?? []);
-      clipboardStore.scheduleLoadStats();
-    })
-  );
-
-  // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
-  unlisteners.push(
-    await listen<boolean>("toggle-panel", (event) => {
-      if (isPasteFocusLock() && event.payload) {
-        // Mid-paste / keep-open: sync flag only — never setFocus (would steal from target).
-        panelVisible.value = true;
-        return;
-      }
-      if (event.payload) {
-        if (!panelVisible.value || settingsVisible.value) {
-          showPanel();
-        } else {
-          // Already visible — still show/focus window without forcing reload
-          void appWindow.show().then(() => appWindow.setFocus());
-        }
-      } else {
-        if (panelVisible.value) {
-          hidePanel();
-        }
-      }
-    })
-  );
-
-  unlisteners.push(
-    await listen<boolean>("paste-focus-lock", (event) => {
-      setPasteFocusLock(!!event.payload);
-    })
-  );
-
-  // Auto-close panel when window loses focus (click outside).
-  // When we lose focus the other app is already FG — snapshot it for paste.
-  // Skip when custom tray-menu took focus (right-click tray while panel open).
-  unlisteners.push(
-    await appWindow.onFocusChanged(({ payload: focused }) => {
-      if (isPasteFocusLock()) return;
-      if (!focused && !isWindowMode.value) {
-        void (async () => {
-          try {
-            const tray = await WebviewWindow.getByLabel("tray-menu");
-            if (tray && (await tray.isFocused())) return;
-          } catch {
-            /* ignore */
-          }
-          void invoke("capture_paste_target").catch((e) =>
-            console.debug("[App] capture_paste_target (non-blocking):", e)
-          );
-          hidePanel();
-        })();
-      }
-    })
-  );
-
-  // Listen for open-settings from Rust tray menu
-  unlisteners.push(
-    await listen("open-settings", () => {
-      openSettings();
-    })
-  );
-
-  // Tray pause/resume syncs Rust → frontend
-  unlisteners.push(
-    await listen<boolean>("capture-paused", (event) => {
-      clipboardStore.setPauseCapture(event.payload);
-    })
-  );
 
   watch(
     () => settings.value.app_mode,

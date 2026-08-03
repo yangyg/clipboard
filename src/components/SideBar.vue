@@ -168,23 +168,17 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
-import { useSettingsStore } from "../stores/settings";
 import { useFeature } from "../composables/useFeature";
-import { useToast } from "../composables/useToast";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
-import type { WebDavSyncResult } from "../types";
 import { useI18n } from "vue-i18n";
+import { useSidebarMenus } from "../composables/useSidebarMenus";
 
 const tagsEnabled = useFeature("tags");
-const syncEnabled = useFeature("sync");
 
 const clipboardStore = useClipboardStore();
-const settingsStore = useSettingsStore();
-const { toast } = useToast();
 const { t } = useI18n();
 
 const props = defineProps<{
@@ -277,121 +271,15 @@ function onTagMenuSelect(id: string) {
   if (id === "delete") emit("deleteTag", tagMenu.tag);
 }
 
-/* ── Quick menu (theme + capture toggle) ── */
+const {
+  quickMenu,
+  quickMenuAnchorEl,
+  quickMenuItems,
+  toggleQuickMenu,
+  closeQuickMenu,
+  onQuickMenuSelect,
+} = useSidebarMenus((section) => emit("openSettings", section));
 
-const quickMenu = reactive({
-  visible: false,
-  x: 0,
-  y: 0,
-});
-
-const webdavSyncing = ref(false);
-
-const quickMenuAnchorEl = ref<HTMLElement | null>(null);
-
-const quickMenuItems = computed<ContextMenuItem[]>(() => {
-  const items: ContextMenuItem[] = [
-    {
-      id: "theme-toggle",
-      label: t('sidebar.appearance'),
-      icon: "palette",
-      toggle: {
-        value: settingsStore.settings.theme !== "dark",
-        labels: [t('sidebar.dark'), t('sidebar.light')],
-      },
-    },
-    {
-      id: "capture-toggle",
-      label: clipboardStore.pauseCapture ? t('sidebar.resumeCapture') : t('sidebar.pauseCapture'),
-      icon: (clipboardStore.pauseCapture ? "play" : "pause") as AppIconName,
-      separatorBefore: true,
-    },
-  ];
-  if (syncEnabled.value) {
-    items.push({
-      id: "webdav-sync",
-      label: webdavSyncing.value ? t('sidebar.syncing') : t('sidebar.webdavSync'),
-      icon: "cloud",
-      separatorBefore: true,
-    });
-  }
-  items.push({
-    id: "help",
-    label: t('sidebar.help'),
-    icon: "help",
-    separatorBefore: !syncEnabled.value,
-  });
-  return items;
-});
-
-function toggleQuickMenu(e: MouseEvent) {
-  if (quickMenu.visible) {
-    quickMenu.visible = false;
-    return;
-  }
-  const target = e.currentTarget as HTMLElement;
-  const rect = target.getBoundingClientRect();
-  quickMenu.x = rect.left;
-  quickMenu.y = rect.top; // ContextMenu clamps into viewport
-  quickMenu.visible = true;
-}
-
-function closeQuickMenu() {
-  quickMenu.visible = false;
-}
-
-function onQuickMenuSelect(id: string) {
-  if (id === "theme-toggle") {
-    const next = settingsStore.settings.theme === "light" ? "dark" : "light";
-    settingsStore.updateSetting("theme", next);
-    return;
-  }
-  if (id === "capture-toggle") {
-    clipboardStore.togglePauseCapture();
-    return;
-  }
-  if (id === "webdav-sync") {
-    webdavSync();
-    return;
-  }
-  if (id === "help") {
-    quickMenu.visible = false;
-    emit("openSettings", "help");
-    return;
-  }
-}
-
-function isWebDavConfigured(): boolean {
-  const s = settingsStore.settings;
-  const urlOk = /^https?:\/\/.+/i.test(s.webdav_url.trim());
-  return urlOk && s.webdav_username.trim().length > 0 && s.webdav_password.length > 0;
-}
-
-async function webdavSync() {
-  if (webdavSyncing.value) return;
-  if (!isWebDavConfigured()) {
-    toast(t('sidebar.webdavNotConfigured'), "warning");
-    quickMenu.visible = false;
-    emit("openSettings", "sync");
-    return;
-  }
-  webdavSyncing.value = true;
-  try {
-    await settingsStore.saveSettings();
-    const result = await invoke<WebDavSyncResult>("webdav_sync");
-    await settingsStore.loadSettings();
-    await clipboardStore.loadRecords();
-    await clipboardStore.loadStats();
-    toast(result.message || t('sidebar.webdavSyncDone'), "success");
-  } catch (e) {
-    toast(t('sidebar.webdavSyncFailed', { error: String(e) }), "error");
-    quickMenu.visible = false;
-    emit("openSettings", "sync");
-  } finally {
-    webdavSyncing.value = false;
-    quickMenu.visible = false;
-  }
-}
 </script>
 
 <style scoped>

@@ -10,29 +10,33 @@
       </div>
 
       <div class="settings-main">
-        <!-- Nav -->
+        <!-- Nav: back stays pinned; sections scroll independently -->
         <nav class="settings-nav">
-          <button type="button" class="nav-item nav-back" :title="$t('settings.back')" :aria-label="$t('settings.back')" @click="emit('close')">
-            <span class="nav-icon"><AppIcon name="back" :size="15" /></span>
-            <span class="nav-label">{{ $t('settings.back') }}</span>
-          </button>
-          <div class="nav-divider" aria-hidden="true"></div>
-          <template v-for="group in visibleGroups" :key="group.key">
-            <div class="nav-group-title">{{ $t(group.labelKey) }}</div>
-            <button
-              v-for="section in group.sections"
-              :key="section.key"
-              type="button"
-              class="nav-item"
-              :class="{ active: activeSection === section.key }"
-              :title="$t(section.labelKey)"
-              :aria-label="$t(section.labelKey)"
-              @click="activeSection = section.key"
-            >
-              <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
-              <span class="nav-label">{{ $t(section.labelKey) }}</span>
+          <div class="nav-back-bar">
+            <button type="button" class="nav-item nav-back" :title="$t('settings.back')" :aria-label="$t('settings.back')" @click="emit('close')">
+              <span class="nav-icon"><AppIcon name="back" :size="15" /></span>
+              <span class="nav-label">{{ $t('settings.back') }}</span>
             </button>
-          </template>
+            <div class="nav-divider" aria-hidden="true"></div>
+          </div>
+          <div class="nav-scroll">
+            <template v-for="group in visibleGroups" :key="group.key">
+              <div class="nav-group-title">{{ $t(group.labelKey) }}</div>
+              <button
+                v-for="section in group.sections"
+                :key="section.key"
+                type="button"
+                class="nav-item"
+                :class="{ active: activeSection === section.key }"
+                :title="$t(section.labelKey)"
+                :aria-label="$t(section.labelKey)"
+                @click="activeSection = section.key"
+              >
+                <span class="nav-icon"><AppIcon :name="section.icon" :size="15" /></span>
+                <span class="nav-label">{{ $t(section.labelKey) }}</span>
+              </button>
+            </template>
+          </div>
         </nav>
 
         <!-- Body -->
@@ -300,12 +304,25 @@ onUnmounted(() => {
   width: 180px;
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-subtle);
-  padding: 12px 0 16px;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
   transition: background var(--transition-smooth), border-color var(--transition-smooth);
+}
+
+.nav-back-bar {
+  flex-shrink: 0;
+  padding: 12px 0 0;
+  background: var(--bg-elevated);
+}
+
+.nav-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 0 16px;
 }
 
 .nav-back {
@@ -389,7 +406,14 @@ onUnmounted(() => {
 @media (max-width: 720px) {
   .settings-nav {
     width: 56px;
-    padding: 8px 0 12px;
+  }
+
+  .nav-back-bar {
+    padding: 8px 0 0;
+  }
+
+  .nav-scroll {
+    padding: 0 0 12px;
   }
 
   .nav-group-title {

@@ -1,71 +1,21 @@
 //! Pull / merge / push orchestration for Clipboard WebDAV sync.
+//! Bundle (de)serialization lives in `bundle.rs`; media transfer in `media.rs`.
 
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use crate::db::ClipboardDb;
 use crate::media;
-use crate::ClipboardRecord;
 use crate::Settings;
 
+use super::bundle::{
+    filter_syncable, load_all_export, parse_bundle, record_to_entry, serialize_bundle,
+    strip_abs_paths, ManifestEntry, SyncManifest, BUNDLE_REL, MANIFEST_NAME, PROTOCOL,
+};
 use super::client::WebDavClient;
-
-const PROTOCOL: &str = "clipvault-webdav-v1";
-const MANIFEST_NAME: &str = "manifest.json";
-const BUNDLE_REL: &str = "records/bundle.jsonl";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ManifestEntry {
-    pub hash: String,
-    pub updated_at: String,
-    #[serde(default)]
-    pub has_media: bool,
-    #[serde(default)]
-    pub media_path: Option<String>,
-    #[serde(default)]
-    pub thumb_path: Option<String>,
-    #[serde(default)]
-    pub content_type: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SyncManifest {
-    pub version: u32,
-    pub protocol: String,
-    pub updated_at: String,
-    pub device_id: String,
-    #[serde(default)]
-    pub entries: Vec<ManifestEntry>,
-}
-
-impl SyncManifest {
-    fn empty(device_id: &str) -> Self {
-        Self {
-            version: 1,
-            protocol: PROTOCOL.to_string(),
-            updated_at: Utc::now().to_rfc3339(),
-            device_id: device_id.to_string(),
-            entries: vec![],
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub struct WebDavSyncResult {
-    pub pulled: i32,
-    pub pushed: i32,
-    pub merged: i32,
-    pub media_downloaded: i32,
-    pub media_uploaded: i32,
-    pub media_skipped: i32,
-    pub message: String,
-}
+use super::media::{download_media_if_needed, upload_media_if_needed};
 
 fn remote_root(settings: &Settings) -> String {
     let p = settings.webdav_remote_path.trim().trim_matches('/');
@@ -76,7 +26,8 @@ fn remote_root(settings: &Settings) -> String {
     }
 }
 
-fn join_remote(root: &str, rel: &str) -> String {
+/// Join a remote path segment onto the sync root, tolerating stray slashes.
+pub(super) fn join_remote(root: &str, rel: &str) -> String {
     format!("{}/{}", root.trim_end_matches('/'), rel.trim_start_matches('/'))
 }
 
@@ -101,194 +52,11 @@ fn client_from_settings(settings: &Settings) -> Result<WebDavClient, String> {
     )
 }
 
-fn record_to_entry(rec: &ClipboardRecord) -> ManifestEntry {
-    let has_media = rec
-        .media_path
-        .as_ref()
-        .map(|p| !p.is_empty())
-        .unwrap_or(false);
-    ManifestEntry {
-        hash: rec.hash.clone(),
-        updated_at: rec.updated_at.clone(),
-        has_media,
-        media_path: rec.media_path.clone(),
-        thumb_path: rec.thumb_path.clone(),
-        content_type: rec.content_type.clone(),
-    }
-}
-
-fn strip_abs_paths(mut rec: ClipboardRecord) -> ClipboardRecord {
-    rec.media_abs = None;
-    rec.thumb_abs = None;
-    rec.id = 0;
-    rec
-}
-
-fn parse_bundle(bytes: &[u8]) -> Result<Vec<ClipboardRecord>, String> {
-    let text = String::from_utf8_lossy(bytes);
-    let mut out = Vec::new();
-    for (i, line) in text.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let rec: ClipboardRecord = serde_json::from_str(line)
-            .map_err(|e| format!("bundle.jsonl 第 {} 行解析失败: {e}", i + 1))?;
-        out.push(strip_abs_paths(rec));
-    }
-    Ok(out)
-}
-
-fn serialize_bundle(records: &[ClipboardRecord]) -> Result<Vec<u8>, String> {
-    let mut buf = String::new();
-    for rec in records {
-        let clean = strip_abs_paths(rec.clone());
-        let line = serde_json::to_string(&clean).map_err(|e| e.to_string())?;
-        buf.push_str(&line);
-        buf.push('\n');
-    }
-    Ok(buf.into_bytes())
-}
-
-fn filter_syncable(records: Vec<ClipboardRecord>, sync_sensitive: bool) -> Vec<ClipboardRecord> {
-    records
-        .into_iter()
-        .filter(|r| sync_sensitive || !r.is_sensitive)
-        .filter(|r| !r.is_trashed)
-        .collect()
-}
-
-fn load_all_export(db: &ClipboardDb) -> Result<Vec<ClipboardRecord>, String> {
-    let page = 200;
-    let mut offset = 0;
-    let mut all = Vec::new();
-    loop {
-        let batch = db
-            .get_records_for_export(page, offset)
-            .map_err(|e| e.to_string())?;
-        let len = batch.len();
-        all.extend(batch);
-        if len < page as usize {
-            break;
-        }
-        offset += page;
-    }
-    Ok(all)
-}
-
-/// Server-supplied media rels must satisfy the same strict hash-path rule as
-/// imports (`security::is_allowed_media_rel`). `media::absolute` alone strips
-/// `..`, but a Windows drive-letter segment (`C:x`) still escapes the media
-/// root — never let one reach `fs::write` / `fs::read`.
-fn safe_media_rel(rel: &str) -> bool {
-    crate::security::is_allowed_media_rel(rel)
-}
-
-async fn download_media_if_needed(
-    client: &WebDavClient,
-    root: &str,
-    media_root: &Path,
-    entry: &ManifestEntry,
-) -> Result<bool, String> {
-    if !entry.has_media {
-        return Ok(false);
-    }
-    let mut downloaded = false;
-    for rel in [entry.media_path.as_deref(), entry.thumb_path.as_deref()] {
-        let Some(rel) = rel.filter(|p| !p.is_empty()) else {
-            continue;
-        };
-        if !safe_media_rel(rel) {
-            continue;
-        }
-        let abs = media::absolute(media_root, rel);
-        if abs.exists() {
-            continue;
-        }
-        let remote = join_remote(root, rel);
-        if let Some(bytes) = client.get_bytes(&remote).await? {
-            if let Some(parent) = abs.parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            fs::write(&abs, bytes).map_err(|e| e.to_string())?;
-            downloaded = true;
-        }
-    }
-    Ok(downloaded)
-}
-
-async fn upload_media_if_needed(
-    client: &WebDavClient,
-    root: &str,
-    media_root: &Path,
-    rec: &ClipboardRecord,
-) -> Result<(bool, bool), String> {
-    // returns (uploaded, skipped)
-    let Some(media_rel) = rec.media_path.as_deref().filter(|p| !p.is_empty()) else {
-        return Ok((false, false));
-    };
-    // Rels can be server-supplied (remote records flow through the catalog) —
-    // enforce the strict hash-path rule before any fs::read to block
-    // remote-directed file exfiltration.
-    if !safe_media_rel(media_rel) {
-        return Ok((false, false));
-    }
-    let abs = media::absolute(media_root, media_rel);
-    if !abs.exists() {
-        return Ok((false, false));
-    }
-    let remote = join_remote(root, media_rel);
-    if client.exists(&remote).await? {
-        // still ensure thumb if missing remotely
-        let mut skipped = true;
-        let mut uploaded = false;
-        if let Some(thumb_rel) = rec.thumb_path.as_deref().filter(|p| !p.is_empty()) {
-            if safe_media_rel(thumb_rel) {
-                let thumb_abs = media::absolute(media_root, thumb_rel);
-                let thumb_remote = join_remote(root, thumb_rel);
-                if thumb_abs.exists() && !client.exists(&thumb_remote).await? {
-                    let bytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
-                    client
-                        .put_bytes(&thumb_remote, bytes, "image/jpeg")
-                        .await?;
-                    uploaded = true;
-                    skipped = false;
-                }
-            }
-        }
-        return Ok((uploaded, skipped));
-    }
-    let bytes = fs::read(&abs).map_err(|e| e.to_string())?;
-    let ct = if media_rel.ends_with(".png") {
-        "image/png"
-    } else if media_rel.ends_with(".jpg") || media_rel.ends_with(".jpeg") {
-        "image/jpeg"
-    } else {
-        "application/octet-stream"
-    };
-    client.put_bytes(&remote, bytes, ct).await?;
-    if let Some(thumb_rel) = rec.thumb_path.as_deref().filter(|p| !p.is_empty()) {
-        if safe_media_rel(thumb_rel) {
-            let thumb_abs = media::absolute(media_root, thumb_rel);
-            if thumb_abs.exists() {
-                let thumb_remote = join_remote(root, thumb_rel);
-                if !client.exists(&thumb_remote).await? {
-                    let tbytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
-                    client
-                        .put_bytes(&thumb_remote, tbytes, "image/jpeg")
-                        .await?;
-                }
-            }
-        }
-    }
-    Ok((true, false))
-}
-
 async fn fetch_remote_state(
     client: &WebDavClient,
     root: &str,
     device_id: &str,
-) -> Result<(SyncManifest, Vec<ClipboardRecord>), String> {
+) -> Result<(SyncManifest, Vec<crate::ClipboardRecord>), String> {
     let manifest_rel = join_remote(root, MANIFEST_NAME);
     let bundle_rel = join_remote(root, BUNDLE_REL);
 
@@ -381,7 +149,7 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
         .collect();
 
     let local = filter_syncable(load_all_export(db)?, settings.webdav_sync_sensitive);
-    let local_by_hash: HashMap<String, ClipboardRecord> = local
+    let local_by_hash: HashMap<String, crate::ClipboardRecord> = local
         .iter()
         .map(|r| (r.hash.clone(), r.clone()))
         .collect();
@@ -390,7 +158,7 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
     // collision (same content) keep the NEWER updated_at — a push without a
     // prior pull must not roll back a fresher timestamp published by another
     // device (a local copy would silently regress it).
-    let mut catalog: HashMap<String, ClipboardRecord> = HashMap::new();
+    let mut catalog: HashMap<String, crate::ClipboardRecord> = HashMap::new();
     for r in remote_records {
         if settings.webdav_sync_sensitive || !r.is_sensitive {
             catalog.insert(r.hash.clone(), strip_abs_paths(r));
@@ -436,7 +204,7 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
     let mut entries: Vec<ManifestEntry> = catalog.values().map(record_to_entry).collect();
     entries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
-    let mut records: Vec<ClipboardRecord> = catalog.into_values().collect();
+    let mut records: Vec<crate::ClipboardRecord> = catalog.into_values().collect();
     records.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
     let bundle_bytes = serialize_bundle(&records)?;
@@ -503,4 +271,16 @@ pub async fn webdav_sync(db: &ClipboardDb, settings: &mut Settings) -> Result<We
             push.media_skipped
         ),
     })
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub struct WebDavSyncResult {
+    pub pulled: i32,
+    pub pushed: i32,
+    pub merged: i32,
+    pub media_downloaded: i32,
+    pub media_uploaded: i32,
+    pub media_skipped: i32,
+    pub message: String,
 }

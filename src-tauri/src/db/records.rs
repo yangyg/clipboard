@@ -208,8 +208,7 @@ impl ClipboardDb {
         let mut stmt = conn.prepare(&sql)?;
         let pairs = stmt
             .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<SqlResult<Vec<_>>>()?;
         Ok(pairs)
     }
 
@@ -253,8 +252,7 @@ impl ClipboardDb {
         )?;
         let tags = stmt
             .query_map([record_id], |row| row.get(0))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<SqlResult<Vec<_>>>()?;
         Ok(tags)
     }
 
@@ -342,8 +340,7 @@ impl ClipboardDb {
 
         let mut records: Vec<ClipboardRecord> = stmt
             .query_map(param_refs.as_slice(), |row| self.map_record_row(row))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<SqlResult<Vec<_>>>()?;
 
         if include_tags {
             let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
@@ -449,15 +446,19 @@ impl ClipboardDb {
         let conn = self.conn.lock();
 
         // Hash check + insert/update under the same write lock (no TOCTOU between
-        // workers; single writer Mutex serializes capture + UI mutations).
-        let existing: Option<i64> = conn
-            .query_row(
-                "SELECT id FROM records WHERE hash = ? AND is_trashed = 0
-                 ORDER BY updated_at DESC LIMIT 1",
-                [hash],
-                |row| row.get(0),
-            )
-            .ok();
+        // workers; single writer Mutex serializes capture + UI mutations). A real
+        // read error here must not be mistaken for "no match" — that would insert
+        // a duplicate row instead of deduping.
+        let existing: Option<i64> = match conn.query_row(
+            "SELECT id FROM records WHERE hash = ? AND is_trashed = 0
+             ORDER BY updated_at DESC LIMIT 1",
+            [hash],
+            |row| row.get(0),
+        ) {
+            Ok(id) => Some(id),
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(e) => return Err(e),
+        };
 
         if let Some(id) = existing {
             let now = chrono::Utc::now().to_rfc3339();
@@ -537,8 +538,7 @@ impl ClipboardDb {
                 )?;
                 let ids = stmt
                     .query_map([overflow_count], |row| row.get(0))?
-                    .filter_map(|r| r.ok())
-                    .collect();
+                    .collect::<SqlResult<Vec<_>>>()?;
                 ids
             };
             let overflow_media = self.fetch_media_paths_by_ids(&conn, &overflow_ids)?;
@@ -631,8 +631,7 @@ impl ClipboardDb {
 
         let mut records: Vec<ClipboardRecord> = stmt
             .query_map(param_refs.as_slice(), |row| self.map_record_row(row))?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<SqlResult<Vec<_>>>()?;
 
         if include_tags {
             let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
@@ -743,8 +742,7 @@ impl ClipboardDb {
             let mut stmt = conn.prepare("SELECT id FROM records WHERE is_trashed = 1")?;
             let ids = stmt
                 .query_map([], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<SqlResult<Vec<_>>>()?;
             ids
         };
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
@@ -840,8 +838,7 @@ impl ClipboardDb {
             )?;
             let ids = stmt
                 .query_map([], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<SqlResult<Vec<_>>>()?;
             ids
         };
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
@@ -874,9 +871,9 @@ impl ClipboardDb {
         // Batch-load existing hashes in one query instead of per-record lookups.
         let existing_hashes: std::collections::HashSet<String> = {
             let mut stmt = tx.prepare("SELECT hash FROM records")?;
-            let hashes: Vec<String> = stmt.query_map([], |row| row.get::<_, String>(0))?
-                .filter_map(|r| r.ok())
-                .collect();
+            let hashes: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(0))?
+                .collect::<SqlResult<Vec<_>>>()?;
             hashes.into_iter().collect()
         };
 
@@ -1000,8 +997,7 @@ impl ClipboardDb {
                 )?;
                 let ids: Vec<i64> = stmt
                     .query_map([overflow_count], |row| row.get(0))?
-                    .filter_map(|r| r.ok())
-                    .collect();
+                    .collect::<SqlResult<Vec<_>>>()?;
                 ids
             };
             let overflow_media: Vec<(Option<String>, Option<String>)> = {
@@ -1018,8 +1014,7 @@ impl ClipboardDb {
                     let mut stmt = tx.prepare(&sql)?;
                     let pairs: Vec<(Option<String>, Option<String>)> = stmt
                         .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
-                        .filter_map(|r| r.ok())
-                        .collect();
+                        .collect::<SqlResult<Vec<_>>>()?;
                     pairs
                 }
             };

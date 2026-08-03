@@ -6,6 +6,19 @@ use rusqlite::Result as SqlResult;
 use super::ClipboardDb;
 use crate::Settings;
 
+/// Errors that can occur while persisting settings. Kept separate from
+/// `rusqlite::Result` so the DPAPI encryption step surfaces its own failure
+/// type instead of being mislabeled as a SQL error.
+#[derive(Debug, thiserror::Error)]
+pub enum SettingsError {
+    #[error("settings serialize failed: {0}")]
+    Serialize(#[from] serde_json::Error),
+    #[error("settings save failed: {0}")]
+    Sql(#[from] rusqlite::Error),
+    #[error("settings encryption failed: {0}")]
+    Encryption(String),
+}
+
 impl ClipboardDb {
     /// Returns a shared reference-counted Settings snapshot. Clone is cheap (Arc bump).
     /// Callers needing mutation (resize persist, webdav sync) should clone the inner Settings.
@@ -17,13 +30,41 @@ impl ClipboardDb {
         let mut settings = Settings::default();
         {
             let conn = self.lock_read();
-            if let Ok(json) = conn.query_row::<String, _, _>(
+            match conn.query_row::<String, _, _>(
                 "SELECT value FROM settings WHERE key = 'app_settings'",
                 [],
                 |row| row.get(0),
             ) {
-                if let Ok(s) = serde_json::from_str::<Settings>(&json) {
-                    settings = s;
+                Ok(json) => match serde_json::from_str::<Settings>(&json) {
+                    Ok(mut s) => {
+                        // WebDAV password is DPAPI-encrypted at rest; legacy
+                        // plaintext values (no prefix) pass through unchanged.
+                        if s.webdav_password.starts_with(crate::security::DPAPI_PREFIX) {
+                            match crate::security::decrypt_secret(&s.webdav_password) {
+                                Ok(pw) => s.webdav_password = pw,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to decrypt stored WebDAV password; cleared: {}",
+                                        e
+                                    );
+                                    s.webdav_password = String::new();
+                                }
+                            }
+                        }
+                        settings = s;
+                    }
+                    Err(e) => {
+                        // Fail loudly instead of silently resetting every setting:
+                        // a corrupt settings blob must not masquerade as "defaults".
+                        tracing::error!(
+                            "Corrupt app_settings JSON; falling back to defaults: {}",
+                            e
+                        );
+                    }
+                },
+                Err(rusqlite::Error::QueryReturnedNoRows) => {}
+                Err(e) => {
+                    tracing::warn!("Failed to read app_settings: {}", e);
                 }
             }
         }
@@ -33,11 +74,19 @@ impl ClipboardDb {
         Ok(arc)
     }
 
-    pub fn save_settings(&self, settings: &Settings) -> SqlResult<()> {
+    pub fn save_settings(&self, settings: &Settings) -> Result<(), SettingsError> {
+        // Serialize a copy whose WebDAV password is DPAPI-encrypted at rest.
+        // The in-memory cache keeps the plaintext form (as the frontend sees
+        // it), so a get_settings round-trip must never hand back the cipher.
         // A serialize failure must not write "" — the next load would silently
         // reset every setting to defaults. Fail loud instead.
-        let json = serde_json::to_string(settings)
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        let mut for_json = settings.clone();
+        if !for_json.webdav_password.is_empty() {
+            for_json.webdav_password =
+                crate::security::encrypt_secret(&for_json.webdav_password)
+                    .map_err(SettingsError::Encryption)?;
+        }
+        let json = serde_json::to_string(&for_json)?;
         {
             let conn = self.conn.lock();
             conn.execute(
@@ -58,8 +107,7 @@ impl ClipboardDb {
             )?;
             let ids = stmt
                 .query_map([&now], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<SqlResult<Vec<_>>>()?;
             ids
         };
         if ids.is_empty() {
@@ -87,8 +135,7 @@ impl ClipboardDb {
             )?;
             let ids = stmt
                 .query_map([&cutoff], |row| row.get(0))?
-                .filter_map(|r| r.ok())
-                .collect();
+                .collect::<SqlResult<Vec<_>>>()?;
             ids
         };
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;

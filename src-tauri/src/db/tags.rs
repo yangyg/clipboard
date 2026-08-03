@@ -86,8 +86,7 @@ pub fn migrate_tag_palette_v2(conn: &Connection) -> SqlResult<()> {
     let mut stmt = conn.prepare("SELECT id, color FROM tags")?;
     let rows: Vec<(i64, String)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
-        .filter_map(|r| r.ok())
-        .collect();
+        .collect::<SqlResult<Vec<_>>>()?;
     drop(stmt);
 
     for (id, color) in rows {
@@ -148,8 +147,7 @@ impl ClipboardDb {
                     count: row.get(4)?,
                 })
             })?
-            .filter_map(|r| r.ok())
-            .collect();
+            .collect::<SqlResult<Vec<_>>>()?;
         Ok(tags)
     }
 

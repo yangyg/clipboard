@@ -691,7 +691,7 @@ fn process_text_job(
     app: &tauri::AppHandle,
 ) {
     let TextCaptureJob { captured, source_app, source_window } = job;
-    let settings = db.get_settings().unwrap_or_default();
+    let settings = capture_settings(db);
     if is_ignored_app(&source_app, &settings.ignored_apps) {
         return;
     }
@@ -750,7 +750,7 @@ fn process_image_job(
     app: &tauri::AppHandle,
 ) {
     let ImageCaptureJob { captured, source_app, source_window } = job;
-    let settings = db.get_settings().unwrap_or_default();
+    let settings = capture_settings(db);
     if is_ignored_app(&source_app, &settings.ignored_apps) {
         return;
     }
@@ -814,6 +814,19 @@ fn process_image_job(
 }
 
 const CLEANUP_INTERVAL_SECS: u64 = 60;
+
+/// Load settings for a capture worker, logging (not silently defaulting) on
+/// failure. Defaults are a deliberate degrade so a transient DB read error
+/// does not drop a clipboard event entirely, but the failure stays visible.
+fn capture_settings(db: &ClipboardDb) -> Settings {
+    match db.get_settings() {
+        Ok(s) => (*s).clone(),
+        Err(e) => {
+            warn!("Failed to load settings for capture; using defaults: {}", e);
+            Settings::default()
+        }
+    }
+}
 
 /// Background cleanup: expire sensitive rows + retention. Does not run on capture.
 fn run_periodic_cleanup(db: &ClipboardDb) -> Result<Vec<i64>, String> {

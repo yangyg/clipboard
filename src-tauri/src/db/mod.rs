@@ -113,6 +113,44 @@ impl ClipboardDb {
         Ok(())
     }
 
+    /// Idempotent migrations for databases created before later columns /
+    /// indexes existed. Columns are added only when `PRAGMA table_info` shows
+    /// them missing, so a duplicate-column error can never occur and genuine
+    /// failures are NOT swallowed (unlike the historical `ALTER … .ok()`).
+    fn migrate_schema(conn: &Connection) -> SqlResult<()> {
+        let existing_cols: std::collections::HashSet<String> = {
+            let mut stmt = conn.prepare("PRAGMA table_info(records)")?;
+            let cols = stmt
+                .query_map([], |row| row.get::<_, String>(1))?
+                .collect::<SqlResult<std::collections::HashSet<String>>>()?;
+            cols
+        };
+        const MIGRATE_COLUMNS: &[(&str, &str)] = &[
+            ("is_trashed", "INTEGER NOT NULL DEFAULT 0"),
+            ("media_path", "TEXT"),
+            ("thumb_path", "TEXT"),
+            ("width", "INTEGER"),
+            ("height", "INTEGER"),
+            ("content_html", "TEXT"),
+            ("content_len", "INTEGER NOT NULL DEFAULT 0"),
+            ("alias", "TEXT NOT NULL DEFAULT ''"),
+        ];
+        for (name, ddl) in MIGRATE_COLUMNS {
+            if !existing_cols.contains(*name) {
+                conn.execute_batch(&format!("ALTER TABLE records ADD COLUMN {name} {ddl}"))?;
+            }
+        }
+        conn.execute_batch(
+            "CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
+             ON records(is_trashed, updated_at DESC);
+             CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
+             ON records(is_trashed, is_pinned, updated_at DESC);
+             CREATE INDEX IF NOT EXISTS idx_records_hash_active
+             ON records(hash, is_trashed);",
+        )?;
+        Ok(())
+    }
+
     pub fn new(db_path: &Path, media_root: PathBuf) -> SqlResult<Self> {
         let conn = Connection::open(db_path)?;
         Self::configure_connection(&conn, false)?;
@@ -157,38 +195,12 @@ impl ClipboardDb {
                 ON records(auto_expire_at) WHERE auto_expire_at IS NOT NULL;"#,
         )?;
 
-        // Migrations for databases created before these columns existed
-        conn.execute_batch(
-            "ALTER TABLE records ADD COLUMN is_trashed INTEGER NOT NULL DEFAULT 0;"
-        ).ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN media_path TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN thumb_path TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN width INTEGER;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
-        conn.execute_batch(
-            "ALTER TABLE records ADD COLUMN content_len INTEGER NOT NULL DEFAULT 0;",
-        )
-        .ok();
-        conn.execute_batch(
-            "ALTER TABLE records ADD COLUMN alias TEXT NOT NULL DEFAULT '';",
-        )
-        .ok();
-        conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
-             ON records(is_trashed, updated_at DESC);",
-        )
-        .ok();
-        conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
-             ON records(is_trashed, is_pinned, updated_at DESC);",
-        )
-        .ok();
-        conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_records_hash_active
-             ON records(hash, is_trashed);",
-        )
-        .ok();
+        // Schema-aware migrations: only ALTER for columns that are genuinely
+        // missing (checked via PRAGMA table_info). The previous
+        // `ALTER TABLE ... .ok()` swallowed every failure silently — including
+        // real ones — leaving the schema half-migrated. CREATE INDEX IF NOT
+        // EXISTS is idempotent and errors propagate.
+        Self::migrate_schema(&conn)?;
 
         conn.execute_batch(
             r#"
@@ -233,14 +245,14 @@ impl ClipboardDb {
             )
             .ok();
         if backfilled.as_deref() != Some("1") {
-            let _ = conn.execute(
+            conn.execute(
                 "UPDATE records SET content_len = length(content) WHERE content_len = 0",
                 [],
-            );
-            let _ = conn.execute(
+            )?;
+            conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES ('content_len_backfill', '1')",
                 [],
-            );
+            )?;
         }
 
         // Snap legacy tag hex values onto the fixed 12-color hue wheel.
@@ -253,7 +265,13 @@ impl ClipboardDb {
 
         Self::ensure_fts(&conn)?;
 
-        media::ensure_dirs(&media_root).ok();
+        // media/ dirs were already created by the caller (lib.rs::run) before
+        // the DB opens; a failure here is recorded rather than swallowed so a
+        // missing media root is visible in logs instead of failing later at
+        // image-capture time with no trace.
+        if let Err(e) = media::ensure_dirs(&media_root) {
+            tracing::warn!("Failed to create media directories: {}", e);
+        }
 
         // Reader pool: open after schema is ready (same DB file, WAL).
         let mut read_conns = Vec::with_capacity(READ_POOL_SIZE);
@@ -399,18 +417,9 @@ mod tests {
             "#,
         )
         .unwrap();
-        // Migrations (idempotent ALTER TABLE … .ok())
-        conn.execute_batch("ALTER TABLE records ADD COLUMN is_trashed INTEGER NOT NULL DEFAULT 0;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN media_path TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN thumb_path TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN width INTEGER;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN content_len INTEGER NOT NULL DEFAULT 0;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN alias TEXT NOT NULL DEFAULT '';").ok();
-        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_records_trashed_updated ON records(is_trashed, updated_at DESC);").ok();
-        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated ON records(is_trashed, is_pinned, updated_at DESC);").ok();
-        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_records_hash_active ON records(hash, is_trashed);").ok();
+        // Apply the real idempotent migration logic — columns already present
+        // are skipped via PRAGMA table_info, so no duplicate-column errors.
+        ClipboardDb::migrate_schema(&conn).unwrap();
         conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS tags (
@@ -565,15 +574,8 @@ mod tests {
         )
         .unwrap();
 
-        // Apply the same idempotent migrations from ClipboardDb::new
-        conn.execute_batch("ALTER TABLE records ADD COLUMN is_trashed INTEGER NOT NULL DEFAULT 0;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN media_path TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN thumb_path TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN width INTEGER;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN height INTEGER;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN content_html TEXT;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN content_len INTEGER NOT NULL DEFAULT 0;").ok();
-        conn.execute_batch("ALTER TABLE records ADD COLUMN alias TEXT NOT NULL DEFAULT '';").ok();
+        // Apply the real idempotent migration logic (adds only missing columns).
+        ClipboardDb::migrate_schema(&conn).unwrap();
 
         // Verify all expected columns now exist
         let mut stmt = conn.prepare("PRAGMA table_info(records)").unwrap();

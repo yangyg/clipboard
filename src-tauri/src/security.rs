@@ -196,6 +196,125 @@ pub fn resolve_media_file(app_data_dir: &Path, relative: &str) -> Result<PathBuf
     Ok(canon)
 }
 
+// === Secret-at-rest encryption (WebDAV password) ===
+
+/// Marker prefix on a `webdav_password` value that was encrypted with DPAPI
+/// before being stored. Legacy values without this prefix are plaintext
+/// (pre-encryption installs) and are passed through unchanged until the next
+/// `save_settings` re-encrypts them.
+pub const DPAPI_PREFIX: &str = "dpapi:";
+
+/// Encrypt a secret for storage using Windows DPAPI (`CryptProtectData`).
+/// The resulting blob is scoped to the current user + machine, so a DB copied
+/// to another account or machine cannot be decrypted there.
+///
+/// Non-Windows fallback stores the value as-is (this app is Windows-only; the
+/// fallback exists so the crate still compiles off-Windows).
+#[cfg(windows)]
+pub fn encrypt_secret(plaintext: &str) -> Result<String, String> {
+    use base64::Engine;
+    use windows_sys::Win32::Security::Cryptography::{
+        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+    };
+    // windows-sys 0.59 omits LocalFree; declared here (same pattern as the
+    // GlobalFree declaration in clipboard.rs) to release CryptProtectData output.
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LocalFree(hmem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
+    }
+
+    if plaintext.len() > u32::MAX as usize {
+        return Err("secret too large to encrypt".into());
+    }
+    let bytes = plaintext.as_bytes();
+    let data_in = CRYPT_INTEGER_BLOB {
+        cbData: bytes.len() as u32,
+        pbData: bytes.as_ptr() as *mut u8,
+    };
+    let mut data_out = CRYPT_INTEGER_BLOB {
+        cbData: 0,
+        pbData: std::ptr::null_mut(),
+    };
+    let ok = unsafe {
+        CryptProtectData(
+            &data_in,
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut data_out,
+        )
+    };
+    if ok == 0 {
+        return Err("DPAPI 加密失败".into());
+    }
+    let cipher = unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize) };
+    let encoded =
+        format!("{}{}", DPAPI_PREFIX, base64::engine::general_purpose::STANDARD.encode(cipher));
+    unsafe { LocalFree(data_out.pbData as *mut core::ffi::c_void) };
+    Ok(encoded)
+}
+
+#[cfg(not(windows))]
+pub fn encrypt_secret(plaintext: &str) -> Result<String, String> {
+    Ok(plaintext.to_string())
+}
+
+/// Decrypt a DPAPI-encrypted secret (must carry [`DPAPI_PREFIX`]).
+/// A value without the prefix is a legacy plaintext secret and is returned
+/// unchanged so old databases keep working until re-saved.
+#[cfg(windows)]
+pub fn decrypt_secret(encoded: &str) -> Result<String, String> {
+    use base64::Engine;
+    use windows_sys::Win32::Security::Cryptography::{
+        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+    };
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LocalFree(hmem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
+    }
+
+    let Some(b64) = encoded.strip_prefix(DPAPI_PREFIX) else {
+        // Legacy plaintext stored before encryption was introduced.
+        return Ok(encoded.to_string());
+    };
+    let cipher = base64::engine::general_purpose::STANDARD
+        .decode(b64)
+        .map_err(|e| format!("密文格式错误: {e}"))?;
+    let data_in = CRYPT_INTEGER_BLOB {
+        cbData: cipher.len().min(u32::MAX as usize) as u32,
+        pbData: cipher.as_ptr() as *mut u8,
+    };
+    let mut data_out = CRYPT_INTEGER_BLOB {
+        cbData: 0,
+        pbData: std::ptr::null_mut(),
+    };
+    let ok = unsafe {
+        CryptUnprotectData(
+            &data_in,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+            CRYPTPROTECT_UI_FORBIDDEN,
+            &mut data_out,
+        )
+    };
+    if ok == 0 {
+        return Err("DPAPI 解密失败（数据库可能来自其他用户或机器）".into());
+    }
+    let plain = unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize) };
+    let text = String::from_utf8(plain.to_vec()).map_err(|e| format!("解密结果不是合法文本: {e}"))?;
+    unsafe { LocalFree(data_out.pbData as *mut core::ffi::c_void) };
+    Ok(text)
+}
+
+#[cfg(not(windows))]
+pub fn decrypt_secret(encoded: &str) -> Result<String, String> {
+    Ok(encoded.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,5 +386,20 @@ mod tests {
     #[test]
     fn json_path_requires_json_ext() {
         assert!(validate_json_io_path("C:\\tmp\\out.txt", true).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn dpapi_secret_round_trips() {
+        let plain = "correct horse battery staple";
+        let enc = encrypt_secret(plain).expect("encrypt");
+        assert!(enc.starts_with(DPAPI_PREFIX));
+        assert_eq!(decrypt_secret(&enc).expect("decrypt"), plain);
+    }
+
+    #[test]
+    fn dpapi_legacy_plaintext_passes_through() {
+        // Pre-encryption stored value (no prefix) must survive decrypt unchanged.
+        assert_eq!(decrypt_secret("legacy-password").unwrap(), "legacy-password");
     }
 }

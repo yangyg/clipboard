@@ -209,7 +209,13 @@ pub async fn paste_record(
     use tauri::Manager;
 
     // H-5: Read-only preparation OUTSIDE the mutex — reduces lock hold time.
-    let settings = state.db.get_settings().unwrap_or_default();
+    let settings = match state.db.get_settings() {
+        Ok(s) => (*s).clone(),
+        Err(e) => {
+            warn!("Failed to load settings for paste; using defaults: {}", e);
+            Settings::default()
+        }
+    };
     let auto_close = settings.auto_close_on_paste;
     // Prefer live chrome over DB — matches what the user actually sees.
     let is_floating = app
@@ -775,10 +781,13 @@ pub async fn set_record_tags(
 pub async fn switch_app_mode(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("window not found")?;
     let is_window = mode == "window";
-    let settings = app
-        .try_state::<AppState>()
-        .and_then(|s| s.db.get_settings().ok())
-        .unwrap_or_default();
+    let settings = match app.try_state::<AppState>().and_then(|s| s.db.get_settings().ok()) {
+        Some(s) => (*s).clone(),
+        None => {
+            warn!("Failed to load settings for mode switch; using defaults");
+            Settings::default()
+        }
+    };
     let (w, h) = crate::window::resolve_panel_size(&window, &settings, is_window);
     let (min_w, min_h, _, _) = crate::window::mode_size_bounds(is_window);
     window.set_decorations(false).map_err(|e| e.to_string())?;

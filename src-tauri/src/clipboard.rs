@@ -428,7 +428,8 @@ fn is_meaningful_share_text(text: &str) -> bool {
 /// True when the payload is essentially one URL with negligible other text.
 fn is_primarily_url(t: &str) -> bool {
     let lower = t.to_lowercase();
-    let start = ["https://", "http://", "ftp://"]
+    // Keep in sync with `security::LINK_PREFIXES` (mid-string find for share captions).
+    let start = ["https://", "http://", "ftp://", "magnet:", "ed2k://", "thunder://"]
         .iter()
         .filter_map(|p| lower.find(p))
         .min();
@@ -1085,6 +1086,12 @@ mod tests {
     fn url_only_is_primarily_url() {
         assert!(is_primarily_url("https://example.com/path"));
         assert!(is_primarily_url("see https://example.com"));
+        assert!(is_primarily_url(
+            "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+        ));
+        assert!(is_primarily_url(
+            "ed2k://|file|name.iso|123|ABCDEF0123456789ABCDEF0123456789|/"
+        ));
     }
 
     #[test]

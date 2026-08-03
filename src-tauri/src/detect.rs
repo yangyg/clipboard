@@ -51,8 +51,8 @@ const BANK_CARD_MAX_CHARS: usize = 25;
 pub fn detect_content_type(content: &str) -> ContentType {
     let trimmed = content.trim();
 
-    // URL detection
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") || trimmed.starts_with("ftp://") {
+    // Link / download URI (http(s), ftp, magnet, ed2k, thunder)
+    if crate::security::is_openable_link(trimmed) {
         return ContentType::Link;
     }
 
@@ -148,6 +148,24 @@ mod tests {
     fn links_are_detected() {
         assert_eq!(detect_content_type("https://example.com"), ContentType::Link);
         assert_eq!(detect_content_type("  ftp://host/file "), ContentType::Link);
+        assert_eq!(detect_content_type("HTTP://Example.COM/a"), ContentType::Link);
+        assert_eq!(
+            detect_content_type("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"),
+            ContentType::Link
+        );
+        assert_eq!(
+            detect_content_type("ed2k://|file|name.iso|123|ABCDEF0123456789ABCDEF0123456789|/"),
+            ContentType::Link
+        );
+        assert_eq!(
+            detect_content_type("thunder://QUFodHRwOi8vZXhhbXBsZS5jb20v"),
+            ContentType::Link
+        );
+        assert_eq!(
+            detect_content_type("download this magnet:?xt=urn:btih:abc please"),
+            ContentType::Text
+        );
+        assert_eq!(detect_content_type("javascript:alert(1)"), ContentType::Text);
     }
 
     #[test]

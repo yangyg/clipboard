@@ -93,7 +93,7 @@
       <template v-else-if="record.content_type === 'link'">
         <div class="link-card">
           <div class="link-icon"><AppIcon name="link" :size="22" /></div>
-          <div class="link-title">{{ $t('preview.webLink') }}</div>
+          <div class="link-title">{{ linkTitle }}</div>
           <a
             v-if="safeLinkHref"
             class="link-url"
@@ -102,6 +102,15 @@
             rel="noopener noreferrer"
             v-html="plainContentHtml"
           ></a>
+          <button
+            v-else-if="openableLinkUrl"
+            type="button"
+            class="link-url link-url-btn"
+            :title="$t('preview.clickToOpenLink')"
+            @click.stop="openLinkExternally"
+          >
+            <span v-html="plainContentHtml"></span>
+          </button>
           <div v-else class="link-url" v-html="plainContentHtml"></div>
         </div>
       </template>
@@ -317,7 +326,7 @@ const sanitizedHtml = computed(() => {
   return sanitizeClipboardHtml(html);
 });
 
-/** Only http(s) — blocks javascript:/data: from malicious imports. */
+/** http(s) only — safe as WebView <a href>. */
 const safeLinkHref = computed(() => {
   const raw = (record.value?.content ?? "").trim();
   if (!raw) return null;
@@ -329,6 +338,44 @@ const safeLinkHref = computed(() => {
   }
   return null;
 });
+
+/** Download / OS-handler schemes (magnet, ed2k, thunder, ftp) — open via Rust. */
+const OPENABLE_LINK_PREFIXES = [
+  "https://",
+  "http://",
+  "ftp://",
+  "magnet:",
+  "ed2k://",
+  "thunder://",
+] as const;
+
+const openableLinkUrl = computed(() => {
+  const raw = (record.value?.content ?? "").trim();
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  for (const p of OPENABLE_LINK_PREFIXES) {
+    if (lower.startsWith(p) && raw.length > p.length) return raw;
+  }
+  return null;
+});
+
+const linkTitle = computed(() => {
+  if (safeLinkHref.value) return t("preview.webLink");
+  if (openableLinkUrl.value) return t("preview.downloadLink");
+  return t("preview.webLink");
+});
+
+async function openLinkExternally() {
+  const url = openableLinkUrl.value;
+  if (!url) return;
+  try {
+    await invoke("open_url", { url });
+  } catch (e) {
+    console.error("Open link failed:", e);
+    const msg = typeof e === "string" ? e : t("preview.openLinkFailed");
+    toast(msg, "error");
+  }
+}
 
 /** Plain content with optional search-term highlighting (escaped). */
 const plainContentHtml = computed(() => {
@@ -826,6 +873,23 @@ async function permanentDel() {
 
 .link-url:hover {
   text-decoration: underline;
+}
+
+button.link-url-btn {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.link-url-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 .file-card {

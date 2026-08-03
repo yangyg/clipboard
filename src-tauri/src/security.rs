@@ -78,13 +78,63 @@ pub fn normalize_content_type(raw: &str) -> String {
     }
 }
 
-/// http(s) only — blocks javascript:/data:/file: etc.
-pub fn is_safe_http_url(s: &str) -> bool {
+/// Schemes accepted as `content_type: link` and allowed by `open_url`.
+const LINK_SCHEMES: &[&str] = &["http", "https", "ftp", "magnet", "ed2k", "thunder"];
+
+/// Case-insensitive whole-string prefixes when `Url::parse` is awkward (e.g. ed2k pipes).
+const LINK_PREFIXES: &[&str] = &[
+    "https://",
+    "http://",
+    "ftp://",
+    "magnet:",
+    "ed2k://",
+    "thunder://",
+];
+
+/// True when the trimmed string is a whole openable link URI (http(s)/ftp/magnet/ed2k/thunder).
+pub fn is_openable_link(s: &str) -> bool {
+    link_scheme(s).is_some()
+}
+
+fn scheme_has_body(trimmed: &str, scheme: &str) -> bool {
+    // Reject bare `magnet:` / `http://` with nothing after the conventional prefix.
+    let lower = trimmed.to_ascii_lowercase();
+    for &prefix in LINK_PREFIXES {
+        if prefix.starts_with(scheme) && lower.starts_with(prefix) {
+            return trimmed.len() > prefix.len();
+        }
+    }
+    // Unknown prefix shape for a known scheme — require at least `scheme:` + 1 char.
+    trimmed.len() > scheme.len() + 1
+}
+
+/// Returns the lowercase scheme if `s` is entirely one whitelisted link URI.
+pub fn link_scheme(s: &str) -> Option<&'static str> {
     let trimmed = s.trim();
-    let Ok(url) = url::Url::parse(trimmed) else {
-        return false;
-    };
-    matches!(url.scheme(), "http" | "https")
+    if trimmed.is_empty() || trimmed.contains('\0') {
+        return None;
+    }
+    if let Ok(url) = url::Url::parse(trimmed) {
+        let scheme = url.scheme();
+        if let Some(&known) = LINK_SCHEMES.iter().find(|&&k| k == scheme) {
+            if scheme_has_body(trimmed, known) {
+                return Some(known);
+            }
+            return None;
+        }
+        // Parsed but not whitelisted (javascript:, data:, file:, …)
+        return None;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    for &prefix in LINK_PREFIXES {
+        if lower.starts_with(prefix) && trimmed.len() > prefix.len() {
+            let scheme = prefix.split([':', '/']).next().unwrap_or(prefix);
+            if let Some(&known) = LINK_SCHEMES.iter().find(|&&k| k == scheme) {
+                return Some(known);
+            }
+        }
+    }
+    None
 }
 
 /// Export/import JSON path: absolute, `.json`, no `..`, parent exists (export) / file exists (import).
@@ -177,12 +227,30 @@ mod tests {
     }
 
     #[test]
-    fn http_url_filter() {
-        assert!(is_safe_http_url("https://example.com/a"));
-        assert!(is_safe_http_url("http://example.com"));
-        assert!(!is_safe_http_url("javascript:alert(1)"));
-        assert!(!is_safe_http_url("data:text/html,hi"));
-        assert!(!is_safe_http_url("file:///c:/x"));
+    fn openable_link_whitelist() {
+        assert_eq!(link_scheme("https://example.com"), Some("https"));
+        assert_eq!(link_scheme("https://example.com/a"), Some("https"));
+        assert_eq!(link_scheme("  HTTP://Example.COM/a "), Some("http"));
+        assert_eq!(link_scheme("ftp://host/file"), Some("ftp"));
+        assert_eq!(
+            link_scheme("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"),
+            Some("magnet")
+        );
+        assert_eq!(
+            link_scheme("ed2k://|file|name.iso|123|ABCDEF0123456789ABCDEF0123456789|/"),
+            Some("ed2k")
+        );
+        assert_eq!(link_scheme("thunder://QUFodHRwOi8vZXhhbXBsZS5jb20v"), Some("thunder"));
+        assert!(!is_openable_link("javascript:alert(1)"));
+        assert!(!is_openable_link("data:text/html,hi"));
+        assert!(!is_openable_link("file:///c:/x"));
+        assert!(!is_openable_link("magnet:"));
+        assert!(!is_openable_link("http://"));
+        assert!(!is_openable_link("see magnet:?xt=urn:btih:abc more text"));
+        assert!(!is_openable_link("plain text"));
+        // http(s) subset still openable; download schemes are not "browser-only" but are openable
+        assert!(matches!(link_scheme("https://a.com"), Some("https")));
+        assert!(matches!(link_scheme("magnet:?xt=urn:btih:abc"), Some("magnet")));
     }
 
     #[test]

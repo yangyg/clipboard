@@ -884,7 +884,7 @@ impl ClipboardDb {
             // M-5: Avoid cloning the entire record (content + content_html can be large).
             // Only create local overrides for fields we might sanitize.
             let mut content_type = crate::security::normalize_content_type(&record.content_type);
-            if content_type == "link" && !crate::security::is_safe_http_url(&record.content) {
+            if content_type == "link" && !crate::security::is_openable_link(&record.content) {
                 content_type = "text".into();
             }
             let mut media_path = record.media_path.as_deref();

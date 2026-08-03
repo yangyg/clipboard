@@ -5,7 +5,6 @@
 use std::sync::atomic::Ordering as AtomicOrdering;
 
 use tauri::{Emitter, Manager, State};
-use url::Url;
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tracing::{info, warn};
 
@@ -164,19 +163,15 @@ fn open_path_with_default_app(path: &std::path::Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Open an http(s) URL in the default browser (whitelist only; see security).
+/// Open a whitelisted link URI via the OS handler (browser / BT client / etc.).
 #[tauri::command]
 pub async fn open_url(url: String) -> Result<(), String> {
     let trimmed = url.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    if !lower.starts_with("https://") && !lower.starts_with("http://") {
-        return Err("仅允许打开 http(s) 链接".into());
+    if !crate::security::is_openable_link(trimmed) {
+        return Err("仅允许打开受支持的链接协议".into());
     }
-    let value = Url::parse(trimmed).map_err(|e| format!("无效链接: {e}"))?;
-    if !matches!(value.scheme(), "http" | "https") {
-        return Err("仅允许打开 http(s) 链接".into());
-    }
-    open_path_with_default_app(std::path::Path::new(value.as_str()))
+    // ShellExecute accepts URI strings; keep the validated trimmed form (ed2k pipes etc.).
+    open_path_with_default_app(std::path::Path::new(trimmed))
 }
 
 /// Remember the current foreground app as paste destination (safe no-op if FG is us).

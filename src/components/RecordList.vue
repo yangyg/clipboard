@@ -145,12 +145,10 @@
             ></div>
             <div class="record-meta">
               <span class="record-time">{{ formatTime(item.record!.created_at, t) }}</span>
-              <span class="record-source">
-                <SourceBadge
-                  :source-app="item.record!.source_app"
-                  :label-html="sourceLabelHtml(item.record!, clipboardStore.searchQuery)"
-                />
-              </span>
+              <span
+                class="record-source"
+                v-html="sourceLabelHtml(item.record!, clipboardStore.searchQuery) ?? escapeHtml(sourceShortName(item.record!.source_app))"
+              ></span>
               <span
                 v-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height"
                 class="record-dims"
@@ -300,7 +298,6 @@ import PreviewPane from "./PreviewPane.vue";
 import ContextMenu from "./ContextMenu.vue";
 import AliasDialog from "./AliasDialog.vue";
 import BatchBar from "./BatchBar.vue";
-import SourceBadge from "./SourceBadge.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 import ListToolbar from "./ListToolbar.vue";
@@ -310,6 +307,8 @@ import { useColumnResize } from "../composables/useColumnResize";
 import { useBatchBarHeight } from "../composables/useBatchBarHeight";
 import { useRecordActions } from "../composables/useRecordActions";
 import { useI18n } from "vue-i18n";
+import { escapeHtml } from "../utils/highlightSearch";
+import { sourceShortName } from "../utils/sourceBadge";
 import {
   formatTime,
   previewHtml,
@@ -1090,6 +1089,9 @@ function onListColResizeKey(e: KeyboardEvent) {
   align-items: center;
   min-width: 0;
   max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .record-dims {

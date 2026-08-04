@@ -5,7 +5,7 @@
  * dependency-free util module).
  */
 import { parseClipboardColor } from "./clipboardColor";
-import { sourceShortName } from "./sourceBadge";
+import { resolveSourceLabel } from "./sourceBadge";
 import { escapeHtml, highlightedPreview, highlightSearchHtml } from "./highlightSearch";
 import type { ClipboardRecord } from "../types";
 
@@ -62,10 +62,15 @@ export function rowColor(record: ClipboardRecord): string | null {
   return parseClipboardColor(record.content);
 }
 
-export function sourceLabelHtml(record: ClipboardRecord, query: string): string | undefined {
+export function sourceLabelHtml(
+  record: ClipboardRecord,
+  query: string,
+  t: TranslateFn,
+  overrides?: Record<string, string>,
+): string | undefined {
   const q = query.trim();
   if (!q) return undefined;
-  return highlightSearchHtml(sourceShortName(record.source_app), q);
+  return highlightSearchHtml(resolveSourceLabel(record.source_app, record.source_name, t, overrides), q);
 }
 
 // Cached "now" refreshed at most once per 30s to avoid creating a Date object

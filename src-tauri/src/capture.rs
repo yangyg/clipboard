@@ -26,6 +26,7 @@ struct TextCaptureJob {
     captured: CapturedText,
     source_app: String,
     source_window: String,
+    source_name: String,
 }
 
 /// Heavy image capture job — processed by the dedicated image worker thread
@@ -34,6 +35,7 @@ struct ImageCaptureJob {
     captured: CapturedImage,
     source_app: String,
     source_window: String,
+    source_name: String,
 }
 
 /// Spawn the capture pipeline (text worker + image worker + monitor) at
@@ -89,12 +91,12 @@ pub(crate) fn start_capture(
             if *capture_paused_thread.read() {
                 return;
             }
-            let (source_window, source_app) = get_foreground_window_info();
+            let (source_window, source_app, source_name) = get_foreground_window_info();
             // Dispatch to the appropriate worker: text (fast) or image (slow).
             // Non-blocking: a full queue must not stall the poll thread.
             match event {
                 ClipboardEvent::Text(captured) => {
-                    let job = TextCaptureJob { captured, source_app, source_window };
+                    let job = TextCaptureJob { captured, source_app, source_window, source_name };
                     match text_tx.try_send(job) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
@@ -106,7 +108,7 @@ pub(crate) fn start_capture(
                     }
                 }
                 ClipboardEvent::Image(captured) => {
-                    let job = ImageCaptureJob { captured, source_app, source_window };
+                    let job = ImageCaptureJob { captured, source_app, source_window, source_name };
                     match image_tx.try_send(job) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
@@ -128,7 +130,7 @@ fn process_text_job(
     db: &ClipboardDb,
     app: &tauri::AppHandle,
 ) {
-    let TextCaptureJob { captured, source_app, source_window } = job;
+    let TextCaptureJob { captured, source_app, source_window, source_name } = job;
     let settings = capture_settings(db);
     if is_ignored_app(&source_app, &settings.ignored_apps) {
         return;
@@ -150,6 +152,7 @@ fn process_text_job(
         settings.sensitive_auto_expire_seconds,
         &source_app,
         &source_window,
+        &source_name,
         None,
         captured.html.as_deref(),
     ) {
@@ -187,7 +190,7 @@ fn process_image_job(
     media_root: &Path,
     app: &tauri::AppHandle,
 ) {
-    let ImageCaptureJob { captured, source_app, source_window } = job;
+    let ImageCaptureJob { captured, source_app, source_window, source_name } = job;
     let settings = capture_settings(db);
     if is_ignored_app(&source_app, &settings.ignored_apps) {
         return;
@@ -222,6 +225,7 @@ fn process_image_job(
                 settings.sensitive_auto_expire_seconds,
                 &source_app,
                 &source_window,
+                &source_name,
                 Some(&image_meta),
                 None,
             ) {

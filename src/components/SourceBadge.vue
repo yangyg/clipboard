@@ -25,13 +25,17 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { resolveSourceBadge } from "../utils/sourceBadge";
+import { useSettingsStore } from "../stores/settings";
+import { buildSourceOverrides, resolveSourceBadge } from "../utils/sourceBadge";
 
 const { t } = useI18n();
+const settingsStore = useSettingsStore();
 
 const props = defineProps<{
   sourceApp: string;
-  /** Full tooltip; defaults to `Source: {raw or System Clipboard}`. */
+  /** FileDescription-based friendly name from Rust capture (optional). */
+  sourceName?: string;
+  /** Full tooltip; defaults to `Source: {display} ({raw})`. */
   title?: string;
   /** Pre-highlighted / escaped HTML for the label (search). */
   labelHtml?: string;
@@ -39,12 +43,22 @@ const props = defineProps<{
   iconSrc?: string;
 }>();
 
-const badge = computed(() => resolveSourceBadge(props.sourceApp ?? ""));
+const overrides = computed(() =>
+  buildSourceOverrides(settingsStore.settings.source_name_overrides),
+);
+
+const badge = computed(() =>
+  resolveSourceBadge(props.sourceApp ?? "", props.sourceName, t, overrides.value)
+);
 
 const resolvedTitle = computed(() => {
   if (props.title != null && props.title !== "") return props.title;
   const raw = (props.sourceApp || "").trim();
-  return t('record.sourceTooltip', { app: raw || t('record.systemClipboard') });
+  if (!raw) return t('record.systemClipboard');
+  const label = badge.value.label;
+  return label === raw
+    ? t('record.sourceTooltip', { app: raw })
+    : t('record.sourceTooltip', { app: `${label} (${raw})` });
 });
 </script>
 

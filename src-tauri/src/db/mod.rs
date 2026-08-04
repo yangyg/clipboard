@@ -84,7 +84,8 @@ impl ClipboardDb {
                 height INTEGER,
                 content_html TEXT,
                 content_len INTEGER NOT NULL DEFAULT 0,
-                alias TEXT NOT NULL DEFAULT ''
+                alias TEXT NOT NULL DEFAULT '',
+                source_name TEXT NOT NULL DEFAULT ''
             );
 
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);

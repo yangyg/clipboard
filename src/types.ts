@@ -12,6 +12,8 @@ export interface ClipboardRecord {
   content_type: ContentType;
   source_app: string;
   source_window: string;
+  /** Friendly source name from the exe's FileDescription (display only; empty = fall back). */
+  source_name?: string;
   hash: string;
   copy_count: number;
   is_favorite: boolean;
@@ -55,6 +57,12 @@ export interface AutoTagRule {
   content_types: string[];
 }
 
+/** User-defined source display-name override (matches exe basename). */
+export interface SourceNameOverride {
+  exe_name: string;
+  display_name: string;
+}
+
 /** Optional product capabilities — keep in sync with Rust `FeatureFlags`. */
 export interface FeatureFlags {
   tags: boolean;
@@ -91,6 +99,8 @@ export interface Settings {
   minimize_to_tray: boolean;
   // Ignore apps
   ignored_apps: string[];
+  /** User-defined exe → display-name overrides (frontend resolution). */
+  source_name_overrides: SourceNameOverride[];
   /** Remembered logical window size (0 = adaptive). */
   floating_width: number;
   floating_height: number;

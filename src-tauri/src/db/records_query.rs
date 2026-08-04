@@ -141,6 +141,7 @@ impl ClipboardDb {
             thumb_abs,
             content_len: row.get(19).ok(),
             alias: row.get::<_, String>(20).unwrap_or_default(),
+            source_name: row.get::<_, String>(21).unwrap_or_default(),
         })
     }
 

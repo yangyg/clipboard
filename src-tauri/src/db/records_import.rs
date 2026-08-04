@@ -111,15 +111,16 @@ impl ClipboardDb {
 
             tx.execute(
                 "INSERT INTO records (
-                    content, content_type, source_app, source_window, hash, copy_count,
+                    content, content_type, source_app, source_window, source_name, hash, copy_count,
                     is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at,
                     media_path, thumb_path, width, height, content_html, alias
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
                     content_type,
                     record.source_app,
                     record.source_window,
+                    record.source_name,
                     record.hash,
                     record.copy_count,
                     record.is_favorite as i32,

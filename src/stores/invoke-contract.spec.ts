@@ -104,7 +104,7 @@ const MOCK_SETTINGS: Settings = {
   default_paste_mode: "original", auto_close_on_paste: true,
   enable_sensitive_detection: true, sensitive_auto_expire_seconds: 600,
   data_path: "", auto_start: false, minimize_to_tray: true,
-  ignored_apps: [], floating_width: 0, floating_height: 0,
+  ignored_apps: [], source_name_overrides: [], floating_width: 0, floating_height: 0,
   window_width: 0, window_height: 0, enable_auto_tag: true,
   auto_tag_rules: [], onboarding_completed: false, language: "zh-CN",
   webdav_url: "", webdav_username: "", webdav_password: "",

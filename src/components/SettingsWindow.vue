@@ -49,6 +49,7 @@
           />
           <SettingsAppearance v-else-if="activeSection === 'appearance'" />
           <SettingsHistory v-else-if="activeSection === 'history'" />
+          <SettingsSource v-else-if="activeSection === 'source'" />
           <SettingsTags v-else-if="activeSection === 'tags'" />
           <SettingsPrivacy v-else-if="activeSection === 'privacy'" />
           <SettingsFeatures v-else-if="activeSection === 'features'" />
@@ -74,6 +75,7 @@ import WindowControls from "./WindowControls.vue";
 import SettingsShortcuts from "./settings/SettingsShortcuts.vue";
 import SettingsAppearance from "./settings/SettingsAppearance.vue";
 import SettingsHistory from "./settings/SettingsHistory.vue";
+import SettingsSource from "./settings/SettingsSource.vue";
 import SettingsTags from "./settings/SettingsTags.vue";
 import SettingsPrivacy from "./settings/SettingsPrivacy.vue";
 import SettingsFeatures from "./settings/SettingsFeatures.vue";
@@ -120,6 +122,7 @@ const ALL_SECTIONS: {
   // 内容
   { key: "tags", icon: "tag", labelKey: "settings.nav.tags", group: "content", feature: "tags" },
   { key: "history", icon: "history", labelKey: "settings.nav.history", group: "content" },
+  { key: "source", icon: "monitor", labelKey: "settings.nav.source", group: "content" },
   // 隐私与系统
   { key: "privacy", icon: "shield", labelKey: "settings.nav.privacy", group: "privacySystem" },
   { key: "system", icon: "settings2", labelKey: "settings.nav.system", group: "privacySystem" },

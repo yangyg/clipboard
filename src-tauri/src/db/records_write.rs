@@ -17,6 +17,7 @@ impl ClipboardDb {
         sensitive_auto_expire_seconds: i32,
         source_app: &str,
         source_window: &str,
+        source_name: &str,
         image: Option<&ImageMeta>,
         content_html: Option<&str>,
     ) -> SqlResult<(i64, bool, ClipboardRecord)> {
@@ -41,8 +42,8 @@ impl ClipboardDb {
             let now = chrono::Utc::now().to_rfc3339();
             // Re-copy only refreshes source/timestamp — paste count is separate.
             conn.execute(
-                "UPDATE records SET updated_at = ?, source_app = ?, source_window = ? WHERE id = ?",
-                params![now, source_app, source_window, id],
+                "UPDATE records SET updated_at = ?, source_app = ?, source_window = ?, source_name = ? WHERE id = ?",
+                params![now, source_app, source_window, source_name, id],
             )?;
             let record = self
                 .get_record_list_locked(&conn, id)?
@@ -68,13 +69,14 @@ impl ClipboardDb {
         };
 
         conn.execute(
-            "INSERT INTO records (content, content_type, source_app, source_window, hash, copy_count, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO records (content, content_type, source_app, source_window, source_name, hash, copy_count, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
+             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 content,
                 content_type.as_str(),
                 source_app,
                 source_window,
+                source_name,
                 hash,
                 is_sensitive as i32,
                 auto_expire_at,

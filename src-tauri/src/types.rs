@@ -27,6 +27,9 @@ pub struct ClipboardRecord {
     pub source_app: String,
     #[serde(rename = "source_window")]
     pub source_window: String,
+    /// Friendly source name from the exe's FileDescription (display only; empty = fall back).
+    #[serde(default, rename = "source_name")]
+    pub source_name: String,
     pub hash: String,
     #[serde(rename = "copy_count")]
     pub copy_count: i32,
@@ -80,6 +83,15 @@ pub struct AutoTagRule {
     pub keywords: Vec<String>,
     #[serde(default, rename = "content_types")]
     pub content_types: Vec<String>,
+}
+
+/// User-defined source display-name override (matches the exe basename).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SourceNameOverride {
+    #[serde(rename = "exe_name")]
+    pub exe_name: String,
+    #[serde(rename = "display_name")]
+    pub display_name: String,
 }
 
 fn default_enable_auto_tag() -> bool {
@@ -184,6 +196,9 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     #[serde(rename = "ignored_apps")]
     pub ignored_apps: Vec<String>,
+    /// User-defined exe → display-name overrides (frontend-only resolution).
+    #[serde(default, rename = "source_name_overrides")]
+    pub source_name_overrides: Vec<SourceNameOverride>,
     /// Remembered logical size (0 = use adaptive default). Per app mode.
     #[serde(default, rename = "floating_width")]
     pub floating_width: i32,
@@ -250,6 +265,7 @@ impl Default for Settings {
                 "1Password.exe".to_string(),
                 "ICBCNetBank.exe".to_string(),
             ],
+            source_name_overrides: vec![],
             floating_width: 0,
             floating_height: 0,
             window_width: 0,

@@ -86,7 +86,7 @@ const EXPECTED_RECORD_COLS: &[&str] = &[
     "id", "content", "content_type", "source_app", "source_window", "hash",
     "copy_count", "is_favorite", "is_pinned", "is_sensitive", "is_trashed",
     "auto_expire_at", "created_at", "updated_at", "media_path", "thumb_path",
-    "width", "height", "content_html", "content_len", "alias",
+    "width", "height", "content_html", "content_len", "alias", "source_name",
 ];
 
 /// Expected indexes (name → must exist in sqlite_master).

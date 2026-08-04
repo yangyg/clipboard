@@ -147,7 +147,7 @@
               <span class="record-time">{{ formatTime(item.record!.created_at, t) }}</span>
               <span
                 class="record-source"
-                v-html="sourceLabelHtml(item.record!, clipboardStore.searchQuery) ?? escapeHtml(sourceShortName(item.record!.source_app))"
+                v-html="sourceLabelHtml(item.record!, clipboardStore.searchQuery, t, sourceOverrides) ?? escapeHtml(resolveSourceLabel(item.record!.source_app, item.record!.source_name, t, sourceOverrides))"
               ></span>
               <span
                 v-if="item.record!.content_type === 'image' && item.record!.width && item.record!.height"
@@ -308,7 +308,7 @@ import { useBatchBarHeight } from "../composables/useBatchBarHeight";
 import { useRecordActions } from "../composables/useRecordActions";
 import { useI18n } from "vue-i18n";
 import { escapeHtml } from "../utils/highlightSearch";
-import { sourceShortName } from "../utils/sourceBadge";
+import { buildSourceOverrides, resolveSourceLabel } from "../utils/sourceBadge";
 import {
   formatTime,
   previewHtml,
@@ -321,6 +321,10 @@ const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const { t } = useI18n();
 const listRef = ref<HTMLElement | null>(null);
+
+const sourceOverrides = computed(() =>
+  buildSourceOverrides(settingsStore.settings.source_name_overrides),
+);
 
 // --- Floating batch bar (window mode): reserve its height as list padding ---
 const batchBarRef = ref<HTMLElement | null>(null);

@@ -32,7 +32,7 @@
             <span>{{ recordAlias || $t('preview.setAlias') }}</span>
           </button>
           <div class="preview-meta-line">
-            <SourceBadge :source-app="record.source_app" />
+            <SourceBadge :source-app="record.source_app" :source-name="record.source_name" />
             <span class="meta-sep" aria-hidden="true">·</span>
             <span :title="$t('preview.createdAt', { time: formatDateTime(record.created_at) })">{{ formatDateTime(record.created_at) }}</span>
             <template v-if="record.content_type === 'image' && record.width && record.height">

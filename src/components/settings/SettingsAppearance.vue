@@ -15,10 +15,10 @@
         @click="update('theme', t.key)"
         @keydown.enter.prevent="update('theme', t.key)"
         @keydown.space.prevent="update('theme', t.key)"
-        @keydown.right.prevent="focusTheme(idx + 1)"
-        @keydown.left.prevent="focusTheme(idx - 1)"
-        @keydown.down.prevent="focusTheme(idx + 1)"
-        @keydown.up.prevent="focusTheme(idx - 1)"
+        @keydown.right.prevent="focusTheme(THEMES, idx + 1)"
+        @keydown.left.prevent="focusTheme(THEMES, idx - 1)"
+        @keydown.down.prevent="focusTheme(THEMES, idx + 1)"
+        @keydown.up.prevent="focusTheme(THEMES, idx - 1)"
       >
         <div class="theme-preview" :class="`theme-${t.key}`" aria-hidden="true"></div>
         <div class="theme-name"><AppIcon :name="t.icon" :size="13" /> {{ $t(t.labelKey) }}</div>
@@ -116,17 +116,25 @@ import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, update } = useSettings();
 
-const THEMES: { key: Settings["theme"]; icon: AppIconName; labelKey: string }[] = [
+type ThemeOption = { key: Settings["theme"]; icon: AppIconName; labelKey: string };
+
+const THEMES: ThemeOption[] = [
   { key: "dark", icon: "moon", labelKey: "settings.appearance.themeDark" },
   { key: "light", icon: "sun", labelKey: "settings.appearance.themeLight" },
   { key: "oled", icon: "circle", labelKey: "settings.appearance.themeOled" },
   { key: "system", icon: "monitor", labelKey: "settings.appearance.themeSystem" },
+  { key: "dracula", icon: "sparkles", labelKey: "settings.appearance.themeDracula" },
+  { key: "nord", icon: "zap", labelKey: "settings.appearance.themeNord" },
+  { key: "sunset", icon: "star", labelKey: "settings.appearance.themeSunset" },
+  { key: "dracula-light", icon: "sparkles", labelKey: "settings.appearance.themeDraculaLight" },
+  { key: "nord-light", icon: "zap", labelKey: "settings.appearance.themeNordLight" },
+  { key: "sunset-light", icon: "star", labelKey: "settings.appearance.themeSunsetLight" },
 ];
 
-function focusTheme(index: number) {
-  const len = THEMES.length;
+function focusTheme(items: readonly ThemeOption[], index: number) {
+  const len = items.length;
   const next = ((index % len) + len) % len;
-  const key = THEMES[next].key;
+  const key = items[next].key;
   update("theme", key);
   requestAnimationFrame(() => {
     const el = document.querySelector<HTMLElement>(`.theme-card[data-theme="${key}"]`);
@@ -153,13 +161,13 @@ const APP_MODES = [
 <style scoped>
 /* Theme cards */
 .theme-cards {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 10px;
   margin-bottom: 16px;
 }
 
 .theme-card {
-  flex: 1;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -197,6 +205,12 @@ const APP_MODES = [
 }
 .theme-oled { background: #000000; }
 .theme-system { background: linear-gradient(135deg, var(--bg-surface) 50%, #ffffff 50%); }
+.theme-dracula { background: linear-gradient(135deg, #282a36, #1e1f29); }
+.theme-nord { background: linear-gradient(135deg, #2e3440, #20252e); }
+.theme-sunset { background: linear-gradient(135deg, #29201a, #1c1512); }
+.theme-dracula-light { background: linear-gradient(135deg, #faf7ff, #f3eefb); }
+.theme-nord-light { background: linear-gradient(135deg, #f0f4f8, #e8edf3); }
+.theme-sunset-light { background: linear-gradient(135deg, #fdf7ee, #f7efe4); }
 
 .theme-name {
   font-size: var(--text-sm);
@@ -253,12 +267,5 @@ const APP_MODES = [
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.4;
-}
-
-@media (max-width: 720px) {
-  .theme-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
 }
 </style>

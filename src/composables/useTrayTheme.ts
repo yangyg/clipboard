@@ -15,6 +15,19 @@ export interface TrayMenuState {
   language: string;
 }
 
+/** Every theme class `applyTheme` can attach to <body> (mirrors settings store). */
+const THEME_CLASSES = [
+  "light-theme",
+  "dark-theme",
+  "oled-theme",
+  "dracula-theme",
+  "nord-theme",
+  "sunset-theme",
+  "dracula-light-theme",
+  "nord-light-theme",
+  "sunset-light-theme",
+] as const;
+
 export function useTrayTheme() {
   let currentTheme = "dark";
   // Latest authoritative OS dark-mode signal from the native watcher. matchMedia
@@ -24,7 +37,7 @@ export function useTrayTheme() {
 
   function applyTheme(theme: string) {
     currentTheme = theme;
-    document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
+    document.body.classList.remove(...THEME_CLASSES);
     if (theme === "system") {
       const prefersDark =
         lastKnownSystemDark ?? window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -56,7 +69,7 @@ export function useTrayTheme() {
   function onSystemThemeChange(dark: boolean) {
     lastKnownSystemDark = dark;
     if (currentTheme !== "system") return;
-    document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
+    document.body.classList.remove(...THEME_CLASSES);
     document.body.classList.add(dark ? "dark-theme" : "light-theme");
   }
 

@@ -78,7 +78,7 @@ export interface Settings {
   max_records: number;
   retention_days: number;
   // Appearance
-  theme: 'dark' | 'light' | 'oled' | 'system';
+  theme: 'dark' | 'light' | 'oled' | 'system' | 'dracula' | 'nord' | 'sunset' | 'dracula-light' | 'nord-light' | 'sunset-light';
   panel_opacity: number;
   panel_radius: number;
   enable_blur: boolean;

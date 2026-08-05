@@ -11,7 +11,14 @@ import { useToast } from "./useToast";
 import { useI18n } from "vue-i18n";
 import type { AppIconName } from "../components/icons/AppIcon.vue";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
-import type { WebDavSyncResult } from "../types";
+import type { Settings, WebDavSyncResult } from "../types";
+
+/** Light-side theme set for the quick-menu dark⇄light toggle (display + action). */
+const LIGHT_THEMES = new Set<Settings["theme"]>(["light", "dracula-light", "nord-light", "sunset-light"]);
+
+function isLightTheme(theme: Settings["theme"]): boolean {
+  return LIGHT_THEMES.has(theme);
+}
 
 export function useSidebarMenus(openSettings: (section?: string) => void) {
   const clipboardStore = useClipboardStore();
@@ -31,7 +38,7 @@ export function useSidebarMenus(openSettings: (section?: string) => void) {
         label: t('sidebar.appearance'),
         icon: "palette",
         toggle: {
-          value: settingsStore.settings.theme !== "dark",
+          value: isLightTheme(settingsStore.settings.theme),
           labels: [t('sidebar.dark'), t('sidebar.light')],
         },
       },
@@ -77,7 +84,9 @@ export function useSidebarMenus(openSettings: (section?: string) => void) {
 
   function onQuickMenuSelect(id: string) {
     if (id === "theme-toggle") {
-      const next = settingsStore.settings.theme === "light" ? "dark" : "light";
+      // Flip lightness only: base "light" ⇄ "dark"; colorful presets follow
+      // their family side (light ones flip back to dark, dark ones to light).
+      const next = isLightTheme(settingsStore.settings.theme) ? "dark" : "light";
       settingsStore.updateSetting("theme", next);
       return;
     }

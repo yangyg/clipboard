@@ -151,6 +151,300 @@ body.oled-theme,
   --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.9);
 }
 
+/* Dracula Theme (紫夜) — fixed dark-leaning colorful preset */
+body.dracula-theme,
+.dracula-theme {
+  --bg-base: #21222c;
+  --bg-surface: #282a36;
+  --bg-elevated: #2f3040;
+  --bg-hover: #34354a;
+  --bg-active: #3a3b52;
+  --bg-input: #1e1f2b;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.11);
+  --border-focus: #bd93f9;
+  --text-primary: #f8f8f2;
+  --text-secondary: #b4b4c8;
+  --text-tertiary: #8a8aa3;
+  --text-inverse: #1e1f29;
+  --accent: #bd93f9;
+  --accent-hover: #caa2fb;
+  --accent-light: #e3d0fd;
+  --accent-text: #d8c1fc;
+  --accent-soft: rgba(189, 147, 249, 0.15);
+  --accent-softer: rgba(189, 147, 249, 0.07);
+  --accent-pressed: #a882f0;
+  --bg-selected: rgba(189, 147, 249, 0.16);
+  --border-light: rgba(255, 255, 255, 0.09);
+  --text-muted: var(--text-tertiary);
+  --type-text: #8be9fd;
+  --type-code: #50fa7b;
+  --type-link: #9ab4ff;
+  --type-image: #3ec6e8;
+  --type-file: #f1fa8c;
+  --success: #50fa7b;
+  --success-soft: rgba(80, 250, 123, 0.13);
+  --warning: #ffb86c;
+  --warning-soft: rgba(255, 184, 108, 0.14);
+  --pin: #ff79c6;
+  --pin-soft: rgba(255, 121, 198, 0.15);
+  --danger: #ff5555;
+  --danger-soft: rgba(255, 85, 85, 0.15);
+  --code-bg: #1e1f29;
+  --sensitive: #ff9e64;
+  --sensitive-soft: rgba(255, 158, 100, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.75);
+  --shadow-glow: 0 0 20px rgba(189, 147, 249, 0.18);
+  --win-close-hover: #e81123;
+}
+
+/* Nord Theme (冰蓝) — fixed dark-leaning colorful preset */
+body.nord-theme,
+.nord-theme {
+  --bg-base: #242933;
+  --bg-surface: #2e3440;
+  --bg-elevated: #353d4b;
+  --bg-hover: #3b4252;
+  --bg-active: #434c5e;
+  --bg-input: #20252e;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-focus: #88c0d0;
+  --text-primary: #eceff4;
+  --text-secondary: #a6b0c4;
+  --text-tertiary: #7b8598;
+  --text-inverse: #2e3440;
+  --accent: #88c0d0;
+  --accent-hover: #9ccddd;
+  --accent-light: #bfe0ea;
+  --accent-text: #bfe0ea;
+  --accent-soft: rgba(136, 192, 208, 0.14);
+  --accent-softer: rgba(136, 192, 208, 0.07);
+  --accent-pressed: #76b3c4;
+  --bg-selected: rgba(136, 192, 208, 0.16);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --text-muted: var(--text-tertiary);
+  --type-text: #9fd8e8;
+  --type-code: #a3be8c;
+  --type-link: #81a1c1;
+  --type-image: #8fbcbb;
+  --type-file: #ebcb8b;
+  --success: #a3be8c;
+  --success-soft: rgba(163, 190, 140, 0.14);
+  --warning: #ebcb8b;
+  --warning-soft: rgba(235, 203, 139, 0.14);
+  --pin: #b48ead;
+  --pin-soft: rgba(180, 142, 173, 0.15);
+  --danger: #bf616a;
+  --danger-soft: rgba(191, 97, 106, 0.15);
+  --code-bg: #20252e;
+  --sensitive: #d08770;
+  --sensitive-soft: rgba(208, 135, 112, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 20px rgba(136, 192, 208, 0.16);
+  --win-close-hover: #e81123;
+}
+
+/* Sunset Theme (暖橙) — fixed dark-leaning colorful preset */
+body.sunset-theme,
+.sunset-theme {
+  --bg-base: #211915;
+  --bg-surface: #29201a;
+  --bg-elevated: #32281f;
+  --bg-hover: #3a2e24;
+  --bg-active: #43352a;
+  --bg-input: #1d1713;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-focus: #fb923c;
+  --text-primary: #f2e8dd;
+  --text-secondary: #bfa794;
+  --text-tertiary: #93776a;
+  --text-inverse: #221a15;
+  --accent: #fb923c;
+  --accent-hover: #fca15a;
+  --accent-light: #fecba1;
+  --accent-text: #fecba1;
+  --accent-soft: rgba(251, 146, 60, 0.15);
+  --accent-softer: rgba(251, 146, 60, 0.07);
+  --accent-pressed: #ef8230;
+  --bg-selected: rgba(251, 146, 60, 0.16);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --text-muted: var(--text-tertiary);
+  --type-text: #ffd9ad;
+  --type-code: #a8d8a0;
+  --type-link: #d9a6f5;
+  --type-image: #ff9e8f;
+  --type-file: #e8c97a;
+  --success: #9fcaa0;
+  --success-soft: rgba(159, 202, 160, 0.14);
+  --warning: #f2a96b;
+  --warning-soft: rgba(242, 169, 107, 0.14);
+  --pin: #c490ff;
+  --pin-soft: rgba(196, 144, 255, 0.15);
+  --danger: #ef6a5a;
+  --danger-soft: rgba(239, 106, 90, 0.15);
+  --code-bg: #201813;
+  --sensitive: #f2835b;
+  --sensitive-soft: rgba(242, 131, 91, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.75);
+  --shadow-glow: 0 0 20px rgba(251, 146, 60, 0.18);
+  --win-close-hover: #e81123;
+}
+
+/* Dracula Light (紫霞) — light counterpart of the dracula family */
+body.dracula-light-theme,
+.dracula-light-theme {
+  --bg-base: #f3eefb;
+  --bg-surface: #faf7ff;
+  --bg-elevated: #f0e9fa;
+  --bg-hover: #e9e0f6;
+  --bg-active: #e0d4f0;
+  --bg-input: #eee7f8;
+  --border-subtle: rgba(80, 40, 120, 0.08);
+  --border-default: rgba(80, 40, 120, 0.12);
+  --border-focus: #8b5cf6;
+  --text-primary: #2d2338;
+  --text-secondary: #6b5d7d;
+  --text-tertiary: #8a7c9c;
+  --text-inverse: #ffffff;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-light: #a78bfa;
+  --accent-text: #6d28d9;
+  --accent-soft: rgba(139, 92, 246, 0.1);
+  --accent-softer: rgba(139, 92, 246, 0.05);
+  --accent-pressed: #6d28d9;
+  --bg-selected: rgba(139, 92, 246, 0.12);
+  --border-light: rgba(80, 40, 120, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #7c3aed;
+  --type-code: #15803d;
+  --type-link: #2563eb;
+  --type-image: #0891b2;
+  --type-file: #b45309;
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --pin: #c026d3;
+  --pin-soft: rgba(192, 38, 211, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --code-bg: #efe8fa;
+  --sensitive: #ea580c;
+  --sensitive-soft: rgba(234, 88, 12, 0.1);
+  --shadow-sm: 0 1px 2px rgba(80, 40, 120, 0.14);
+  --shadow-md: 0 4px 16px rgba(80, 40, 120, 0.18);
+  --shadow-lg: 0 12px 48px rgba(80, 40, 120, 0.22);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.14);
+  --win-close-hover: #e81123;
+}
+
+/* Nord Light (冰白) — light counterpart of the nord family */
+body.nord-light-theme,
+.nord-light-theme {
+  --bg-base: #e8edf3;
+  --bg-surface: #f0f4f8;
+  --bg-elevated: #e3e9f1;
+  --bg-hover: #dce4ee;
+  --bg-active: #d4dee9;
+  --bg-input: #e6ecf3;
+  --border-subtle: rgba(46, 52, 64, 0.08);
+  --border-default: rgba(46, 52, 64, 0.12);
+  --border-focus: #5e81ac;
+  --text-primary: #2e3440;
+  --text-secondary: #4c566a;
+  --text-tertiary: #616e85;
+  --text-inverse: #eceff4;
+  --accent: #5e81ac;
+  --accent-hover: #5279a3;
+  --accent-light: #81a1c1;
+  --accent-text: #41678f;
+  --accent-soft: rgba(94, 129, 172, 0.12);
+  --accent-softer: rgba(94, 129, 172, 0.06);
+  --accent-pressed: #4d7299;
+  --bg-selected: rgba(94, 129, 172, 0.12);
+  --border-light: rgba(46, 52, 64, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #47688d;
+  --type-code: #4e7d43;
+  --type-link: #2d6da3;
+  --type-image: #3a7c8c;
+  --type-file: #9a7310;
+  --success: #3f7d3f;
+  --success-soft: rgba(63, 125, 63, 0.1);
+  --warning: #9a7310;
+  --warning-soft: rgba(154, 115, 16, 0.1);
+  --pin: #8a5a83;
+  --pin-soft: rgba(138, 90, 131, 0.1);
+  --danger: #c24554;
+  --danger-soft: rgba(194, 69, 84, 0.1);
+  --code-bg: #e2e8f0;
+  --sensitive: #b05e1f;
+  --sensitive-soft: rgba(176, 94, 31, 0.1);
+  --shadow-sm: 0 1px 2px rgba(46, 52, 64, 0.14);
+  --shadow-md: 0 4px 16px rgba(46, 52, 64, 0.18);
+  --shadow-lg: 0 12px 48px rgba(46, 52, 64, 0.22);
+  --shadow-glow: 0 0 20px rgba(94, 129, 172, 0.14);
+  --win-close-hover: #e81123;
+}
+
+/* Sunset Light (暖阳) — light counterpart of the sunset family */
+body.sunset-light-theme,
+.sunset-light-theme {
+  --bg-base: #f7efe4;
+  --bg-surface: #fdf7ee;
+  --bg-elevated: #f5ead9;
+  --bg-hover: #efe1cc;
+  --bg-active: #e8d6bd;
+  --bg-input: #f4e9db;
+  --border-subtle: rgba(120, 60, 0, 0.09);
+  --border-default: rgba(120, 60, 0, 0.13);
+  --border-focus: #ea580c;
+  --text-primary: #3d2c1d;
+  --text-secondary: #7a5c3e;
+  --text-tertiary: #9a7c5e;
+  --text-inverse: #fff7ed;
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
+  --accent-light: #fb923c;
+  --accent-text: #c2410c;
+  --accent-soft: rgba(234, 88, 12, 0.11);
+  --accent-softer: rgba(234, 88, 12, 0.05);
+  --accent-pressed: #9a3412;
+  --bg-selected: rgba(234, 88, 12, 0.12);
+  --border-light: rgba(120, 60, 0, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #c2410c;
+  --type-code: #4d7c0f;
+  --type-link: #7c3aed;
+  --type-image: #be123c;
+  --type-file: #a16207;
+  --success: #4d7c0f;
+  --success-soft: rgba(77, 124, 15, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.1);
+  --pin: #a21caf;
+  --pin-soft: rgba(162, 28, 175, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --code-bg: #f2e6d5;
+  --sensitive: #ea580c;
+  --sensitive-soft: rgba(234, 88, 12, 0.1);
+  --shadow-sm: 0 1px 2px rgba(120, 60, 0, 0.14);
+  --shadow-md: 0 4px 16px rgba(120, 60, 0, 0.18);
+  --shadow-lg: 0 12px 48px rgba(120, 60, 0, 0.22);
+  --shadow-glow: 0 0 20px rgba(234, 88, 12, 0.14);
+  --win-close-hover: #e81123;
+}
+
 /* ============================================================
    Global Reset & Base
    ============================================================ */

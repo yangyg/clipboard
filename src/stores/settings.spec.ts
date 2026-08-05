@@ -229,3 +229,107 @@ describe("settingsStore system theme tracking", () => {
     expect(document.body.classList.contains("light-theme")).toBe(false);
   });
 });
+
+describe("settingsStore colorful preset themes", () => {
+  const originalMatchMedia = window.matchMedia;
+
+  function mockSystemTheme(initialDark: boolean) {
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: initialDark,
+      media: "(prefers-color-scheme: dark)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList);
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    document.body.className = "";
+  });
+
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia;
+    vi.mocked(listen).mockClear();
+    vi.mocked(invoke).mockReset();
+    vi.mocked(invoke).mockResolvedValue(undefined);
+  });
+
+  it("applies the colorful theme class to <body>", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "dracula");
+    expect(document.body.classList.contains("dracula-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("applies each colorful theme with its own class", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "nord");
+    expect(document.body.classList.contains("nord-theme")).toBe(true);
+    store.updateSetting("theme", "sunset");
+    expect(document.body.classList.contains("sunset-theme")).toBe(true);
+    expect(document.body.classList.contains("nord-theme")).toBe(false);
+    expect(document.body.classList.contains("dracula-theme")).toBe(false);
+  });
+
+  it("applies light colorful themes with their own classes", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "dracula-light");
+    expect(document.body.classList.contains("dracula-light-theme")).toBe(true);
+    expect(document.body.classList.contains("dracula-theme")).toBe(false);
+
+    store.updateSetting("theme", "nord-light");
+    expect(document.body.classList.contains("nord-light-theme")).toBe(true);
+    expect(document.body.classList.contains("dracula-light-theme")).toBe(false);
+
+    store.updateSetting("theme", "sunset-light");
+    expect(document.body.classList.contains("sunset-light-theme")).toBe(true);
+    expect(document.body.classList.contains("nord-light-theme")).toBe(false);
+  });
+
+  it("removes light colorful classes when switching to system", () => {
+    mockSystemTheme(false);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "sunset-light");
+    expect(document.body.classList.contains("sunset-light-theme")).toBe(true);
+
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("sunset-light-theme")).toBe(false);
+    expect(document.body.classList.contains("light-theme")).toBe(true);
+  });
+
+  it("removes colorful classes when switching to system", () => {
+    mockSystemTheme(true);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "sunset");
+    expect(document.body.classList.contains("sunset-theme")).toBe(true);
+
+    store.updateSetting("theme", "system");
+    expect(document.body.classList.contains("sunset-theme")).toBe(false);
+    expect(document.body.classList.contains("dark-theme")).toBe(true);
+  });
+
+  it("ignores native OS theme events while a colorful fixed theme is active", () => {
+    mockSystemTheme(true);
+    const store = useSettingsStore();
+    store.updateSetting("theme", "system");
+    store.updateSetting("theme", "dracula");
+
+    const calls = vi.mocked(listen).mock.calls;
+    const handler = calls.find((c) => c[0] === "system-theme-changed")?.[1] as
+      | ((e: { payload: boolean }) => void)
+      | undefined;
+    handler?.({ payload: false });
+    expect(document.body.classList.contains("dracula-theme")).toBe(true);
+    expect(document.body.classList.contains("light-theme")).toBe(false);
+    expect(document.body.classList.contains("dark-theme")).toBe(false);
+  });
+
+  it("applies a saved colorful theme on loadSettings (app start)", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ theme: "nord" } as unknown as Settings);
+    const store = useSettingsStore();
+    await store.loadSettings();
+    expect(store.settings.theme).toBe("nord");
+    expect(document.body.classList.contains("nord-theme")).toBe(true);
+  });
+});

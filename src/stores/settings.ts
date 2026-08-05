@@ -66,6 +66,20 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
 
 const SAVE_DEBOUNCE_MS = 200;
 
+/** Every theme class `applyTheme` can attach to <body>; removing all of them
+ *  on re-apply keeps the tree clean when switching between any two themes. */
+const THEME_CLASSES = [
+  "light-theme",
+  "dark-theme",
+  "oled-theme",
+  "dracula-theme",
+  "nord-theme",
+  "sunset-theme",
+  "dracula-light-theme",
+  "nord-light-theme",
+  "sunset-light-theme",
+] as const;
+
 export const useSettingsStore = defineStore("settings", () => {
   const settings = ref<Settings>(normalizeSettings(DEFAULT_SETTINGS));
   const isLoaded = ref(false);
@@ -139,7 +153,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function applySystemThemeClass(prefersDark: boolean) {
-    document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
+    document.body.classList.remove(...THEME_CLASSES);
     document.body.classList.add(prefersDark ? "dark-theme" : "light-theme");
   }
 
@@ -147,7 +161,7 @@ export const useSettingsStore = defineStore("settings", () => {
     // Detach any previous OS-theme listener: fixed themes must not be
     // overridden by system changes, and re-entry must not double-register.
     stopSystemThemeWatch();
-    document.body.classList.remove("light-theme", "dark-theme", "oled-theme");
+    document.body.classList.remove(...THEME_CLASSES);
     if (theme === "system") {
       const mql = window.matchMedia("(prefers-color-scheme: dark)");
       applySystemThemeClass(lastKnownSystemDark ?? mql.matches);

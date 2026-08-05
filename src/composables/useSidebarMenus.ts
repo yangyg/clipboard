@@ -1,5 +1,5 @@
 /**
- * Sidebar quick menu (theme toggle / capture pause / WebDAV sync / help)
+ * Sidebar quick menu (capture pause / WebDAV sync / help)
  * extracted from SideBar.vue so the SFC script stays under 200 lines.
  */
 import { computed, reactive, ref } from "vue";
@@ -11,14 +11,7 @@ import { useToast } from "./useToast";
 import { useI18n } from "vue-i18n";
 import type { AppIconName } from "../components/icons/AppIcon.vue";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
-import type { Settings, WebDavSyncResult } from "../types";
-
-/** Light-side theme set for the quick-menu dark⇄light toggle (display + action). */
-const LIGHT_THEMES = new Set<Settings["theme"]>(["light", "dracula-light", "nord-light", "sunset-light"]);
-
-function isLightTheme(theme: Settings["theme"]): boolean {
-  return LIGHT_THEMES.has(theme);
-}
+import type { WebDavSyncResult } from "../types";
 
 export function useSidebarMenus(openSettings: (section?: string) => void) {
   const clipboardStore = useClipboardStore();
@@ -34,19 +27,9 @@ export function useSidebarMenus(openSettings: (section?: string) => void) {
   const quickMenuItems = computed<ContextMenuItem[]>(() => {
     const items: ContextMenuItem[] = [
       {
-        id: "theme-toggle",
-        label: t('sidebar.appearance'),
-        icon: "palette",
-        toggle: {
-          value: isLightTheme(settingsStore.settings.theme),
-          labels: [t('sidebar.dark'), t('sidebar.light')],
-        },
-      },
-      {
         id: "capture-toggle",
         label: clipboardStore.pauseCapture ? t('sidebar.resumeCapture') : t('sidebar.pauseCapture'),
         icon: (clipboardStore.pauseCapture ? "play" : "pause") as AppIconName,
-        separatorBefore: true,
       },
     ];
     if (syncEnabled.value) {
@@ -83,13 +66,6 @@ export function useSidebarMenus(openSettings: (section?: string) => void) {
   }
 
   function onQuickMenuSelect(id: string) {
-    if (id === "theme-toggle") {
-      // Flip lightness only: base "light" ⇄ "dark"; colorful presets follow
-      // their family side (light ones flip back to dark, dark ones to light).
-      const next = isLightTheme(settingsStore.settings.theme) ? "dark" : "light";
-      settingsStore.updateSetting("theme", next);
-      return;
-    }
     if (id === "capture-toggle") {
       clipboardStore.togglePauseCapture();
       return;

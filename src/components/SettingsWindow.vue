@@ -332,7 +332,10 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 0 16px;
+  /* Extend to the nav edges so the scrollbar hugs the right border, then
+     restore the horizontal inset with matching padding. */
+  margin: 0 calc(-1 * var(--space-3));
+  padding: 0 var(--space-3) 16px;
 }
 
 .nav-back {

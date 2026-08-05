@@ -385,6 +385,10 @@ const {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  /* Extend to the sidebar edges so the scrollbar hugs the right border, then
+     restore the horizontal inset with matching padding. */
+  margin: 0 calc(-1 * var(--space-3));
+  padding: 0 var(--space-3);
 }
 
 .tag-item {

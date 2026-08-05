@@ -270,6 +270,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
+  background: var(--bg-elevated);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
 }
@@ -310,6 +311,7 @@ onUnmounted(() => {
 
 .settings-nav {
   width: 180px;
+  padding: 0 var(--space-3);
   background: var(--bg-elevated);
   border-right: 1px solid var(--border-subtle);
   display: flex;
@@ -344,13 +346,13 @@ onUnmounted(() => {
 
 .nav-divider {
   height: 1px;
-  margin: 8px 16px;
+  margin: 8px var(--space-2);
   background: var(--border-subtle);
   flex-shrink: 0;
 }
 
 .nav-group-title {
-  padding: 14px 16px 4px;
+  padding: 14px var(--space-2) 4px;
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -365,9 +367,9 @@ onUnmounted(() => {
   gap: 10px;
   width: 100%;
   margin: 0;
-  padding: 8px 16px;
+  padding: 7px var(--space-2);
   border: none;
-  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
   font-size: var(--text-md);
@@ -375,7 +377,7 @@ onUnmounted(() => {
   text-align: left;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 
 .nav-item:hover {
@@ -386,7 +388,6 @@ onUnmounted(() => {
 .nav-item.active {
   background: var(--accent-soft);
   color: var(--accent-text);
-  border-left-color: var(--accent);
 }
 
 .nav-icon {
@@ -407,6 +408,7 @@ onUnmounted(() => {
 .settings-body {
   flex: 1;
   padding: 20px 24px;
+  background: var(--bg-surface);
   overflow-y: auto;
   min-width: 0;
 }

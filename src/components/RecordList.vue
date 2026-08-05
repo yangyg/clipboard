@@ -48,7 +48,12 @@
         </div>
         <div
           class="record-list"
-          :class="{ 'view-grid': listLayout === 'grid', reloading: isListReloading }"
+          :class="{
+            'view-grid': listLayout === 'grid',
+            reloading: isListReloading,
+            'view-fade-a': layoutFadeArmed && !layoutFadeOn,
+            'view-fade-b': layoutFadeArmed && layoutFadeOn,
+          }"
           :style="listLayout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
           ref="listRef"
           role="listbox"
@@ -369,6 +374,12 @@ onUnmounted(() => {
 });
 
 const LAYOUT_KEY = "clipvault-list-layout";
+/** Alternate between two identical fade keyframes so each layout switch
+ * restarts the enter animation without remounting the scroll container
+ * (a remount would reset scrollTop). Armed only after the first switch so
+ * the initial mount keeps its single .list-body--enter fade. */
+const layoutFadeArmed = ref(false);
+const layoutFadeOn = ref(false);
 
 function readStoredLayout(): ListLayout {
   try {
@@ -394,7 +405,10 @@ const {
 } = useVirtualList(listRef, listLayout);
 
 function setListLayout(mode: ListLayout) {
+  if (listLayout.value === mode) return;
   listLayout.value = mode;
+  layoutFadeArmed.value = true;
+  layoutFadeOn.value = !layoutFadeOn.value;
   try {
     localStorage.setItem(LAYOUT_KEY, mode);
   } catch {
@@ -656,6 +670,36 @@ function onListColResizeKey(e: KeyboardEvent) {
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-1) 0 var(--space-2);
+}
+
+/* Layout switch cross-fade (spec §3.5): a fresh one-way fade runs per toggle.
+   Two identical keyframes alternate by class name so switching restarts the
+   animation without remounting the scroll container (which would lose the
+   scroll position). Pure CSS — never gates mounting, honors anim-disabled /
+   prefers-reduced-motion. */
+.view-fade-a {
+  animation: view-fade-a var(--transition-normal) ease;
+}
+.view-fade-b {
+  animation: view-fade-b var(--transition-normal) ease;
+}
+@keyframes view-fade-a {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes view-fade-b {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+:global(body.anim-disabled) .view-fade-a,
+:global(body.anim-disabled) .view-fade-b {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-fade-a,
+  .view-fade-b {
+    animation: none;
+  }
 }
 
 /* —— Grid view: vertical cards (original structure) —— */
@@ -1149,7 +1193,11 @@ function onListColResizeKey(e: KeyboardEvent) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-instant);
+}
+
+.record-action-btn:active {
+  transform: scale(0.88);
 }
 
 /* Semantic hover: paste/default → accent; fav → gold; pin → violet; delete → danger */

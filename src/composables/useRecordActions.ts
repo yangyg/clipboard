@@ -47,6 +47,54 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  /** Read a `--transition-*` token ("180ms cubic-bezier(...)") into WAAPI options. */
+  function readTokenTransition(name: string): { duration: number; easing: string } {
+    const raw = getComputedStyle(document.body).getPropertyValue(name).trim();
+    const parts = raw.split(" ");
+    const duration = parseFloat(parts[0] ?? "") || 180;
+    const easing = parts.slice(1).join(" ") || "ease";
+    return { duration, easing };
+  }
+
+  /**
+   * FLIP-style smooth reflow (spec §3.3/§3.4/§3.6): capture every mounted row's
+   * position, run `mutate`, then animate surviving rows from their old offset to
+   * the new one. Rows are keyed by data-record-id, so virtualization is fine —
+   * only rows currently mounted are measured/played. Uses WAAPI (WebView2
+   * supports it) so overlapping flips never fight over inline styles, and it
+   * degrades to an instant jump when animations are disabled.
+   */
+  async function flipAfter<T>(mutate: () => Promise<T> | T): Promise<T> {
+    const list = ctx.listRef.value;
+    const animate =
+      !!list &&
+      settingsStore.settings.enable_animation &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const first = new Map<number, number>();
+    if (list) {
+      for (const el of list.querySelectorAll<HTMLElement>(".record-item")) {
+        const id = Number(el.dataset.recordId);
+        if (Number.isFinite(id)) first.set(id, el.getBoundingClientRect().top);
+      }
+    }
+    const result = await mutate();
+    if (!list || !animate || first.size === 0) return result;
+    await nextTick();
+    const { duration, easing } = readTokenTransition("--transition-normal");
+    for (const el of list.querySelectorAll<HTMLElement>(".record-item")) {
+      const id = Number(el.dataset.recordId);
+      const from = first.get(id);
+      if (from == null) continue;
+      const delta = from - el.getBoundingClientRect().top;
+      if (Math.abs(delta) < 1) continue;
+      el.animate(
+        [{ transform: `translateY(${delta}px)` }, { transform: "none" }],
+        { duration, easing, fill: "backwards" },
+      );
+    }
+    return result;
+  }
+
   async function scheduleTogglePin(record: ClipboardRecord) {
     if (leavingIds.value.has(record.id)) return;
     const next = !isPinned(record);
@@ -54,7 +102,7 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     pending.set(record.id, next);
     pinOverride.value = pending;
     await sleep(150);
-    const result = await clipboardStore.togglePin(record.id);
+    const result = await flipAfter(() => clipboardStore.togglePin(record.id));
     const cleared = new Map(pinOverride.value);
     cleared.delete(record.id);
     pinOverride.value = cleared;
@@ -165,7 +213,7 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     leavingIds.value = nextLeave;
     await sleep(160);
     try {
-      await clipboardStore.deleteRecord(record.id);
+      await flipAfter(() => clipboardStore.deleteRecord(record.id));
       toast(t('record.deleted'), "success");
     } catch {
       toast(t('common.operationFailed'), "error");

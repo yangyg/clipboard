@@ -89,6 +89,32 @@ const emptyState = computed(() => {
   flex: 1;
   padding: var(--space-5);
   text-align: center;
+  /* Symmetric with the list's .list-body--enter: the panel that replaces the
+     list fades in the same way (pure CSS, never gates mounting). */
+  animation: state-enter var(--transition-smooth) ease;
+}
+
+@keyframes state-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:global(body.anim-disabled) .loading-state,
+:global(body.anim-disabled) .empty-state {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-state,
+  .empty-state {
+    animation: none;
+  }
 }
 
 .empty-icon {

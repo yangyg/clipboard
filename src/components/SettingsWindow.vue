@@ -39,26 +39,31 @@
           </div>
         </nav>
 
-        <!-- Body -->
+        <!-- Body: keyed wrapper remounts on section switch so the fade-in
+             animation runs each time. Leave is an instant cut (a one-way
+             enter is enough to anchor "content changed"). Pure CSS animation,
+             not a JS <Transition>, matching the cold-start-safe list pattern. -->
         <div class="settings-body">
-          <SettingsShortcuts
-            v-if="activeSection === 'shortcuts'"
-            :is-recording="isRecordingShortcut"
-            @start-recording="startShortcutRecording"
-            @shortcut-keydown="onShortcutKeydown"
-          />
-          <SettingsAppearance v-else-if="activeSection === 'appearance'" />
-          <SettingsHistory v-else-if="activeSection === 'history'" />
-          <SettingsSource v-else-if="activeSection === 'source'" />
-          <SettingsTags v-else-if="activeSection === 'tags'" />
-          <SettingsPrivacy v-else-if="activeSection === 'privacy'" />
-          <SettingsFeatures v-else-if="activeSection === 'features'" />
-          <SettingsStats v-else-if="activeSection === 'stats'" />
-          <SettingsData v-else-if="activeSection === 'data'" />
-          <SettingsSync v-else-if="activeSection === 'sync'" />
-          <SettingsSystem v-else-if="activeSection === 'system'" />
-          <SettingsHelp v-else-if="activeSection === 'help'" />
-          <SettingsAbout v-else-if="activeSection === 'about'" />
+          <div class="settings-section-fade" :key="activeSection">
+            <SettingsShortcuts
+              v-if="activeSection === 'shortcuts'"
+              :is-recording="isRecordingShortcut"
+              @start-recording="startShortcutRecording"
+              @shortcut-keydown="onShortcutKeydown"
+            />
+            <SettingsAppearance v-else-if="activeSection === 'appearance'" />
+            <SettingsHistory v-else-if="activeSection === 'history'" />
+            <SettingsSource v-else-if="activeSection === 'source'" />
+            <SettingsTags v-else-if="activeSection === 'tags'" />
+            <SettingsPrivacy v-else-if="activeSection === 'privacy'" />
+            <SettingsFeatures v-else-if="activeSection === 'features'" />
+            <SettingsStats v-else-if="activeSection === 'stats'" />
+            <SettingsData v-else-if="activeSection === 'data'" />
+            <SettingsSync v-else-if="activeSection === 'sync'" />
+            <SettingsSystem v-else-if="activeSection === 'system'" />
+            <SettingsHelp v-else-if="activeSection === 'help'" />
+            <SettingsAbout v-else-if="activeSection === 'about'" />
+          </div>
         </div>
       </div>
     </div>
@@ -404,6 +409,33 @@ onUnmounted(() => {
   padding: 20px 24px;
   overflow-y: auto;
   min-width: 0;
+}
+
+/* One-way fade when switching sections — the enter anchors "content just
+   changed". Keyed on the wrapper so the animation reruns per switch. */
+.settings-section-fade {
+  animation: settings-section-in var(--transition-fast) ease;
+}
+
+@keyframes settings-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:global(body.anim-disabled) .settings-section-fade {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-section-fade {
+    animation: none;
+  }
 }
 
 @media (max-width: 720px) {

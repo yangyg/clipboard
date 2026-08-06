@@ -53,4 +53,22 @@ describe("RecordListItem", () => {
 
     expect(wrapper.emitted("context-menu")?.[0]?.[1]).toEqual(record);
   });
+
+  it("shows an alias icon prefix and the alias title when the record has an alias", () => {
+    const wrapper = mountWithPlugins(RecordListItem, {
+      props: { ...props, record: { ...record, alias: "my alias" } },
+    });
+
+    const mark = wrapper.find(".alias-mark");
+    expect(mark.exists()).toBe(true);
+    expect(wrapper.find(".record-title").text()).toContain("my alias");
+    expect(wrapper.find(".record-title").attributes("title")).toBe("hello");
+  });
+
+  it("hides the alias icon when no alias is set", () => {
+    const wrapper = mountWithPlugins(RecordListItem, { props });
+
+    expect(wrapper.find(".alias-mark").exists()).toBe(false);
+    expect(wrapper.find(".record-title").attributes("title")).toBeUndefined();
+  });
 });

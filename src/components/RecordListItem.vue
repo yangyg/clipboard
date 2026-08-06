@@ -36,7 +36,10 @@
       <div v-if="record.content_type === 'image' && thumb" class="record-image-tile" aria-hidden="true">
         <img class="record-thumb" :src="thumb" alt="" loading="lazy" decoding="async" />
       </div>
-      <div v-else class="record-title" :title="recordTitleAttr(record, t)" v-html="previewHtml(record, searchQuery, t)"></div>
+      <div v-else class="record-title" :title="recordTitleAttr(record, t)">
+        <AppIcon v-if="hasAlias" name="pencilOff" :size="12" class="alias-mark" aria-hidden="true" />
+        <span v-html="previewHtml(record, searchQuery, t)"></span>
+      </div>
       <div class="record-meta">
         <span class="record-time">{{ formatTime(record.created_at, t) }}</span>
         <span class="record-source" v-html="sourceLabelHtml(record, searchQuery, t, sourceOverrides) ?? escapeHtml(resolveSourceLabel(record.source_app, record.source_name, t, sourceOverrides))"></span>
@@ -61,15 +64,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord } from "../types";
 import { escapeHtml } from "../utils/highlightSearch";
-import { formatTime, previewHtml, recordTitleAttr, rowColor, sourceLabelHtml } from "../utils/recordFormatting";
+import { formatTime, previewHtml, recordAlias, recordTitleAttr, rowColor, sourceLabelHtml } from "../utils/recordFormatting";
 import { resolveSourceLabel } from "../utils/sourceBadge";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 
-defineProps<{
+const props = defineProps<{
   record: ClipboardRecord;
   thumb?: string | null;
   batchMode: boolean;
@@ -83,6 +87,8 @@ defineProps<{
   searchQuery: string;
   sourceOverrides: Record<string, string>;
 }>();
+
+const hasAlias = computed(() => recordAlias(props.record).length > 0);
 
 const emit = defineEmits<{
   click: [id: number];
@@ -118,8 +124,11 @@ const { t } = useI18n();
 .record-image-tile { width: 64px; height: 48px; border-radius: var(--radius-sm, 6px); overflow: hidden; border: 1px solid var(--border-subtle); background: var(--bg-elevated); }
 .record-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
 .record-body { flex: 1; min-width: 0; }
-.record-title { font-size: var(--text-base, 0.8125rem); font-weight: 500; color: var(--text-primary); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-title { font-size: var(--text-base, 0.8125rem); font-weight: 500; color: var(--text-primary); line-height: 1.4; display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.record-title > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-title .alias-mark { flex-shrink: 0; margin-top: 2px; color: var(--text-tertiary); text-decoration: none; }
 .record-item.is-link .record-title { color: var(--type-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--type-link) 35%, transparent); text-underline-offset: 2px; }
+.record-item.is-link .record-title .alias-mark { text-decoration: none; color: var(--text-tertiary); }
 .record-item.is-code .record-title { font-family: var(--font-mono); font-weight: 400; font-size: var(--text-md, 0.75rem); }
 .record-meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-top: 6px; font-size: var(--text-sm, 0.6875rem); color: var(--text-tertiary); }
 .record-time { white-space: nowrap; }
@@ -154,7 +163,9 @@ const { t } = useI18n();
 .view-grid .record-type-icon, .view-grid .record-color-swatch { width: 28px; height: 28px; margin-top: 0; }
 .view-grid .record-body { display: flex; flex-direction: column; flex: 1 1 auto; width: 100%; min-width: 0; min-height: 0; gap: var(--space-1); overflow: hidden; }
 .view-grid .record-image-tile { order: -1; width: 100%; height: 72px; max-height: 72px; flex: 0 0 72px; overflow: hidden; }
-.view-grid .record-title { flex: 1 1 auto; min-height: 0; max-height: calc(1.35em * 2); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; line-height: 1.35; word-break: break-word; overflow-wrap: anywhere; }
+.view-grid .record-title { flex: 1 1 auto; min-height: 0; max-height: calc(1.35em * 2); display: flex; align-items: flex-start; gap: 4px; line-height: 1.35; }
+.view-grid .record-title > span { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+.view-grid .record-title .alias-mark { margin-top: 2px; }
 .view-grid .record-meta { display: flex; flex-wrap: nowrap; align-items: center; margin-top: auto; gap: 6px; width: 100%; min-width: 0; overflow: hidden; flex-shrink: 0; }
 .view-grid .record-time { flex-shrink: 0; }
 .view-grid .record-source { flex: 1 1 auto; min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

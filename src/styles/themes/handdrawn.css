@@ -1,0 +1,473 @@
+/* ============================================================
+   Hand-Drawn family (手绘 / 手绘·浅)
+   Fixed preset pair: dark ink on charcoal + light ink on paper.
+   The sketch styling below is gated on body.handdrawn-* so the
+   other theme families render untouched.
+   ============================================================ */
+
+/* Hand-Drawn Theme (手绘) — fixed dark-leaning preset.
+   Warm charcoal base + paper text + coral "marker" accent, chalk pastel
+   type colors. Sketch extras: sticker shadow ink + paper dot texture. */
+body.handdrawn-theme,
+.handdrawn-theme {
+  --bg-base: #262320;
+  --bg-surface: #2e2a26;
+  --bg-elevated: #37322c;
+  --bg-hover: #403a33;
+  --bg-active: #4a433a;
+  --bg-input: #211e1b;
+  --border-subtle: rgba(255, 240, 214, 0.07);
+  --border-default: rgba(255, 240, 214, 0.11);
+  --border-focus: #f27059;
+  --text-primary: #f3eadd;
+  --text-secondary: #b9a898;
+  --text-tertiary: #8e7f6e;
+  --text-inverse: #262320;
+  --accent: #f27059;
+  --accent-hover: #f5816b;
+  --accent-light: #ffb4a3;
+  --accent-text: #ffa993;
+  --accent-soft: rgba(242, 112, 89, 0.15);
+  --accent-softer: rgba(242, 112, 89, 0.07);
+  --accent-pressed: #e15a42;
+  --bg-selected: rgba(242, 112, 89, 0.16);
+  --border-light: rgba(255, 240, 214, 0.08);
+  --text-muted: var(--text-tertiary);
+  --type-text: #8ec9e0;
+  --type-code: #a9d18f;
+  --type-link: #9aa8f0;
+  --type-image: #6fc8b0;
+  --type-file: #e3c46a;
+  --success: #8fce9a;
+  --success-soft: rgba(143, 206, 154, 0.14);
+  --warning: #eab566;
+  --warning-soft: rgba(234, 181, 102, 0.14);
+  --pin: #c490ff;
+  --pin-soft: rgba(196, 144, 255, 0.15);
+  --danger: #f26d6d;
+  --danger-soft: rgba(242, 109, 109, 0.15);
+  --code-bg: #221f1c;
+  --sensitive: #f2a25b;
+  --sensitive-soft: rgba(242, 162, 91, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.72);
+  --shadow-glow: 0 0 20px rgba(242, 112, 89, 0.18);
+  --win-close-hover: #e81123;
+  /* Hand-drawn extras */
+  --sketch-ink: rgba(0, 0, 0, 0.38);
+  --sketch-dot: rgba(255, 246, 224, 0.028);
+  --sketch-underline: rgba(242, 112, 89, 0.9);
+  --sketch-select: #ffd84d;
+  --sketch-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Cpath d='M0 2 Q 3 0.4 6 2 T 12 2 T 18 2 T 24 2' fill='none' stroke='%23f3eadd' stroke-opacity='0.12'/%3E%3C/svg%3E");
+}
+
+/* Hand-Drawn Light (手绘·浅) — light counterpart of the family.
+   Cream paper base + ink text; same coral hue deepened for AA. */
+body.handdrawn-light-theme,
+.handdrawn-light-theme {
+  --bg-base: #f1eadd;
+  --bg-surface: #faf5ea;
+  --bg-elevated: #f0e7d4;
+  --bg-hover: #e8dcc4;
+  --bg-active: #ded0b3;
+  --bg-input: #f7f0e0;
+  --border-subtle: rgba(70, 50, 20, 0.08);
+  --border-default: rgba(70, 50, 20, 0.13);
+  --border-focus: #e8603f;
+  --text-primary: #3a2f22;
+  --text-secondary: #6f5f49;
+  --text-tertiary: #8d7b63;
+  --text-inverse: #faf5ea;
+  --accent: #e8603f;
+  --accent-hover: #cf4f30;
+  --accent-light: #f28163;
+  --accent-text: #c24525;
+  --accent-soft: rgba(232, 96, 63, 0.11);
+  --accent-softer: rgba(232, 96, 63, 0.05);
+  --accent-pressed: #b84022;
+  --bg-selected: rgba(232, 96, 63, 0.12);
+  --border-light: rgba(70, 50, 20, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #0e7490;
+  --type-code: #3f7d2e;
+  --type-link: #5b52c4;
+  --type-image: #0d8a74;
+  --type-file: #9a6b10;
+  --success: #3f7d3f;
+  --success-soft: rgba(63, 125, 63, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --pin: #8a3ec9;
+  --pin-soft: rgba(138, 62, 201, 0.1);
+  --danger: #d33f3f;
+  --danger-soft: rgba(211, 63, 63, 0.1);
+  --code-bg: #f2e9d6;
+  --sensitive: #c2410c;
+  --sensitive-soft: rgba(194, 65, 12, 0.1);
+  --shadow-sm: 0 1px 2px rgba(80, 55, 20, 0.14);
+  --shadow-md: 0 4px 16px rgba(80, 55, 20, 0.18);
+  --shadow-lg: 0 12px 48px rgba(80, 55, 20, 0.22);
+  --shadow-glow: 0 0 20px rgba(232, 96, 63, 0.14);
+  --win-close-hover: #e81123;
+  --sketch-ink: rgba(58, 38, 20, 0.28);
+  --sketch-dot: rgba(58, 38, 20, 0.035);
+  --sketch-underline: rgba(232, 96, 63, 0.85);
+  --sketch-select: #ffd84d;
+  --sketch-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Cpath d='M0 2 Q 3 0.4 6 2 T 12 2 T 18 2 T 24 2' fill='none' stroke='%234a3220' stroke-opacity='0.16'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   Hand-Drawn visual styling (both variants)
+   The `body.` prefix keeps these above any component scoped style.
+   ============================================================ */
+
+/* Sketchy corner radii (shared by both variants) */
+body.handdrawn-theme,
+body.handdrawn-light-theme {
+  /* Full sketch: big wobbly corners on panel-scale surfaces */
+  --sketch-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  /* Subtle sketch: gentler wobble for small chips / buttons */
+  --sketch-radius-sm: 85px 12px 70px 14px / 12px 70px 14px 85px;
+}
+
+/* Wobbly borders on cards, menus, dialogs */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.theme-card, .mode-card, .dialog-card, .context-menu) {
+  border-radius: var(--sketch-radius);
+}
+
+/* Wobbly borders on small chips / buttons */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.btn, .tag-badge, .badge, .kbd) {
+  border-radius: var(--sketch-radius-sm);
+}
+
+/* Sticker-style hard offset shadow (dialogs/menus get an extra inner frame) */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.btn, .theme-card, .mode-card) {
+  box-shadow: 3px 3px 0 var(--sketch-ink);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.dialog-card, .context-menu) {
+  box-shadow: 3px 3px 0 var(--sketch-ink), inset 0 0 0 1px color-mix(in srgb, var(--sketch-ink) 45%, transparent);
+}
+
+/* Tilted cards — the "pasted by hand" look, straightened on hover */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .theme-card {
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    transform var(--transition-fast);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .theme-card:nth-child(3n) {
+  transform: rotate(-0.4deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .theme-card:nth-child(3n + 1) {
+  transform: rotate(0.5deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .theme-card:hover {
+  transform: rotate(0deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .mode-card:nth-child(odd) {
+  transform: rotate(-0.3deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .mode-card:nth-child(even) {
+  transform: rotate(0.3deg);
+}
+
+/* Selected list rows get a hand-drawn dashed frame instead of a flat fill */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .record-item.selected {
+  border-color: var(--accent);
+  border-style: dashed;
+}
+
+/* Wavy marker underlines on section titles + nav/category/tag items.
+   Active AND keyboard focus both draw the wavy line — the dashed focus
+   ring opts out of these so a mouse-clicked item doesn't end up wrapped
+   in a dashed box (Chromium keeps :focus-visible on clicked <button>s). */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .settings-section-title {
+  text-decoration: underline wavy var(--sketch-underline);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+  text-decoration-skip-ink: none;
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .nav-item.active .nav-label,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .nav-item:focus-visible .nav-label,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .filter-tab.active,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .filter-tab:focus-visible,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .tag-item.active .tag-name,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .tag-item:focus-visible .tag-name {
+  text-decoration: underline wavy var(--sketch-underline);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+/* Keep the count chip clear of the wavy line */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .filter-tab.active .filter-count,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .filter-tab:focus-visible .filter-count {
+  text-decoration: none;
+}
+
+/* Dashed focus ring (sketched outline), except on nav/category/tag items
+   where the wavy underline above is the focus cue instead. */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) :focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .nav-item:focus-visible,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .filter-tab:focus-visible,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .tag-item:focus-visible {
+  outline: none;
+}
+
+/* Paper dot texture on the outer chrome (also after the blur shorthand) */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .panel-surface,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .tray-menu,
+:is(body.handdrawn-theme.blur-enabled, body.handdrawn-light-theme.blur-enabled)
+  .panel-surface,
+:is(body.handdrawn-theme.blur-enabled, body.handdrawn-light-theme.blur-enabled)
+  .tray-menu {
+  background-image: radial-gradient(var(--sketch-dot) 1px, transparent 1.4px);
+  background-size: 16px 16px;
+}
+
+/* Marker-highlighter text selection */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) ::selection {
+  background: var(--sketch-select);
+  color: #2b2118;
+}
+
+/* ============================================================
+   Thorough hand-drawn pass: icons, buttons/tabs/inputs, wavy
+   dividers, search highlight, placeholders, section labels.
+   ============================================================ */
+
+/* Icons: the hand-drawn theme renders @sketchyicons/vue (derived from Lucide)
+   instead of clean Lucide — AppIcon picks the set via useHanddrawnTheme. No
+   runtime filter needed, so no per-icon rasterization cost. */
+
+/* Sketchy radius on interactive chrome (main-page buttons, tabs, search box,
+   and text-ish form fields). Range/checkbox inputs keep their native shape. */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(
+    .icon-btn,
+    .clear-btn,
+    .filter-tab,
+    .view-toggle-btn,
+    .back-to-top-btn,
+    .search-box,
+    .auto-tag-input,
+    input[type="text"],
+    input[type="password"],
+    input[type="url"],
+    input[type="number"],
+    textarea,
+    select
+  ) {
+  border-radius: var(--sketch-radius-sm);
+}
+
+/* Tilted icon buttons — "pasted by hand" micro-rotation on hover */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.icon-btn, .clear-btn) {
+  transition: background var(--transition-fast), color var(--transition-fast),
+    transform var(--transition-fast);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.icon-btn, .clear-btn):hover {
+  transform: rotate(-2deg) scale(1.06);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.icon-btn, .clear-btn):active {
+  transform: rotate(-2deg) scale(0.9);
+}
+
+/* Wavy hand-drawn dividers replace crisp horizontal hairlines.
+   border-bottom is dropped; the SVG squiggle is painted at the bottom edge. */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(
+    .titlebar,
+    .panel-header,
+    .list-toolbar,
+    .settings-header,
+    .preview-header,
+    .dialog-header,
+    .setting-row,
+    .batch-bar
+  ) {
+  border-bottom: none;
+  background-image: var(--sketch-divider-line);
+  background-repeat: repeat-x;
+  background-position: bottom;
+  background-size: 24px 4px;
+}
+
+/* List footer divider (border-top) → wavy squiggle along the top edge */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .list-footer {
+  border-top: none;
+  background-image: var(--sketch-divider-line);
+  background-repeat: repeat-x;
+  background-position: top;
+  background-size: 24px 4px;
+}
+
+/* Pinned section divider (list row): hairline → wavy squiggle, centered in
+   its 17px slot (parent is already display:flex; align-items:center). */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .pin-section-divider::after {
+  height: 4px;
+  background-color: transparent;
+  background-image: var(--sketch-divider-line);
+  background-repeat: repeat-x;
+  background-position: center;
+  background-size: 24px 4px;
+}
+
+/* Sidebar section captions get a wavy marker line too */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .sidebar-label {
+  text-decoration: underline wavy var(--sketch-underline);
+  text-decoration-thickness: 1.2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
+/* Search keyword highlight = marker pen instead of flat accent fill */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) mark.search-hit {
+  background: color-mix(in srgb, var(--sketch-select) 42%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Handwritten-feel placeholders */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) ::placeholder {
+  font-style: italic;
+  opacity: 0.9;
+}
+
+/* ============================================================
+   Nav icons + content-type icons + row/preview action buttons:
+   hand-stamped tilt + sketchy chips.
+   ============================================================ */
+
+/* Nav icons: alternate micro-rotation (stamped by hand) */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .nav-item:nth-child(odd) .nav-icon {
+  transform: rotate(-3deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .nav-item:nth-child(even) .nav-icon {
+  transform: rotate(2deg);
+}
+
+/* Content-type icon chips: sketchy radius + casual tilt */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .record-type-icon,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-type-icon {
+  border-radius: var(--sketch-radius-sm);
+  transform: rotate(-2deg);
+}
+
+/* List-row inline action buttons (paste / star / pin / delete) */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .record-action-btn {
+  border-radius: var(--sketch-radius-sm);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .record-action-btn:hover {
+  transform: rotate(-5deg) scale(1.12);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .record-action-btn:active {
+  transform: rotate(-5deg) scale(0.88);
+}
+
+/* Preview bottom action bar: sketchy chips; primary paste = sticker */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn {
+  border-radius: var(--sketch-radius-sm);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn.action-primary {
+  box-shadow: 3px 3px 0 var(--sketch-ink);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn:hover {
+  transform: rotate(-1deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn:active {
+  transform: rotate(-1deg) scale(0.96);
+}
+
+/* ============================================================
+   Column seams + color swatch + preview tags.
+   ============================================================ */
+
+/* Three-column seams: crisp hairline → stitched dotted line.
+   (Dotted rather than wavy — a wavy bg image would sit under the
+   right-edge scrollbars; dotted keeps the border box clean.) */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.sidebar, .list-column:not(.list-column--full)) {
+  border-right-width: 2px;
+  border-right-style: dotted;
+  border-right-color: color-mix(in srgb, var(--text-tertiary) 35%, transparent);
+}
+
+/* Color swatch chip: sketchy shape + casual tilt */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .record-color-swatch {
+  border-radius: var(--sketch-radius-sm);
+  transform: rotate(-2deg);
+}
+
+/* Preview tags: wavy label + sketchy tilted chips */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tags-label {
+  text-decoration: underline wavy var(--sketch-underline);
+  text-decoration-thickness: 1.2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip {
+  border-radius: var(--sketch-radius-sm);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip:nth-child(odd) {
+  transform: rotate(-1deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip:nth-child(even) {
+  transform: rotate(1deg);
+}
+
+/* ============================================================
+   Block & panel boxes: sketchy shape on bordered containers.
+   Wobbly radius alone (layout-neutral); sticker shadow only on
+   small floating panels where it reads as "pasted".
+   ============================================================ */
+
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(
+    .data-card,
+    .empty-icon,
+    .toast-item,
+    .capture-toggle,
+    .kbd-display,
+    .link-card,
+    .file-card,
+    .code-box,
+    .image-placeholder,
+    .image-thumb,
+    .color-swatch-lg,
+    .record-image-tile
+  ) {
+  border-radius: var(--sketch-radius-sm);
+}
+
+/* Grid cards (window mode) */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .view-grid .record-item {
+  border-radius: var(--sketch-radius-sm);
+}
+
+/* Settings segmented control */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.segmented, .segment-btn) {
+  border-radius: var(--sketch-radius-sm);
+}
+
+/* Sticker shadow on small floating panels */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.toast-item, .data-card, .batch-bar) {
+  box-shadow: 3px 3px 0 var(--sketch-ink);
+}
+
+/* Big preview color swatch: casual tilt */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .color-swatch-lg {
+  transform: rotate(-0.5deg);
+}

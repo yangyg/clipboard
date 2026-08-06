@@ -128,6 +128,8 @@ const THEMES: ThemeOption[] = [
   { key: "dracula-light", icon: "sparkles", labelKey: "settings.appearance.themeDraculaLight" },
   { key: "nord-light", icon: "zap", labelKey: "settings.appearance.themeNordLight" },
   { key: "sunset-light", icon: "star", labelKey: "settings.appearance.themeSunsetLight" },
+  { key: "handdrawn", icon: "edit", labelKey: "settings.appearance.themeHanddrawn" },
+  { key: "handdrawn-light", icon: "palette", labelKey: "settings.appearance.themeHanddrawnLight" },
 ];
 
 function focusTheme(items: readonly ThemeOption[], index: number) {
@@ -209,6 +211,11 @@ const APP_MODES = [
 .theme-dracula-light { background: linear-gradient(135deg, #faf7ff, #f3eefb); }
 .theme-nord-light { background: linear-gradient(135deg, #f0f4f8, #e8edf3); }
 .theme-sunset-light { background: linear-gradient(135deg, #fdf7ee, #f7efe4); }
+.theme-handdrawn { background: linear-gradient(135deg, #2e2a26, #221f1c); }
+.theme-handdrawn-light {
+  background: linear-gradient(135deg, #faf5ea, #f1eadd);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
 
 .theme-name {
   font-size: var(--text-sm);

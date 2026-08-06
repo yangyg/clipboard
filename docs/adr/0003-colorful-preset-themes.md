@@ -37,6 +37,12 @@ Accepted
 
 快捷菜单曾有一个二态「深色/浅色」开关。随着主题扩为 10 个平铺预设，该开关不再合适：二态控件无法表达 10 选一的设置，且点击会把用户的彩色主题直接丢弃为纯「深色/浅色」。已将其从侧栏快捷菜单移除，主题统一在 设置 > 外观 管理（侧栏底部设置按钮默认即落在外观分区）。
 
+### 追加：themes/ 拆分 + 手绘主题族（手绘 / 手绘·浅）
+
+- **token 文件按族拆分**：主题 token 块从 `main.css` 迁到 `src/styles/themes/*.css`（`base` / `dracula` / `nord` / `sunset` / `handdrawn`，暗+亮同族一文件），`main.css` 顶部 `@import` 引入（`@import` 须在 `:root` 规则之前）。主题块是 body 类作用域变量，相对 `:root` 的 html 级默认值靠继承生效，与加载顺序无关，纯搬迁零行为变化。
+- **手绘主题族的非 token 视觉**：手绘主题在 token 之外还带一段**共享视觉覆盖块**（不规则圆角 `--sketch-radius*`、贴纸硬阴影、卡片微旋转、波浪下划线、纸点纹理、虚线 focus 环、马克笔 `::selection`），以 `:is(body.handdrawn-theme, body.handdrawn-light-theme)` 前缀门控，避免污染其余主题。因此「新增一个主题」的 checklist 从「token 块 + 入口 + 卡片 + i18n」扩展为「token 块 + 可选视觉块 + `themeClass.ts` 的 `THEME_CLASSES` 入口 + 设置卡 + i18n」。`THEME_CLASSES` 与 `applyTheme` 收敛为单一 `src/utils/themeClass.ts`，设置页与托盘窗口共用。
+- **外层 `.panel-surface` 圆角仍跟随 `--panel-radius`**（与 Rust `SetWindowRgn` HWND 剪裁对齐），手绘波动只作用于内层卡片/菜单/按钮/徽章等元素。
+
 ## Consequences（后果）
 
 **收益**

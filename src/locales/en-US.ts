@@ -346,6 +346,8 @@ export default {
       themeDraculaLight: 'Violet Dawn',
       themeNordLight: 'Ice White',
       themeSunsetLight: 'Warm Sunshine',
+      themeHanddrawn: 'Sketch',
+      themeHanddrawnLight: 'Sketch Light',
       appMode: 'App Mode',
       modeFloating: 'Floating Panel',
       modeFloatingDesc: 'Frameless always-on-top, auto-hides on focus loss. Best for quick paste.',

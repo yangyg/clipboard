@@ -113,6 +113,27 @@ describe("settingsStore colorful preset themes", () => {
     expect(document.body.classList.contains("nord-theme")).toBe(true);
   });
 
+  it("applies handdrawn themes with their own classes", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "handdrawn");
+    expect(document.body.classList.contains("handdrawn-theme")).toBe(true);
+    expect(document.body.classList.contains("handdrawn-light-theme")).toBe(false);
+
+    store.updateSetting("theme", "handdrawn-light");
+    expect(document.body.classList.contains("handdrawn-light-theme")).toBe(true);
+    expect(document.body.classList.contains("handdrawn-theme")).toBe(false);
+  });
+
+  it("removes handdrawn classes when switching away", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "handdrawn");
+    expect(document.body.classList.contains("handdrawn-theme")).toBe(true);
+
+    store.updateSetting("theme", "dark");
+    expect(document.body.classList.contains("handdrawn-theme")).toBe(false);
+    expect(document.body.classList.contains("handdrawn-light-theme")).toBe(false);
+  });
+
   it("normalizes a legacy 'system' theme value to dark on loadSettings", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({ theme: "system" } as unknown as Settings);
     const store = useSettingsStore();

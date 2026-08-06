@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Component as VueComponent } from "vue";
+import { useHanddrawnTheme } from "../../composables/useHanddrawnTheme";
+// Clean line icons — every theme except hand-drawn.
 import {
   ClipboardList,
   Search,
@@ -52,8 +54,60 @@ import {
   ArrowUp,
   Component,
 } from "lucide-vue-next";
+// Hand-drawn icons (derived from Lucide, same names) — hand-drawn theme only.
+import {
+  ClipboardList as SketchyClipboardList,
+  Search as SketchySearch,
+  Settings as SketchySettings,
+  Settings2 as SketchySettings2,
+  Star as SketchyStar,
+  Pin as SketchyPin,
+  Trash2 as SketchyTrash2,
+  SquareCheck as SketchySquareCheck,
+  X as SketchyX,
+  CornerDownLeft as SketchyCornerDownLeft,
+  Type as SketchyType,
+  Link2 as SketchyLink2,
+  Image as SketchyImage,
+  FileText as SketchyFileText,
+  Code2 as SketchyCode2,
+  Tag as SketchyTag,
+  Plus as SketchyPlus,
+  RotateCcw as SketchyRotateCcw,
+  AlertTriangle as SketchyAlertTriangle,
+  Keyboard as SketchyKeyboard,
+  History as SketchyHistory,
+  Palette as SketchyPalette,
+  Shield as SketchyShield,
+  BarChart3 as SketchyBarChart3,
+  Package as SketchyPackage,
+  Info as SketchyInfo,
+  Moon as SketchyMoon,
+  Sun as SketchySun,
+  Monitor as SketchyMonitor,
+  Copy as SketchyCopy,
+  Check as SketchyCheck,
+  Pause as SketchyPause,
+  Play as SketchyPlay,
+  PanelTop as SketchyPanelTop,
+  AppWindow as SketchyAppWindow,
+  Circle as SketchyCircle,
+  Pencil as SketchyPencil,
+  ArrowLeft as SketchyArrowLeft,
+  HelpCircle as SketchyHelpCircle,
+  List as SketchyList,
+  LayoutGrid as SketchyLayoutGrid,
+  Sparkles as SketchySparkles,
+  Cloud as SketchyCloud,
+  CloudUpload as SketchyCloudUpload,
+  CloudDownload as SketchyCloudDownload,
+  RefreshCw as SketchyRefreshCw,
+  Zap as SketchyZap,
+  ArrowUp as SketchyArrowUp,
+  Component as SketchyComponent,
+} from "@sketchyicons/vue";
 
-const ICONS = {
+const LUCIDE_ICONS = {
   clipboard: ClipboardList,
   search: Search,
   settings: Settings,
@@ -105,7 +159,59 @@ const ICONS = {
   component: Component,
 } as const;
 
-export type AppIconName = keyof typeof ICONS;
+const SKETCHY_ICONS = {
+  clipboard: SketchyClipboardList,
+  search: SketchySearch,
+  settings: SketchySettings,
+  settings2: SketchySettings2,
+  star: SketchyStar,
+  pin: SketchyPin,
+  trash: SketchyTrash2,
+  batch: SketchySquareCheck,
+  close: SketchyX,
+  back: SketchyArrowLeft,
+  paste: SketchyCornerDownLeft,
+  type: SketchyType,
+  link: SketchyLink2,
+  image: SketchyImage,
+  file: SketchyFileText,
+  code: SketchyCode2,
+  tag: SketchyTag,
+  plus: SketchyPlus,
+  restore: SketchyRotateCcw,
+  warning: SketchyAlertTriangle,
+  keyboard: SketchyKeyboard,
+  history: SketchyHistory,
+  palette: SketchyPalette,
+  shield: SketchyShield,
+  stats: SketchyBarChart3,
+  package: SketchyPackage,
+  info: SketchyInfo,
+  moon: SketchyMoon,
+  sun: SketchySun,
+  monitor: SketchyMonitor,
+  copy: SketchyCopy,
+  check: SketchyCheck,
+  pause: SketchyPause,
+  play: SketchyPlay,
+  panel: SketchyPanelTop,
+  window: SketchyAppWindow,
+  circle: SketchyCircle,
+  edit: SketchyPencil,
+  help: SketchyHelpCircle,
+  list: SketchyList,
+  grid: SketchyLayoutGrid,
+  sparkles: SketchySparkles,
+  cloud: SketchyCloud,
+  cloudUpload: SketchyCloudUpload,
+  cloudDownload: SketchyCloudDownload,
+  refresh: SketchyRefreshCw,
+  zap: SketchyZap,
+  arrowUp: SketchyArrowUp,
+  component: SketchyComponent,
+} as const;
+
+export type AppIconName = keyof typeof LUCIDE_ICONS;
 
 const props = withDefaults(
   defineProps<{
@@ -122,7 +228,12 @@ const props = withDefaults(
   }
 );
 
-const icon = computed<VueComponent>(() => ICONS[props.name]);
+const isHanddrawn = useHanddrawnTheme();
+
+const icon = computed<VueComponent>(() => {
+  const set = isHanddrawn.value ? SKETCHY_ICONS : LUCIDE_ICONS;
+  return set[props.name];
+});
 </script>
 
 <template>

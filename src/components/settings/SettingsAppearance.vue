@@ -318,6 +318,30 @@ const APP_MODES = [
   background: linear-gradient(135deg, #ffffff, #f0f0f0);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
+.theme-editorial {
+  background-color: #242322;
+  background-image: linear-gradient(90deg, transparent 0 18%, rgba(255, 255, 255, 0.12) 18% 18.8%, transparent 18.8% 100%),
+    linear-gradient(135deg, #332f2b 0 48%, #9d5b3c 48% 52%, #332f2b 52%);
+}
+.theme-editorial-light {
+  background-color: #f5efe3;
+  background-image: linear-gradient(90deg, transparent 0 18%, rgba(39, 34, 29, 0.18) 18% 18.8%, transparent 18.8% 100%),
+    linear-gradient(135deg, #f5efe3 0 48%, #b65d3b 48% 52%, #f5efe3 52%);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
+.theme-sticker {
+  background-color: #293038;
+  background-image: radial-gradient(circle at 25% 28%, #f5c84b 0 14%, transparent 15%),
+    radial-gradient(circle at 74% 68%, #ed795f 0 18%, transparent 19%),
+    linear-gradient(135deg, transparent 0 45%, #87c8c1 45% 62%, transparent 62%);
+}
+.theme-sticker-light {
+  background-color: #f7f0df;
+  background-image: radial-gradient(circle at 25% 28%, #f5c84b 0 14%, transparent 15%),
+    radial-gradient(circle at 74% 68%, #ed795f 0 18%, transparent 19%),
+    linear-gradient(135deg, transparent 0 45%, #73b9b2 45% 62%, transparent 62%);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
 
 .theme-name {
   font-size: var(--text-sm);

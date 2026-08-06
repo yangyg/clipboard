@@ -1,0 +1,205 @@
+/* ============================================================
+   Editorial family (杂志编辑 / 杂志编辑·浅)
+   Paper, ink, hairline rules and an editorial red mark.
+   ============================================================ */
+
+body.editorial-theme,
+.editorial-theme {
+  --bg-base: #252422;
+  --bg-surface: #302e2a;
+  --bg-elevated: #3b3832;
+  --bg-hover: #454139;
+  --bg-active: #504a40;
+  --bg-input: #211f1d;
+  --border-subtle: rgba(246, 237, 218, 0.1);
+  --border-default: rgba(246, 237, 218, 0.16);
+  --border-focus: #d86b48;
+  --text-primary: #f4eddf;
+  --text-secondary: #c2b7a4;
+  --text-tertiary: #958b7d;
+  --text-inverse: #252422;
+  --accent: #d86b48;
+  --accent-hover: #e17b58;
+  --accent-light: #ffb095;
+  --accent-text: #ffb095;
+  --accent-soft: rgba(216, 107, 72, 0.16);
+  --accent-softer: rgba(216, 107, 72, 0.08);
+  --accent-pressed: #bd5638;
+  --bg-selected: rgba(216, 107, 72, 0.16);
+  --border-light: rgba(246, 237, 218, 0.12);
+  --text-muted: var(--text-tertiary);
+  --type-text: #8cc6d2;
+  --type-code: #a7c98d;
+  --type-link: #9fb9e8;
+  --type-image: #73c5b3;
+  --type-file: #e2bd70;
+  --success: #9dcc9b;
+  --success-soft: rgba(157, 204, 155, 0.14);
+  --warning: #e5bd6c;
+  --warning-soft: rgba(229, 189, 108, 0.14);
+  --pin: #c8a0e8;
+  --pin-soft: rgba(200, 160, 232, 0.15);
+  --danger: #ef8a79;
+  --danger-soft: rgba(239, 138, 121, 0.15);
+  --code-bg: #24221f;
+  --sensitive: #eab06c;
+  --sensitive-soft: rgba(234, 176, 108, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.34);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 20px rgba(216, 107, 72, 0.14);
+  --win-close-hover: #e81123;
+  --text-on-accent: #252422;
+  --editorial-rule: rgba(246, 237, 218, 0.2);
+  --editorial-paper: rgba(246, 237, 218, 0.018);
+}
+
+body.editorial-light-theme,
+.editorial-light-theme {
+  --bg-base: #ebe4d6;
+  --bg-surface: #f8f4eb;
+  --bg-elevated: #fffdf7;
+  --bg-hover: #eee6d8;
+  --bg-active: #e3d8c5;
+  --bg-input: #fffaf0;
+  --border-subtle: rgba(50, 42, 32, 0.1);
+  --border-default: rgba(50, 42, 32, 0.16);
+  --border-focus: #b94e32;
+  --text-primary: #28251f;
+  --text-secondary: #625a4e;
+  --text-tertiary: #83796b;
+  --text-inverse: #fffdf7;
+  --accent: #b94e32;
+  --accent-hover: #a63f27;
+  --accent-light: #e37b5b;
+  --accent-text: #a63f27;
+  --accent-soft: rgba(185, 78, 50, 0.12);
+  --accent-softer: rgba(185, 78, 50, 0.06);
+  --accent-pressed: #8f351f;
+  --bg-selected: rgba(185, 78, 50, 0.12);
+  --border-light: rgba(50, 42, 32, 0.1);
+  --text-muted: var(--text-tertiary);
+  --type-text: #176d83;
+  --type-code: #39742d;
+  --type-link: #315ca6;
+  --type-image: #197c6d;
+  --type-file: #906617;
+  --success: #39743d;
+  --success-soft: rgba(57, 116, 61, 0.1);
+  --warning: #9a650d;
+  --warning-soft: rgba(154, 101, 13, 0.1);
+  --pin: #7542a6;
+  --pin-soft: rgba(117, 66, 166, 0.1);
+  --danger: #b52e2e;
+  --danger-soft: rgba(181, 46, 46, 0.1);
+  --code-bg: #eee7d9;
+  --sensitive: #a64b16;
+  --sensitive-soft: rgba(166, 75, 22, 0.1);
+  --shadow-sm: 0 1px 2px rgba(70, 52, 30, 0.12);
+  --shadow-md: 0 4px 16px rgba(70, 52, 30, 0.15);
+  --shadow-lg: 0 12px 48px rgba(70, 52, 30, 0.2);
+  --shadow-glow: 0 0 20px rgba(185, 78, 50, 0.12);
+  --win-close-hover: #e81123;
+  --text-on-accent: #fffdf7;
+  --editorial-rule: rgba(50, 42, 32, 0.2);
+  --editorial-paper: rgba(50, 42, 32, 0.018);
+}
+
+/* The restrained paper grain keeps the family tactile without competing with
+   clipboard content. */
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.panel-surface, .sidebar, .list-column, .preview-pane, .settings-nav, .settings-body) {
+  background-image: repeating-linear-gradient(0deg, var(--editorial-paper) 0 1px, transparent 1px 4px);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.panel-title, .list-title, .preview-name, .settings-section-title) {
+  font-family: Georgia, "Noto Serif SC", "Microsoft YaHei UI", serif;
+  letter-spacing: 0.02em;
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.titlebar, .panel-header, .list-toolbar, .settings-header, .preview-header) {
+  border-bottom-color: var(--editorial-rule);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) .settings-section-title {
+  width: fit-content;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--accent);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) .record-item {
+  border-radius: 2px;
+  border-bottom-color: var(--border-subtle);
+  border-bottom-style: solid;
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) .record-item.selected {
+  border-left: 3px solid var(--accent);
+  border-radius: 0;
+  box-shadow: inset 0 0 0 1px var(--accent-soft);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) .record-type-icon,
+:is(body.editorial-theme, body.editorial-light-theme) .preview-type-icon,
+:is(body.editorial-theme, body.editorial-light-theme) .record-color-swatch {
+  border-radius: 2px;
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.badge, .tag-badge, .kbd) {
+  border-radius: 2px;
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) .search-box {
+  border-bottom: 1px solid var(--editorial-rule);
+}
+
+/* Editorial controls use an ink-and-red editorial mark instead of the generic
+   gray hover wash used by the neutral themes. */
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.nav-item:not(.has-cat-color):hover, .tag-item:hover, .filter-tab:hover,
+    .icon-btn:hover, .list-tool-btn:hover, .view-toggle-btn:hover) {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.nav-item:not(.has-cat-color).active, .tag-item.active, .filter-tab.active,
+    .icon-btn.active, .list-tool-btn.active, .view-toggle-btn.active) {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.nav-item:not(.has-cat-color).active, .tag-item.active) {
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) .filter-tab.active {
+  border-bottom: 2px solid var(--accent);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):active {
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) ::selection {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+:is(body.editorial-theme, body.editorial-light-theme) mark.search-hit {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: inherit;
+  border-bottom: 2px solid var(--accent);
+}

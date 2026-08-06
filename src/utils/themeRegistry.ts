@@ -12,6 +12,10 @@ export const THEME_DEFINITIONS = [
   { key: "handdrawn-light", icon: "palette", labelKey: "settings.appearance.themeHanddrawnLight" },
   { key: "mono", icon: "circle", labelKey: "settings.appearance.themeMono" },
   { key: "mono-light", icon: "circle", labelKey: "settings.appearance.themeMonoLight" },
+  { key: "editorial", icon: "component", labelKey: "settings.appearance.themeEditorial" },
+  { key: "editorial-light", icon: "component", labelKey: "settings.appearance.themeEditorialLight" },
+  { key: "sticker", icon: "palette", labelKey: "settings.appearance.themeSticker" },
+  { key: "sticker-light", icon: "palette", labelKey: "settings.appearance.themeStickerLight" },
 ] as const;
 
 export type ThemeKey = (typeof THEME_DEFINITIONS)[number]["key"];

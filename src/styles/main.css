@@ -9,6 +9,8 @@
 @import "./themes/sunset.css";
 @import "./themes/handdrawn.css";
 @import "./themes/mono.css";
+@import "./themes/editorial.css";
+@import "./themes/sticker.css";
 
 :root {
   /* Dark Theme (default) */
@@ -397,7 +399,7 @@ body.anim-disabled *::after {
 }
 .btn-primary {
   background: var(--accent);
-  color: white;
+  color: var(--text-on-accent, white);
   font-weight: 600;
 }
 .btn-primary:hover {

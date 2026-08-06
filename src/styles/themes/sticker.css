@@ -1,0 +1,242 @@
+/* ============================================================
+   Sticker Collage family (贴纸拼贴 / 贴纸拼贴·浅)
+   Colorful paper pieces, offset shadows and playful labels.
+   ============================================================ */
+
+body.sticker-theme,
+.sticker-theme {
+  --bg-base: #202932;
+  --bg-surface: #29343d;
+  --bg-elevated: #34414a;
+  --bg-hover: #3d4b55;
+  --bg-active: #465660;
+  --bg-input: #1b232b;
+  --border-subtle: rgba(244, 238, 218, 0.12);
+  --border-default: rgba(244, 238, 218, 0.18);
+  --border-focus: #f2bd45;
+  --text-primary: #f5efdf;
+  --text-secondary: #c4c5b8;
+  --text-tertiary: #909b9b;
+  --text-inverse: #202932;
+  --accent: #f2bd45;
+  --accent-hover: #f8ca5c;
+  --accent-light: #ffe196;
+  --accent-text: #ffe196;
+  --accent-soft: rgba(242, 189, 69, 0.18);
+  --accent-softer: rgba(242, 189, 69, 0.08);
+  --accent-pressed: #dca62d;
+  --bg-selected: rgba(242, 189, 69, 0.18);
+  --border-light: rgba(244, 238, 218, 0.12);
+  --text-muted: var(--text-tertiary);
+  --type-text: #7fd0c2;
+  --type-code: #a7d98f;
+  --type-link: #9ebcf0;
+  --type-image: #7ec7e5;
+  --type-file: #f1bb74;
+  --success: #9bd28c;
+  --success-soft: rgba(155, 210, 140, 0.15);
+  --warning: #f2bd45;
+  --warning-soft: rgba(242, 189, 69, 0.16);
+  --pin: #dd9de8;
+  --pin-soft: rgba(221, 157, 232, 0.16);
+  --danger: #f28c78;
+  --danger-soft: rgba(242, 140, 120, 0.16);
+  --code-bg: #202a31;
+  --sensitive: #f0a55d;
+  --sensitive-soft: rgba(240, 165, 93, 0.15);
+  --shadow-sm: 2px 2px 0 rgba(9, 14, 18, 0.4);
+  --shadow-md: 4px 5px 0 rgba(9, 14, 18, 0.36);
+  --shadow-lg: 8px 10px 0 rgba(9, 14, 18, 0.28);
+  --shadow-glow: 0 0 20px rgba(242, 189, 69, 0.16);
+  --win-close-hover: #e81123;
+  --text-on-accent: #202932;
+  --sticker-ink: rgba(9, 14, 18, 0.42);
+  --sticker-yellow: #f2bd45;
+  --sticker-coral: #ed795f;
+  --sticker-teal: #79c7bf;
+  --sticker-paper: rgba(255, 247, 220, 0.022);
+}
+
+body.sticker-light-theme,
+.sticker-light-theme {
+  --bg-base: #eee8d9;
+  --bg-surface: #f8f1df;
+  --bg-elevated: #fffaf0;
+  --bg-hover: #f0e2c7;
+  --bg-active: #e4d2ad;
+  --bg-input: #fff9ec;
+  --border-subtle: rgba(55, 45, 29, 0.1);
+  --border-default: rgba(55, 45, 29, 0.16);
+  --border-focus: #d79a23;
+  --text-primary: #332d25;
+  --text-secondary: #6c6252;
+  --text-tertiary: #897c69;
+  --text-inverse: #fffaf0;
+  --accent: #d79a23;
+  --accent-hover: #bd7f0e;
+  --accent-light: #f2bd45;
+  --accent-text: #9a6507;
+  --accent-soft: rgba(215, 154, 35, 0.14);
+  --accent-softer: rgba(215, 154, 35, 0.07);
+  --accent-pressed: #a86e08;
+  --bg-selected: rgba(215, 154, 35, 0.14);
+  --border-light: rgba(55, 45, 29, 0.09);
+  --text-muted: var(--text-tertiary);
+  --type-text: #147582;
+  --type-code: #467d31;
+  --type-link: #3d63a2;
+  --type-image: #237c7b;
+  --type-file: #94641b;
+  --success: #4b813d;
+  --success-soft: rgba(75, 129, 61, 0.1);
+  --warning: #a86e08;
+  --warning-soft: rgba(168, 110, 8, 0.12);
+  --pin: #9b4eae;
+  --pin-soft: rgba(155, 78, 174, 0.11);
+  --danger: #c44938;
+  --danger-soft: rgba(196, 73, 56, 0.11);
+  --code-bg: #eee2c8;
+  --sensitive: #b25c1c;
+  --sensitive-soft: rgba(178, 92, 28, 0.11);
+  --shadow-sm: 2px 2px 0 rgba(77, 58, 28, 0.18);
+  --shadow-md: 4px 5px 0 rgba(77, 58, 28, 0.16);
+  --shadow-lg: 8px 10px 0 rgba(77, 58, 28, 0.12);
+  --shadow-glow: 0 0 20px rgba(215, 154, 35, 0.12);
+  --win-close-hover: #e81123;
+  --text-on-accent: #332d25;
+  --sticker-ink: rgba(77, 58, 28, 0.28);
+  --sticker-yellow: #f2bd45;
+  --sticker-coral: #ed795f;
+  --sticker-teal: #79bdb5;
+  --sticker-paper: rgba(77, 58, 28, 0.025);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.panel-surface, .sidebar, .list-column, .preview-pane, .settings-nav, .settings-body) {
+  background-image: radial-gradient(var(--sticker-paper) 1px, transparent 1.4px);
+  background-size: 13px 13px;
+}
+
+/* Small hard shadows make controls read as separate paper pieces. */
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.theme-card, .mode-card, .btn, .context-menu, .dialog-card, .tag-badge, .badge) {
+  box-shadow: 3px 3px 0 var(--sticker-ink);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.theme-card, .mode-card, .btn, .tag-badge, .badge, .kbd) {
+  border-radius: 5px 8px 6px 7px;
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .theme-card:nth-child(3n) {
+  transform: rotate(-0.8deg);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .theme-card:nth-child(3n + 1) {
+  transform: rotate(0.7deg);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .theme-card:hover,
+:is(body.sticker-theme, body.sticker-light-theme) .theme-card.selected {
+  transform: translateY(-1px) rotate(0deg);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .settings-section-title {
+  width: fit-content;
+  padding: 2px 8px 3px;
+  background: linear-gradient(transparent 35%, color-mix(in srgb, var(--sticker-yellow) 58%, transparent) 35%);
+  transform: rotate(-1deg);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .record-item {
+  border-radius: 8px 10px 7px 9px;
+  border-color: var(--border-subtle);
+  box-shadow: 2px 2px 0 var(--sticker-ink);
+  transition: background var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .record-item:hover {
+  transform: translateY(-1px) rotate(-0.25deg);
+  border-color: var(--accent);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .record-item.selected {
+  border: 2px solid var(--accent);
+  box-shadow: 3px 3px 0 var(--sticker-ink);
+  transform: rotate(0deg);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .record-type-icon,
+:is(body.sticker-theme, body.sticker-light-theme) .preview-type-icon,
+:is(body.sticker-theme, body.sticker-light-theme) .record-color-swatch {
+  border-radius: 5px 8px 6px 7px;
+  transform: rotate(-2deg);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .search-box {
+  border: 2px solid var(--border-default);
+  border-radius: 7px 10px 8px 6px;
+  background: var(--bg-input);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .filter-tab.active,
+:is(body.sticker-theme, body.sticker-light-theme) .nav-item.active {
+  box-shadow: 2px 2px 0 var(--sticker-ink);
+}
+
+/* Sticker controls use a colored paper piece for active states and a coral
+   edge for hover, so navigation remains visibly playful and directional. */
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.nav-item:not(.has-cat-color):hover, .tag-item:hover, .filter-tab:hover,
+    .icon-btn:hover, .list-tool-btn:hover, .view-toggle-btn:hover) {
+  background: color-mix(in srgb, var(--sticker-coral) 18%, transparent);
+  color: var(--accent-text);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.nav-item:not(.has-cat-color).active, .tag-item.active, .filter-tab.active,
+    .icon-btn.active, .list-tool-btn.active, .view-toggle-btn.active) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .filter-tab.active .filter-count {
+  background: color-mix(in srgb, var(--text-on-accent) 16%, transparent);
+  color: var(--text-on-accent);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):active {
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) .preview-header {
+  border-bottom: 2px solid var(--sticker-teal);
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) ::selection {
+  background: var(--sticker-yellow);
+  color: #332d25;
+}
+
+:is(body.sticker-theme, body.sticker-light-theme) mark.search-hit {
+  background: color-mix(in srgb, var(--sticker-yellow) 70%, transparent);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(body.sticker-theme, body.sticker-light-theme) .theme-card,
+  :is(body.sticker-theme, body.sticker-light-theme) .record-item {
+    transform: none;
+  }
+}

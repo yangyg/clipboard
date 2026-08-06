@@ -77,10 +77,10 @@ const emit = defineEmits<{
 .action-btn:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
 .action-btn:active { transform: scale(0.96); }
 .action-btn:hover .action-label, .action-btn:hover .action-icon { color: var(--accent-text); }
-.action-btn.action-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.action-btn.action-primary .action-label, .action-btn.action-primary .action-icon { color: #fff; }
+.action-btn.action-primary { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent, #fff); }
+.action-btn.action-primary .action-label, .action-btn.action-primary .action-icon { color: var(--text-on-accent, #fff); }
 .action-btn.action-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.action-btn.action-primary:hover .action-label, .action-btn.action-primary:hover .action-icon { color: #fff; }
+.action-btn.action-primary:hover .action-label, .action-btn.action-primary:hover .action-icon { color: var(--text-on-accent, #fff); }
 .action-btn.action-fav:hover { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 20%, transparent); }
 .action-btn.action-fav:hover .action-label, .action-btn.action-fav:hover .action-icon { color: var(--warning); }
 .action-btn.action-active { background: var(--warning-soft); border-color: color-mix(in srgb, var(--warning) 20%, transparent); }

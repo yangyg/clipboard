@@ -348,6 +348,8 @@ export default {
       themeSunsetLight: 'Warm Sunshine',
       themeHanddrawn: 'Sketch',
       themeHanddrawnLight: 'Sketch Light',
+      themeMono: 'Monochrome',
+      themeMonoLight: 'Monochrome Light',
       appMode: 'App Mode',
       modeFloating: 'Floating Panel',
       modeFloatingDesc: 'Frameless always-on-top, auto-hides on focus loss. Best for quick paste.',

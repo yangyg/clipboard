@@ -16,6 +16,8 @@ export const THEME_CLASSES = [
   "sunset-light-theme",
   "handdrawn-theme",
   "handdrawn-light-theme",
+  "mono-theme",
+  "mono-light-theme",
 ] as const;
 
 /** Attach the theme class for `theme` (dark = default, no class) to <body>. */

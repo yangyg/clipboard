@@ -348,6 +348,8 @@ export default {
       themeSunsetLight: '暖阳',
       themeHanddrawn: '手绘',
       themeHanddrawnLight: '手绘·浅',
+      themeMono: '黑白',
+      themeMonoLight: '黑白·浅',
       appMode: '应用模式',
       modeFloating: '悬浮面板',
       modeFloatingDesc: '无边框置顶，失焦后自动隐藏，适合快速粘贴。',

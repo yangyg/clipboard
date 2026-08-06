@@ -134,6 +134,27 @@ describe("settingsStore colorful preset themes", () => {
     expect(document.body.classList.contains("handdrawn-light-theme")).toBe(false);
   });
 
+  it("applies mono themes with their own classes", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "mono");
+    expect(document.body.classList.contains("mono-theme")).toBe(true);
+    expect(document.body.classList.contains("mono-light-theme")).toBe(false);
+
+    store.updateSetting("theme", "mono-light");
+    expect(document.body.classList.contains("mono-light-theme")).toBe(true);
+    expect(document.body.classList.contains("mono-theme")).toBe(false);
+  });
+
+  it("removes mono classes when switching away", () => {
+    const store = useSettingsStore();
+    store.updateSetting("theme", "mono");
+    expect(document.body.classList.contains("mono-theme")).toBe(true);
+
+    store.updateSetting("theme", "dark");
+    expect(document.body.classList.contains("mono-theme")).toBe(false);
+    expect(document.body.classList.contains("mono-light-theme")).toBe(false);
+  });
+
   it("normalizes a legacy 'system' theme value to dark on loadSettings", async () => {
     vi.mocked(invoke).mockResolvedValueOnce({ theme: "system" } as unknown as Settings);
     const store = useSettingsStore();

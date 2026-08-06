@@ -43,6 +43,12 @@ Accepted
 - **手绘主题族的非 token 视觉**：手绘主题在 token 之外还带一段**共享视觉覆盖块**（不规则圆角 `--sketch-radius*`、贴纸硬阴影、卡片微旋转、波浪下划线、纸点纹理、虚线 focus 环、马克笔 `::selection`），以 `:is(body.handdrawn-theme, body.handdrawn-light-theme)` 前缀门控，避免污染其余主题。因此「新增一个主题」的 checklist 从「token 块 + 入口 + 卡片 + i18n」扩展为「token 块 + 可选视觉块 + `themeClass.ts` 的 `THEME_CLASSES` 入口 + 设置卡 + i18n」。`THEME_CLASSES` 与 `applyTheme` 收敛为单一 `src/utils/themeClass.ts`，设置页与托盘窗口共用。
 - **外层 `.panel-surface` 圆角仍跟随 `--panel-radius`**（与 Rust `SetWindowRgn` HWND 剪裁对齐），手绘波动只作用于内层卡片/菜单/按钮/徽章等元素。
 
+### 追加：黑白极简主题族（黑白 / 黑白·浅）
+
+- **纯灰阶 token**：`mono` / `mono-light` 是「严格黑白」预设——背景/边框/文字/accent/类型色/语义色全部灰阶，语义色仅靠明度区分（danger 最亮、warning 中灰等），无任何彩色。
+- **极简零装饰**：该家族没有手绘那种视觉覆盖块，只带一个**组件修正块**——暗色 accent 为纯白，而基础 `.btn-primary` / `.action-btn.action-primary` 硬编码白字（白上加白不可见），故覆盖为墨色文字；`.toggle.on` 白轨配墨色圆钮；`::selection` 与 `mark.search-hit` 改为黑白反转。
+- **图标保持 lucide**：`useHanddrawnTheme` 只识别 `handdrawn-*`，mono 家族自动沿用干净 lucide。
+
 ## Consequences（后果）
 
 **收益**

@@ -130,6 +130,8 @@ const THEMES: ThemeOption[] = [
   { key: "sunset-light", icon: "star", labelKey: "settings.appearance.themeSunsetLight" },
   { key: "handdrawn", icon: "edit", labelKey: "settings.appearance.themeHanddrawn" },
   { key: "handdrawn-light", icon: "palette", labelKey: "settings.appearance.themeHanddrawnLight" },
+  { key: "mono", icon: "circle", labelKey: "settings.appearance.themeMono" },
+  { key: "mono-light", icon: "circle", labelKey: "settings.appearance.themeMonoLight" },
 ];
 
 function focusTheme(items: readonly ThemeOption[], index: number) {
@@ -214,6 +216,11 @@ const APP_MODES = [
 .theme-handdrawn { background: linear-gradient(135deg, #2e2a26, #221f1c); }
 .theme-handdrawn-light {
   background: linear-gradient(135deg, #faf5ea, #f1eadd);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
+.theme-mono { background: linear-gradient(135deg, #121212, #0a0a0a); }
+.theme-mono-light {
+  background: linear-gradient(135deg, #ffffff, #f0f0f0);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
 

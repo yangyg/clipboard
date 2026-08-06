@@ -1,0 +1,151 @@
+/* ============================================================
+   Monochrome family (黑白 / 黑白·浅)
+   Strict black-and-white minimalism: every token is grayscale,
+   semantic colors differentiated by lightness only.
+   ============================================================ */
+
+/* Monochrome Theme (黑白) — dark-leaning preset.
+   Near-black grays, white text, pure white accent. */
+body.mono-theme,
+.mono-theme {
+  --bg-base: #0a0a0a;
+  --bg-surface: #121212;
+  --bg-elevated: #1b1b1b;
+  --bg-hover: #242424;
+  --bg-active: #2d2d2d;
+  --bg-input: #0e0e0e;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-focus: #ffffff;
+  --text-primary: #f2f2f2;
+  --text-secondary: #a8a8a8;
+  --text-tertiary: #767676;
+  --text-inverse: #0a0a0a;
+  --accent: #ffffff;
+  --accent-hover: #e8e8e8;
+  --accent-light: #d9d9d9;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(255, 255, 255, 0.12);
+  --accent-softer: rgba(255, 255, 255, 0.06);
+  --accent-pressed: #d0d0d0;
+  --bg-selected: rgba(255, 255, 255, 0.14);
+  --border-light: rgba(255, 255, 255, 0.09);
+  --text-muted: var(--text-tertiary);
+  --type-text: #c9c9c9;
+  --type-code: #a6a6a6;
+  --type-link: #f5f5f5;
+  --type-image: #b8b8b8;
+  --type-file: #999999;
+  --success: #e0e0e0;
+  --success-soft: rgba(224, 224, 224, 0.12);
+  --warning: #c9c9c9;
+  --warning-soft: rgba(201, 201, 201, 0.12);
+  --pin: #f0f0f0;
+  --pin-soft: rgba(240, 240, 240, 0.14);
+  --danger: #ffffff;
+  --danger-soft: rgba(255, 255, 255, 0.14);
+  --code-bg: #101010;
+  --sensitive: #d6d6d6;
+  --sensitive-soft: rgba(214, 214, 214, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.8);
+  --shadow-glow: 0 0 20px rgba(255, 255, 255, 0.12);
+  --win-close-hover: #f0f0f0;
+}
+
+/* Monochrome Light (黑白·浅) — light counterpart.
+   Near-white grays, ink text, pure black accent. */
+body.mono-light-theme,
+.mono-light-theme {
+  --bg-base: #f4f4f4;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f0f0f0;
+  --bg-hover: #e8e8e8;
+  --bg-active: #dfdfdf;
+  --bg-input: #fafafa;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-focus: #000000;
+  --text-primary: #111111;
+  --text-secondary: #555555;
+  --text-tertiary: #7a7a7a;
+  --text-inverse: #ffffff;
+  --accent: #000000;
+  --accent-hover: #2a2a2a;
+  --accent-light: #333333;
+  --accent-text: #000000;
+  --accent-soft: rgba(0, 0, 0, 0.08);
+  --accent-softer: rgba(0, 0, 0, 0.04);
+  --accent-pressed: #1a1a1a;
+  --bg-selected: rgba(0, 0, 0, 0.1);
+  --border-light: rgba(0, 0, 0, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #333333;
+  --type-code: #4a4a4a;
+  --type-link: #000000;
+  --type-image: #3d3d3d;
+  --type-file: #5c5c5c;
+  --success: #3d3d3d;
+  --success-soft: rgba(61, 61, 61, 0.1);
+  --warning: #4a4a4a;
+  --warning-soft: rgba(74, 74, 74, 0.1);
+  --pin: #000000;
+  --pin-soft: rgba(0, 0, 0, 0.1);
+  --danger: #111111;
+  --danger-soft: rgba(17, 17, 17, 0.1);
+  --code-bg: #f0f0f0;
+  --sensitive: #2f2f2f;
+  --sensitive-soft: rgba(47, 47, 47, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.14);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.18);
+  --shadow-glow: 0 0 20px rgba(0, 0, 0, 0.08);
+  --win-close-hover: #000000;
+}
+
+/* ============================================================
+   Component fixes required by a pure-black / pure-white accent.
+   The base .btn-primary / .action-btn.action-primary hardcode white
+   text; on the dark mono theme the accent is white, so text flips
+   to ink. The toggle track is white too, so its knob goes ink.
+   ============================================================ */
+
+body.mono-theme .btn-primary,
+body.mono-theme .btn-primary.danger,
+body.mono-theme .action-btn.action-primary,
+body.mono-theme .action-btn.action-primary:hover {
+  color: #0a0a0a;
+}
+body.mono-theme .btn-primary:hover {
+  background: var(--accent-hover);
+}
+body.mono-theme .action-btn.action-primary .action-label,
+body.mono-theme .action-btn.action-primary .action-icon,
+body.mono-theme .action-btn.action-primary:hover .action-label,
+body.mono-theme .action-btn.action-primary:hover .action-icon {
+  color: #0a0a0a;
+}
+
+/* Toggle on-state: ink knob on the white track */
+body.mono-theme .toggle.on::after {
+  background: #0a0a0a;
+}
+
+/* Strict B&W text selection + search highlight */
+body.mono-theme ::selection {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+body.mono-light-theme ::selection {
+  background: #111111;
+  color: #ffffff;
+}
+body.mono-theme mark.search-hit {
+  background: #ffffff;
+  color: #0a0a0a;
+}
+body.mono-light-theme mark.search-hit {
+  background: #111111;
+  color: #ffffff;
+}

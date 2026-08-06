@@ -8,6 +8,7 @@
 @import "./themes/nord.css";
 @import "./themes/sunset.css";
 @import "./themes/handdrawn.css";
+@import "./themes/mono.css";
 
 :root {
   /* Dark Theme (default) */

@@ -84,7 +84,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 ├── ToastHost.vue
 ├── CaptureStatus.vue
 ├── TrayMenuApp.vue              # Custom tray-menu window entry (src root, Vite multi-page)
-├── composables/useVirtualList.ts · useColumnResize.ts · useSettings.ts · useFeature.ts · useBatchActions.ts · useClipboardHotkeys.ts · useClipboardEvents.ts · useToast.ts · useConfirm.ts · useBatchBarHeight.ts · useExpireCountdown.ts · usePreviewActions.ts · usePreviewFormatting.ts · useRecordActions.ts · useSidebarMenus.ts · useTrayTheme.ts · pasteFocusLock.ts
+├── composables/useVirtualList.ts · useColumnResize.ts · useSettings.ts · useFeature.ts · useBatchActions.ts · useClipboardHotkeys.ts · useClipboardEvents.ts · useToast.ts · useConfirm.ts · useBatchBarHeight.ts · useExpireCountdown.ts · usePreviewActions.ts · usePreviewFormatting.ts · useRecordActions.ts · useSidebarMenus.ts · useTrayTheme.ts · useSearchHistory.ts · pasteFocusLock.ts
 ├── utils/mediaUrl.ts · sanitizeHtml.ts · trayMenuItems.ts · highlightSearch.ts · clipboardColor.ts · recordFormatting.ts · themeColors.ts · sourceBadge.ts
 ├── features/capabilities.ts     # FeatureId + DEFAULT_FEATURES (Rust: features.rs)
 └── stores/clipboard.ts          # Orchestrator; fragments: clipboardList.ts · clipboardRecordActions.ts · clipboardTagActions.ts · clipboardExpiry.ts · settings.ts
@@ -93,7 +93,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 ### Backend (Rust) Module Layout
 - `lib.rs` — `run()`: logging, dirs, DB init, plugin registration, `invoke_handler`, window events, resume safety-net
 - `setup.rs` — one-time setup closure (capture pipeline, autostart, shortcut, tray, corners, backdrop, cleanup thread)
-- `commands/` — Tauri commands: `mod.rs` (re-exports + `MAX_PAGE_SIZE`/`MAX_BATCH_IDS`), `records.rs`, `paste.rs`, `settings.rs`, `tags.rs`, `tray.rs`, `import_export.rs`, `webdav.rs`
+- `commands/` — Tauri commands: `mod.rs` (re-exports + `MAX_PAGE_SIZE`/`MAX_BATCH_IDS`), `records.rs`, `paste.rs`, `settings.rs`, `tags.rs`, `tray.rs`, `import_export.rs`, `search_history.rs`, `webdav.rs`
 - `window.rs` — adaptive / remembered size, round corners, resize persistence. **Window mode** min width **760** (SideBar+List+Preview ≥740); floating stays compact.
 - `tray.rs` — tray icon (no native menu); right-click shows `tray-menu` window; left-click → `toggle_main_panel`; **Windows power-resume** rebuilds tray + reloads webviews
 - `clipboard/` — `mod.rs` (monitor re-export), `monitor.rs` (poll loop, sequence/fp watermark, suppression), `capture` lives in `capture.rs` (worker threads + periodic cleanup ~60s), `paste.rs` (target HWND, focus restore + Ctrl+V), `write.rs` (text/PNG/image write), `fgwin.rs` (foreground window), `image.rs` (image fingerprint/downscale ≤2560 edge)
@@ -103,8 +103,8 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - `detect.rs` — content type + sensitive detection + SHA-256 helpers. Link type via `security::is_openable_link`
 - `security.rs` — media path must resolve under media root; export/import JSON path checks; **openable-link whitelist** (`is_openable_link` / `link_scheme` + `LINK_PREFIXES`); DPAPI; safe media rel-paths only
 - `features.rs` — feature flags (tags/batch/sync/stats) + `require_feature`
-- `types.rs` — `ClipboardRecord` / `Settings` / `StatsData` / `TagInfo` / `SearchResult` / `RecordsPage` / `AutoTagRule` + serde defaults
-- `db/` — SQLite layer: `mod.rs` (constructor, read/write lock split); `types.rs` (`RECORD_COLS` / `RECORD_COLS_LIST`); `schema.rs` (FTS5 + schema version); `schema_tests.rs`; `records_query.rs` / `records_search.rs` / `records_write.rs` / `records_media.rs` / `records_import.rs`; `settings.rs` (settings + DPAPI); `tags.rs` (tag CRUD + auto-tag); `stats.rs` (aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). Export: `get_records_for_export`.
+- `types.rs` — `ClipboardRecord` / `Settings` / `StatsData` / `TagInfo` / `SearchResult` / `RecordsPage` / `SearchHistoryEntry` / `AutoTagRule` + serde defaults
+- `db/` — SQLite layer: `mod.rs` (constructor, read/write lock split); `types.rs` (`RECORD_COLS` / `RECORD_COLS_LIST`); `schema.rs` (FTS5 + schema version); `schema_tests.rs`; `records_query.rs` / `records_search.rs` / `records_write.rs` / `records_media.rs` / `records_import.rs`; `search_history.rs` (search-history autocomplete, **local-only**, cap 50, upsert count + recency); `settings.rs` (settings + DPAPI); `tags.rs` (tag CRUD + auto-tag); `stats.rs` (aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). Export: `get_records_for_export`.
 - `webdav/` — WebDAV cloud sync (`client.rs` HTTP client; `sync.rs` pull/merge/push; `bundle.rs`; `media.rs`). Protocol `clipvault-webdav-v1`; manifest + JSONL bundle. Settings page: **Sync** (`SettingsSync.vue`). Default remote dir `ClipVaultSync`.
 - `main.rs` — `clipboard_lib::run()`
 
@@ -150,6 +150,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 - **Record alias:** Optional short `alias` (max 80 chars) for display only — does **not** change paste content / hash / HTML. List title prefers alias (hover `title` = content preview). Edit via preview header or context menu (`set_record_alias`). Hash-dedup re-copy keeps existing alias. Import/export include `alias` (serde default `""`).
 - **Auto-tag:** Settings `enable_auto_tag` (default **true**) + `auto_tag_rules`. Per-rule match is OR. No per-tag FTS triggers — refresh FTS once after batch tag writes (**FTS v4**). Defaults: 链接←`link`; 部署 / 前端←keywords. UI: Settings → 标签 (local draft + 400ms commit). `scheduleLoadTags` 350ms.
 - **Search:** FTS5 trigram (**≥3 chars**) on content / alias / source_app / source_window / tags. **1–2 chars:** single-pass `instr(...)` (incl. `alias`) + tag `EXISTS` (no `LIKE '%X%'`). FTS update trigger is **`OF content` only** so hash-dedup source updates do not rebuild FTS. Tag / alias changes call `refresh_record_fts`. **FTS delete:** `DELETE FROM records_fts WHERE rowid=…` (not FTS5 `'delete'` command — broken on Windows SQLite).
+- **Search history / autocomplete:** `SearchBar` dropdown of recent searches (top **10**). Stored in the `search_history` table (`query` PK, `search_count`, `last_searched_at`) — **local-only**, never exported/synced; DB cap **50**. Recorded only on deliberate submit (Enter / suggestion-select), never on debounced intermediate typing. Frontend `useSearchHistory` loads once on mount and writes optimistically (fire-and-forget invoke; failed writes silently dropped). Keyboard: ↑/↓ navigate, Enter fills+searches, Delete removes the active row, bottom「清空历史搜索」clears all.
 - **Stats storage:** `storage_bytes` ≈ `SUM(content_len)` (+ HTML lengths) + cached `media/` dir size. `data_path` is the absolute app data dir; displayed on the **Data** settings page (moved from Stats).
 - **Sets in Vue:** Never mutate `Set` in place — assign a new `Set`.
 - **Global shortcut:** From `settings.global_shortcut` at startup; re-bound in `save_settings`.

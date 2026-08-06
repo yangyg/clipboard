@@ -23,6 +23,11 @@
     </div>
 
     <div class="guide-block">
+      <div class="guide-heading"><AppIcon name="history" :size="14" /> {{ $t('settings.help.searchHistory') }}</div>
+      <div class="guide-text">{{ $t('settings.help.searchHistoryText') }}</div>
+    </div>
+
+    <div class="guide-block">
       <div class="guide-heading"><AppIcon name="star" :size="14" /> {{ $t('settings.help.favoritePinTag') }}</div>
       <div class="guide-text">{{ $t('settings.help.favoritePinTagText') }}</div>
     </div>

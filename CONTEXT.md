@@ -21,6 +21,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
 | **Soft cap** | In-memory list pages are soft-capped (`PAGE_SIZE × 2`). When dirty, the next `loadMore` reloads from DB. |
 | **WebDAV sync** | Cloud sync via WebDAV protocol `clipvault-webdav-v1`. Manifest + JSONL bundle; media files synced alongside. Default remote dir `ClipVaultSync`. |
+| **Search history** | Distinct search terms submitted via Enter / suggestion-select, stored in the `search_history` table (query PK + count + last_searched_at). Drives the search-box autocomplete dropdown (top 10, recency-ordered). **Local-only** — excluded from export/import and WebDAV sync. |
 | **UI font** | `font_family` setting — a preset key (`default`/`yahei`/`simhei`/`simsun`/`kaiti`/`segoe`) or `system:<name>` for an OS-installed font. Applied as `--font-sans`; every stack carries a CJK-capable fallback (`Microsoft YaHei UI`). |
 
 ## Architecture Decision Records
@@ -42,6 +43,7 @@ See `docs/adr/` for immutable decision records:
 - **Media open uses `ShellExecuteW`** — Not `cmd /c start` or `shell.open`.
 - **Link schemes are a shared whitelist** — `security::is_openable_link` is the single source for detect / `open_url` / import keep-as-link. WebView `<a href>` stays http(s)-only; other openable schemes go through Rust.
 - **UI font via presets / system fonts** — `font_family` resolves through `src/utils/fontPresets.ts` (`resolveFontStack`); system-font choices (`system:<name>`) are enumerated by the async Rust command `get_system_fonts` (DirectWrite via `font-kit`, CJK-glyph filtered, cached) and applied with a CJK-safe fallback stack. Settings is a JSON blob, so new fields need no DB migration (serde default).
+- **Search history is local-only** — `search_history` rows never enter export/import (`get_records_for_export`) or WebDAV bundles, keeping the blast radius of search terms identical to the old localStorage store (just durable). Recorded only on deliberate submit (Enter / suggestion-select), never on debounced intermediate typing.
 - **Brand name** — Product name is **Clipboard** everywhere in UI. Machine-readable names use `clipboard`. Compatibility identifiers (bundle ID, data dir, DB filename) retain legacy `ClipVault` names.
 
 ## Data Paths

@@ -511,6 +511,8 @@ export default {
       pasteToAppText: 'Press Enter, click the inline/bottom "Paste" button, or right-click menu "Paste" to write content back to the system clipboard (images prefer PNG format), return focus to the app that opened the panel, and simulate Ctrl+V; press Alt+V or select "Plain Text Paste" to strip formatting.',
       searchFilter: 'Search & Filter',
       searchFilterText: 'Press / or Ctrl+K in the panel to focus the search box (supports content, source, and tags; short keywords work too). The left navigation can filter by type, favorites, or tags. In standalone window mode, the list toolbar can switch sort order (newest / oldest / recently created / most pasted; pinned always first).',
+      searchHistory: 'Search History',
+      searchHistoryText: 'Search terms are remembered when you submit with Enter or pick a suggestion. Focusing the box drops down recent searches (up to 10): use ↑ / ↓ to select, Enter to fill and search; press Delete or the hover × to remove one; "Clear search history" at the bottom clears all. History is stored only in the local database and never leaves the device via export or cloud sync.',
       favoritePinTag: 'Favorites, Pin & Tags',
       favoritePinTagText: 'Frequently used content can be favorited or pinned to avoid auto-cleanup; you can also manually add tags to items. With "Auto-tagging" enabled (Settings → Auto-tagging, on by default), new records are tagged by content type or keyword rules (e.g. links, deploy, frontend); rules are customizable. Re-copying the same content won\'t duplicate tags.',
       privacyProtection: 'Privacy Protection',

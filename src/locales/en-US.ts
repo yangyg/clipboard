@@ -39,6 +39,9 @@ export default {
     ariaLabel: 'Search clipboard',
     clear: 'Clear search',
     searching: 'Searching',
+    suggestionsHistory: 'Recent searches',
+    removeHistory: 'Remove this history item',
+    clearHistory: 'Clear search history',
   },
   filter: {
     all: 'All',

@@ -11,6 +11,7 @@ mod records_query;
 mod records_search;
 mod records_write;
 mod schema;
+mod search_history;
 mod settings;
 mod stats;
 mod tags;
@@ -132,6 +133,14 @@ impl ClipboardDb {
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            -- Search-history autocomplete (v3). Local-only: never part of
+            -- export/import or WebDAV sync. One row per distinct query.
+            CREATE TABLE IF NOT EXISTS search_history (
+                query TEXT PRIMARY KEY,
+                search_count INTEGER NOT NULL DEFAULT 1,
+                last_searched_at TEXT NOT NULL
             );
 
             INSERT OR IGNORE INTO tags (name, color, is_auto) VALUES

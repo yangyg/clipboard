@@ -72,6 +72,11 @@ fn fresh_db() -> rusqlite::Connection {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS search_history (
+            query TEXT PRIMARY KEY,
+            search_count INTEGER NOT NULL DEFAULT 1,
+            last_searched_at TEXT NOT NULL
+        );
         "#,
     )
     .unwrap();
@@ -79,7 +84,13 @@ fn fresh_db() -> rusqlite::Connection {
 }
 
 /// Expected tables that must exist after schema init.
-const EXPECTED_TABLES: &[&str] = &["records", "tags", "record_tags", "settings"];
+const EXPECTED_TABLES: &[&str] = &[
+    "records",
+    "tags",
+    "record_tags",
+    "settings",
+    "search_history",
+];
 
 /// Expected columns for the `records` table (column_name → must be queryable).
 const EXPECTED_RECORD_COLS: &[&str] = &[

@@ -35,6 +35,10 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
       "tag", "sort",
     ],
   },
+  get_search_history: { params: ["limit"] },
+  record_search_history: { params: ["query"] },
+  remove_search_history: { params: ["query"] },
+  clear_search_history: { params: [] },
   get_record: { params: ["id"] },
   open_record_media: { params: ["id"] },
   paste_record: { params: ["id", "mode"] },
@@ -165,6 +169,41 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "get_record");
     expect(call).toBeTruthy();
     expect(call![1]).toEqual({ id: 42 });
+  });
+
+  // ── search history (useSearchHistory composable) ──
+
+  it("loadHistory → get_search_history with { limit }", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce([]);
+    await invoke("get_search_history", { limit: 50 });
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "get_search_history");
+    expect(call).toBeTruthy();
+    expect(call![1]).toEqual({ limit: 50 });
+  });
+
+  it("recordHistory → record_search_history with { query }", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await invoke("record_search_history", { query: "hello" });
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "record_search_history");
+    expect(call).toBeTruthy();
+    expect(call![1]).toEqual({ query: "hello" });
+  });
+
+  it("removeHistory → remove_search_history with { query }", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await invoke("remove_search_history", { query: "hello" });
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "remove_search_history");
+    expect(call).toBeTruthy();
+    expect(call![1]).toEqual({ query: "hello" });
+  });
+
+  it("clearHistory → clear_search_history with no params", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await invoke("clear_search_history");
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "clear_search_history");
+    expect(call).toBeTruthy();
+    const args = call![1];
+    expect(args === undefined || Object.keys(args as object).length === 0).toBe(true);
   });
 
   it("pasteRecord → paste_record with { id, mode }", async () => {

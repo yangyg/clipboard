@@ -16,7 +16,8 @@ mod window;
 
 pub use features::{require_feature, FeatureFlags, FeatureId};
 pub use types::{
-    AppState, AutoTagRule, ClipboardRecord, RecordsPage, SearchResult, Settings, StatsData, TagInfo,
+    AppState, AutoTagRule, ClipboardRecord, RecordsPage, SearchHistoryEntry, SearchResult,
+    Settings, StatsData, TagInfo,
 };
 
 pub(crate) use panel::{apply_global_shortcut, show_main_panel, toggle_main_panel};
@@ -103,6 +104,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_records,
             commands::search_records,
+            commands::get_search_history,
+            commands::record_search_history,
+            commands::remove_search_history,
+            commands::clear_search_history,
             commands::get_record,
             commands::get_system_fonts,
             commands::open_record_media,

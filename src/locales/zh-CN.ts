@@ -39,6 +39,9 @@ export default {
     ariaLabel: '搜索剪贴板',
     clear: '清除搜索',
     searching: '搜索中',
+    suggestionsHistory: '历史搜索',
+    removeHistory: '删除这条历史',
+    clearHistory: '清空历史搜索',
   },
   filter: {
     all: '全部',

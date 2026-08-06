@@ -165,6 +165,12 @@ export interface RecordsPage {
   has_more: boolean;
 }
 
+export interface SearchHistoryEntry {
+  query: string;
+  search_count: number;
+  last_searched_at: string;
+}
+
 export interface ExportOptions {
   format: 'json' | 'csv' | 'markdown' | 'sqlite';
   include_images: boolean;

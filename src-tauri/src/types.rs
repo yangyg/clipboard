@@ -308,6 +308,16 @@ pub struct RecordsPage {
     pub has_more: bool,
 }
 
+/// One distinct search-history entry (autocomplete + future stats).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHistoryEntry {
+    #[serde(rename = "search_count")]
+    pub search_count: i64,
+    #[serde(rename = "last_searched_at")]
+    pub last_searched_at: String,
+    pub query: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TagInfo {
     pub id: i64,

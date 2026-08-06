@@ -7,11 +7,14 @@
       class="search-box"
       type="text"
       :aria-label="$t('search.ariaLabel')"
+      aria-autocomplete="list"
+      :aria-expanded="showDropdown"
+      :aria-activedescendant="showDropdown && activeIndex >= 0 ? 'suggest-' + activeIndex : undefined"
       :placeholder="compact ? $t('search.placeholderCompact') : $t('search.placeholder')"
-      @focus="isFocused = true"
-      @blur="isFocused = false"
+      @focus="onFocus"
+      @blur="onBlur"
       @input="onInput"
-      @keydown.escape.stop.prevent="onEscapeInSearch"
+      @keydown="onInputKeydown"
     />
     <div class="search-trailing">
       <span
@@ -37,32 +40,216 @@
       </Transition>
     </div>
   </div>
+
+  <Teleport to="body">
+    <Transition name="fade-instant">
+      <div
+        v-if="showDropdown && suggestions.length > 0"
+        ref="dropdownRef"
+        class="search-suggest"
+        role="listbox"
+        :aria-label="$t('search.suggestionsHistory')"
+        :style="{ left: pos.x + 'px', top: pos.y + 'px', width: pos.width + 'px' }"
+      >
+        <div
+          v-for="(s, i) in suggestions"
+          :key="s.label"
+          class="suggest-item"
+          :class="{ active: i === activeIndex }"
+          :id="'suggest-' + i"
+          role="option"
+          :aria-selected="i === activeIndex"
+          @mousedown.prevent="acceptSuggestion(s)"
+          @mouseenter="activeIndex = i"
+        >
+          <span class="suggest-icon"><AppIcon name="history" :size="13" /></span>
+          <span class="suggest-label" v-html="s.html"></span>
+          <button
+            type="button"
+            class="suggest-delete"
+            tabindex="-1"
+            :aria-label="$t('search.removeHistory')"
+            @mousedown.stop.prevent="removeSuggestion(s)"
+            @mouseenter.stop="activeIndex = i"
+          ><AppIcon name="close" :size="11" /></button>
+        </div>
+        <div class="suggest-footer">
+          <button
+            type="button"
+            class="suggest-clear-all"
+            tabindex="-1"
+            @mousedown.prevent="clearAllHistory"
+          >{{ $t('search.clearHistory') }}</button>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, nextTick, reactive, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import { useSearchHistory } from "../composables/useSearchHistory";
+import { highlightSearchHtml } from "../utils/highlightSearch";
 import AppIcon from "./icons/AppIcon.vue";
+
+const MAX_HISTORY = 10;
+
+interface Suggestion {
+  label: string;
+  html: string;
+}
 
 defineProps<{
   compact?: boolean;
 }>();
 
 const clipboardStore = useClipboardStore();
+const { history, loadHistory, recordHistory, clearHistory, removeHistory } = useSearchHistory();
+
 const inputRef = ref<HTMLInputElement | null>(null);
+const dropdownRef = ref<HTMLElement | null>(null);
 const query = ref("");
 const isFocused = ref(false);
+
+const suggestions = ref<Suggestion[]>([]);
+const activeIndex = ref(-1);
+const showDropdown = ref(false);
+const pos = reactive({ x: 0, y: 0, width: 260 });
 
 const isMac = computed(() => /Mac|iPhone|iPad/.test(navigator.platform));
 const searchHint = computed(() => (isMac.value ? "⌘K" : "Ctrl+K"));
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+function buildSuggestions() {
+  const q = query.value.trim().toLowerCase();
+  const entries = q ? history.value.filter((h) => h.toLowerCase().includes(q)) : history.value;
+  suggestions.value = entries.slice(0, MAX_HISTORY).map((label) => ({
+    label,
+    html: highlightSearchHtml(label, q),
+  }));
+}
+
+function positionDropdown() {
+  const el = inputRef.value;
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const pad = 8;
+  const gap = 6;
+  pos.width = Math.max(rect.width, 260);
+  pos.x = Math.max(pad, Math.min(rect.left, window.innerWidth - pos.width - pad));
+  const dd = dropdownRef.value;
+  const ddHeight = dd?.offsetHeight ?? 0;
+  let y = rect.bottom + gap;
+  if (y + ddHeight > window.innerHeight - pad && rect.top - gap - ddHeight >= pad) {
+    y = rect.top - gap - ddHeight;
+  }
+  pos.y = y;
+}
+
+function openDropdown() {
+  showDropdown.value = true;
+  nextTick(positionDropdown);
+}
+
+function closeDropdown() {
+  showDropdown.value = false;
+  activeIndex.value = -1;
+}
+
+function onFocus() {
+  isFocused.value = true;
+  buildSuggestions();
+  if (suggestions.value.length > 0) openDropdown();
+}
+
+function onBlur() {
+  isFocused.value = false;
+}
+
 function onInput() {
+  buildSuggestions();
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     clipboardStore.search(query.value);
   }, 250);
+}
+
+function acceptSuggestion(s: Suggestion) {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  query.value = s.label;
+  recordHistory(s.label);
+  closeDropdown();
+  clipboardStore.search(s.label);
+}
+
+function removeSuggestion(s: Suggestion) {
+  removeHistory(s.label);
+  buildSuggestions();
+}
+
+function clearAllHistory() {
+  clearHistory();
+  buildSuggestions();
+}
+
+function onInputKeydown(e: KeyboardEvent) {
+  const list = suggestions.value;
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (!list.length) return;
+    if (!showDropdown.value) {
+      openDropdown();
+      activeIndex.value = 0;
+      return;
+    }
+    activeIndex.value = (activeIndex.value + 1) % list.length;
+    return;
+  }
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (!list.length) return;
+    activeIndex.value = (activeIndex.value - 1 + list.length) % list.length;
+    return;
+  }
+  if (e.key === "Delete") {
+    const item = list[activeIndex.value];
+    if (showDropdown.value && item) {
+      e.preventDefault();
+      removeSuggestion(item);
+    }
+    return;
+  }
+  if (e.key === "Enter") {
+    if (showDropdown.value && activeIndex.value >= 0 && list[activeIndex.value]) {
+      e.preventDefault();
+      acceptSuggestion(list[activeIndex.value]);
+      return;
+    }
+    // Explicit submit without picking a suggestion — record history.
+    if (showDropdown.value) closeDropdown();
+    recordHistory(query.value);
+    return;
+  }
+  if (e.key === "Escape") {
+    if (showDropdown.value) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeDropdown();
+      return;
+    }
+    if (query.value) {
+      e.preventDefault();
+      e.stopPropagation();
+      clearSearch();
+      return;
+    }
+    inputRef.value?.blur();
+  }
 }
 
 function clearSearch() {
@@ -72,16 +259,9 @@ function clearSearch() {
   }
   query.value = "";
   clipboardStore.search("");
+  closeDropdown();
   // Keep focus so keyboard users can continue typing immediately
   inputRef.value?.focus();
-}
-
-function onEscapeInSearch() {
-  if (query.value) {
-    clearSearch();
-  } else {
-    inputRef.value?.blur();
-  }
 }
 
 function onGlobalKey(e: KeyboardEvent) {
@@ -93,17 +273,41 @@ function onGlobalKey(e: KeyboardEvent) {
   }
 }
 
+// Keep the active row in range as suggestions change under the cursor.
+watch(suggestions, (list) => {
+  if (list.length === 0) {
+    activeIndex.value = -1;
+  } else if (activeIndex.value >= list.length) {
+    activeIndex.value = list.length - 1;
+  }
+});
+
 watch(
   () => clipboardStore.searchQuery,
   (val) => {
     if (!val && query.value) {
       query.value = "";
+      buildSuggestions();
+    }
+  }
+);
+
+// Auto-open/close with focus + non-empty suggestions; reposition on resize.
+watch(
+  () => [isFocused.value, suggestions.value.length] as const,
+  () => {
+    if (isFocused.value && suggestions.value.length > 0) {
+      openDropdown();
+    } else {
+      closeDropdown();
     }
   }
 );
 
 onMounted(() => {
   window.addEventListener("keydown", onGlobalKey);
+  window.addEventListener("resize", positionDropdown);
+  void loadHistory();
 });
 
 onUnmounted(() => {
@@ -112,6 +316,7 @@ onUnmounted(() => {
     debounceTimer = null;
   }
   window.removeEventListener("keydown", onGlobalKey);
+  window.removeEventListener("resize", positionDropdown);
 });
 </script>
 
@@ -246,5 +451,119 @@ onUnmounted(() => {
 .clear-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* ── Suggestion dropdown ─────────────────────────────────────────────── */
+.search-suggest {
+  position: fixed;
+  z-index: 1200;
+  max-height: 300px;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-1);
+}
+
+.suggest-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.suggest-item:hover,
+.suggest-item.active,
+.suggest-item:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  outline: none;
+}
+
+.suggest-icon {
+  flex-shrink: 0;
+  display: flex;
+  color: var(--text-tertiary);
+  transition: color var(--transition-fast);
+}
+
+.suggest-item.active .suggest-icon {
+  color: var(--accent-text);
+}
+
+.suggest-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.suggest-delete {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.suggest-item:hover .suggest-delete,
+.suggest-item.active .suggest-delete,
+.suggest-delete:focus-visible {
+  opacity: 1;
+}
+
+.suggest-delete:hover {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.suggest-footer {
+  border-top: 1px solid var(--border-subtle);
+  margin-top: var(--space-1);
+  padding-top: var(--space-1);
+}
+
+.suggest-clear-all {
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-md);
+  color: var(--text-tertiary);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.suggest-clear-all:hover,
+.suggest-clear-all:focus-visible {
+  background: var(--bg-hover);
+  color: var(--danger);
+  outline: none;
 }
 </style>

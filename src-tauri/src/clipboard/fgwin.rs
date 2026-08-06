@@ -169,13 +169,23 @@ fn read_file_description(path: &str) -> Option<String> {
             return None;
         }
 
-        let wide_desc = std::slice::from_raw_parts(desc_ptr as *const u16, (desc_len / 2) as usize);
-        let s = String::from_utf16_lossy(wide_desc).trim().to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(s)
-        }
+        // VerQueryValueW reports string lengths in UTF-16 characters, not
+        // bytes. Dividing this value by two truncates every description.
+        let wide_desc = std::slice::from_raw_parts(desc_ptr as *const u16, desc_len as usize);
+        decode_file_description(wide_desc)
+    }
+}
+
+#[cfg(windows)]
+fn decode_file_description(wide_desc: &[u16]) -> Option<String> {
+    let s = String::from_utf16_lossy(wide_desc)
+        .trim_matches('\0')
+        .trim()
+        .to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
     }
 }
 
@@ -209,4 +219,17 @@ fn friendly_name_for_path(path: &str) -> String {
 #[cfg(not(windows))]
 pub fn get_foreground_window_info() -> (String, String, String) {
     (String::new(), String::new(), String::new())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    #[test]
+    fn file_description_keeps_the_full_utf16_string() {
+        let description: Vec<u16> = "OpenCode 中文".encode_utf16().collect();
+
+        assert_eq!(
+            super::decode_file_description(&description),
+            Some("OpenCode 中文".to_string())
+        );
+    }
 }

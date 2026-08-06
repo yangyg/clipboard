@@ -444,8 +444,8 @@ onUnmounted(() => {
 }
 
 .clear-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .clear-btn:focus-visible {
@@ -486,8 +486,8 @@ onUnmounted(() => {
 .suggest-item:hover,
 .suggest-item.active,
 .suggest-item:focus-visible {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
   outline: none;
 }
 
@@ -536,8 +536,8 @@ onUnmounted(() => {
 }
 
 .suggest-delete:hover {
-  background: var(--bg-active);
-  color: var(--text-primary);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 .suggest-footer {
@@ -562,7 +562,7 @@ onUnmounted(() => {
 
 .suggest-clear-all:hover,
 .suggest-clear-all:focus-visible {
-  background: var(--bg-hover);
+  background: var(--danger-soft);
   color: var(--danger);
   outline: none;
 }

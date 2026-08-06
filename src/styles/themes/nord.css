@@ -20,6 +20,7 @@ body.nord-theme,
   --text-tertiary: #7b8598;
   --text-inverse: #2e3440;
   --accent: #88c0d0;
+  --text-on-accent: #2e3440;
   --accent-hover: #9ccddd;
   --accent-light: #bfe0ea;
   --accent-text: #bfe0ea;
@@ -69,6 +70,7 @@ body.nord-light-theme,
   --text-tertiary: #616e85;
   --text-inverse: #eceff4;
   --accent: #5e81ac;
+  --text-on-accent: #ffffff;
   --accent-hover: #5279a3;
   --accent-light: #81a1c1;
   --accent-text: #41678f;

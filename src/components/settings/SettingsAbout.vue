@@ -92,7 +92,7 @@ async function openRepo() {
 }
 
 .about-link:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
   border-color: var(--accent);
 }
 

@@ -22,6 +22,7 @@ body.mono-theme,
   --text-tertiary: #767676;
   --text-inverse: #0a0a0a;
   --accent: #ffffff;
+  --text-on-accent: #0a0a0a;
   --accent-hover: #e8e8e8;
   --accent-light: #d9d9d9;
   --accent-text: #ffffff;
@@ -72,6 +73,7 @@ body.mono-light-theme,
   --text-tertiary: #7a7a7a;
   --text-inverse: #ffffff;
   --accent: #000000;
+  --text-on-accent: #ffffff;
   --accent-hover: #2a2a2a;
   --accent-light: #333333;
   --accent-text: #000000;
@@ -106,9 +108,8 @@ body.mono-light-theme,
 
 /* ============================================================
    Component fixes required by a pure-black / pure-white accent.
-   The base .btn-primary / .action-btn.action-primary hardcode white
-   text; on the dark mono theme the accent is white, so text flips
-   to ink. The toggle track is white too, so its knob goes ink.
+   The dark mono theme uses ink text on its white accent. The toggle
+   track is white too, so its knob goes ink.
    ============================================================ */
 
 body.mono-theme .btn-primary,

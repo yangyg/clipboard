@@ -211,7 +211,7 @@ async function onEmptyTrash() {
 }
 
 .filter-tab:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
   color: var(--accent-text);
 }
 

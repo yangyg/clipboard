@@ -24,6 +24,7 @@ body.handdrawn-theme,
   --text-tertiary: #8e7f6e;
   --text-inverse: #262320;
   --accent: #f27059;
+  --text-on-accent: #262320;
   --accent-hover: #f5816b;
   --accent-light: #ffb4a3;
   --accent-text: #ffa993;
@@ -87,6 +88,7 @@ body.handdrawn-light-theme,
   --text-tertiary: #8d7b63;
   --text-inverse: #faf5ea;
   --accent: #e8603f;
+  --text-on-accent: #3a2f22;
   --accent-hover: #cf4f30;
   --accent-light: #f28163;
   --accent-text: #c24525;

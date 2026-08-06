@@ -340,7 +340,7 @@ onUnmounted(() => {
 }
 
 .nav-back:hover {
-  color: var(--text-primary);
+  color: var(--accent-text);
 }
 
 .nav-divider {
@@ -380,8 +380,8 @@ onUnmounted(() => {
 }
 
 .nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .nav-item.active {

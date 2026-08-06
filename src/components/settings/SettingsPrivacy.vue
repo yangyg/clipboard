@@ -92,7 +92,7 @@ function removeIgnoredApp(app: string) {
 }
 
 .ignore-item:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
 }
 
 .ignore-icon {

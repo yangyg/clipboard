@@ -268,8 +268,8 @@ const aliasDialogVisible = ref(false);
 }
 
 .preview-drawer-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 /* Sensitive Warning */

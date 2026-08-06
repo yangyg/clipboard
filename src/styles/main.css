@@ -28,6 +28,7 @@
   --text-tertiary: #6b7088;
   --text-inverse: #0f1117;
   --accent: #0078d4;
+  --text-on-accent: #ffffff;
   --accent-hover: #1b86d9;
   --accent-light: #60cdff;
   /* Text-on-dark uses lighter accent for AA contrast (9.65:1) */
@@ -257,7 +258,7 @@ body.anim-disabled *::after {
   height: 28px;
 }
 .icon-btn:hover {
-  background: var(--bg-hover);
+  background: var(--accent-soft);
   color: var(--accent-text);
 }
 .icon-btn.active {
@@ -421,9 +422,9 @@ body.anim-disabled *::after {
   border: 1px solid var(--border-subtle);
 }
 .btn-secondary:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--border-default);
+  background: var(--accent-softer);
+  color: var(--accent-text);
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-default));
 }
 .btn-danger {
   background: var(--danger-soft);

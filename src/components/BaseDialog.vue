@@ -168,8 +168,8 @@ onUnmounted(() => {
 }
 
 .dialog-close:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .dialog-body {

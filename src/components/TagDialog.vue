@@ -282,7 +282,7 @@ async function confirmAssign() {
 }
 
 .assign-item:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
 }
 
 .assign-checkbox {

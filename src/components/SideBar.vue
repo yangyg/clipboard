@@ -334,8 +334,8 @@ const {
 }
 
 .nav-item:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .nav-item.active {
@@ -409,7 +409,8 @@ const {
 }
 
 .tag-item:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .tag-item.active {
@@ -466,8 +467,8 @@ const {
 }
 
 .tag-more-toggle:hover {
-  background: var(--bg-hover);
-  color: var(--text-secondary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .tag-more-label {
@@ -503,7 +504,7 @@ const {
 }
 
 .tag-add:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
   color: var(--accent-text);
 }
 
@@ -534,8 +535,8 @@ const {
 }
 
 .sidebar-icon-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-soft);
+  color: var(--accent-text);
 }
 
 /* Left (quick-menu) button fills remaining width for a larger click target */

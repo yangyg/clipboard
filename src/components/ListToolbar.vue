@@ -277,8 +277,8 @@ async function onEmptyTrash() {
 }
 
 .view-toggle-btn:hover {
-  color: var(--text-secondary);
-  background: var(--bg-hover);
+  color: var(--accent-text);
+  background: var(--accent-softer);
 }
 
 .view-toggle-btn.active {

@@ -88,8 +88,8 @@ const { toggleBatchMode, batchCopy, batchFavorite, batchDelete, batchRestore } =
 }
 
 .batch-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
 }
 
 .batch-btn.danger {

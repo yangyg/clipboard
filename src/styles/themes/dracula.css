@@ -20,6 +20,7 @@ body.dracula-theme,
   --text-tertiary: #8a8aa3;
   --text-inverse: #1e1f29;
   --accent: #bd93f9;
+  --text-on-accent: #21222c;
   --accent-hover: #caa2fb;
   --accent-light: #e3d0fd;
   --accent-text: #d8c1fc;
@@ -69,6 +70,7 @@ body.dracula-light-theme,
   --text-tertiary: #8a7c9c;
   --text-inverse: #ffffff;
   --accent: #8b5cf6;
+  --text-on-accent: #ffffff;
   --accent-hover: #7c3aed;
   --accent-light: #a78bfa;
   --accent-text: #6d28d9;

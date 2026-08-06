@@ -20,6 +20,7 @@ body.sunset-theme,
   --text-tertiary: #93776a;
   --text-inverse: #221a15;
   --accent: #fb923c;
+  --text-on-accent: #211915;
   --accent-hover: #fca15a;
   --accent-light: #fecba1;
   --accent-text: #fecba1;
@@ -69,6 +70,7 @@ body.sunset-light-theme,
   --text-tertiary: #9a7c5e;
   --text-inverse: #fff7ed;
   --accent: #ea580c;
+  --text-on-accent: #3d2c1d;
   --accent-hover: #c2410c;
   --accent-light: #fb923c;
   --accent-text: #c2410c;

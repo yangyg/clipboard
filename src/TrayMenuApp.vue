@@ -246,8 +246,8 @@ onUnmounted(() => {
 .item:hover,
 .item.focused,
 .item:focus-visible {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
   outline: none;
 }
 
@@ -259,6 +259,7 @@ onUnmounted(() => {
 .item.danger.focused,
 .item.danger:focus-visible {
   background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .icon {

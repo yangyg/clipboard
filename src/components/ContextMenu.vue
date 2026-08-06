@@ -236,8 +236,8 @@ onUnmounted(() => {
 .ctx-item:hover,
 .ctx-item.focused,
 .ctx-item:focus-visible {
-  background: var(--bg-hover);
-  color: var(--text-primary);
+  background: var(--accent-softer);
+  color: var(--accent-text);
   outline: none;
 }
 
@@ -249,6 +249,7 @@ onUnmounted(() => {
 .ctx-item.danger.focused,
 .ctx-item.danger:focus-visible {
   background: var(--danger-soft);
+  color: var(--danger);
 }
 
 .ctx-icon {
@@ -294,9 +295,9 @@ onUnmounted(() => {
 }
 
 .ctx-toggle-opt.active {
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .ctx-sep {

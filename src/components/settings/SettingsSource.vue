@@ -87,7 +87,7 @@ function removeOverride(exe: string) {
 }
 
 .source-item:hover {
-  background: var(--bg-hover);
+  background: var(--accent-softer);
 }
 
 .source-exe {

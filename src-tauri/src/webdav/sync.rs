@@ -28,7 +28,11 @@ fn remote_root(settings: &Settings) -> String {
 
 /// Join a remote path segment onto the sync root, tolerating stray slashes.
 pub(super) fn join_remote(root: &str, rel: &str) -> String {
-    format!("{}/{}", root.trim_end_matches('/'), rel.trim_start_matches('/'))
+    format!(
+        "{}/{}",
+        root.trim_end_matches('/'),
+        rel.trim_start_matches('/')
+    )
 }
 
 fn ensure_device_id(settings: &mut Settings) -> String {
@@ -77,7 +81,10 @@ pub async fn webdav_test_connection(settings: &Settings) -> Result<(), String> {
     client.test_connection().await
 }
 
-pub async fn webdav_pull(db: &ClipboardDb, settings: &mut Settings) -> Result<WebDavSyncResult, String> {
+pub async fn webdav_pull(
+    db: &ClipboardDb,
+    settings: &mut Settings,
+) -> Result<WebDavSyncResult, String> {
     let device_id = ensure_device_id(settings);
     let client = client_from_settings(settings)?;
     let root = remote_root(settings);
@@ -114,9 +121,7 @@ pub async fn webdav_pull(db: &ClipboardDb, settings: &mut Settings) -> Result<We
     settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
     db.save_settings(settings).map_err(|e| e.to_string())?;
 
-    info!(
-        "WebDAV pull: new={pulled} merged={merged} media_dl={media_downloaded}"
-    );
+    info!("WebDAV pull: new={pulled} merged={merged} media_dl={media_downloaded}");
     Ok(WebDavSyncResult {
         pulled,
         pushed: 0,
@@ -128,15 +133,22 @@ pub async fn webdav_pull(db: &ClipboardDb, settings: &mut Settings) -> Result<We
     })
 }
 
-pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<WebDavSyncResult, String> {
+pub async fn webdav_push(
+    db: &ClipboardDb,
+    settings: &mut Settings,
+) -> Result<WebDavSyncResult, String> {
     let device_id = ensure_device_id(settings);
     let client = client_from_settings(settings)?;
     let root = remote_root(settings);
     let media_root = db.media_root().to_path_buf();
 
     client.ensure_collection(&root).await?;
-    client.ensure_collection(&join_remote(&root, "records")).await?;
-    client.ensure_collection(&join_remote(&root, "media")).await?;
+    client
+        .ensure_collection(&join_remote(&root, "records"))
+        .await?;
+    client
+        .ensure_collection(&join_remote(&root, "media"))
+        .await?;
     client
         .ensure_collection(&join_remote(&root, "media/thumbs"))
         .await?;
@@ -149,10 +161,8 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
         .collect();
 
     let local = filter_syncable(load_all_export(db)?, settings.webdav_sync_sensitive);
-    let local_by_hash: HashMap<String, crate::ClipboardRecord> = local
-        .iter()
-        .map(|r| (r.hash.clone(), r.clone()))
-        .collect();
+    let local_by_hash: HashMap<String, crate::ClipboardRecord> =
+        local.iter().map(|r| (r.hash.clone(), r.clone())).collect();
 
     // Add-only: keep remote-only records in the published catalog. On a hash
     // collision (same content) keep the NEWER updated_at — a push without a
@@ -235,9 +245,7 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
     settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
     db.save_settings(settings).map_err(|e| e.to_string())?;
 
-    info!(
-        "WebDAV push: changed≈{pushed} media_up={media_uploaded} media_skip={media_skipped}"
-    );
+    info!("WebDAV push: changed≈{pushed} media_up={media_uploaded} media_skip={media_skipped}");
     Ok(WebDavSyncResult {
         pulled: 0,
         pushed,
@@ -251,7 +259,10 @@ pub async fn webdav_push(db: &ClipboardDb, settings: &mut Settings) -> Result<We
     })
 }
 
-pub async fn webdav_sync(db: &ClipboardDb, settings: &mut Settings) -> Result<WebDavSyncResult, String> {
+pub async fn webdav_sync(
+    db: &ClipboardDb,
+    settings: &mut Settings,
+) -> Result<WebDavSyncResult, String> {
     let pull = webdav_pull(db, settings).await?;
     let push = webdav_push(db, settings).await?;
     Ok(WebDavSyncResult {

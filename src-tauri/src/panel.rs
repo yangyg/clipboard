@@ -132,16 +132,25 @@ mod ignored_app_tests {
     #[test]
     fn matches_exe_basename_with_or_without_extension() {
         let list = ignored(&["1Password.exe"]);
-        assert!(is_ignored_app("C:\\Program Files\\1Password\\1Password.exe", &list));
+        assert!(is_ignored_app(
+            "C:\\Program Files\\1Password\\1Password.exe",
+            &list
+        ));
         let noext = ignored(&["chrome"]);
-        assert!(is_ignored_app("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", &noext));
+        assert!(is_ignored_app(
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            &noext
+        ));
     }
 
     #[test]
     fn does_not_substring_match_unrelated_apps() {
         // Regression: `contains` made pattern "git" match any path containing it.
         let list = ignored(&["git"]);
-        assert!(!is_ignored_app("C:\\Users\\me\\AppData\\Roaming\\digit\\app.exe", &list));
+        assert!(!is_ignored_app(
+            "C:\\Users\\me\\AppData\\Roaming\\digit\\app.exe",
+            &list
+        ));
         assert!(!is_ignored_app("C:\\Windows\\System32\\notepad.exe", &list));
     }
 

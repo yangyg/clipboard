@@ -104,7 +104,9 @@ fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWi
     // Cold path (debounced resize): clone inner Settings for mutation.
     let mut settings = (*settings_arc).clone();
     // Prefer live window chrome over DB app_mode (mode switch may not be saved yet).
-    let is_window = !window.is_always_on_top().unwrap_or(settings.app_mode == "window");
+    let is_window = !window
+        .is_always_on_top()
+        .unwrap_or(settings.app_mode == "window");
     let (min_w, min_h, _, _) = mode_size_bounds(is_window);
     if (w as f64) < min_w || (h as f64) < min_h {
         return;
@@ -211,11 +213,7 @@ pub(crate) fn apply_window_backdrop(
         use tauri::window::{Effect, EffectsBuilder};
 
         let effects = if enabled {
-            Some(
-                EffectsBuilder::new()
-                    .effect(Effect::Acrylic)
-                    .build(),
-            )
+            Some(EffectsBuilder::new().effect(Effect::Acrylic).build())
         } else {
             None
         };

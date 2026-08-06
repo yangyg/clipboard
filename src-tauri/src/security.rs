@@ -5,9 +5,8 @@ use std::path::{Component, Path, PathBuf};
 use regex::Regex;
 use std::sync::LazyLock;
 
-static MEDIA_REL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^media/(?:thumbs/)?[a-f0-9]{64}\.(?:png|jpe?g)$").unwrap()
-});
+static MEDIA_REL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^media/(?:thumbs/)?[a-f0-9]{64}\.(?:png|jpe?g)$").unwrap());
 
 // Event-handler attributes that could execute when the HTML is pasted into a
 // rich-text editor. Scoped to known handler names so plain text like "one="
@@ -51,10 +50,7 @@ pub fn is_safe_import_html(html: &str) -> bool {
     if HTML_HANDLER_RE.is_match(&lower) {
         return false;
     }
-    if lower.contains("javascript:")
-        || lower.contains("vbscript:")
-        || lower.contains("file:")
-    {
+    if lower.contains("javascript:") || lower.contains("vbscript:") || lower.contains("file:") {
         return false;
     }
     true
@@ -82,7 +78,7 @@ pub fn normalize_content_type(raw: &str) -> String {
 const LINK_SCHEMES: &[&str] = &["http", "https", "ftp", "magnet", "ed2k", "thunder"];
 
 /// Case-insensitive whole-string prefixes when `Url::parse` is awkward (e.g. ed2k pipes).
-const LINK_PREFIXES: &[&str] = &[
+pub(crate) const LINK_PREFIXES: &[&str] = &[
     "https://",
     "http://",
     "ftp://",
@@ -214,14 +210,8 @@ pub const DPAPI_PREFIX: &str = "dpapi:";
 pub fn encrypt_secret(plaintext: &str) -> Result<String, String> {
     use base64::Engine;
     use windows_sys::Win32::Security::Cryptography::{
-        CryptProtectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptProtectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
-    // windows-sys 0.59 omits LocalFree; declared here (same pattern as the
-    // GlobalFree declaration in clipboard.rs) to release CryptProtectData output.
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn LocalFree(hmem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
-    }
 
     if plaintext.len() > u32::MAX as usize {
         return Err("secret too large to encrypt".into());
@@ -250,9 +240,12 @@ pub fn encrypt_secret(plaintext: &str) -> Result<String, String> {
         return Err("DPAPI 加密失败".into());
     }
     let cipher = unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize) };
-    let encoded =
-        format!("{}{}", DPAPI_PREFIX, base64::engine::general_purpose::STANDARD.encode(cipher));
-    unsafe { LocalFree(data_out.pbData as *mut core::ffi::c_void) };
+    let encoded = format!(
+        "{}{}",
+        DPAPI_PREFIX,
+        base64::engine::general_purpose::STANDARD.encode(cipher)
+    );
+    unsafe { crate::ffi::LocalFree(data_out.pbData as *mut core::ffi::c_void) };
     Ok(encoded)
 }
 
@@ -268,12 +261,8 @@ pub fn encrypt_secret(plaintext: &str) -> Result<String, String> {
 pub fn decrypt_secret(encoded: &str) -> Result<String, String> {
     use base64::Engine;
     use windows_sys::Win32::Security::Cryptography::{
-        CryptUnprotectData, CRYPT_INTEGER_BLOB, CRYPTPROTECT_UI_FORBIDDEN,
+        CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
     };
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn LocalFree(hmem: *mut core::ffi::c_void) -> *mut core::ffi::c_void;
-    }
 
     let Some(b64) = encoded.strip_prefix(DPAPI_PREFIX) else {
         // Legacy plaintext stored before encryption was introduced.
@@ -305,8 +294,9 @@ pub fn decrypt_secret(encoded: &str) -> Result<String, String> {
         return Err("DPAPI 解密失败（数据库可能来自其他用户或机器）".into());
     }
     let plain = unsafe { std::slice::from_raw_parts(data_out.pbData, data_out.cbData as usize) };
-    let text = String::from_utf8(plain.to_vec()).map_err(|e| format!("解密结果不是合法文本: {e}"))?;
-    unsafe { LocalFree(data_out.pbData as *mut core::ffi::c_void) };
+    let text =
+        String::from_utf8(plain.to_vec()).map_err(|e| format!("解密结果不是合法文本: {e}"))?;
+    unsafe { crate::ffi::LocalFree(data_out.pbData as *mut core::ffi::c_void) };
     Ok(text)
 }
 
@@ -359,7 +349,10 @@ mod tests {
             link_scheme("ed2k://|file|name.iso|123|ABCDEF0123456789ABCDEF0123456789|/"),
             Some("ed2k")
         );
-        assert_eq!(link_scheme("thunder://QUFodHRwOi8vZXhhbXBsZS5jb20v"), Some("thunder"));
+        assert_eq!(
+            link_scheme("thunder://QUFodHRwOi8vZXhhbXBsZS5jb20v"),
+            Some("thunder")
+        );
         assert!(!is_openable_link("javascript:alert(1)"));
         assert!(!is_openable_link("data:text/html,hi"));
         assert!(!is_openable_link("file:///c:/x"));
@@ -369,7 +362,10 @@ mod tests {
         assert!(!is_openable_link("plain text"));
         // http(s) subset still openable; download schemes are not "browser-only" but are openable
         assert!(matches!(link_scheme("https://a.com"), Some("https")));
-        assert!(matches!(link_scheme("magnet:?xt=urn:btih:abc"), Some("magnet")));
+        assert!(matches!(
+            link_scheme("magnet:?xt=urn:btih:abc"),
+            Some("magnet")
+        ));
     }
 
     #[test]
@@ -378,8 +374,12 @@ mod tests {
         assert!(is_safe_import_html("<p>set one=2 and two=3</p>"));
         assert!(!is_safe_import_html("<p>x<script>alert(1)</script></p>"));
         assert!(!is_safe_import_html("<img src=x onerror=alert(1)>"));
-        assert!(!is_safe_import_html("<a href=\"javascript:alert(1)\">x</a>"));
-        assert!(!is_safe_import_html("<iframe src=\"https://evil\"></iframe>"));
+        assert!(!is_safe_import_html(
+            "<a href=\"javascript:alert(1)\">x</a>"
+        ));
+        assert!(!is_safe_import_html(
+            "<iframe src=\"https://evil\"></iframe>"
+        ));
         assert!(!is_safe_import_html("<svg onload=alert(1)>"));
     }
 
@@ -400,6 +400,9 @@ mod tests {
     #[test]
     fn dpapi_legacy_plaintext_passes_through() {
         // Pre-encryption stored value (no prefix) must survive decrypt unchanged.
-        assert_eq!(decrypt_secret("legacy-password").unwrap(), "legacy-password");
+        assert_eq!(
+            decrypt_secret("legacy-password").unwrap(),
+            "legacy-password"
+        );
     }
 }

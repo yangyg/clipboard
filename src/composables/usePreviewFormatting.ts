@@ -5,6 +5,7 @@
 import { computed, type ComputedRef, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord, Tag } from "../types";
+import { expandHexColor } from "../utils/clipboardColor";
 
 const TYPE_LABEL_KEYS: Record<string, string> = {
   text: "preview.typeText",
@@ -35,22 +36,11 @@ export function usePreviewFormatting(
     return map;
   });
 
-  function normalizeHex(color: string): string {
-    if (color.startsWith("#")) {
-      if (color.length === 4) {
-        // #abc -> #aabbcc
-        return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`;
-      }
-      return color; // #rrggbb or #rrggbbaa
-    }
-    return color; // rgb()/rgba() passed through as-is
-  }
-
   function getTagBg(tagName: string): string {
     const tag = tagsByName.value.get(tagName);
     if (!tag) return "var(--bg-surface)";
     // Normalize hex color for CSS color-mix
-    return `color-mix(in srgb, ${normalizeHex(tag.color)} 10%, transparent)`;
+    return `color-mix(in srgb, ${expandHexColor(tag.color)} 10%, transparent)`;
   }
 
   function getTagColor(tagName: string): string {

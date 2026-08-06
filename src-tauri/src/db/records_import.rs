@@ -141,56 +141,10 @@ impl ClipboardDb {
             imported += 1;
         }
 
-        let active_count: i64 = tx.query_row(
-            "SELECT COUNT(*) FROM records WHERE is_trashed = 0", [], |row| row.get(0),
-        )?;
-        let max = max_records.max(1) as i64;
-        if active_count > max {
-            let overflow_count = active_count - max;
-            let overflow_ids: Vec<i64> = {
-                let mut stmt = tx.prepare(
-                    "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                     ORDER BY updated_at ASC LIMIT ?",
-                )?;
-                let ids: Vec<i64> = stmt
-                    .query_map([overflow_count], |row| row.get(0))?
-                    .collect::<SqlResult<Vec<_>>>()?;
-                ids
-            };
-            let overflow_media: Vec<(Option<String>, Option<String>)> = {
-                if overflow_ids.is_empty() {
-                    Vec::new()
-                } else {
-                    let placeholders = Self::id_placeholders(overflow_ids.len());
-                    let sql = format!(
-                        "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
-                        placeholders
-                    );
-                    let params: Vec<&dyn rusqlite::types::ToSql> =
-                        overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
-                    let mut stmt = tx.prepare(&sql)?;
-                    let pairs: Vec<(Option<String>, Option<String>)> = stmt
-                        .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
-                        .collect::<SqlResult<Vec<_>>>()?;
-                    pairs
-                }
-            };
-
-            if !overflow_ids.is_empty() {
-                let placeholders = Self::id_placeholders(overflow_ids.len());
-                let params: Vec<&dyn rusqlite::types::ToSql> =
-                    overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
-                tx.execute(
-                    &format!("DELETE FROM records WHERE id IN ({placeholders})"),
-                    params.as_slice(),
-                )?;
-            }
-            tx.commit()?;
-            drop(conn);
-            self.purge_media_pairs(&overflow_media);
-        } else {
-            tx.commit()?;
-        }
+        let overflow_media = self.evict_over_limit(&tx, max_records)?;
+        tx.commit()?;
+        drop(conn);
+        self.purge_media_pairs(&overflow_media);
         Ok((imported, merged))
     }
 
@@ -209,13 +163,7 @@ impl ClipboardDb {
         let mut records: Vec<ClipboardRecord> = stmt
             .query_map(params![limit, offset], |row| self.map_record_row(row))?
             .collect::<SqlResult<Vec<_>>>()?;
-        let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
-        let tags_map = self.load_tags_batch(&conn, &ids)?;
-        for record in &mut records {
-            if let Some(tags) = tags_map.get(&record.id) {
-                record.tags = tags.clone();
-            }
-        }
+        self.enrich_tags(&conn, &mut records, true)?;
         Ok(records)
     }
 }

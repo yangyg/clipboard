@@ -18,7 +18,6 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Window mode** | Full window with SideBar + RecordList + PreviewPane. Min width 760px. |
 | **Paste target** | The foreground HWND at the moment the panel opened. Paste writes clipboard → focuses target → sends Ctrl+V. |
 | **Source app** | The executable name of the process that owned the clipboard content at capture time. Shown as a letter avatar + short name via `SourceBadge`. |
-| **Follow-system theme** | OS light/dark mode tracked via a native Rust watcher (invisible window + `WM_SETTINGCHANGE` + registry). Frontend applies it only when `theme === "system"`. |
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
 | **Soft cap** | In-memory list pages are soft-capped (`PAGE_SIZE × 2`). When dirty, the next `loadMore` reloads from DB. |
 | **WebDAV sync** | Cloud sync via WebDAV protocol `clipvault-webdav-v1`. Manifest + JSONL bundle; media files synced alongside. Default remote dir `ClipVaultSync`. |
@@ -30,6 +29,7 @@ See `docs/adr/` for immutable decision records:
 - **ADR-0001** — Virtual-list composable extraction & responsive grid column single-source-of-truth (JS, not CSS `auto-fill`).
 - **ADR-0002** — Native OS-theme watcher (invisible HWND + `WM_SETTINGCHANGE`) as the primary source for follow-system theme, because WebView2 matchMedia events are unreliable while hidden. **Superseded by ADR-0004 (feature removed).**
 - **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor.
+- **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 9 fixed cards in one radiogroup.
 
 ## Key Design Constraints
 
@@ -46,7 +46,7 @@ See `docs/adr/` for immutable decision records:
 
 - Database: `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - Media: `%LOCALAPPDATA%/ClipVault/media/`
-- Log: `%LOCALAPPDATA%/ClipVault/clipvault.log`
+- Log: `%LOCALAPPDATA%/ClipVault/logs/clipvault.log`
 
 ## Motion & Animation
 

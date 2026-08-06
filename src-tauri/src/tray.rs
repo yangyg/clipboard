@@ -64,10 +64,7 @@ pub(crate) fn anchor_menu_to_tray_icon(
 }
 
 /// Build the system tray icon (no native menu) and register click handlers.
-pub(crate) fn build_tray(
-    app: &AppHandle,
-    capture_paused: Arc<RwLock<bool>>,
-) -> tauri::Result<()> {
+pub(crate) fn build_tray(app: &AppHandle, capture_paused: Arc<RwLock<bool>>) -> tauri::Result<()> {
     let _capture_paused = capture_paused;
 
     // A missing default icon must not abort the whole app at startup.

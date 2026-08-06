@@ -93,7 +93,12 @@ impl WebDavClient {
         Ok(())
     }
 
-    pub async fn put_bytes(&self, relative: &str, bytes: Vec<u8>, content_type: &str) -> Result<(), String> {
+    pub async fn put_bytes(
+        &self,
+        relative: &str,
+        bytes: Vec<u8>,
+        content_type: &str,
+    ) -> Result<(), String> {
         let url = self.url(relative);
         let res = self
             .client
@@ -105,7 +110,8 @@ impl WebDavClient {
             .await
             .map_err(|e| format!("PUT {relative}: {e}"))?;
         let status = res.status();
-        if status.is_success() || status == StatusCode::CREATED || status == StatusCode::NO_CONTENT {
+        if status.is_success() || status == StatusCode::CREATED || status == StatusCode::NO_CONTENT
+        {
             return Ok(());
         }
         let body = res.text().await.unwrap_or_default();

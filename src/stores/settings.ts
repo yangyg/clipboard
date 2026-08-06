@@ -5,6 +5,7 @@ import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES } from "../types";
 import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
+import { applyTheme as applyThemeClass } from "../utils/themeClass";
 import { i18n } from "../locales";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -68,19 +69,6 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
 
 const SAVE_DEBOUNCE_MS = 200;
 
-/** Every theme class `applyTheme` can attach to <body>; removing all of them
- *  on re-apply keeps the tree clean when switching between any two themes. */
-const THEME_CLASSES = [
-  "light-theme",
-  "oled-theme",
-  "dracula-theme",
-  "nord-theme",
-  "sunset-theme",
-  "dracula-light-theme",
-  "nord-light-theme",
-  "sunset-light-theme",
-] as const;
-
 export const useSettingsStore = defineStore("settings", () => {
   const settings = ref<Settings>(normalizeSettings(DEFAULT_SETTINGS));
   const isLoaded = ref(false);
@@ -134,10 +122,7 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   function applyTheme(theme: Settings["theme"]) {
-    document.body.classList.remove(...THEME_CLASSES);
-    if (theme !== "dark") {
-      document.body.classList.add(`${theme}-theme`);
-    }
+    applyThemeClass(theme);
   }
 
   const lastAppliedRadius = ref<number | null>(null);

@@ -25,6 +25,33 @@ export const LIST_SORT_OPTIONS: { value: ListSort; labelKey: string }[] = [
   { value: "copies_desc", labelKey: "sort.copiesDesc" },
 ];
 
+/** Merge a patch into a cached detail record (copy-on-write; no-op if absent). */
+export function detailUpsert(
+  recordDetails: Ref<Map<number, ClipboardRecord>>,
+  id: number,
+  patch: Partial<ClipboardRecord>,
+) {
+  const detail = recordDetails.value.get(id);
+  if (!detail) return;
+  const next = new Map(recordDetails.value);
+  next.set(id, { ...detail, ...patch });
+  recordDetails.value = next;
+}
+
+/** Drop detail records by id (copy-on-write; no-op when nothing matches). */
+export function detailRemove(
+  recordDetails: Ref<Map<number, ClipboardRecord>>,
+  ids: number | number[],
+) {
+  const list = Array.isArray(ids) ? ids : [ids];
+  const next = new Map(recordDetails.value);
+  let changed = false;
+  for (const id of list) {
+    if (next.delete(id)) changed = true;
+  }
+  if (changed) recordDetails.value = next;
+}
+
 export interface ListActionsCtx {
   records: Ref<ClipboardRecord[]>;
   selectedId: Ref<number | null>;

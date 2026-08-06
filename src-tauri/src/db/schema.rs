@@ -161,20 +161,6 @@ impl ClipboardDb {
         Ok(())
     }
 
-    /// Read the schema version stored in the database. Returns `None` when the
-    /// key is absent (database created before versioning was introduced).
-    pub fn read_schema_version(conn: &Connection) -> Option<i64> {
-        conn.query_row(
-            "SELECT value FROM settings WHERE key = 'schema_version'",
-            [],
-            |row| {
-                let s: String = row.get(0)?;
-                Ok(s.parse::<i64>().unwrap_or(0))
-            },
-        )
-        .ok()
-    }
-
     pub fn schema_version() -> i64 {
         SCHEMA_VERSION
     }

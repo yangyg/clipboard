@@ -1,7 +1,6 @@
 //! Cheap image fingerprints and pre-channel downscaling for captured bitmaps.
 use arboard::ImageData;
-use image::{imageops::FilterType, RgbaImage};
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// H-2: Quick dedup fingerprint for clipboard images. Uses FNV-1a (non-crypto)
 /// over dimensions + sampled head/tail bytes. This only guards the poll-loop
@@ -32,60 +31,27 @@ pub fn image_quick_fingerprint(img: &ImageData<'_>) -> String {
     format!("{:016x}", h)
 }
 
-/// Maximum edge (px) for a captured bitmap entering the process pipeline.
-/// Mirrors `media::MAX_EDGE` so the on-disk file and in-memory buffer match.
-pub const CAPTURE_MAX_EDGE: u32 = 2560;
-
-/// Downscale an RGBA clipboard bitmap to at most `CAPTURE_MAX_EDGE` on its
+/// Downscale an RGBA clipboard bitmap to at most `media::MAX_EDGE` on its
 /// longest side before it is moved into the bounded capture channel.
 ///
 /// Without this, an 8K screenshot carries ~660MB of raw RGBA that sits in the
 /// channel (capacity) plus the worker until PNG encoding completes — a real OOM
 /// risk on memory-constrained machines. `arboard` guarantees RGBA byte order,
-/// which matches `image::RgbaImage`.
+/// which matches `image::RgbaImage`. See `media::downscale_rgba` (shared with
+/// the on-disk store path).
 pub fn downscale_captured_rgba_if_large(
     rgba: Vec<u8>,
     width: u32,
     height: u32,
 ) -> (Vec<u8>, u32, u32) {
-    if width <= CAPTURE_MAX_EDGE && height <= CAPTURE_MAX_EDGE {
-        return (rgba, width, height);
+    let (out, nw, nh) = crate::media::downscale_rgba(rgba, width, height, crate::media::MAX_EDGE);
+    if nw != width || nh != height {
+        debug!(
+            "Downscaled captured image {}x{} -> {}x{}",
+            width, height, nw, nh
+        );
     }
-    // Zero-sized bitmaps: nothing to downscale, pass through unchanged.
-    if width == 0 || height == 0 {
-        return (rgba, width, height);
-    }
-    let expected = (width as usize)
-        .saturating_mul(height as usize)
-        .saturating_mul(4);
-    // arboard pixel buffers can carry trailing stride padding or be short from
-    // some sources; normalize to width*height*4 before handing to the image crate.
-    let mut pixels = rgba;
-    if pixels.len() < expected {
-        pixels.resize(expected, 0);
-    } else if pixels.len() > expected {
-        pixels.truncate(expected);
-    }
-    // After normalization pixels.len() == expected, so from_raw cannot fail.
-    let img = match RgbaImage::from_raw(width, height, pixels) {
-        Some(img) => img,
-        None => {
-            warn!(
-                "Failed to wrap {}x{} RGBA buffer for downscale; sending as-is",
-                width, height
-            );
-            return (Vec::new(), width, height);
-        }
-    };
-    let scale = (CAPTURE_MAX_EDGE as f32 / width.max(height) as f32).min(1.0);
-    let nw = ((width as f32) * scale).round().max(1.0) as u32;
-    let nh = ((height as f32) * scale).round().max(1.0) as u32;
-    let out = image::imageops::resize(&img, nw, nh, FilterType::Triangle);
-    debug!(
-        "Downscaled captured image {}x{} -> {}x{}",
-        width, height, nw, nh
-    );
-    (out.into_raw(), nw, nh)
+    (out, nw, nh)
 }
 
 #[cfg(test)]
@@ -144,9 +110,20 @@ mod tests {
         let a = vec![1u8; len];
         let mut b = a.clone();
         b[len / 2] = 99; // outside both sampled windows
-        let img_a = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(a) };
-        let img_b = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(b) };
-        assert_eq!(image_quick_fingerprint(&img_a), image_quick_fingerprint(&img_b));
+        let img_a = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(a),
+        };
+        let img_b = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(b),
+        };
+        assert_eq!(
+            image_quick_fingerprint(&img_a),
+            image_quick_fingerprint(&img_b)
+        );
     }
 
     #[test]
@@ -156,9 +133,20 @@ mod tests {
         let a = vec![1u8; len];
         let mut b = a.clone();
         *b.last_mut().unwrap() = 2;
-        let img_a = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(a) };
-        let img_b = ImageData { width: 64, height: 64, bytes: std::borrow::Cow::Owned(b) };
-        assert_ne!(image_quick_fingerprint(&img_a), image_quick_fingerprint(&img_b));
+        let img_a = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(a),
+        };
+        let img_b = ImageData {
+            width: 64,
+            height: 64,
+            bytes: std::borrow::Cow::Owned(b),
+        };
+        assert_ne!(
+            image_quick_fingerprint(&img_a),
+            image_quick_fingerprint(&img_b)
+        );
     }
 
     // --- downscale_captured_rgba_if_large ---
@@ -184,14 +172,14 @@ mod tests {
 
     #[test]
     fn large_image_is_downscaled() {
-        // Big enough to exceed CAPTURE_MAX_EDGE (2560) without an 80MB buffer.
+        // Big enough to exceed MAX_EDGE (2560) without an 80MB buffer.
         let w = 3000u32;
         let h = 1000u32;
         let rgba = vec![128u8; (w * h * 4) as usize];
         let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
-        // Both edges must be <= CAPTURE_MAX_EDGE
-        assert!(ow <= CAPTURE_MAX_EDGE);
-        assert!(oh <= CAPTURE_MAX_EDGE);
+        // Both edges must be <= MAX_EDGE
+        assert!(ow <= crate::media::MAX_EDGE);
+        assert!(oh <= crate::media::MAX_EDGE);
         // Output buffer matches dimensions
         assert_eq!(out.len(), (ow * oh * 4) as usize);
         assert!(!out.is_empty());
@@ -206,8 +194,8 @@ mod tests {
         let expected = (w * h * 4) as usize;
         let rgba = vec![128u8; expected + 64];
         let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
-        assert!(ow <= CAPTURE_MAX_EDGE);
-        assert!(oh <= CAPTURE_MAX_EDGE);
+        assert!(ow <= crate::media::MAX_EDGE);
+        assert!(oh <= crate::media::MAX_EDGE);
         assert_eq!(out.len(), (ow * oh * 4) as usize);
     }
 
@@ -220,8 +208,8 @@ mod tests {
         let expected = (w * h * 4) as usize;
         let rgba = vec![128u8; expected - 64];
         let (out, ow, oh) = downscale_captured_rgba_if_large(rgba, w, h);
-        assert!(ow <= CAPTURE_MAX_EDGE);
-        assert!(oh <= CAPTURE_MAX_EDGE);
+        assert!(ow <= crate::media::MAX_EDGE);
+        assert!(oh <= crate::media::MAX_EDGE);
         assert_eq!(out.len(), (ow * oh * 4) as usize);
     }
 }

@@ -35,16 +35,18 @@ pub fn get_foreground_window_info() -> (String, String, String) {
 
 #[cfg(windows)]
 fn get_foreground_window_info_uncached() -> (String, String, String) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId};
     use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+    };
     // PROCESS_QUERY_LIMITED_INFORMATION + QueryFullProcessImageNameW works across
     // integrity levels without PROCESS_VM_READ. GetModuleFileNameW is wrong here —
     // it expects an HMODULE in *this* process, not a foreign process HANDLE.
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::System::Threading::{
         OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
     };
-    use std::ffi::OsString;
-    use std::os::windows::ffi::OsStringExt;
 
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -75,12 +77,7 @@ fn get_foreground_window_info_uncached() -> (String, String, String) {
 
         let mut module_buf = [0u16; 260];
         let mut size = module_buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(
-            process_handle,
-            0,
-            module_buf.as_mut_ptr(),
-            &mut size,
-        );
+        let ok = QueryFullProcessImageNameW(process_handle, 0, module_buf.as_mut_ptr(), &mut size);
         CloseHandle(process_handle);
 
         if ok == 0 || size == 0 {
@@ -110,10 +107,10 @@ fn get_foreground_window_info_uncached() -> (String, String, String) {
 /// Returns `None` when the file has no version info / no readable description.
 #[cfg(windows)]
 fn read_file_description(path: &str) -> Option<String> {
+    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
     };
-    use std::os::windows::ffi::OsStrExt;
 
     let wide: Vec<u16> = std::ffi::OsStr::new(path)
         .encode_wide()

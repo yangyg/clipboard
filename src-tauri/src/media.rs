@@ -8,7 +8,53 @@ use std::time::{Duration, Instant};
 use tracing::{debug, warn};
 
 const THUMB_MAX_EDGE: u32 = 160;
-const MAX_EDGE: u32 = 2560;
+
+/// Maximum edge (px) for stored PNGs and in-memory captured bitmaps.
+/// Shared with `clipboard/image.rs` so the on-disk file and in-memory
+/// pre-channel buffer target the same cap.
+pub const MAX_EDGE: u32 = 2560;
+
+/// Normalize an RGBA buffer to exactly `width*height*4` bytes (some clipboard
+/// sources carry stride padding or truncation). Zero-fills short buffers,
+/// truncates over-long ones. Never fails.
+pub fn normalize_rgba_len(mut rgba: Vec<u8>, width: u32, height: u32) -> Vec<u8> {
+    let expected = (width as usize)
+        .saturating_mul(height as usize)
+        .saturating_mul(4);
+    if rgba.len() < expected {
+        rgba.resize(expected, 0);
+    } else if rgba.len() > expected {
+        rgba.truncate(expected);
+    }
+    rgba
+}
+
+/// Downscale an RGBA buffer so its longest edge ≤ `max_edge`.
+/// Returns the buffer unchanged when it is already within bounds or zero-sized;
+/// an empty buffer signals a corrupt input that could not be wrapped as an image.
+pub fn downscale_rgba(
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    max_edge: u32,
+) -> (Vec<u8>, u32, u32) {
+    if width <= max_edge && height <= max_edge {
+        return (rgba, width, height);
+    }
+    if width == 0 || height == 0 {
+        return (rgba, width, height);
+    }
+    let pixels = normalize_rgba_len(rgba, width, height);
+    let img = match image::RgbaImage::from_raw(width, height, pixels) {
+        Some(img) => img,
+        None => return (Vec::new(), width, height),
+    };
+    let scale = (max_edge as f32 / width.max(height) as f32).min(1.0);
+    let nw = ((width as f32) * scale).round().max(1.0) as u32;
+    let nh = ((height as f32) * scale).round().max(1.0) as u32;
+    let out = image::imageops::resize(&img, nw, nh, FilterType::Triangle);
+    (out.into_raw(), nw, nh)
+}
 
 pub struct StoredImage {
     /// Relative path e.g. `media/{hash}.png`
@@ -62,22 +108,15 @@ pub fn store_clipboard_image(
         });
     }
 
-    // Clipboard RGBA may include stride padding or truncation from some apps
-    let expected = (width as usize).saturating_mul(height as usize).saturating_mul(4);
-    let mut pixels = rgba; // take ownership — avoid second full copy
-    if pixels.len() < expected {
-        pixels.resize(expected, 0);
-    } else if pixels.len() > expected {
-        pixels.truncate(expected);
-    }
-    let mut img = image::RgbaImage::from_raw(width, height, pixels)
-        .ok_or_else(|| "Failed to create RGBA image".to_string())?;
+    // Clipboard RGBA may include stride padding or truncation from some apps.
+    let mut img =
+        image::RgbaImage::from_raw(width, height, normalize_rgba_len(rgba, width, height))
+            .ok_or_else(|| "Failed to create RGBA image".to_string())?;
 
     let (out_w, out_h) = if width > MAX_EDGE || height > MAX_EDGE {
-        let scale = (MAX_EDGE as f32 / width.max(height) as f32).min(1.0);
-        let nw = ((width as f32) * scale).round().max(1.0) as u32;
-        let nh = ((height as f32) * scale).round().max(1.0) as u32;
-        img = image::imageops::resize(&img, nw, nh, FilterType::Triangle);
+        let (buf, nw, nh) = downscale_rgba(img.into_raw(), width, height, MAX_EDGE);
+        img = image::RgbaImage::from_raw(nw, nh, buf)
+            .ok_or_else(|| "Failed to wrap downscaled image".to_string())?;
         (nw, nh)
     } else {
         (width, height)
@@ -207,7 +246,10 @@ fn media_dir_size(root: &Path) -> i64 {
 }
 
 /// Load PNG from disk into RGBA bytes for arboard set_image.
-pub fn load_image_rgba(app_data_dir: &Path, media_path: &str) -> Result<(Vec<u8>, usize, usize), String> {
+pub fn load_image_rgba(
+    app_data_dir: &Path,
+    media_path: &str,
+) -> Result<(Vec<u8>, usize, usize), String> {
     let path = crate::security::resolve_media_file(app_data_dir, media_path)?;
     let dyn_img = image::open(&path).map_err(|e| format!("Failed to open image: {e}"))?;
     let rgba = dyn_img.to_rgba8();

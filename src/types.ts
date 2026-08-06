@@ -38,9 +38,6 @@ export interface ClipboardRecord {
   content_len?: number | null;
   /** Short display alias; empty = none. Does not change paste content. */
   alias?: string;
-  /** Preview-specific fields (not stored) */
-  preview?: string; // truncated content for list
-  display_time?: string; // relative time string
 }
 
 export interface Tag {

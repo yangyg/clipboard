@@ -12,19 +12,7 @@ impl ClipboardDb {
         let conn = self.lock_read();
 
         // One table scan: aggregates + per-type counts (known content_type values).
-        let row: (
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-        ) = conn.query_row(
+        let row: (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64) = conn.query_row(
             "SELECT COUNT(*),
                     COALESCE(SUM(copy_count), 0),
                     SUM(CASE WHEN is_favorite = 1 THEN 1 ELSE 0 END),

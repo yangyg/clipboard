@@ -188,8 +188,6 @@ pub struct Settings {
     pub enable_sensitive_detection: bool,
     #[serde(rename = "sensitive_auto_expire_seconds")]
     pub sensitive_auto_expire_seconds: i32,
-    #[serde(rename = "data_path")]
-    pub data_path: String,
     #[serde(rename = "auto_start")]
     pub auto_start: bool,
     #[serde(rename = "minimize_to_tray")]
@@ -258,13 +256,9 @@ impl Default for Settings {
             auto_close_on_paste: true,
             enable_sensitive_detection: true,
             sensitive_auto_expire_seconds: 600,
-            data_path: "".to_string(),
             auto_start: false,
             minimize_to_tray: true,
-            ignored_apps: vec![
-                "1Password.exe".to_string(),
-                "ICBCNetBank.exe".to_string(),
-            ],
+            ignored_apps: vec!["1Password.exe".to_string(), "ICBCNetBank.exe".to_string()],
             source_name_overrides: vec![],
             floating_width: 0,
             floating_height: 0,
@@ -345,7 +339,7 @@ mod settings_onboarding_tests {
 
     #[test]
     fn missing_json_field_skips_onboarding_for_upgrades() {
-        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"data_path":"","auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
+        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(s.onboarding_completed);
     }

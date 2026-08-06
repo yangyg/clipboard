@@ -96,7 +96,12 @@ pub(crate) fn start_capture(
             // Non-blocking: a full queue must not stall the poll thread.
             match event {
                 ClipboardEvent::Text(captured) => {
-                    let job = TextCaptureJob { captured, source_app, source_window, source_name };
+                    let job = TextCaptureJob {
+                        captured,
+                        source_app,
+                        source_window,
+                        source_name,
+                    };
                     match text_tx.try_send(job) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
@@ -108,7 +113,12 @@ pub(crate) fn start_capture(
                     }
                 }
                 ClipboardEvent::Image(captured) => {
-                    let job = ImageCaptureJob { captured, source_app, source_window, source_name };
+                    let job = ImageCaptureJob {
+                        captured,
+                        source_app,
+                        source_window,
+                        source_name,
+                    };
                     match image_tx.try_send(job) {
                         Ok(()) => {}
                         Err(std::sync::mpsc::TrySendError::Full(_)) => {
@@ -125,20 +135,20 @@ pub(crate) fn start_capture(
 }
 
 /// Text worker: detect content type, hash, dedup, insert (<5ms per job).
-fn process_text_job(
-    job: TextCaptureJob,
-    db: &ClipboardDb,
-    app: &tauri::AppHandle,
-) {
-    let TextCaptureJob { captured, source_app, source_window, source_name } = job;
+fn process_text_job(job: TextCaptureJob, db: &ClipboardDb, app: &tauri::AppHandle) {
+    let TextCaptureJob {
+        captured,
+        source_app,
+        source_window,
+        source_name,
+    } = job;
     let settings = capture_settings(db);
     if is_ignored_app(&source_app, &settings.ignored_apps) {
         return;
     }
 
     let content_type = detect_content_type(&captured.text);
-    let is_sensitive =
-        settings.enable_sensitive_detection && detect_sensitive(&captured.text);
+    let is_sensitive = settings.enable_sensitive_detection && detect_sensitive(&captured.text);
     // Keep wrapping fingerprint for DB hash so existing rows still dedupe
     // (historical inserts stored sha256(fingerprint), not fingerprint itself).
     let hash = sha256_hash(&captured.fingerprint());
@@ -158,12 +168,9 @@ fn process_text_job(
     ) {
         Ok((id, is_new, mut record)) => {
             if is_new && settings.features.tags && settings.enable_auto_tag {
-                if let Err(e) = db.apply_auto_tags(
-                    id,
-                    &captured.text,
-                    &content_type,
-                    &settings.auto_tag_rules,
-                ) {
+                if let Err(e) =
+                    db.apply_auto_tags(id, &captured.text, &content_type, &settings.auto_tag_rules)
+                {
                     warn!("Failed to apply auto tags: {}", e);
                 } else if let Ok(tags) = db.get_record_tag_names(id) {
                     record.tags = tags;
@@ -190,7 +197,12 @@ fn process_image_job(
     media_root: &Path,
     app: &tauri::AppHandle,
 ) {
-    let ImageCaptureJob { captured, source_app, source_window, source_name } = job;
+    let ImageCaptureJob {
+        captured,
+        source_app,
+        source_window,
+        source_name,
+    } = job;
     let settings = capture_settings(db);
     if is_ignored_app(&source_app, &settings.ignored_apps) {
         return;

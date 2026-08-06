@@ -35,11 +35,17 @@ pub async fn save_settings(
         apply_autostart(&app, settings.auto_start)?;
     }
 
-    state.db.cleanup_retention(settings.retention_days).map_err(|e| e.to_string())?;
+    state
+        .db
+        .cleanup_retention(settings.retention_days)
+        .map_err(|e| e.to_string())?;
     if let Err(e) = state.db.save_settings(&settings) {
         if autostart_changed {
             if let Err(revert_err) = apply_autostart(&app, previous.auto_start) {
-                warn!("Failed to revert autostart after settings save error: {}", revert_err);
+                warn!(
+                    "Failed to revert autostart after settings save error: {}",
+                    revert_err
+                );
             }
         }
         return Err(e.to_string());
@@ -119,7 +125,10 @@ pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Res
 pub async fn switch_app_mode(app: AppHandle, mode: String) -> Result<(), String> {
     let window = app.get_webview_window("main").ok_or("window not found")?;
     let is_window = mode == "window";
-    let settings = match app.try_state::<AppState>().and_then(|s| s.db.get_settings().ok()) {
+    let settings = match app
+        .try_state::<AppState>()
+        .and_then(|s| s.db.get_settings().ok())
+    {
         Some(s) => (*s).clone(),
         None => {
             warn!("Failed to load settings for mode switch; using defaults");
@@ -130,8 +139,12 @@ pub async fn switch_app_mode(app: AppHandle, mode: String) -> Result<(), String>
     let (min_w, min_h, _, _) = window::mode_size_bounds(is_window);
     window.set_decorations(false).map_err(|e| e.to_string())?;
     let _ = window.set_shadow(false);
-    window.set_always_on_top(!is_window).map_err(|e| e.to_string())?;
-    window.set_skip_taskbar(!is_window).map_err(|e| e.to_string())?;
+    window
+        .set_always_on_top(!is_window)
+        .map_err(|e| e.to_string())?;
+    window
+        .set_skip_taskbar(!is_window)
+        .map_err(|e| e.to_string())?;
     // Both modes resizable so remembered size can be adjusted
     window.set_resizable(true).map_err(|e| e.to_string())?;
     let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
@@ -143,10 +156,7 @@ pub async fn switch_app_mode(app: AppHandle, mode: String) -> Result<(), String>
     let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
     // Re-apply rounded region after size change
     let _ = window::apply_window_round_corners(&window, settings.panel_radius);
-    info!(
-        "App mode switched to: {} (size {}x{})",
-        mode, w, h
-    );
+    info!("App mode switched to: {} (size {}x{})", mode, w, h);
     Ok(())
 }
 

@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod detect;
 mod features;
+mod ffi;
 mod media;
 mod panel;
 mod security;
@@ -92,10 +93,12 @@ pub fn run() {
             info!("Second instance detected; focusing existing window");
             crate::show_main_panel(app);
         }))
-        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None::<Vec<&'static str>>))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None::<Vec<&'static str>>,
+        ))
         .manage(app_state)
         .invoke_handler(tauri::generate_handler![
             commands::get_records,
@@ -157,8 +160,7 @@ pub fn run() {
                     window.hide().ok();
                     api.prevent_close();
                 }
-                tauri::WindowEvent::Resized(_)
-                | tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::ScaleFactorChanged { .. } => {
                     if window.label() != "main" {
                         return;
                     }

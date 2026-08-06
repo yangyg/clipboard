@@ -1,7 +1,7 @@
 //! WebDAV sync commands (test connection / pull / push / sync).
 use tauri::State;
 
-use crate::{AppState, FeatureId, require_feature};
+use crate::{require_feature, AppState, FeatureId};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn webdav_test_connection(state: State<'_, AppState>) -> Result<(), String> {

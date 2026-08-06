@@ -85,7 +85,9 @@ impl ClipboardDb {
         match secondary {
             "updated_at ASC" => "is_pinned DESC, updated_at ASC",
             "created_at DESC" => "is_pinned DESC, created_at DESC",
-            "copy_count DESC, updated_at DESC" => "is_pinned DESC, copy_count DESC, updated_at DESC",
+            "copy_count DESC, updated_at DESC" => {
+                "is_pinned DESC, copy_count DESC, updated_at DESC"
+            }
             _ => "is_pinned DESC, updated_at DESC",
         }
     }
@@ -100,7 +102,11 @@ impl ClipboardDb {
     /// M-3: Fast path enrichment using cached prefix + string concat.
     /// Relative paths are known-safe (SHA-256 hex filenames from our own code).
     #[inline]
-    pub(super) fn enrich_paths(&self, media_path: Option<&str>, thumb_path: Option<&str>) -> (Option<String>, Option<String>) {
+    pub(super) fn enrich_paths(
+        &self,
+        media_path: Option<&str>,
+        thumb_path: Option<&str>,
+    ) -> (Option<String>, Option<String>) {
         let to_abs = |rel: &str| {
             // Replace '/' with '\\' for Windows; single allocation via format!.
             let normalized = rel.replace('/', "\\");
@@ -115,7 +121,8 @@ impl ClipboardDb {
         let media_path: Option<String> = row.get(14)?;
         let thumb_path: Option<String> = row.get(15)?;
         // M-3: Pass &str — no clone needed since enrich_paths only reads.
-        let (media_abs, thumb_abs) = self.enrich_paths(media_path.as_deref(), thumb_path.as_deref());
+        let (media_abs, thumb_abs) =
+            self.enrich_paths(media_path.as_deref(), thumb_path.as_deref());
         Ok(ClipboardRecord {
             id: row.get(0)?,
             content: row.get(1)?,
@@ -167,7 +174,8 @@ impl ClipboardDb {
             "SELECT {} FROM records WHERE is_trashed = ?",
             RECORD_COLS_LIST
         );
-        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(if trashed { 1i32 } else { 0i32 })];
+        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
+            vec![Box::new(if trashed { 1i32 } else { 0i32 })];
 
         if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
             sql.push_str(" AND content_type = ?");
@@ -176,18 +184,7 @@ impl ClipboardDb {
         if favorites_only {
             sql.push_str(" AND is_favorite = 1");
         }
-        if include_tags {
-            if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
-                sql.push_str(
-                    " AND id IN (
-                        SELECT rt.record_id FROM record_tags rt
-                        INNER JOIN tags t ON t.id = rt.tag_id
-                        WHERE t.name = ?
-                    )",
-                );
-                params.push(Box::new(tag.to_string()));
-            }
-        }
+        Self::push_tag_filter(&mut sql, &mut params, tag_name, include_tags);
 
         // Keyset for default newest-first (+ pinned). Avoids OFFSET drift when
         // clipboard-changed prepends rows while the user scrolls.
@@ -231,25 +228,15 @@ impl ClipboardDb {
             .query_map(param_refs.as_slice(), |row| self.map_record_row(row))?
             .collect::<SqlResult<Vec<_>>>()?;
 
-        if include_tags {
-            let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
-            let tags_map = self.load_tags_batch(&conn, &ids)?;
-            for record in &mut records {
-                if let Some(tags) = tags_map.get(&record.id) {
-                    record.tags = tags.clone();
-                }
-            }
-        }
+        self.enrich_tags(&conn, &mut records, include_tags)?;
 
         Ok(records)
     }
 
     pub fn get_record(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
         let conn = self.lock_read();
-        let mut stmt = conn.prepare(&format!(
-            "SELECT {} FROM records WHERE id = ?",
-            RECORD_COLS
-        ))?;
+        let mut stmt =
+            conn.prepare(&format!("SELECT {} FROM records WHERE id = ?", RECORD_COLS))?;
 
         let mut rows = stmt.query([id])?;
         if let Some(row) = rows.next()? {
@@ -259,12 +246,6 @@ impl ClipboardDb {
         } else {
             Ok(None)
         }
-    }
-
-    /// List-shaped row (truncated content, no HTML) — cheaper emit after capture.
-    pub fn get_record_list(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
-        let conn = self.lock_read();
-        self.get_record_list_locked(&conn, id)
     }
 
     pub(super) fn get_record_list_locked(
@@ -334,7 +315,10 @@ mod tests {
     fn fts_match_needs_three_chars() {
         assert_eq!(ClipboardDb::build_fts_match("ab"), None);
         assert_eq!(ClipboardDb::build_fts_match("  x "), None);
-        assert_eq!(ClipboardDb::build_fts_match("abc"), Some("\"abc\"".to_string()));
+        assert_eq!(
+            ClipboardDb::build_fts_match("abc"),
+            Some("\"abc\"".to_string())
+        );
     }
 
     #[test]

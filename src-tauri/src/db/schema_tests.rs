@@ -83,10 +83,28 @@ const EXPECTED_TABLES: &[&str] = &["records", "tags", "record_tags", "settings"]
 
 /// Expected columns for the `records` table (column_name → must be queryable).
 const EXPECTED_RECORD_COLS: &[&str] = &[
-    "id", "content", "content_type", "source_app", "source_window", "hash",
-    "copy_count", "is_favorite", "is_pinned", "is_sensitive", "is_trashed",
-    "auto_expire_at", "created_at", "updated_at", "media_path", "thumb_path",
-    "width", "height", "content_html", "content_len", "alias", "source_name",
+    "id",
+    "content",
+    "content_type",
+    "source_app",
+    "source_window",
+    "hash",
+    "copy_count",
+    "is_favorite",
+    "is_pinned",
+    "is_sensitive",
+    "is_trashed",
+    "auto_expire_at",
+    "created_at",
+    "updated_at",
+    "media_path",
+    "thumb_path",
+    "width",
+    "height",
+    "content_html",
+    "content_len",
+    "alias",
+    "source_name",
 ];
 
 /// Expected indexes (name → must exist in sqlite_master).
@@ -121,9 +139,7 @@ fn schema_all_expected_tables_exist() {
 fn schema_records_has_all_columns() {
     let conn = fresh_db();
     // PRAGMA table_info returns (cid, name, type, notnull, dflt_value, pk)
-    let mut stmt = conn
-        .prepare("PRAGMA table_info(records)")
-        .unwrap();
+    let mut stmt = conn.prepare("PRAGMA table_info(records)").unwrap();
     let cols: Vec<String> = stmt
         .query_map([], |row| row.get::<_, String>(1))
         .unwrap()
@@ -155,12 +171,9 @@ fn schema_all_expected_indexes_exist() {
 #[test]
 fn schema_version_is_stamped_after_init() {
     let conn = fresh_db();
-    // Stamp version the same way ClipboardDb::new does
-    conn.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?1)",
-        [ClipboardDb::schema_version().to_string().as_str()],
-    )
-    .unwrap();
+    // Stamp through the real idempotent path (not a manual INSERT) so the test
+    // exercises the exact code ClipboardDb::new runs.
+    ClipboardDb::apply_schema_version(&conn).unwrap();
     let stored: i64 = conn
         .query_row(
             "SELECT value FROM settings WHERE key = 'schema_version'",

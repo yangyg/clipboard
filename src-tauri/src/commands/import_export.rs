@@ -5,7 +5,7 @@ use std::io::{BufWriter, Write};
 use tauri::State;
 
 use crate::security;
-use crate::{AppState, ClipboardRecord, FeatureId, StatsData, require_feature};
+use crate::{require_feature, AppState, ClipboardRecord, FeatureId, StatsData};
 
 /// Stream records as a JSON array directly to `path` (no full in-memory buffer).
 #[tauri::command]
@@ -43,14 +43,23 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
 }
 
 #[tauri::command]
-pub async fn import_data(state: State<'_, AppState>, records: Vec<ClipboardRecord>) -> Result<i32, String> {
+pub async fn import_data(
+    state: State<'_, AppState>,
+    records: Vec<ClipboardRecord>,
+) -> Result<i32, String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
-    state.db.import_records(&records, settings.max_records).map_err(|e| e.to_string())
+    state
+        .db
+        .import_records(&records, settings.max_records)
+        .map_err(|e| e.to_string())
 }
 
 /// Read a JSON backup from disk (path from native dialog) and import with sanitization.
 #[tauri::command]
-pub async fn import_data_from_path(state: State<'_, AppState>, path: String) -> Result<i32, String> {
+pub async fn import_data_from_path(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<i32, String> {
     let path = security::validate_json_io_path(&path, false)?;
     let text = std::fs::read_to_string(&path).map_err(|e| format!("无法读取备份文件: {e}"))?;
     // Cap import size to limit memory DoS from huge malicious files.
@@ -74,7 +83,10 @@ pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
-    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Stats)?;
+    require_feature(
+        &(*state.db.get_settings().map_err(|e| e.to_string())?),
+        FeatureId::Stats,
+    )?;
     // Cleanup stays on the periodic background thread — stats is a hot UI poll.
     state.db.get_stats().map_err(|e| e.to_string())
 }

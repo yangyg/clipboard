@@ -20,13 +20,6 @@ export const TAG_PALETTE_HEX = [
   "#ec4899", // pink
 ] as const;
 
-/** Resolve a CSS custom property to a concrete color string (usually hex). */
-export function cssColorVar(name: string, fallback: string): string {
-  if (typeof document === "undefined") return fallback;
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return raw || fallback;
-}
-
 /** Normalize for equality (hex case / whitespace). */
 export function normalizeColorKey(color: string): string {
   return color.trim().toLowerCase();
@@ -43,48 +36,6 @@ export function uniqueColors(colors: string[]): string[] {
     out.push(c.trim());
   }
   return out;
-}
-
-function parseHexRgb(color: string): [number, number, number] | null {
-  let h = color.trim().replace(/^#/, "");
-  if (h.length === 3) {
-    h = h
-      .split("")
-      .map((c) => c + c)
-      .join("");
-  }
-  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
-  return [
-    parseInt(h.slice(0, 2), 16),
-    parseInt(h.slice(2, 4), 16),
-    parseInt(h.slice(4, 6), 16),
-  ];
-}
-
-/** Snap any hex to the nearest palette swatch (RGB Euclidean). Invalid → first swatch. */
-export function nearestPaletteColor(color: string): string {
-  const key = normalizeColorKey(color);
-  const exact = TAG_PALETTE_HEX.find((c) => normalizeColorKey(c) === key);
-  if (exact) return exact;
-
-  const rgb = parseHexRgb(color);
-  if (!rgb) return TAG_PALETTE_HEX[0];
-
-  let best: string = TAG_PALETTE_HEX[0];
-  let bestDist = Infinity;
-  for (const swatch of TAG_PALETTE_HEX) {
-    const s = parseHexRgb(swatch);
-    if (!s) continue;
-    const dr = rgb[0] - s[0];
-    const dg = rgb[1] - s[1];
-    const db = rgb[2] - s[2];
-    const d = dr * dr + dg * dg + db * db;
-    if (d < bestDist) {
-      bestDist = d;
-      best = swatch;
-    }
-  }
-  return best;
 }
 
 /**

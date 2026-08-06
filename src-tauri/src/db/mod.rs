@@ -1,9 +1,9 @@
-use rusqlite::{Connection, Result as SqlResult};
-use parking_lot::{Mutex, RwLock};
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use crate::media;
 use crate::Settings;
+use parking_lot::{Mutex, RwLock};
+use rusqlite::{Connection, Result as SqlResult};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 mod records_import;
 mod records_media;
@@ -228,4 +228,3 @@ impl ClipboardDb {
         &self.media_root
     }
 }
-

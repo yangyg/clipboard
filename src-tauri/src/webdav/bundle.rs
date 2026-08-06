@@ -94,7 +94,10 @@ pub fn serialize_bundle(records: &[ClipboardRecord]) -> Result<Vec<u8>, String> 
     Ok(buf.into_bytes())
 }
 
-pub fn filter_syncable(records: Vec<ClipboardRecord>, sync_sensitive: bool) -> Vec<ClipboardRecord> {
+pub fn filter_syncable(
+    records: Vec<ClipboardRecord>,
+    sync_sensitive: bool,
+) -> Vec<ClipboardRecord> {
     records
         .into_iter()
         .filter(|r| sync_sensitive || !r.is_sensitive)

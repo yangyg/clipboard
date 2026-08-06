@@ -298,7 +298,11 @@ export function useRecordActions(ctx: RecordActionsCtx) {
       return;
     }
     if (id === "restore") {
-      await clipboardStore.restoreRecord(record.id);
+      try {
+        await clipboardStore.restoreRecord(record.id);
+      } catch {
+        toast(t('common.operationFailed'), "error");
+      }
       return;
     }
     if (id === "delete") {

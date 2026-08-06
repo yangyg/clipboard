@@ -8,6 +8,7 @@ import type { Ref } from "vue";
 import type { ClipboardRecord } from "../types";
 import { setPasteFocusLock } from "../composables/pasteFocusLock";
 import type { ListSort } from "./clipboardList";
+import { detailRemove, detailUpsert } from "./clipboardList";
 
 export interface RecordActionsCtx {
   records: Ref<ClipboardRecord[]>;
@@ -34,9 +35,7 @@ export function createRecordActions(ctx: RecordActionsCtx) {
       if (row) ctx.patchRecord(id, { copy_count: row.copy_count + 1 });
       const detail = ctx.recordDetails.value.get(id);
       if (detail) {
-        const next = new Map(ctx.recordDetails.value);
-        next.set(id, { ...detail, copy_count: detail.copy_count + 1 });
-        ctx.recordDetails.value = next;
+        detailUpsert(ctx.recordDetails, id, { copy_count: detail.copy_count + 1 });
       }
     } catch (e) {
       console.error("Paste failed:", e);
@@ -69,11 +68,7 @@ export function createRecordActions(ctx: RecordActionsCtx) {
     try {
       await invoke("delete_record", { id });
       ctx.records.value = ctx.records.value.filter((r) => r.id !== id);
-      if (ctx.recordDetails.value.has(id)) {
-        const next = new Map(ctx.recordDetails.value);
-        next.delete(id);
-        ctx.recordDetails.value = next;
-      }
+      detailRemove(ctx.recordDetails, id);
       if (ctx.selectedId.value === id) ctx.selectedId.value = null;
       ctx.scheduleLoadStats();
       await ctx.loadTrashCount();
@@ -187,11 +182,7 @@ export function createRecordActions(ctx: RecordActionsCtx) {
     try {
       await invoke("permanently_delete_record", { id });
       ctx.records.value = ctx.records.value.filter((r) => r.id !== id);
-      if (ctx.recordDetails.value.has(id)) {
-        const next = new Map(ctx.recordDetails.value);
-        next.delete(id);
-        ctx.recordDetails.value = next;
-      }
+      detailRemove(ctx.recordDetails, id);
       if (ctx.selectedId.value === id) ctx.selectedId.value = null;
       await ctx.loadTrashCount();
     } catch (e) {
@@ -205,13 +196,7 @@ export function createRecordActions(ctx: RecordActionsCtx) {
       await invoke("permanently_delete_records_batch", { ids });
       const idSet = new Set(ids);
       ctx.records.value = ctx.records.value.filter((r) => !idSet.has(r.id));
-      for (const id of ids) {
-        if (ctx.recordDetails.value.has(id)) {
-          const next = new Map(ctx.recordDetails.value);
-          next.delete(id);
-          ctx.recordDetails.value = next;
-        }
-      }
+      detailRemove(ctx.recordDetails, ids);
       if (ctx.selectedId.value !== null && ctx.selectedIds.value.has(ctx.selectedId.value)) {
         ctx.selectedId.value = null;
       }

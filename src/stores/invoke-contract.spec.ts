@@ -4,7 +4,7 @@
  * Validates that every invoke() call from stores matches the Rust backend's
  * #[tauri::command] signatures — command name, parameter keys, and required args.
  *
- * THE CONTRACT — keep in sync with src-tauri/src/commands.rs.
+ * THE CONTRACT — keep in sync with src-tauri/src/commands/*.rs.
  * Each entry lists the expected parameter keys (matching Rust's snake_case
  * after #[tauri::command(rename_all = "snake_case")] where applicable).
  */
@@ -19,7 +19,7 @@ import type { ClipboardRecord, Settings, StatsData } from "@/types";
 // ─── Contract Definition ─────────────────────────────────────────────────────
 // Each key is a Tauri command name; the value is the set of expected parameter
 // keys the frontend must send. Must match #[tauri::command] signatures in
-// src-tauri/src/commands.rs (after rename_all = "snake_case" if present).
+// src-tauri/src/commands/*.rs (after rename_all = "snake_case" if present).
 
 const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   // ── clipboard.ts ──
@@ -266,6 +266,9 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
 
   it("purgeExpiredRecords → cleanup_expired with no params", async () => {
     const store = useClipboardStore();
+    // Default mock resolves undefined; give it an empty list so the expiry
+    // sweep's removeExpiredFromList is a no-op instead of logging an error.
+    vi.mocked(invoke).mockResolvedValueOnce([]);
     await store.purgeExpiredRecords();
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "cleanup_expired");
     expect(call).toBeTruthy();

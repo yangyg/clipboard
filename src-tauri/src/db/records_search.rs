@@ -44,18 +44,7 @@ impl ClipboardDb {
         if favorites_only {
             sql.push_str(" AND is_favorite = 1");
         }
-        if include_tags {
-            if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
-                sql.push_str(
-                    " AND id IN (
-                        SELECT rt.record_id FROM record_tags rt
-                        INNER JOIN tags t ON t.id = rt.tag_id
-                        WHERE t.name = ?
-                    )",
-                );
-                params.push(Box::new(tag.to_string()));
-            }
-        }
+        Self::push_tag_filter(&mut sql, &mut params, tag_name, include_tags);
         sql.push_str(" ORDER BY ");
         sql.push_str(Self::order_by_clause(false, sort));
         sql.push_str(" LIMIT ? OFFSET ?");
@@ -70,15 +59,7 @@ impl ClipboardDb {
             .query_map(param_refs.as_slice(), |row| self.map_record_row(row))?
             .collect::<SqlResult<Vec<_>>>()?;
 
-        if include_tags {
-            let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
-            let tags_map = self.load_tags_batch(&conn, &ids)?;
-            for record in &mut records {
-                if let Some(tags) = tags_map.get(&record.id) {
-                    record.tags = tags.clone();
-                }
-            }
-        }
+        self.enrich_tags(&conn, &mut records, include_tags)?;
 
         Ok(records)
     }

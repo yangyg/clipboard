@@ -3,6 +3,7 @@ use rusqlite::{Connection, Result as SqlResult};
 
 use super::ClipboardDb;
 use crate::media;
+use crate::ClipboardRecord;
 
 impl ClipboardDb {
     pub(super) fn purge_media_pairs(&self, pairs: &[(Option<String>, Option<String>)]) {
@@ -62,8 +63,10 @@ impl ClipboardDb {
             "SELECT media_path, thumb_path FROM records WHERE id IN ({})",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
         let mut stmt = conn.prepare(&sql)?;
         let pairs = stmt
             .query_map(params.as_slice(), |row| Ok((row.get(0)?, row.get(1)?)))?
@@ -72,7 +75,11 @@ impl ClipboardDb {
     }
 
     /// Batch-load tags for multiple record IDs in one query.
-    pub(super) fn load_tags_batch(&self, conn: &Connection, record_ids: &[i64]) -> SqlResult<std::collections::HashMap<i64, Vec<String>>> {
+    pub(super) fn load_tags_batch(
+        &self,
+        conn: &Connection,
+        record_ids: &[i64],
+    ) -> SqlResult<std::collections::HashMap<i64, Vec<String>>> {
         if record_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
@@ -84,8 +91,10 @@ impl ClipboardDb {
              ORDER BY rt.record_id",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            record_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = record_ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
         let mut stmt = conn.prepare(&sql)?;
         let mut map: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
         for id in record_ids {
@@ -103,7 +112,11 @@ impl ClipboardDb {
         Ok(map)
     }
 
-    pub(super) fn get_record_tags_locked(&self, conn: &Connection, record_id: i64) -> SqlResult<Vec<String>> {
+    pub(super) fn get_record_tags_locked(
+        &self,
+        conn: &Connection,
+        record_id: i64,
+    ) -> SqlResult<Vec<String>> {
         let mut stmt = conn.prepare(
             "SELECT t.name FROM tags t
              INNER JOIN record_tags rt ON rt.tag_id = t.id
@@ -113,5 +126,47 @@ impl ClipboardDb {
             .query_map([record_id], |row| row.get(0))?
             .collect::<SqlResult<Vec<_>>>()?;
         Ok(tags)
+    }
+
+    /// Append `AND id IN (SELECT record_id … WHERE t.name = ?)` when a tag filter
+    /// applies. Shared by list + search queries (must stay in sync).
+    pub(super) fn push_tag_filter(
+        sql: &mut String,
+        params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+        tag_name: Option<&str>,
+        include_tags: bool,
+    ) {
+        if include_tags {
+            if let Some(tag) = tag_name.filter(|s| !s.is_empty()) {
+                sql.push_str(
+                    " AND id IN (
+                        SELECT rt.record_id FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE t.name = ?
+                    )",
+                );
+                params.push(Box::new(tag.to_string()));
+            }
+        }
+    }
+
+    /// Assign tags onto list rows via one batch query (records must be mutable).
+    pub(super) fn enrich_tags(
+        &self,
+        conn: &Connection,
+        records: &mut [ClipboardRecord],
+        include_tags: bool,
+    ) -> SqlResult<()> {
+        if !include_tags || records.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
+        let tags_map = self.load_tags_batch(conn, &ids)?;
+        for record in records.iter_mut() {
+            if let Some(tags) = tags_map.get(&record.id) {
+                record.tags = tags.clone();
+            }
+        }
+        Ok(())
     }
 }

@@ -8,10 +8,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev          # Start Vite dev server (port 1420)
 npm run build        # vue-tsc type-check + vite build
 npm run tauri        # Run Tauri CLI commands (e.g., npm run tauri dev)
-npm test             # Run Vitest once (Pinia store smoke tests, jsdom)
+npm test             # Run Vitest once (components / stores / utils, jsdom)
 npm run lint         # Run ESLint over src (.ts + .vue)
 npm run doctor       # 环境诊断：Node / Rust / WebView2 / SQLite，异常时输出修复建议
 npm run clippy       # Rust clippy（-D warnings，与 CI 一致）
+npm run typecheck    # vue-tsc --noEmit（build 的前半段）
+npm run check:ipc-contract  # Rust 命令签名 ↔ TS invoke 契约校验
+npm run check:schema        # SQLite 建表 / ALTER 迁移一致性校验
+npm run validate     # 本地全量校验（lint + typecheck + check:* + test + clippy + cargo-test）
 
 cargo test --manifest-path src-tauri/Cargo.toml   # Run Rust backend tests
 ```
@@ -20,7 +24,7 @@ The full Tauri dev command is `npm run tauri dev` (starts both Vite + Rust backe
 
 **After modifying Rust code** (`src-tauri/src/*.rs`), run `cargo test --manifest-path src-tauri/Cargo.toml` to verify the backend still passes its tests.
 
-CI (`.github/workflows/ci.yml`) runs on every push / PR: frontend lint, type-check + build and vitest on Ubuntu; Rust `cargo clippy -- -D warnings` and `cargo test` on Windows (`windows-latest`, because the Rust code is Windows-gated). Run `npm run lint` / `npm test` / `npm run clippy` locally before pushing.
+CI (`.github/workflows/ci.yml`) runs on every push / PR: frontend lint, type-check + build, vitest, `check:schema` and `check:ipc-contract` on Ubuntu; Rust `cargo clippy -- -D warnings`, `cargo fmt --check` and `cargo test` on Windows (`windows-latest`, because the Rust code is Windows-gated). Run `npm run lint` / `npm test` / `npm run clippy` / `cargo fmt` locally before pushing.
 
 Regenerate app icons from a source image (PNG preferred; JPEG renamed as `.png` must be converted first):
 
@@ -34,7 +38,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows.
 
 ### Stack
 - **Frontend:** Vue 3 + TypeScript + Vite + Pinia; Lucide icons; DOMPurify for rich-text preview
-- **Backend:** Rust (Tauri v2 plugins: single-instance, clipboard-manager, dialog, global-shortcut, autostart). No fs/shell/sql plugins — filesystem & SQLite stay in Rust commands/`rusqlite`; media open uses `ShellExecuteW`
+- **Backend:** Rust (Tauri v2 plugins: single-instance, dialog, global-shortcut, autostart). No fs/shell/sql/clipboard-manager plugins — filesystem & SQLite stay in Rust commands/`rusqlite`; clipboard I/O uses arboard; media open uses `ShellExecuteW`
 - **Database:** SQLite via rusqlite (WAL + `busy_timeout=5000`), `%LOCALAPPDATA%/ClipVault/clipvault.db`
 - **Media:** PNG + JPEG thumbs under `%LOCALAPPDATA%/ClipVault/media/`; DB stores paths/size only; column `content_len` stores text length at insert (backfilled once). Capture/store max edge **2560**; list thumb max edge **160**.
 - **Clipboard polling:** arboard every 500ms, but **`GetClipboardSequenceNumber` skips all reads** when OS clipboard unchanged. **Text-first:** meaningful share text skips `get_image()`; otherwise only call it when `IsClipboardFormatAvailable` reports bitmap/DIB. Monitor **`try_send`s** to a bounded worker (`sync_channel(2)`); full queue drops the event (never blocks the poll thread). Large images are downscaled on the poll thread before enqueue. Image SHA-256 runs on the worker; poll only uses a cheap edge-sample fingerprint.
@@ -67,7 +71,7 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 │   │   └── PreviewPane.vue      # Paste primary CTA; icon-only delete; tags; trash
 │   └── SideBar.vue              # Categories; trash; tags; ContextMenu; ≤720px icon rail
 ├── SettingsWindow.vue           # Nav + section router; shortcut-recording window listener; ≤720px icon nav
-│   └── settings/Settings*.vue   # 11 sections (shortcuts/appearance/history/tags/privacy/stats/data/sync/system/help/about)
+│   └── settings/Settings*.vue   # 13 sections (shortcuts/appearance/features/source/history/tags/privacy/stats/data/sync/system/help/about)
 │                                #   shared store access via composables/useSettings.ts; primitives in styles/settings.css
 ├── WelcomeDialog.vue            # First-run welcome (BaseDialog); onboarding_completed
 ├── BatchBar.vue                 # Shared batch actions (floating + window)
@@ -78,26 +82,34 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 ├── ContextMenu.vue              # Fixed + clamp; Arrow/Enter/Esc; role=menu
 ├── WindowControls.vue
 ├── ToastHost.vue
-├── TrayMenuApp.vue              # Custom tray-menu window entry (Vite multi-page)
-├── composables/useVirtualList.ts · useColumnResize.ts · useSettings.ts · useBatchActions.ts · useClipboardHotkeys.ts · useToast.ts · useConfirm.ts · useBatchBarHeight.ts · pasteFocusLock.ts
-└── utils/mediaUrl.ts · sanitizeHtml.ts · trayMenuItems.ts
+├── CaptureStatus.vue
+├── TrayMenuApp.vue              # Custom tray-menu window entry (src root, Vite multi-page)
+├── composables/useVirtualList.ts · useColumnResize.ts · useSettings.ts · useFeature.ts · useBatchActions.ts · useClipboardHotkeys.ts · useClipboardEvents.ts · useToast.ts · useConfirm.ts · useBatchBarHeight.ts · useExpireCountdown.ts · usePreviewActions.ts · usePreviewFormatting.ts · useRecordActions.ts · useSidebarMenus.ts · useTrayTheme.ts · pasteFocusLock.ts
+├── utils/mediaUrl.ts · sanitizeHtml.ts · trayMenuItems.ts · highlightSearch.ts · clipboardColor.ts · recordFormatting.ts · themeColors.ts · sourceBadge.ts
+├── features/capabilities.ts     # FeatureId + DEFAULT_FEATURES (Rust: features.rs)
+└── stores/clipboard.ts          # Orchestrator; fragments: clipboardList.ts · clipboardRecordActions.ts · clipboardTagActions.ts · clipboardExpiry.ts · settings.ts
 ```
 
 ### Backend (Rust) Module Layout
-- `lib.rs` — setup, command registration, capture worker + **periodic cleanup thread** (~60s), `Settings` / `AutoTagRule` / `onboarding_completed`, `show_main_panel`, shortcuts, ignore-list helpers, `list_ipc_payload`
-- `commands.rs` — Tauri commands (CRUD, paste, settings, import/export, stats, mode switch, `tray_menu_action` / `get_tray_menu_state`)
+- `lib.rs` — `run()`: logging, dirs, DB init, plugin registration, `invoke_handler`, window events, resume safety-net
+- `setup.rs` — one-time setup closure (capture pipeline, autostart, shortcut, tray, corners, backdrop, cleanup thread)
+- `commands/` — Tauri commands: `mod.rs` (re-exports + `MAX_PAGE_SIZE`/`MAX_BATCH_IDS`), `records.rs`, `paste.rs`, `settings.rs`, `tags.rs`, `tray.rs`, `import_export.rs`, `webdav.rs`
 - `window.rs` — adaptive / remembered size, round corners, resize persistence. **Window mode** min width **760** (SideBar+List+Preview ≥740); floating stays compact.
-- `tray.rs` — tray icon (no native menu); right-click shows `tray-menu` window; left-click → `toggle_main_panel` (see Custom tray menu); **Windows power-resume** rebuilds tray + reloads webviews
-- `clipboard.rs` — monitor, paste-target HWND, write text/PNG/image, focus restore + Ctrl+V keys, suppress self-write (**do not advance `last_*` fingerprints while suppressed**); capture downscale ≤2560 edge
+- `tray.rs` — tray icon (no native menu); right-click shows `tray-menu` window; left-click → `toggle_main_panel`; **Windows power-resume** rebuilds tray + reloads webviews
+- `clipboard/` — `mod.rs` (monitor re-export), `monitor.rs` (poll loop, sequence/fp watermark, suppression), `capture` lives in `capture.rs` (worker threads + periodic cleanup ~60s), `paste.rs` (target HWND, focus restore + Ctrl+V), `write.rs` (text/PNG/image write), `fgwin.rs` (foreground window), `image.rs` (image fingerprint/downscale ≤2560 edge)
+- `capture.rs` — capture worker + **periodic cleanup thread** (~60s)
+- `panel.rs` — `show_main_panel` / `toggle_main_panel`, `apply_global_shortcut`, adaptive size, `list_ipc_payload`
 - `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
-- `db/` — SQLite layer: `mod.rs` (types, pool, constructor); `records.rs` (CRUD/search/trash/favorites/import/export); `schema.rs` (FTS5 management + schema version); `settings.rs` (settings + cleanup); `tags.rs` (tag CRUD + auto-tag); `stats.rs` (aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). `content_len` column. Export: `get_records_for_export`.
-- `detect.rs` — content type + sensitive detection + SHA-256 helpers. Link type via `security::is_openable_link` (whole-string URI after trim).
-- `webdav/` — WebDAV cloud sync (`client.rs` HTTP client; `sync.rs` pull/merge/push orchestration). Protocol `clipvault-webdav-v1`; manifest + JSONL bundle; media files synced alongside. Settings page: **Sync** (`SettingsSync.vue`). Default remote dir `ClipVaultSync`.
-- `security.rs` — media path must resolve under media root; export/import JSON path checks; import normalizes `content_type`; **openable-link whitelist** (`is_openable_link` / `link_scheme`: `http`/`https`/`ftp`/`magnet`/`ed2k`/`thunder`) gates link typing, `open_url`, and import keep-as-link; safe media rel-paths only
+- `detect.rs` — content type + sensitive detection + SHA-256 helpers. Link type via `security::is_openable_link`
+- `security.rs` — media path must resolve under media root; export/import JSON path checks; **openable-link whitelist** (`is_openable_link` / `link_scheme` + `LINK_PREFIXES`); DPAPI; safe media rel-paths only
+- `features.rs` — feature flags (tags/batch/sync/stats) + `require_feature`
+- `types.rs` — `ClipboardRecord` / `Settings` / `StatsData` / `TagInfo` / `SearchResult` / `RecordsPage` / `AutoTagRule` + serde defaults
+- `db/` — SQLite layer: `mod.rs` (constructor, read/write lock split); `types.rs` (`RECORD_COLS` / `RECORD_COLS_LIST`); `schema.rs` (FTS5 + schema version); `schema_tests.rs`; `records_query.rs` / `records_search.rs` / `records_write.rs` / `records_media.rs` / `records_import.rs`; `settings.rs` (settings + DPAPI); `tags.rs` (tag CRUD + auto-tag); `stats.rs` (aggregates). **WAL:** write `conn` + **read pool** (3× `query_only`). Export: `get_records_for_export`.
+- `webdav/` — WebDAV cloud sync (`client.rs` HTTP client; `sync.rs` pull/merge/push; `bundle.rs`; `media.rs`). Protocol `clipvault-webdav-v1`; manifest + JSONL bundle. Settings page: **Sync** (`SettingsSync.vue`). Default remote dir `ClipVaultSync`.
 - `main.rs` — `clipboard_lib::run()`
 
 ### State Management (Pinia)
-- `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection
+- `clipboardStore` — records, category×tag AND filters, trash exclusive, batch, pause, pagination (60 / `has_more`), keyset/`listFetchOffset`, `listSort` (session), `ensureRecordDetail` for HTML; `loadRecords`/search re-fetches detail for current selection. Orchestrated in `stores/clipboard.ts`, with per-domain fragments (`clipboardList.ts` list/pagination/search · `clipboardRecordActions.ts` mutations · `clipboardTagActions.ts` tags · `clipboardExpiry.ts` expiry/stats scheduler) that late-bind their shared `Ref`s through typed context objects.
 - `settingsStore` — debounced auto-save (200ms); theme / appearance; `features` capability flags (`tags`/`batch`/`sync`/`stats`, default all on); `enable_auto_tag` + `auto_tag_rules`; `onboarding_completed`; applies CSS vars + body classes (`blur-enabled`, `mode-window` / `mode-floating`) + `set_window_corner_radius`
 - **Feature capabilities:** `settings.features` + `src/features/capabilities.ts` / Rust `features.rs`. Off → hide UI, skip capture hooks, reject related commands, keep data. Tags off also disables tag filter/search (`include_tags` on list/search SQL + FTS column filter).
 

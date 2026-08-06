@@ -6,6 +6,4 @@ mod client;
 mod media;
 mod sync;
 
-pub use sync::{
-    webdav_pull, webdav_push, webdav_sync, webdav_test_connection, WebDavSyncResult,
-};
+pub use sync::{webdav_pull, webdav_push, webdav_sync, webdav_test_connection, WebDavSyncResult};

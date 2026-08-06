@@ -82,9 +82,8 @@ impl ClipboardDb {
         // reset every setting to defaults. Fail loud instead.
         let mut for_json = settings.clone();
         if !for_json.webdav_password.is_empty() {
-            for_json.webdav_password =
-                crate::security::encrypt_secret(&for_json.webdav_password)
-                    .map_err(SettingsError::Encryption)?;
+            for_json.webdav_password = crate::security::encrypt_secret(&for_json.webdav_password)
+                .map_err(SettingsError::Encryption)?;
         }
         let json = serde_json::to_string(&for_json)?;
         {
@@ -128,7 +127,8 @@ impl ClipboardDb {
             return Ok(());
         }
         let conn = self.conn.lock();
-        let cutoff = (chrono::Utc::now() - chrono::Duration::days(retention_days as i64)).to_rfc3339();
+        let cutoff =
+            (chrono::Utc::now() - chrono::Duration::days(retention_days as i64)).to_rfc3339();
         let ids: Vec<i64> = {
             let mut stmt = conn.prepare(
                 "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 1 AND updated_at < ?",

@@ -44,9 +44,11 @@ describe("settingsStore colorful preset themes", () => {
   });
 
   afterEach(() => {
+    // Clear call history + once-implementations only. mockReset() would wipe
+    // the setup.ts default (get_records → empty page), silently breaking any
+    // later list-returning store action.
     vi.mocked(listen).mockClear();
-    vi.mocked(invoke).mockReset();
-    vi.mocked(invoke).mockResolvedValue(undefined);
+    vi.mocked(invoke).mockClear();
   });
 
   it("applies the colorful theme class to <body>", () => {

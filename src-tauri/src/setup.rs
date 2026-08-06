@@ -24,7 +24,12 @@ pub(crate) fn setup(
     let app_handle = app.handle().clone();
 
     // ── Capture pipeline (start first to minimise the startup blind spot) ──
-    start_capture(&app_handle, db.clone(), monitor.clone(), capture_paused.clone());
+    start_capture(
+        &app_handle,
+        db.clone(),
+        monitor.clone(),
+        capture_paused.clone(),
+    );
 
     // ── Non-critical setup (autostart, shortcut, tray, theme, window) ──
 
@@ -69,10 +74,7 @@ pub(crate) fn setup(
     // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_shadow(false);
-        let radius = db
-            .get_settings()
-            .map(|s| s.panel_radius)
-            .unwrap_or(20);
+        let radius = db.get_settings().map(|s| s.panel_radius).unwrap_or(20);
         if let Err(e) = window::apply_window_round_corners(&window, radius) {
             warn!("Failed to apply window round corners: {}", e);
         }
@@ -89,16 +91,14 @@ pub(crate) fn setup(
     // Periodic cleanup off the capture path — stamp only after success.
     let db_cleanup = db.clone();
     let app_cleanup = app_handle.clone();
-    std::thread::spawn(move || {
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
-            match run_periodic_cleanup(&db_cleanup) {
-                Ok(ids) if !ids.is_empty() => {
-                    let _ = app_cleanup.emit("records-expired", &ids);
-                }
-                Ok(_) => {}
-                Err(e) => warn!("Periodic cleanup failed: {}", e),
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(CLEANUP_INTERVAL_SECS));
+        match run_periodic_cleanup(&db_cleanup) {
+            Ok(ids) if !ids.is_empty() => {
+                let _ = app_cleanup.emit("records-expired", &ids);
             }
+            Ok(_) => {}
+            Err(e) => warn!("Periodic cleanup failed: {}", e),
         }
     });
 

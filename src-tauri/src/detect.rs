@@ -33,10 +33,8 @@ static CODE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 // no longer matches, cutting false positives on ordinary numeric content.
 static VERIFICATION_CODE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b\d{4,8}\b").unwrap());
-static API_KEY_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap());
-static BANK_CARD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\b\d{16,19}\b").unwrap());
+static API_KEY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap());
+static BANK_CARD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{16,19}\b").unwrap());
 
 /// Length ceilings for the digit-based heuristics. Verification codes / card
 /// numbers arrive in short messages; a long document that merely contains
@@ -135,8 +133,15 @@ pub fn sha256_hash(content: &str) -> String {
 }
 
 pub fn sha256_hash_bytes(bytes: &[u8]) -> String {
+    sha256_hash_slices(&[bytes])
+}
+
+/// SHA-256 over multiple byte slices in one pass (used for combined payloads).
+pub fn sha256_hash_slices(parts: &[&[u8]]) -> String {
     let mut hasher = Sha256::new();
-    hasher.update(bytes);
+    for part in parts {
+        hasher.update(part);
+    }
     hex::encode(hasher.finalize())
 }
 
@@ -146,9 +151,15 @@ mod tests {
 
     #[test]
     fn links_are_detected() {
-        assert_eq!(detect_content_type("https://example.com"), ContentType::Link);
+        assert_eq!(
+            detect_content_type("https://example.com"),
+            ContentType::Link
+        );
         assert_eq!(detect_content_type("  ftp://host/file "), ContentType::Link);
-        assert_eq!(detect_content_type("HTTP://Example.COM/a"), ContentType::Link);
+        assert_eq!(
+            detect_content_type("HTTP://Example.COM/a"),
+            ContentType::Link
+        );
         assert_eq!(
             detect_content_type("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"),
             ContentType::Link
@@ -165,13 +176,22 @@ mod tests {
             detect_content_type("download this magnet:?xt=urn:btih:abc please"),
             ContentType::Text
         );
-        assert_eq!(detect_content_type("javascript:alert(1)"), ContentType::Text);
+        assert_eq!(
+            detect_content_type("javascript:alert(1)"),
+            ContentType::Text
+        );
     }
 
     #[test]
     fn file_paths_are_detected() {
-        assert_eq!(detect_content_type(r"C:\Users\a\report.pdf"), ContentType::File);
-        assert_eq!(detect_content_type("/usr/local/bin/tool.sh"), ContentType::File);
+        assert_eq!(
+            detect_content_type(r"C:\Users\a\report.pdf"),
+            ContentType::File
+        );
+        assert_eq!(
+            detect_content_type("/usr/local/bin/tool.sh"),
+            ContentType::File
+        );
     }
 
     #[test]
@@ -183,8 +203,14 @@ mod tests {
 
     #[test]
     fn plain_text_is_default() {
-        assert_eq!(detect_content_type("just a normal sentence"), ContentType::Text);
-        assert_eq!(detect_content_type("你好，这是一段普通文本"), ContentType::Text);
+        assert_eq!(
+            detect_content_type("just a normal sentence"),
+            ContentType::Text
+        );
+        assert_eq!(
+            detect_content_type("你好，这是一段普通文本"),
+            ContentType::Text
+        );
     }
 
     #[test]
@@ -195,7 +221,9 @@ mod tests {
 
     #[test]
     fn api_keys_are_sensitive() {
-        assert!(detect_sensitive("token sk-abcdefghijklmnopqrstuvwxyz012345"));
+        assert!(detect_sensitive(
+            "token sk-abcdefghijklmnopqrstuvwxyz012345"
+        ));
     }
 
     #[test]

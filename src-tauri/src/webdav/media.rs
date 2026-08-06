@@ -80,9 +80,7 @@ pub(super) async fn upload_media_if_needed(
                 let thumb_remote = join_remote(root, thumb_rel);
                 if thumb_abs.exists() && !client.exists(&thumb_remote).await? {
                     let bytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
-                    client
-                        .put_bytes(&thumb_remote, bytes, "image/jpeg")
-                        .await?;
+                    client.put_bytes(&thumb_remote, bytes, "image/jpeg").await?;
                     uploaded = true;
                     skipped = false;
                 }

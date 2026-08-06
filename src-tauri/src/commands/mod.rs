@@ -18,10 +18,12 @@ pub use tags::*;
 pub use tray::*;
 pub use webdav::*;
 
-use tauri::State;
 use crate::AppState;
+use tauri::State;
 
-pub(crate) fn settings_features(state: &State<'_, AppState>) -> Result<crate::FeatureFlags, String> {
+pub(crate) fn settings_features(
+    state: &State<'_, AppState>,
+) -> Result<crate::FeatureFlags, String> {
     let s = state.db.get_settings().map_err(|e| e.to_string())?;
     Ok(s.features.clone())
 }

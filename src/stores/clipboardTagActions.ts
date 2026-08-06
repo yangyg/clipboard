@@ -6,6 +6,7 @@ import type { Ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import type { ClipboardRecord, Tag } from "../types";
 import { featureEnabled } from "../composables/useFeature";
+import { detailUpsert } from "./clipboardList";
 
 export interface TagActionsCtx {
   tags: Ref<Tag[]>;
@@ -150,12 +151,7 @@ export function createTagActions(ctx: TagActionsCtx) {
       if (record) {
         ctx.patchRecord(recordId, { tags: [...tagNames] });
       }
-      const detail = ctx.recordDetails.value.get(recordId);
-      if (detail) {
-        const next = new Map(ctx.recordDetails.value);
-        next.set(recordId, { ...detail, tags: [...tagNames] });
-        ctx.recordDetails.value = next;
-      }
+      detailUpsert(ctx.recordDetails, recordId, { tags: [...tagNames] });
       scheduleLoadTags();
     } catch (e) {
       console.error("Failed to set record tags:", e);

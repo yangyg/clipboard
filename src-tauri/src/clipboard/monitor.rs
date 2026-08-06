@@ -33,13 +33,10 @@ pub struct CapturedText {
 impl CapturedText {
     /// Fingerprint for change detection (plain + html) — hash only, no huge string retention.
     pub fn fingerprint(&self) -> String {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(self.text.as_bytes());
-        if let Some(h) = &self.html {
-            hasher.update(h.as_bytes());
+        match &self.html {
+            Some(h) => crate::detect::sha256_hash_slices(&[self.text.as_bytes(), h.as_bytes()]),
+            None => crate::detect::sha256_hash_slices(&[self.text.as_bytes()]),
         }
-        hex::encode(hasher.finalize())
     }
 }
 
@@ -352,8 +349,7 @@ fn is_meaningful_share_text(text: &str) -> bool {
 /// True when the payload is essentially one URL with negligible other text.
 fn is_primarily_url(t: &str) -> bool {
     let lower = t.to_lowercase();
-    // Keep in sync with `security::LINK_PREFIXES` (mid-string find for share captions).
-    let start = ["https://", "http://", "ftp://", "magnet:", "ed2k://", "thunder://"]
+    let start = crate::security::LINK_PREFIXES
         .iter()
         .filter_map(|p| lower.find(p))
         .min();
@@ -412,15 +408,27 @@ mod tests {
 
     #[test]
     fn fingerprint_changes_with_text() {
-        let a = CapturedText { text: "hello".into(), html: None };
-        let b = CapturedText { text: "world".into(), html: None };
+        let a = CapturedText {
+            text: "hello".into(),
+            html: None,
+        };
+        let b = CapturedText {
+            text: "world".into(),
+            html: None,
+        };
         assert_ne!(a.fingerprint(), b.fingerprint());
     }
 
     #[test]
     fn fingerprint_changes_with_html() {
-        let a = CapturedText { text: "hello".into(), html: None };
-        let b = CapturedText { text: "hello".into(), html: Some("<p>hi</p>".into()) };
+        let a = CapturedText {
+            text: "hello".into(),
+            html: None,
+        };
+        let b = CapturedText {
+            text: "hello".into(),
+            html: Some("<p>hi</p>".into()),
+        };
         assert_ne!(a.fingerprint(), b.fingerprint());
     }
 
@@ -451,7 +459,9 @@ mod tests {
         assert!(is_meaningful_share_text("this is a meaningful caption"));
         assert!(!is_meaningful_share_text("   "));
         assert!(!is_meaningful_share_text("short"));
-        assert!(!is_meaningful_share_text("https://example.com/some/long/path"));
+        assert!(!is_meaningful_share_text(
+            "https://example.com/some/long/path"
+        ));
     }
 
     // --- is_capture_suppressed ---

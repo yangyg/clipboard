@@ -59,18 +59,12 @@ pub fn write_clipboard_text(_text: &str, _html: Option<&str>) -> bool {
 pub fn write_clipboard_png_file(path: &Path) -> bool {
     use std::fs;
     use std::ptr;
-    use windows_sys::Win32::Foundation::HGLOBAL;
     use windows_sys::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
     };
     use windows_sys::Win32::System::Memory::{
         GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE,
     };
-    // windows-sys 0.59 omits GlobalFree; still required to release failed allocations.
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn GlobalFree(hmem: HGLOBAL) -> HGLOBAL;
-    }
 
     let bytes = match fs::read(path) {
         Ok(b) if !b.is_empty() => b,
@@ -79,7 +73,11 @@ pub fn write_clipboard_png_file(path: &Path) -> bool {
             return false;
         }
         Err(e) => {
-            warn!("Failed to read PNG for clipboard ({}): {}", path.display(), e);
+            warn!(
+                "Failed to read PNG for clipboard ({}): {}",
+                path.display(),
+                e
+            );
             return false;
         }
     };
@@ -94,13 +92,16 @@ pub fn write_clipboard_png_file(path: &Path) -> bool {
 
         let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
         if hmem.is_null() {
-            warn!("GlobalAlloc failed for PNG clipboard ({} bytes)", bytes.len());
+            warn!(
+                "GlobalAlloc failed for PNG clipboard ({} bytes)",
+                bytes.len()
+            );
             return false;
         }
 
         let locked = GlobalLock(hmem);
         if locked.is_null() {
-            GlobalFree(hmem);
+            crate::ffi::GlobalFree(hmem);
             warn!("GlobalLock failed for PNG clipboard");
             return false;
         }
@@ -108,7 +109,7 @@ pub fn write_clipboard_png_file(path: &Path) -> bool {
         GlobalUnlock(hmem);
 
         if OpenClipboard(ptr::null_mut()) == 0 {
-            GlobalFree(hmem);
+            crate::ffi::GlobalFree(hmem);
             warn!("OpenClipboard failed for PNG paste");
             return false;
         }
@@ -116,7 +117,7 @@ pub fn write_clipboard_png_file(path: &Path) -> bool {
         let set = SetClipboardData(fmt, hmem);
         CloseClipboard();
         if set.is_null() {
-            GlobalFree(hmem);
+            crate::ffi::GlobalFree(hmem);
             warn!("SetClipboardData(PNG) failed");
             return false;
         }

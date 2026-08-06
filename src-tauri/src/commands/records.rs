@@ -2,7 +2,7 @@
 use tauri::State;
 
 use crate::security;
-use crate::{AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult, require_feature};
+use crate::{require_feature, AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult};
 
 use super::{cap_ids, settings_features, MAX_PAGE_SIZE};
 
@@ -87,7 +87,10 @@ pub async fn search_records(
 }
 
 #[tauri::command]
-pub async fn get_record(state: State<'_, AppState>, id: i64) -> Result<Option<ClipboardRecord>, String> {
+pub async fn get_record(
+    state: State<'_, AppState>,
+    id: i64,
+) -> Result<Option<ClipboardRecord>, String> {
     state.db.get_record(id).map_err(|e| e.to_string())
 }
 
@@ -157,9 +160,18 @@ pub async fn delete_record(state: State<'_, AppState>, id: i64) -> Result<(), St
 }
 
 #[tauri::command]
-pub async fn delete_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
-    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
-    state.db.trash_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
+pub async fn delete_records_batch(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    require_feature(
+        &(*state.db.get_settings().map_err(|e| e.to_string())?),
+        FeatureId::Batch,
+    )?;
+    state
+        .db
+        .trash_records_batch(&cap_ids(ids))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -168,20 +180,41 @@ pub async fn restore_record(state: State<'_, AppState>, id: i64) -> Result<(), S
 }
 
 #[tauri::command]
-pub async fn restore_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
-    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
-    state.db.restore_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
+pub async fn restore_records_batch(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    require_feature(
+        &(*state.db.get_settings().map_err(|e| e.to_string())?),
+        FeatureId::Batch,
+    )?;
+    state
+        .db
+        .restore_records_batch(&cap_ids(ids))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn permanently_delete_record(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.permanently_delete_record(id).map_err(|e| e.to_string())
+    state
+        .db
+        .permanently_delete_record(id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn permanently_delete_records_batch(state: State<'_, AppState>, ids: Vec<i64>) -> Result<usize, String> {
-    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
-    state.db.permanently_delete_records_batch(&cap_ids(ids)).map_err(|e| e.to_string())
+pub async fn permanently_delete_records_batch(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<usize, String> {
+    require_feature(
+        &(*state.db.get_settings().map_err(|e| e.to_string())?),
+        FeatureId::Batch,
+    )?;
+    state
+        .db
+        .permanently_delete_records_batch(&cap_ids(ids))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -210,7 +243,10 @@ pub async fn batch_set_favorite(
     ids: Vec<i64>,
     favorite: bool,
 ) -> Result<usize, String> {
-    require_feature(&(*state.db.get_settings().map_err(|e| e.to_string())?), FeatureId::Batch)?;
+    require_feature(
+        &(*state.db.get_settings().map_err(|e| e.to_string())?),
+        FeatureId::Batch,
+    )?;
     state
         .db
         .batch_set_favorite(&cap_ids(ids), favorite)

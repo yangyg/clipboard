@@ -1,5 +1,5 @@
 //! Record inserts, soft-delete/trash, restore, favorites, pin, alias.
-use rusqlite::{params, Result as SqlResult};
+use rusqlite::{params, Connection, Result as SqlResult};
 
 use super::{ClipboardDb, ContentType, ImageMeta, ALIAS_MAX_CHARS};
 use crate::ClipboardRecord;
@@ -53,7 +53,11 @@ impl ClipboardDb {
 
         let now = chrono::Utc::now().to_rfc3339();
         let auto_expire_at = if is_sensitive && sensitive_auto_expire_seconds > 0 {
-            Some((chrono::Utc::now() + chrono::Duration::seconds(sensitive_auto_expire_seconds as i64)).to_rfc3339())
+            Some(
+                (chrono::Utc::now()
+                    + chrono::Duration::seconds(sensitive_auto_expire_seconds as i64))
+                .to_rfc3339(),
+            )
         } else {
             None
         };
@@ -103,34 +107,7 @@ impl ClipboardDb {
             |row| row.get::<_, i64>(0),
         )? > max;
         if over_cap {
-            let active_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM records WHERE is_trashed = 0",
-                [],
-                |row| row.get(0),
-            )?;
-            let overflow_count = (active_count - max).max(0);
-            // Collect media of records about to be evicted by max_records
-            let overflow_ids: Vec<i64> = {
-                let mut stmt = conn.prepare(
-                    "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
-                     ORDER BY updated_at ASC LIMIT ?",
-                )?;
-                let ids = stmt
-                    .query_map([overflow_count], |row| row.get(0))?
-                    .collect::<SqlResult<Vec<_>>>()?;
-                ids
-            };
-            let overflow_media = self.fetch_media_paths_by_ids(&conn, &overflow_ids)?;
-
-            if !overflow_ids.is_empty() {
-                let placeholders = Self::id_placeholders(overflow_ids.len());
-                let params: Vec<&dyn rusqlite::types::ToSql> =
-                    overflow_ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
-                conn.execute(
-                    &format!("DELETE FROM records WHERE id IN ({placeholders})"),
-                    params.as_slice(),
-                )?;
-            }
+            let overflow_media = self.evict_over_limit(&conn, max_records)?;
             let record = self
                 .get_record_list_locked(&conn, id)?
                 .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
@@ -145,16 +122,51 @@ impl ClipboardDb {
         Ok((id, true, record))
     }
 
-    // === Delete / Trash ===
-
-    pub fn delete_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        let media = self.fetch_media_paths_by_ids(&conn, &[id])?;
-        conn.execute("DELETE FROM records WHERE id = ?", [id])?;
-        drop(conn);
-        self.purge_media_pairs(&media);
-        Ok(())
+    /// Evict oldest non-favorite / non-pinned active rows when `max_records` is
+    /// exceeded. Returns the media pairs of evicted rows; callers must release
+    /// the write lock before passing them to `purge_media_pairs` (which takes a
+    /// read lock). Shared by insert + import so capacity rules stay in sync.
+    pub(super) fn evict_over_limit(
+        &self,
+        conn: &Connection,
+        max_records: i32,
+    ) -> SqlResult<Vec<(Option<String>, Option<String>)>> {
+        let active_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM records WHERE is_trashed = 0",
+            [],
+            |row| row.get(0),
+        )?;
+        let max = max_records.max(1) as i64;
+        if active_count <= max {
+            return Ok(Vec::new());
+        }
+        let overflow_count = active_count - max;
+        let overflow_ids: Vec<i64> = {
+            let mut stmt = conn.prepare(
+                "SELECT id FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0
+                 ORDER BY updated_at ASC LIMIT ?",
+            )?;
+            let ids = stmt
+                .query_map([overflow_count], |row| row.get(0))?
+                .collect::<SqlResult<Vec<_>>>()?;
+            ids
+        };
+        let overflow_media = self.fetch_media_paths_by_ids(conn, &overflow_ids)?;
+        if !overflow_ids.is_empty() {
+            let placeholders = Self::id_placeholders(overflow_ids.len());
+            let params: Vec<&dyn rusqlite::types::ToSql> = overflow_ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            conn.execute(
+                &format!("DELETE FROM records WHERE id IN ({placeholders})"),
+                params.as_slice(),
+            )?;
+        }
+        Ok(overflow_media)
     }
+
+    // === Delete / Trash ===
 
     pub fn trash_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
@@ -175,8 +187,10 @@ impl ClipboardDb {
             "UPDATE records SET is_trashed = 1, is_pinned = 0 WHERE id IN ({})",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
         let count = conn.execute(&sql, params.as_slice())?;
         Ok(count)
     }
@@ -197,8 +211,10 @@ impl ClipboardDb {
             "UPDATE records SET is_trashed = 0 WHERE id IN ({})",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
         let count = conn.execute(&sql, params.as_slice())?;
         Ok(count)
     }
@@ -225,8 +241,10 @@ impl ClipboardDb {
             "DELETE FROM records WHERE is_trashed = 1 AND id IN ({})",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> =
-            ids.iter().map(|id| id as &dyn rusqlite::types::ToSql).collect();
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
         let count = conn.execute(&sql, params.as_slice())?;
         drop(conn);
         if count > 0 {
@@ -253,7 +271,11 @@ impl ClipboardDb {
 
     pub fn get_trash_count(&self) -> SqlResult<i64> {
         let conn = self.lock_read();
-        conn.query_row("SELECT COUNT(*) FROM records WHERE is_trashed = 1", [], |row| row.get(0))
+        conn.query_row(
+            "SELECT COUNT(*) FROM records WHERE is_trashed = 1",
+            [],
+            |row| row.get(0),
+        )
     }
 
     // === Favorites / Pin / Alias ===
@@ -287,9 +309,7 @@ impl ClipboardDb {
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();
         let n = conn.execute(
-            &format!(
-                "UPDATE records SET is_favorite = ? WHERE id IN ({placeholders})"
-            ),
+            &format!("UPDATE records SET is_favorite = ? WHERE id IN ({placeholders})"),
             param_refs.as_slice(),
         )?;
         Ok(n)
@@ -332,16 +352,18 @@ impl ClipboardDb {
     pub fn clear_non_favorite(&self) -> SqlResult<()> {
         let conn = self.conn.lock();
         let ids: Vec<i64> = {
-            let mut stmt = conn.prepare(
-                "SELECT id FROM records WHERE is_favorite = 0 AND is_trashed = 0",
-            )?;
+            let mut stmt =
+                conn.prepare("SELECT id FROM records WHERE is_favorite = 0 AND is_trashed = 0")?;
             let ids = stmt
                 .query_map([], |row| row.get(0))?
                 .collect::<SqlResult<Vec<_>>>()?;
             ids
         };
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
-        conn.execute("DELETE FROM records WHERE is_favorite = 0 AND is_trashed = 0", [])?;
+        conn.execute(
+            "DELETE FROM records WHERE is_favorite = 0 AND is_trashed = 0",
+            [],
+        )?;
         drop(conn);
         self.purge_media_pairs(&media);
         Ok(())

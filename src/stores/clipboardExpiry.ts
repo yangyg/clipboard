@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Ref } from "vue";
 import type { ClipboardRecord, StatsData } from "../types";
 import { featureEnabled } from "../composables/useFeature";
+import { detailRemove } from "./clipboardList";
 
 export interface ExpirySchedulerCtx {
   records: Ref<ClipboardRecord[]>;
@@ -34,11 +35,7 @@ export function createExpiryScheduler(ctx: ExpirySchedulerCtx) {
       const next = new Set([...ctx.selectedIds.value].filter((id) => !idSet.has(id)));
       ctx.selectedIds.value = next;
     }
-    if (ctx.recordDetails.value.size > 0) {
-      const details = new Map(ctx.recordDetails.value);
-      for (const id of idSet) details.delete(id);
-      ctx.recordDetails.value = details;
-    }
+    detailRemove(ctx.recordDetails, [...idSet]);
   }
 
   async function purgeExpiredRecords() {

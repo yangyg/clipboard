@@ -1,7 +1,6 @@
 //! Tray-menu window state + action commands.
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::clipboard;
 use crate::AppState;
 
 #[derive(serde::Serialize, Clone)]
@@ -55,24 +54,9 @@ pub async fn tray_menu_action(
             let _ = app.emit("capture-paused", next);
         }
         "settings" => {
-            if let Some(window) = app.get_webview_window("main") {
-                let our = window.hwnd().ok().map(|h| h.0 as isize);
-                clipboard::set_our_main_hwnd(our);
-                clipboard::remember_paste_target(our);
-                let _ = window.unminimize();
-                let _ = window.show();
-                // Focus while tray-menu still owns foreground.
-                if let Some(hwnd) = our {
-                    let _ = clipboard::focus_window(hwnd);
-                } else {
-                    let _ = window.set_focus();
-                }
-                hide_tray();
-                let _ = app.emit("toggle-panel", true);
-                let _ = app.emit("open-settings", ());
-            } else {
-                hide_tray();
-            }
+            crate::show_main_panel(&app);
+            hide_tray();
+            let _ = app.emit("open-settings", ());
         }
         "quit" => {
             hide_tray();

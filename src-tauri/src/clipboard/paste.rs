@@ -68,9 +68,7 @@ pub fn hwnd_belongs_to_us(
     our_hwnd: Option<isize>,
 ) -> bool {
     use windows_sys::Win32::System::Threading::GetCurrentProcessId;
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        GetParent, GetWindowThreadProcessId,
-    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{GetParent, GetWindowThreadProcessId};
 
     if hwnd.is_null() {
         return false;
@@ -190,14 +188,12 @@ pub fn foreground_is_pasteable(_our_hwnd: Option<isize>) -> bool {
 pub fn focus_window(hwnd_id: isize) -> bool {
     use windows_sys::Win32::Foundation::{FALSE, TRUE};
     use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
-    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-        keybd_event, KEYEVENTF_KEYUP, VK_MENU,
-    };
+    use windows_sys::Win32::UI::Input::KeyboardAndMouse::{keybd_event, KEYEVENTF_KEYUP, VK_MENU};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         AllowSetForegroundWindow, BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId,
-        IsIconic, IsWindow, SetForegroundWindow, ShowWindow, SwitchToThisWindow, SystemParametersInfoW,
-        SPI_GETFOREGROUNDLOCKTIMEOUT, SPI_SETFOREGROUNDLOCKTIMEOUT, SPIF_SENDCHANGE,
-        SPIF_UPDATEINIFILE, SW_RESTORE,
+        IsIconic, IsWindow, SetForegroundWindow, ShowWindow, SwitchToThisWindow,
+        SystemParametersInfoW, SPIF_SENDCHANGE, SPIF_UPDATEINIFILE, SPI_GETFOREGROUNDLOCKTIMEOUT,
+        SPI_SETFOREGROUNDLOCKTIMEOUT, SW_RESTORE,
     };
 
     unsafe {
@@ -283,8 +279,7 @@ pub fn focus_window(hwnd_id: isize) -> bool {
         } else {
             warn!(
                 "SetForegroundWindow failed for hwnd={:#x} (fg={:#x})",
-                hwnd as isize,
-                now as isize
+                hwnd as isize, now as isize
             );
         }
         ok

@@ -29,14 +29,9 @@
     "core:tray:default",
     "core:tray:allow-set-icon",
     "core:menu:default",
-    "clipboard-manager:allow-read-text",
-    "clipboard-manager:allow-write-text",
     "dialog:allow-open",
     "dialog:allow-save",
     "dialog:allow-message",
-    "dialog:allow-ask",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
-    "global-shortcut:allow-is-registered"
+    "dialog:allow-ask"
   ]
 }

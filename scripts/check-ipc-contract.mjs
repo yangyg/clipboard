@@ -2,9 +2,9 @@
 /**
  * IPC Contract Validation Script
  * 
- * Parses Rust command sources (src-tauri/src/commands/ directory, or the
- * legacy single commands.rs) to extract #[tauri::command] signatures,
- * then compares against TypeScript contract definition.
+ * Parses Rust command sources (src-tauri/src/commands/*.rs) to extract
+ * #[tauri::command] signatures, then compares against TypeScript contract
+ * definition.
  * 
  * Exit codes:
  *   0 - All commands match
@@ -12,14 +12,13 @@
  *   2 - Parse error
  */
 
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { readdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const COMMANDS_DIR = 'src-tauri/src/commands';
-const COMMANDS_RS = 'src-tauri/src/commands.rs';
 const CONTRACT_SPEC = 'src/stores/invoke-contract.spec.ts';
 
 // Tauri-injected params that don't appear in frontend invoke calls
@@ -228,20 +227,12 @@ function validateContracts(rustCommands, tsContracts) {
 function main() {
   try {
     const commandsDir = join(__dirname, '..', COMMANDS_DIR);
-    const commandsFile = join(__dirname, '..', COMMANDS_RS);
     const contractPath = join(__dirname, '..', CONTRACT_SPEC);
 
-    // Commands were split into src-tauri/src/commands/*.rs (module split);
-    // fall back to the legacy single file.
-    let rustContent;
-    if (existsSync(commandsDir)) {
-      const files = readdirSync(commandsDir).filter((f) => f.endsWith('.rs')).sort();
-      rustContent = files
-        .map((f) => readFileSync(join(commandsDir, f), 'utf-8'))
-        .join('\n');
-    } else {
-      rustContent = readFileSync(commandsFile, 'utf-8');
-    }
+    const files = readdirSync(commandsDir).filter((f) => f.endsWith('.rs')).sort();
+    const rustContent = files
+      .map((f) => readFileSync(join(commandsDir, f), 'utf-8'))
+      .join('\n');
     const tsContent = readFileSync(contractPath, 'utf-8');
     
     const rustCommands = parseRustCommands(rustContent);

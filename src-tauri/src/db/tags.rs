@@ -178,11 +178,9 @@ impl ClipboardDb {
     }
 
     fn ensure_auto_tag_conn(conn: &Connection, name: &str) -> SqlResult<i64> {
-        if let Ok(id) = conn.query_row(
-            "SELECT id FROM tags WHERE name = ?",
-            [name],
-            |row| row.get(0),
-        ) {
+        if let Ok(id) = conn.query_row("SELECT id FROM tags WHERE name = ?", [name], |row| {
+            row.get(0)
+        }) {
             return Ok(id);
         }
         conn.execute(
@@ -314,10 +312,7 @@ mod tests {
 
     #[test]
     fn nearest_snaps_off_palette_onto_wheel() {
-        let palette: Vec<_> = TAG_PALETTE
-            .iter()
-            .map(|c| normalize_color_key(c))
-            .collect();
+        let palette: Vec<_> = TAG_PALETTE.iter().map(|c| normalize_color_key(c)).collect();
         for legacy in ["#0078d4", "#60cdff", "#34d399", "#fbbf24", "#a78bfa"] {
             let snapped = normalize_color_key(nearest_palette_color(legacy));
             assert!(

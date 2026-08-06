@@ -3,6 +3,7 @@
  * SFC script stays under 200 lines.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { applyTheme } from "../utils/themeClass";
 
 export interface TrayMenuState {
   paused: boolean;
@@ -14,26 +15,7 @@ export interface TrayMenuState {
   language: string;
 }
 
-/** Every theme class `applyTheme` can attach to <body> (mirrors settings store). */
-const THEME_CLASSES = [
-  "light-theme",
-  "oled-theme",
-  "dracula-theme",
-  "nord-theme",
-  "sunset-theme",
-  "dracula-light-theme",
-  "nord-light-theme",
-  "sunset-light-theme",
-] as const;
-
 export function useTrayTheme() {
-  function applyTheme(theme: string) {
-    document.body.classList.remove(...THEME_CLASSES);
-    if (theme !== "dark") {
-      document.body.classList.add(`${theme}-theme`);
-    }
-  }
-
   function applyChrome(state: TrayMenuState) {
     applyTheme(state.theme);
     document.documentElement.style.setProperty(

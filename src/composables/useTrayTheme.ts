@@ -1,7 +1,6 @@
 /**
  * Tray-menu theme + DWM backdrop chrome, extracted from TrayMenuApp.vue so the
- * SFC script stays under 200 lines. Owns the OS-theme cache that a hidden
- * WebView2 cannot get reliably from matchMedia.
+ * SFC script stays under 200 lines.
  */
 import { invoke } from "@tauri-apps/api/core";
 
@@ -18,7 +17,6 @@ export interface TrayMenuState {
 /** Every theme class `applyTheme` can attach to <body> (mirrors settings store). */
 const THEME_CLASSES = [
   "light-theme",
-  "dark-theme",
   "oled-theme",
   "dracula-theme",
   "nord-theme",
@@ -29,20 +27,9 @@ const THEME_CLASSES = [
 ] as const;
 
 export function useTrayTheme() {
-  let currentTheme = "dark";
-  // Latest authoritative OS dark-mode signal from the native watcher. matchMedia
-  // can stay stale in this (mostly hidden) webview, so re-applying the "system"
-  // theme on menu open must prefer the cache; null = no signal yet.
-  let lastKnownSystemDark: boolean | null = null;
-
   function applyTheme(theme: string) {
-    currentTheme = theme;
     document.body.classList.remove(...THEME_CLASSES);
-    if (theme === "system") {
-      const prefersDark =
-        lastKnownSystemDark ?? window.matchMedia("(prefers-color-scheme: dark)").matches;
-      document.body.classList.add(prefersDark ? "dark-theme" : "light-theme");
-    } else if (theme !== "dark") {
+    if (theme !== "dark") {
       document.body.classList.add(`${theme}-theme`);
     }
   }
@@ -65,13 +52,5 @@ export function useTrayTheme() {
     });
   }
 
-  /** Native OS light/dark change from Rust; only relevant while following the system theme. */
-  function onSystemThemeChange(dark: boolean) {
-    lastKnownSystemDark = dark;
-    if (currentTheme !== "system") return;
-    document.body.classList.remove(...THEME_CLASSES);
-    document.body.classList.add(dark ? "dark-theme" : "light-theme");
-  }
-
-  return { applyChrome, onSystemThemeChange };
+  return { applyChrome };
 }

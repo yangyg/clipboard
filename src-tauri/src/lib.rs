@@ -8,7 +8,6 @@ mod media;
 mod panel;
 mod security;
 mod setup;
-mod system_theme;
 mod tray;
 mod types;
 mod webdav;
@@ -187,9 +186,6 @@ pub fn run() {
             // Windows sleep/wake is primarily handled by tray::start_resume_watcher.
             if let tauri::RunEvent::Resumed = event {
                 tray::recover_after_resume(app_handle);
-            }
-            if matches!(event, tauri::RunEvent::Exit) {
-                system_theme::stop_system_theme_watcher();
             }
         });
 }

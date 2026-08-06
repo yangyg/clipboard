@@ -63,7 +63,7 @@ function focusActiveItem() {
 
 watch(focusIndex, () => focusActiveItem());
 
-const { applyChrome, onSystemThemeChange } = useTrayTheme();
+const { applyChrome } = useTrayTheme();
 
 function applyPaused(paused: boolean) {
   items.value = buildTrayMenuItems(paused);
@@ -173,14 +173,6 @@ onMounted(async () => {
         console.error("get_tray_menu_state failed:", e);
       }
       await fitWindowToContent();
-    }),
-  );
-
-  // Native OS light/dark change from Rust (matchMedia is unreliable in a
-  // hidden WebView2); only relevant while following the system theme.
-  unlisteners.push(
-    await listen<boolean>("system-theme-changed", (event) => {
-      onSystemThemeChange(event.payload);
     }),
   );
 

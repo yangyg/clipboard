@@ -28,7 +28,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 See `docs/adr/` for immutable decision records:
 
 - **ADR-0001** — Virtual-list composable extraction & responsive grid column single-source-of-truth (JS, not CSS `auto-fill`).
-- **ADR-0002** — Native OS-theme watcher (invisible HWND + `WM_SETTINGCHANGE`) as the primary source for follow-system theme, because WebView2 matchMedia events are unreliable while hidden.
+- **ADR-0002** — Native OS-theme watcher (invisible HWND + `WM_SETTINGCHANGE`) as the primary source for follow-system theme, because WebView2 matchMedia events are unreliable while hidden. **Superseded by ADR-0004 (feature removed).**
 - **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor.
 
 ## Key Design Constraints

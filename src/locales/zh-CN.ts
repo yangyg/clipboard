@@ -340,7 +340,6 @@ export default {
       themeDark: '深色',
       themeLight: '浅色',
       themeOled: '深黑',
-      themeSystem: '跟随系统',
       themeDracula: '紫夜',
       themeNord: '冰蓝',
       themeSunset: '暖橙',

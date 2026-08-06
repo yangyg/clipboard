@@ -13,7 +13,7 @@ use crate::clipboard::ClipboardMonitor;
 use crate::commands;
 use crate::db::ClipboardDb;
 use crate::panel::apply_global_shortcut;
-use crate::{system_theme, tray, window};
+use crate::{tray, window};
 
 pub(crate) fn setup(
     app: &mut App,
@@ -65,11 +65,6 @@ pub(crate) fn setup(
     if let Some(tray_win) = app.get_webview_window("tray-menu") {
         tray::hook_tray_menu_cursor(&tray_win);
     }
-
-    // Native OS light/dark watcher → "system-theme-changed" events.
-    // WebView2 matchMedia change events are unreliable while the panel
-    // window is hidden, so "follow system" needs this native signal.
-    system_theme::start_system_theme_watcher(app.handle().clone());
 
     // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
     if let Some(window) = app.get_webview_window("main") {

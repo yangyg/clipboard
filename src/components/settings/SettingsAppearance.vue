@@ -122,7 +122,6 @@ const THEMES: ThemeOption[] = [
   { key: "dark", icon: "moon", labelKey: "settings.appearance.themeDark" },
   { key: "light", icon: "sun", labelKey: "settings.appearance.themeLight" },
   { key: "oled", icon: "circle", labelKey: "settings.appearance.themeOled" },
-  { key: "system", icon: "monitor", labelKey: "settings.appearance.themeSystem" },
   { key: "dracula", icon: "sparkles", labelKey: "settings.appearance.themeDracula" },
   { key: "nord", icon: "zap", labelKey: "settings.appearance.themeNord" },
   { key: "sunset", icon: "star", labelKey: "settings.appearance.themeSunset" },
@@ -204,7 +203,6 @@ const APP_MODES = [
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
 .theme-oled { background: #000000; }
-.theme-system { background: linear-gradient(135deg, var(--bg-surface) 50%, #ffffff 50%); }
 .theme-dracula { background: linear-gradient(135deg, #282a36, #1e1f29); }
 .theme-nord { background: linear-gradient(135deg, #2e3440, #20252e); }
 .theme-sunset { background: linear-gradient(135deg, #29201a, #1c1512); }

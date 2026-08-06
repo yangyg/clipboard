@@ -1,7 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES } from "../types";
 import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
@@ -56,6 +55,9 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
     ...DEFAULT_SETTINGS,
     ...(raw ?? {}),
     features: mergeFeatures(raw?.features),
+    // Legacy "system" theme value (removed): collapse to the dark default so
+    // existing users don't end up with an unselected theme card.
+    theme: (raw?.theme as string | undefined) === "system" ? "dark" : raw?.theme ?? DEFAULT_SETTINGS.theme,
     auto_tag_rules: (raw?.auto_tag_rules ?? DEFAULT_SETTINGS.auto_tag_rules).map((r) => ({
       ...r,
       keywords: [...r.keywords],
@@ -70,7 +72,6 @@ const SAVE_DEBOUNCE_MS = 200;
  *  on re-apply keeps the tree clean when switching between any two themes. */
 const THEME_CLASSES = [
   "light-theme",
-  "dark-theme",
   "oled-theme",
   "dracula-theme",
   "nord-theme",
@@ -132,65 +133,12 @@ export const useSettingsStore = defineStore("settings", () => {
     }, SAVE_DEBOUNCE_MS);
   }
 
-  // Tracks the active prefers-color-scheme listener so "system" theme follows
-  // OS changes, without ever registering twice or leaking into fixed themes.
-  let systemThemeMql: MediaQueryList | null = null;
-  let systemThemeHandler: ((e: MediaQueryListEvent) => void) | null = null;
-  // Latest authoritative OS dark-mode signal (native watcher event, with the
-  // matchMedia change event as a secondary source). matchMedia can stay stale
-  // in a hidden WebView2, so any re-application of the "system" theme (e.g.
-  // loadSettings after a WebDAV sync) must prefer this cache over a fresh
-  // matchMedia read; `null` means no signal yet (fall back to matchMedia,
-  // which is fresh at webview creation).
-  let lastKnownSystemDark: boolean | null = null;
-
-  function stopSystemThemeWatch() {
-    if (systemThemeMql && systemThemeHandler) {
-      systemThemeMql.removeEventListener("change", systemThemeHandler);
-    }
-    systemThemeMql = null;
-    systemThemeHandler = null;
-  }
-
-  function applySystemThemeClass(prefersDark: boolean) {
-    document.body.classList.remove(...THEME_CLASSES);
-    document.body.classList.add(prefersDark ? "dark-theme" : "light-theme");
-  }
-
   function applyTheme(theme: Settings["theme"]) {
-    // Detach any previous OS-theme listener: fixed themes must not be
-    // overridden by system changes, and re-entry must not double-register.
-    stopSystemThemeWatch();
     document.body.classList.remove(...THEME_CLASSES);
-    if (theme === "system") {
-      const mql = window.matchMedia("(prefers-color-scheme: dark)");
-      applySystemThemeClass(lastKnownSystemDark ?? mql.matches);
-      systemThemeHandler = (e: MediaQueryListEvent) => {
-        // Cache first (mirrors the native-event handler): even if this fires
-        // while a fixed theme is active, the cache must stay fresh so a later
-        // switch back to "system" starts from the latest OS state.
-        lastKnownSystemDark = e.matches;
-        if (settings.value.theme !== "system") return;
-        applySystemThemeClass(e.matches);
-      };
-      systemThemeMql = mql;
-      mql.addEventListener("change", systemThemeHandler);
-    } else if (theme !== "dark") {
+    if (theme !== "dark") {
       document.body.classList.add(`${theme}-theme`);
     }
   }
-
-  // Authoritative OS theme signal from the Rust backend (WM_SETTINGCHANGE +
-  // registry). WebView2 often does not fire matchMedia change events while
-  // the panel window is hidden, so this is the primary "follow system"
-  // driver on Windows; the matchMedia listener above is only a fallback.
-  void listen<boolean>("system-theme-changed", (event) => {
-    // Always refresh the cache — even under a fixed theme — so switching
-    // back to "system" later starts from the latest OS state.
-    lastKnownSystemDark = event.payload;
-    if (settings.value.theme !== "system") return;
-    applySystemThemeClass(event.payload);
-  }).catch((e) => console.error("Failed to listen for system-theme-changed:", e));
 
   const lastAppliedRadius = ref<number | null>(null);
   const lastAppliedBlur = ref<boolean | null>(null);

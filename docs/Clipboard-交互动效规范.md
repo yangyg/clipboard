@@ -119,7 +119,7 @@
 
 ## 附录：Token 复用
 
-Clipboard **默认暗色主题**（另有浅色 / OLED / 跟随系统），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。
+Clipboard **默认暗色主题**（另有浅色 / OLED / 六款彩色预设），颜色走 [`src/styles/main.css`](../src/styles/main.css) 的 CSS 变量（`--accent` Fluent 蓝 `#0078d4`、`--type-*`、`--pin`、`--bg-*`、`--text-*` 等）。
 
 动效时长与缓动对齐现有 token（本规范文中的 `duration-*` / `ease-*` 按此映射，不另立一套）：
 

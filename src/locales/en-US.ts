@@ -340,7 +340,6 @@ export default {
       themeDark: 'Dark',
       themeLight: 'Light',
       themeOled: 'OLED',
-      themeSystem: 'System',
       themeDracula: 'Violet Night',
       themeNord: 'Ice Blue',
       themeSunset: 'Warm Sunset',

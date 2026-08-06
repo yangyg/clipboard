@@ -74,6 +74,7 @@ import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useColumnResize } from "../composables/useColumnResize";
+import { isFilterTab } from "../utils/filterDefinitions";
 import type { Tag } from "../types";
 
 const clipboardStore = useClipboardStore();
@@ -150,17 +151,8 @@ function onCategoryChange(key: string) {
   if (clipboardStore.trashFilter) {
     clipboardStore.setTrashFilter(false);
   }
-  const mapping: Record<string, "all" | "text" | "code" | "link" | "image" | "file" | "favorites"> = {
-    all: "all",
-    text: "text",
-    image: "image",
-    file: "file",
-    link: "link",
-    code: "code",
-    favorites: "favorites",
-  };
   // setFilter keeps activeTag (AND combine)
-  clipboardStore.setFilter(mapping[key] ?? "all");
+  clipboardStore.setFilter(isFilterTab(key) ? key : "all");
 }
 
 function onTagChange(tagName: string | null) {

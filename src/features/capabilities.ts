@@ -3,6 +3,17 @@ import type { FeatureFlags } from "../types";
 /** Keep in sync with Rust `FeatureId` / `FeatureFlags`. */
 export type FeatureId = keyof FeatureFlags;
 
+export const FEATURE_DEFINITIONS = [
+  { id: "tags", labelKey: "settings.features.tags", descKey: "settings.features.tagsDesc" },
+  { id: "batch", labelKey: "settings.features.batch", descKey: "settings.features.batchDesc" },
+  { id: "sync", labelKey: "settings.features.sync", descKey: "settings.features.syncDesc" },
+  { id: "stats", labelKey: "settings.features.stats", descKey: "settings.features.statsDesc" },
+] as const satisfies ReadonlyArray<{
+  id: FeatureId;
+  labelKey: string;
+  descKey: string;
+}>;
+
 export const DEFAULT_FEATURES: FeatureFlags = {
   tags: true,
   batch: true,

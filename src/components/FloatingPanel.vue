@@ -88,7 +88,7 @@ import BatchBar from "./BatchBar.vue";
 import AppIcon from "./icons/AppIcon.vue";
 import { ref } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
-import type { FilterTab } from "../stores/clipboard";
+import { CONTENT_FILTER_DEFINITIONS } from "../utils/filterDefinitions";
 import { useClipboardHotkeys } from "../composables/useClipboardHotkeys";
 import { useBatchActions } from "../composables/useBatchActions";
 import { useBatchBarHeight } from "../composables/useBatchBarHeight";
@@ -121,14 +121,7 @@ useClipboardHotkeys({
   allowCloseOnEscape: true,
 });
 
-const FILTER_TABS: { key: FilterTab; labelKey: string }[] = [
-  { key: "all", labelKey: "filter.all" },
-  { key: "text", labelKey: "filter.text" },
-  { key: "code", labelKey: "filter.code" },
-  { key: "link", labelKey: "filter.link" },
-  { key: "image", labelKey: "filter.image" },
-  { key: "file", labelKey: "filter.file" },
-];
+const FILTER_TABS = CONTENT_FILTER_DEFINITIONS;
 
 async function toggleTrash() {
   const next = !clipboardStore.trashFilter;

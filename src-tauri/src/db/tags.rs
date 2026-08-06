@@ -314,8 +314,20 @@ impl ClipboardDb {
     }
 
     pub fn delete_tag(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        conn.execute("DELETE FROM tags WHERE id = ?", [id])?;
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let record_ids: Vec<i64> = {
+            let mut stmt = tx.prepare("SELECT record_id FROM record_tags WHERE tag_id = ?")?;
+            let ids = stmt
+                .query_map([id], |row| row.get(0))?
+                .collect::<SqlResult<Vec<_>>>()?;
+            ids
+        };
+        tx.execute("DELETE FROM tags WHERE id = ?", [id])?;
+        for record_id in record_ids {
+            Self::refresh_record_fts(&tx, record_id)?;
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -515,6 +527,72 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(5));
         db.update_tag(tag_id, "VIP", "#ef4444").unwrap();
         assert_ne!(read_updated(), after_set);
+
+        for name in ["test.db", "test.db-wal", "test.db-shm"] {
+            let _ = std::fs::remove_file(dir.join(name));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn deleting_tag_removes_it_from_full_text_search() {
+        use crate::ClipboardDb;
+        use crate::ClipboardRecord;
+
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_tag_fts_delete_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let record = ClipboardRecord {
+            id: 0,
+            content: "searchable content".into(),
+            content_type: "text".into(),
+            source_app: String::new(),
+            source_window: String::new(),
+            source_name: String::new(),
+            hash: "hash-fts-delete".into(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive: false,
+            is_trashed: false,
+            auto_expire_at: None,
+            created_at: now.clone(),
+            updated_at: now,
+            tags: vec![],
+            content_html: None,
+            media_path: None,
+            thumb_path: None,
+            width: None,
+            height: None,
+            media_abs: None,
+            thumb_abs: None,
+            content_len: None,
+            alias: String::new(),
+        };
+        db.import_records_with_merge(&[record], 100).unwrap();
+        let record_id = db.get_records_for_export(10, 0).unwrap()[0].id;
+        let tag_id = db.create_tag("stale-search-tag", "#ef4444").unwrap();
+        db.add_tag_to_record(record_id, tag_id).unwrap();
+
+        assert_eq!(
+            db.search_records("stale-search-tag", 10, 0, None, false, None, None, true)
+                .unwrap()
+                .len(),
+            1
+        );
+        db.delete_tag(tag_id).unwrap();
+        assert!(db
+            .search_records("stale-search-tag", 10, 0, None, false, None, None, true)
+            .unwrap()
+            .is_empty());
 
         for name in ["test.db", "test.db-wal", "test.db-shm"] {
             let _ = std::fs::remove_file(dir.join(name));

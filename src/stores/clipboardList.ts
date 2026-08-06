@@ -11,7 +11,8 @@ import type { Ref } from "vue";
 import type { ClipboardRecord, RecordsPage, SearchResult } from "../types";
 import { featureEnabled } from "../composables/useFeature";
 
-export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
+export type { FilterTab } from "../types";
+import type { FilterTab } from "../types";
 export type ListSort =
   | "updated_desc"
   | "updated_asc"

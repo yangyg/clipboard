@@ -149,11 +149,7 @@ const visibleSections = computed(() =>
 const visibleGroups = computed(() =>
   GROUPS.map((group) => ({
     ...group,
-    sections: ALL_SECTIONS.filter(
-      (s) =>
-        s.group === group.key &&
-        (!s.feature || isFeatureEnabled(settings.features, s.feature)),
-    ),
+    sections: visibleSections.value.filter((s) => s.group === group.key),
   })).filter((group) => group.sections.length > 0),
 );
 

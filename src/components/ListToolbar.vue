@@ -61,6 +61,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { FILTER_DEFINITIONS } from "../utils/filterDefinitions";
 import { useClipboardStore, LIST_SORT_OPTIONS, type ListSort } from "../stores/clipboard";
 import { useConfirm } from "../composables/useConfirm";
 import { useToast } from "../composables/useToast";
@@ -84,16 +85,10 @@ const { toast } = useToast();
 const { toggleBatchMode } = useBatchActions();
 const { t } = useI18n();
 
-const CATEGORY_TITLE_KEYS: Record<string, string> = {
-  all: "category.all",
-  text: "category.text",
-  image: "category.image",
-  file: "category.file",
-  link: "category.link",
-  code: "category.code",
-  favorites: "category.favorites",
-  trash: "category.trash",
-};
+const CATEGORY_TITLE_KEYS: Record<string, string> = Object.fromEntries([
+  ...FILTER_DEFINITIONS.map((definition) => [definition.key, definition.labelKey]),
+  ["trash", "category.trash"],
+]);
 
 const categoryTitle = computed(() => {
   if (clipboardStore.trashFilter) return t('category.trash');

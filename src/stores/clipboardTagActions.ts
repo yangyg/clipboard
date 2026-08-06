@@ -62,6 +62,7 @@ export function createTagActions(ctx: TagActionsCtx) {
       scheduleLoadTags();
     } catch (e) {
       console.error("Failed to create tag:", e);
+      throw e;
     }
   }
 
@@ -125,6 +126,7 @@ export function createTagActions(ctx: TagActionsCtx) {
       scheduleLoadTags();
     } catch (e) {
       console.error("Failed to add tag to record:", e);
+      throw e;
     }
   }
 
@@ -140,6 +142,7 @@ export function createTagActions(ctx: TagActionsCtx) {
       scheduleLoadTags();
     } catch (e) {
       console.error("Failed to remove tag from record:", e);
+      throw e;
     }
   }
 

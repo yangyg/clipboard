@@ -2,14 +2,16 @@ import { createI18n } from 'vue-i18n'
 import zhCN from './zh-CN'
 import enUS from './en-US'
 
+const messages = {
+  'zh-CN': zhCN,
+  'en-US': enUS,
+} satisfies Record<string, typeof zhCN>
+
 export const i18n = createI18n({
   legacy: false,
   locale: 'zh-CN',
   fallbackLocale: 'en-US',
-  messages: {
-    'zh-CN': zhCN,
-    'en-US': enUS,
-  },
+  messages,
 })
 
 /** Resolve a language setting ('system' | 'zh-CN' | 'en-US') to a concrete locale. */

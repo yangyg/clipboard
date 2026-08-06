@@ -40,6 +40,7 @@ console.log('Schema compatibility check\n');
 const src = readFileSync(DB_MOD, 'utf-8');
 const schemaSrc = readFileSync(DB_SCHEMA, 'utf-8');
 const typesSrc = readFileSync(DB_TYPES, 'utf-8');
+const schemaSources = `${src}\n${schemaSrc}`;
 
 // ── 1. SCHEMA_VERSION ──────────────────────────────────────────────
 const versionMatch = schemaSrc.match(/const\s+SCHEMA_VERSION\s*:\s*i64\s*=\s*(\d+)/);
@@ -55,7 +56,7 @@ if (!versionMatch) {
 }
 
 // ── 2. Extract CREATE TABLE records columns ────────────────────────
-const createTableMatch = src.match(
+const createTableMatch = schemaSources.match(
   /CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+records\s*\(([\s\S]*?)\);/
 );
 if (!createTableMatch) {
@@ -189,7 +190,7 @@ const expectedIndexes = [
 ];
 
 for (const idx of expectedIndexes) {
-  if (!src.includes(idx)) {
+if (!schemaSources.includes(idx)) {
     fail(`Expected index '${idx}' not found in source`);
   }
 }

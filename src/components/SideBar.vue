@@ -175,6 +175,7 @@ import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
 import { useI18n } from "vue-i18n";
 import { useSidebarMenus } from "../composables/useSidebarMenus";
+import { FILTER_DEFINITIONS } from "../utils/filterDefinitions";
 
 const tagsEnabled = useFeature("tags");
 
@@ -230,15 +231,14 @@ const tagMenuItems = computed<ContextMenuItem[]>(() => [
   { id: "delete", label: t('sidebar.deleteTag'), icon: "trash", danger: true, separatorBefore: true },
 ]);
 
-const categoryItems = computed(() => [
-  { key: "all", icon: "clipboard" as AppIconName, label: t('category.all'), count: clipboardStore.filterCounts.all },
-  { key: "text", icon: "type" as AppIconName, label: t('category.text'), count: clipboardStore.filterCounts.text, color: "var(--type-text)" },
-  { key: "image", icon: "image" as AppIconName, label: t('category.image'), count: clipboardStore.filterCounts.image, color: "var(--type-image)" },
-  { key: "file", icon: "file" as AppIconName, label: t('category.file'), count: clipboardStore.filterCounts.file, color: "var(--type-file)" },
-  { key: "link", icon: "link" as AppIconName, label: t('category.link'), count: clipboardStore.filterCounts.link, color: "var(--type-link)" },
-  { key: "code", icon: "code" as AppIconName, label: t('category.code'), count: clipboardStore.filterCounts.code, color: "var(--type-code)" },
-  { key: "favorites", icon: "star" as AppIconName, label: t('category.favorites'), count: clipboardStore.filterCounts.favorites, color: "var(--warning)" },
-]);
+const categoryItems = computed(() =>
+  FILTER_DEFINITIONS.map((definition) => ({
+    ...definition,
+    icon: definition.icon as AppIconName,
+    label: t(definition.labelKey),
+    count: clipboardStore.filterCounts[definition.key],
+  })),
+);
 
 function selectCategory(key: string) {
   emit("update:activeCategory", key);

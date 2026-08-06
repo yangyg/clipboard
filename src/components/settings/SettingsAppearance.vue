@@ -153,7 +153,7 @@ import {
 } from "../../utils/fontPresets";
 import { useToast } from "../../composables/useToast";
 import { i18n } from "../../locales";
-import type { Settings } from "../../types";
+import { THEME_DEFINITIONS } from "../../utils/themeRegistry";
 import AppIcon, { type AppIconName } from "../icons/AppIcon.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
 
@@ -212,23 +212,8 @@ function onSystemFontChange(e: Event) {
 }
 
 
-type ThemeOption = { key: Settings["theme"]; icon: AppIconName; labelKey: string };
-
-const THEMES: ThemeOption[] = [
-  { key: "dark", icon: "moon", labelKey: "settings.appearance.themeDark" },
-  { key: "light", icon: "sun", labelKey: "settings.appearance.themeLight" },
-  { key: "oled", icon: "circle", labelKey: "settings.appearance.themeOled" },
-  { key: "dracula", icon: "sparkles", labelKey: "settings.appearance.themeDracula" },
-  { key: "nord", icon: "zap", labelKey: "settings.appearance.themeNord" },
-  { key: "sunset", icon: "star", labelKey: "settings.appearance.themeSunset" },
-  { key: "dracula-light", icon: "sparkles", labelKey: "settings.appearance.themeDraculaLight" },
-  { key: "nord-light", icon: "zap", labelKey: "settings.appearance.themeNordLight" },
-  { key: "sunset-light", icon: "star", labelKey: "settings.appearance.themeSunsetLight" },
-  { key: "handdrawn", icon: "edit", labelKey: "settings.appearance.themeHanddrawn" },
-  { key: "handdrawn-light", icon: "palette", labelKey: "settings.appearance.themeHanddrawnLight" },
-  { key: "mono", icon: "circle", labelKey: "settings.appearance.themeMono" },
-  { key: "mono-light", icon: "circle", labelKey: "settings.appearance.themeMonoLight" },
-];
+type ThemeOption = (typeof THEME_DEFINITIONS)[number];
+const THEMES = THEME_DEFINITIONS;
 
 function focusTheme(items: readonly ThemeOption[], index: number) {
   const len = items.length;

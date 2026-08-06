@@ -18,6 +18,8 @@ mod sync_history;
 mod tags;
 mod types;
 
+pub use records_import::{validate_import_records, ExportCursor};
+
 // Schema compatibility tests live in `schema_tests.rs` (test-only module) to
 // keep schema.rs under the 500-line cap.
 #[cfg(test)]
@@ -63,115 +65,7 @@ impl ClipboardDb {
         let conn = Connection::open(db_path)?;
         Self::configure_connection(&conn, false)?;
 
-        conn.execute_batch(
-            r#"
-            CREATE TABLE IF NOT EXISTS records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT NOT NULL,
-                content_type TEXT NOT NULL DEFAULT 'text',
-                source_app TEXT NOT NULL DEFAULT '',
-                source_window TEXT NOT NULL DEFAULT '',
-                hash TEXT NOT NULL,
-                copy_count INTEGER NOT NULL DEFAULT 0,
-                is_favorite INTEGER NOT NULL DEFAULT 0,
-                is_pinned INTEGER NOT NULL DEFAULT 0,
-                is_sensitive INTEGER NOT NULL DEFAULT 0,
-                is_trashed INTEGER NOT NULL DEFAULT 0,
-                auto_expire_at TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                media_path TEXT,
-                thumb_path TEXT,
-                width INTEGER,
-                height INTEGER,
-                content_html TEXT,
-                content_len INTEGER NOT NULL DEFAULT 0,
-                alias TEXT NOT NULL DEFAULT '',
-                source_name TEXT NOT NULL DEFAULT ''
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_records_hash ON records(hash);
-            CREATE INDEX IF NOT EXISTS idx_records_content_type ON records(content_type);
-            CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);
-            CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
-                ON records(is_trashed, updated_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
-                ON records(is_trashed, is_pinned, updated_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_records_hash_active
-                ON records(hash, is_trashed);
-            CREATE INDEX IF NOT EXISTS idx_records_auto_expire
-                ON records(auto_expire_at) WHERE auto_expire_at IS NOT NULL;"#,
-        )?;
-
-        // Schema-aware migrations: only ALTER for columns that are genuinely
-        // missing (checked via PRAGMA table_info). The previous
-        // `ALTER TABLE ... .ok()` swallowed every failure silently — including
-        // real ones — leaving the schema half-migrated. CREATE INDEX IF NOT
-        // EXISTS is idempotent and errors propagate.
-        Self::migrate_schema(&conn)?;
-
-        conn.execute_batch(
-            r#"
-            CREATE TABLE IF NOT EXISTS tags (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                color TEXT NOT NULL DEFAULT '#6366f1',
-                is_auto INTEGER NOT NULL DEFAULT 0
-            );
-
-            CREATE TABLE IF NOT EXISTS record_tags (
-                record_id INTEGER NOT NULL,
-                tag_id INTEGER NOT NULL,
-                PRIMARY KEY (record_id, tag_id),
-                FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE,
-                FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
-            );
-
-            -- tag_id lookups (delete_tag, auto-tag refresh) scan record_tags.
-            CREATE INDEX IF NOT EXISTS idx_record_tags_tag_id ON record_tags(tag_id);
-
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            );
-
-            -- Search-history autocomplete (v3). Local-only: never part of
-            -- export/import or WebDAV sync. One row per distinct query.
-            CREATE TABLE IF NOT EXISTS search_history (
-                query TEXT PRIMARY KEY,
-                search_count INTEGER NOT NULL DEFAULT 1,
-                last_searched_at TEXT NOT NULL
-            );
-
-            -- WebDAV sync operation log. Local-only (never synced, avoids recursion).
-            -- Records every pull/push/sync with its outcome + counters.
-            CREATE TABLE IF NOT EXISTS sync_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                synced_at TEXT NOT NULL,
-                action TEXT NOT NULL,
-                success INTEGER NOT NULL,
-                pulled INTEGER NOT NULL DEFAULT 0,
-                pushed INTEGER NOT NULL DEFAULT 0,
-                merged INTEGER NOT NULL DEFAULT 0,
-                tags_pulled INTEGER NOT NULL DEFAULT 0,
-                tags_pushed INTEGER NOT NULL DEFAULT 0,
-                media_downloaded INTEGER NOT NULL DEFAULT 0,
-                media_uploaded INTEGER NOT NULL DEFAULT 0,
-                media_skipped INTEGER NOT NULL DEFAULT 0,
-                error TEXT
-            );
-            CREATE INDEX IF NOT EXISTS idx_sync_history_synced_at
-                ON sync_history(synced_at DESC);
-
-            INSERT OR IGNORE INTO tags (name, color, is_auto) VALUES
-                ('部署', '#22c55e', 1),
-                ('前端', '#6366f1', 1),
-                ('链接', '#eab308', 1),
-                ('重要', '#ef4444', 0),
-                ('设计', '#a855f7', 0);
-            "#,
-        )?;
+        Self::initialize_schema(&conn)?;
 
         // One-time backfill of content_len (avoids length(content) on every list query).
         let backfilled: Option<String> = conn

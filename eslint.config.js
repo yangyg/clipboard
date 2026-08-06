@@ -12,7 +12,6 @@ export default tseslint.config(
       "src-tauri/**",
       "graphify-out/**",
       ".qoder/**",
-      "prototype/**",
       "public/**",
     ],
   },

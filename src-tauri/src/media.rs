@@ -162,9 +162,22 @@ pub fn delete_media_files(app_data_dir: &Path, media_path: Option<&str>, thumb_p
     for rel in [media_path, thumb_path].into_iter().flatten() {
         let path = absolute(app_data_dir, rel);
         if path.exists() {
-            removed = removed.saturating_add(file_len(&path));
-            if let Err(e) = fs::remove_file(&path) {
+            let size = file_len(&path);
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("media");
+            let pending = path.with_file_name(format!(".{name}.pending-delete"));
+            // Quarantine before deleting. If a concurrent capture recreates the
+            // canonical path after the reference check, it cannot be removed.
+            if let Err(e) = fs::rename(&path, &pending) {
+                warn!("Failed to quarantine media file {:?}: {}", path, e);
+                continue;
+            }
+            if let Err(e) = fs::remove_file(&pending) {
                 warn!("Failed to delete media file {:?}: {}", path, e);
+            } else {
+                removed = removed.saturating_add(size);
             }
         }
     }
@@ -256,4 +269,30 @@ pub fn load_image_rgba(
     let w = rgba.width() as usize;
     let h = rgba.height() as usize;
     Ok((rgba.into_raw(), w, h))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::delete_media_files;
+
+    #[test]
+    fn delete_media_files_removes_the_requested_files() {
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_media_delete_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("media/thumbs")).unwrap();
+        std::fs::write(dir.join("media/hash.png"), b"png").unwrap();
+        std::fs::write(dir.join("media/thumbs/hash.jpg"), b"jpg").unwrap();
+
+        delete_media_files(&dir, Some("media/hash.png"), Some("media/thumbs/hash.jpg"));
+
+        assert!(!dir.join("media/hash.png").exists());
+        assert!(!dir.join("media/thumbs/hash.jpg").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

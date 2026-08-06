@@ -20,6 +20,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const COMMANDS_DIR = 'src-tauri/src/commands';
 const CONTRACT_SPEC = 'src/stores/invoke-contract.spec.ts';
+const FRONTEND_DIR = 'src';
 
 // Tauri-injected params that don't appear in frontend invoke calls
 const TAURI_INTERNAL_PARAMS = new Set(['state', 'app']);
@@ -158,6 +159,34 @@ function parseContractSpec(content) {
   return contracts;
 }
 
+function collectSourceFiles(dir) {
+  const files = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (!['assets', 'locales'].includes(entry.name)) files.push(...collectSourceFiles(path));
+      continue;
+    }
+    if (/\.(ts|vue)$/.test(entry.name) && !/\.(spec|test)\.ts$/.test(entry.name)) {
+      files.push(path);
+    }
+  }
+  return files;
+}
+
+function parseFrontendInvokes(files) {
+  const invokes = new Map();
+  const invokeRegex = /\binvoke(?:<[^;]*?>)?\s*\(\s*["']([^"']+)["']/g;
+  for (const file of files) {
+    const content = readFileSync(file, 'utf8');
+    let match;
+    while ((match = invokeRegex.exec(content)) !== null) {
+      if (!invokes.has(match[1])) invokes.set(match[1], file);
+    }
+  }
+  return invokes;
+}
+
 /**
  * Compare Rust commands against TypeScript contracts
  */
@@ -221,6 +250,16 @@ function validateContracts(rustCommands, tsContracts) {
   return { errors, warnings };
 }
 
+function validateFrontendInvokes(rustCommands, frontendInvokes) {
+  const errors = [];
+  for (const [command, file] of frontendInvokes) {
+    if (!rustCommands.has(command)) {
+      errors.push(`Frontend invoke "${command}" in ${file} is not a Rust command`);
+    }
+  }
+  return errors;
+}
+
 /**
  * Main validation logic
  */
@@ -237,12 +276,14 @@ function main() {
     
     const rustCommands = parseRustCommands(rustContent);
     const tsContracts = parseContractSpec(tsContent);
+    const frontendInvokes = parseFrontendInvokes(collectSourceFiles(join(__dirname, '..', FRONTEND_DIR)));
     
     console.log(`Found ${rustCommands.size} Rust commands`);
     console.log(`Found ${tsContracts.size} TypeScript contracts`);
     console.log('');
     
     const { errors, warnings } = validateContracts(rustCommands, tsContracts);
+    const frontendErrors = validateFrontendInvokes(rustCommands, frontendInvokes);
     
     // Report warnings
     if (warnings.length > 0) {
@@ -254,13 +295,19 @@ function main() {
     }
     
     // Report errors
-    if (errors.length > 0) {
+    if (frontendErrors.length > 0) {
+      console.log('❌ Frontend invoke errors:');
+      for (const error of frontendErrors) console.log(`  ${error}`);
+      console.log('');
+    }
+
+    if (errors.length > 0 || frontendErrors.length > 0) {
       console.log('❌ Errors:');
       for (const e of errors) {
         console.log(`  ${e.message}`);
       }
       console.log('');
-      console.log(`Found ${errors.length} error(s)`);
+       console.log(`Found ${errors.length + frontendErrors.length} error(s)`);
       process.exit(1);
     }
     

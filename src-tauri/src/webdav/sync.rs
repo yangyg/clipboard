@@ -60,20 +60,48 @@ async fn fetch_remote_state(
     client: &WebDavClient,
     root: &str,
     device_id: &str,
-) -> Result<(SyncManifest, Vec<crate::ClipboardRecord>), String> {
+) -> Result<RemoteState, String> {
     let manifest_rel = join_remote(root, MANIFEST_NAME);
-    let bundle_rel = join_remote(root, BUNDLE_REL);
+    let manifest_remote = client.get_bytes_with_etag(&manifest_rel).await?;
+    let (manifest, manifest_etag, manifest_exists) = match manifest_remote {
+        Some(remote) => (
+            serde_json::from_slice::<SyncManifest>(&remote.bytes)
+                .map_err(|e| format!("解析 manifest.json 失败: {e}"))?,
+            remote.etag,
+            true,
+        ),
+        None => (SyncManifest::empty(device_id), None, false),
+    };
 
-    let manifest = match client.get_bytes(&manifest_rel).await? {
-        Some(bytes) => serde_json::from_slice::<SyncManifest>(&bytes)
-            .map_err(|e| format!("解析 manifest.json 失败: {e}"))?,
-        None => SyncManifest::empty(device_id),
+    let bundle_rel = join_remote(root, BUNDLE_REL);
+    let bundle_remote = client.get_bytes_with_etag(&bundle_rel).await?;
+    let (records, bundle_etag, bundle_exists, bundle_bytes) = match bundle_remote {
+        Some(remote) => {
+            let bytes = remote.bytes;
+            let records = parse_bundle(&bytes)?;
+            (records, remote.etag, true, Some(bytes))
+        }
+        None => (Vec::new(), None, false, None),
     };
-    let records = match client.get_bytes(&bundle_rel).await? {
-        Some(bytes) => parse_bundle(&bytes)?,
-        None => Vec::new(),
-    };
-    Ok((manifest, records))
+    Ok(RemoteState {
+        manifest,
+        records,
+        manifest_etag,
+        manifest_exists,
+        bundle_etag,
+        bundle_exists,
+        bundle_bytes,
+    })
+}
+
+struct RemoteState {
+    manifest: SyncManifest,
+    records: Vec<crate::ClipboardRecord>,
+    manifest_etag: Option<String>,
+    manifest_exists: bool,
+    bundle_etag: Option<String>,
+    bundle_exists: bool,
+    bundle_bytes: Option<Vec<u8>>,
 }
 
 pub async fn webdav_test_connection(settings: &Settings) -> Result<(), String> {
@@ -91,7 +119,9 @@ pub async fn webdav_pull(
     let media_root = db.media_root().to_path_buf();
     media::ensure_dirs(&media_root).map_err(|e| e.to_string())?;
 
-    let (manifest, mut records) = fetch_remote_state(&client, &root, &device_id).await?;
+    let state = fetch_remote_state(&client, &root, &device_id).await?;
+    let manifest = state.manifest;
+    let mut records = state.records;
     if !settings.webdav_sync_sensitive {
         records.retain(|r| !r.is_sensitive);
     }
@@ -156,7 +186,15 @@ pub async fn webdav_push(
         .ensure_collection(&join_remote(&root, "media/thumbs"))
         .await?;
 
-    let (remote_manifest, remote_records) = fetch_remote_state(&client, &root, &device_id).await?;
+    let RemoteState {
+        manifest: remote_manifest,
+        records: remote_records,
+        manifest_etag,
+        manifest_exists,
+        bundle_etag,
+        bundle_exists,
+        bundle_bytes,
+    } = fetch_remote_state(&client, &root, &device_id).await?;
     let remote_entry_map: HashMap<String, ManifestEntry> = remote_manifest
         .entries
         .into_iter()
@@ -247,15 +285,7 @@ pub async fn webdav_push(
     let mut records: Vec<crate::ClipboardRecord> = catalog.into_values().collect();
     records.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
-    let bundle_bytes = serialize_bundle(&records)?;
-    client
-        .put_bytes(
-            &join_remote(&root, BUNDLE_REL),
-            bundle_bytes,
-            "application/x-ndjson",
-        )
-        .await?;
-
+    let bundle_payload = serialize_bundle(&records)?;
     let manifest = SyncManifest {
         version: 1,
         protocol: PROTOCOL.to_string(),
@@ -264,13 +294,67 @@ pub async fn webdav_push(
         entries,
     };
     let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
-    client
-        .put_bytes(
+    let expected_manifest_etag = if manifest_exists {
+        Some(
+            manifest_etag
+                .as_deref()
+                .ok_or("WebDAV manifest 缺少 ETag，拒绝无条件覆盖远端数据")?,
+        )
+    } else {
+        None
+    };
+    let expected_bundle_etag = if bundle_exists {
+        Some(
+            bundle_etag
+                .as_deref()
+                .ok_or("WebDAV bundle 缺少 ETag，拒绝无条件覆盖远端数据")?,
+        )
+    } else {
+        None
+    };
+    let written_bundle_etag = client
+        .put_bytes_if_match(
+            &join_remote(&root, BUNDLE_REL),
+            bundle_payload,
+            "application/x-ndjson",
+            expected_bundle_etag,
+        )
+        .await?;
+    if let Err(manifest_error) = client
+        .put_bytes_if_match(
             &join_remote(&root, MANIFEST_NAME),
             manifest_bytes,
             "application/json",
+            expected_manifest_etag,
         )
-        .await?;
+        .await
+    {
+        let rollback = match (bundle_bytes, written_bundle_etag.as_deref()) {
+            (Some(previous), Some(etag)) => client
+                .put_bytes_if_match(
+                    &join_remote(&root, BUNDLE_REL),
+                    previous,
+                    "application/x-ndjson",
+                    Some(etag),
+                )
+                .await
+                .map(|_| ()),
+            (None, Some(etag)) => {
+                client
+                    .delete_bytes_if_match(&join_remote(&root, BUNDLE_REL), etag)
+                    .await
+            }
+            (Some(_), None) | (None, None) => Err("新 bundle 缺少 ETag，无法安全回滚".into()),
+        };
+        return match rollback {
+            Ok(()) => Err(format!(
+                "写入 manifest 失败，已回滚 bundle: {manifest_error}"
+            )),
+            Err(rollback_error) => Err(format!(
+                "写入 manifest 失败且 bundle 回滚失败: {manifest_error}; {rollback_error}"
+            )),
+        };
+    }
 
     settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
     db.save_settings(settings).map_err(|e| e.to_string())?;

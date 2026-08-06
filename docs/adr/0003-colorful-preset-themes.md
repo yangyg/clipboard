@@ -4,6 +4,13 @@
 
 Accepted
 
+## Current State
+
+This ADR records the original colorful-theme decision. ADR-0004 later removed
+the `system` option. The current UI has 13 fixed themes, including the
+hand-drawn and monochrome families added after this ADR; see `CONTEXT.md` for
+the current theme inventory and constraints.
+
 ## Date
 
 2026-08-05

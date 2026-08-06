@@ -39,13 +39,17 @@ function run(cmd, args, options = {}) {
   }
 }
 
-function semverGte(a, b) {
+function compareSemver(a, b) {
   const pa = a.split(".").map(Number);
   const pb = b.split(".").map(Number);
   for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) > (pb[i] ?? 0);
+    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
   }
-  return true;
+  return 0;
+}
+
+function semverGte(a, b) {
+  return compareSemver(a, b) >= 0;
 }
 
 console.log("== Clipboard 环境诊断 ==");
@@ -149,7 +153,7 @@ console.log("== Clipboard 环境诊断 ==");
         if (!existsSync(dir)) continue;
         const versions = readdirSync(dir).filter((d) => /^\d+\.\d+/.test(d));
         if (versions.length) {
-          version = versions.sort(semverGte).pop();
+          version = versions.sort(compareSemver).pop();
           break;
         }
       }

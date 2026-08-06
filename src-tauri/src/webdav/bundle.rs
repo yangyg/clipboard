@@ -2,7 +2,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
-use crate::db::ClipboardDb;
+use crate::db::{validate_import_records, ClipboardDb, ExportCursor};
 use crate::ClipboardRecord;
 
 pub const PROTOCOL: &str = "clipvault-webdav-v1";
@@ -80,6 +80,7 @@ pub fn parse_bundle(bytes: &[u8]) -> Result<Vec<ClipboardRecord>, String> {
             .map_err(|e| format!("bundle.jsonl 第 {} 行解析失败: {e}", i + 1))?;
         out.push(strip_abs_paths(rec));
     }
+    validate_import_records(&out)?;
     Ok(out)
 }
 
@@ -107,18 +108,22 @@ pub fn filter_syncable(
 
 pub fn load_all_export(db: &ClipboardDb) -> Result<Vec<ClipboardRecord>, String> {
     let page = 200;
-    let mut offset = 0;
+    let mut cursor: Option<ExportCursor> = None;
     let mut all = Vec::new();
     loop {
         let batch = db
-            .get_records_for_export(page, offset)
+            .get_records_for_export_page(page, cursor.as_ref())
             .map_err(|e| e.to_string())?;
         let len = batch.len();
+        cursor = batch.last().map(|record| ExportCursor {
+            is_pinned: record.is_pinned,
+            updated_at: record.updated_at.clone(),
+            id: record.id,
+        });
         all.extend(batch);
         if len < page as usize {
             break;
         }
-        offset += page;
     }
     Ok(all)
 }

@@ -72,16 +72,24 @@ export function useColumnResize(options: ColumnResizeOptions) {
   }
 
   function onPointerUp() {
-    isDragging.value = false;
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
+    cleanupDrag();
     try {
       localStorage.setItem(storageKey, String(width.value));
     } catch {
       /* ignore */
     }
+  }
+
+  function cleanupDrag() {
+    if (raf) {
+      cancelAnimationFrame(raf);
+      raf = 0;
+    }
+    isDragging.value = false;
+    document.removeEventListener("pointermove", onPointerMove);
+    document.removeEventListener("pointerup", onPointerUp);
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
   }
 
   function startResize(e: PointerEvent) {
@@ -97,9 +105,7 @@ export function useColumnResize(options: ColumnResizeOptions) {
   }
 
   onUnmounted(() => {
-    if (raf) cancelAnimationFrame(raf);
-    document.removeEventListener("pointermove", onPointerMove);
-    document.removeEventListener("pointerup", onPointerUp);
+    cleanupDrag();
   });
 
   return { width, isDragging, isDefault, startResize, setWidth };

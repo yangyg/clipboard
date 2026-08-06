@@ -1,5 +1,10 @@
 # Dependencies
 node_modules/
+coverage/
+*.log
+*.tsbuildinfo
+.eslintcache
+npm-debug.log*
 
 # Build output
 dist/
@@ -30,4 +35,3 @@ graphify-out/
 
 # Local git worktrees
 .worktrees/
-

@@ -214,6 +214,9 @@ export function useVirtualList(
     for (const r of records) {
       // id is unique; pin flag in high bit. Multiply-xor for order sensitivity.
       h = (h ^ ((r.id * 2654435761 + (r.is_pinned ? 0x9e3779b9 : 0)) >>> 0)) >>> 0;
+      // Grid cards have type-dependent heights, so a type change must rebuild rows.
+      const typeCode = r.content_type === "image" ? 1 : 0;
+      h = (h ^ typeCode) >>> 0;
       h = ((h << 5) ^ (h >>> 27)) >>> 0; // rotate-mix
     }
     return h;

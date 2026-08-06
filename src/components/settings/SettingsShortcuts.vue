@@ -111,7 +111,7 @@ const PASTE_MODES = [
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-text);
-  animation: pulse-border 1.2s ease-in-out infinite;
+  animation: pulse-border var(--animation-pulse) infinite;
 }
 
 @keyframes pulse-border {

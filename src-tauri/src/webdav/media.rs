@@ -16,6 +16,24 @@ fn safe_media_rel(rel: &str) -> bool {
     crate::security::is_allowed_media_rel(rel)
 }
 
+fn write_downloaded_media(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let format = image::guess_format(bytes).map_err(|_| "远端媒体格式无效".to_string())?;
+    if !matches!(format, image::ImageFormat::Png | image::ImageFormat::Jpeg) {
+        return Err("远端媒体只允许 PNG 或 JPEG".into());
+    }
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("media");
+    let temp = path.with_file_name(format!(".{name}.download"));
+    fs::write(&temp, bytes).map_err(|e| e.to_string())?;
+    if let Err(error) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
 pub(super) async fn download_media_if_needed(
     client: &WebDavClient,
     root: &str,
@@ -42,7 +60,7 @@ pub(super) async fn download_media_if_needed(
             if let Some(parent) = abs.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            fs::write(&abs, bytes).map_err(|e| e.to_string())?;
+            write_downloaded_media(&abs, &bytes)?;
             downloaded = true;
         }
     }

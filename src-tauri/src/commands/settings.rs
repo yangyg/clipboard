@@ -35,10 +35,12 @@ pub async fn save_settings(
         apply_autostart(&app, settings.auto_start)?;
     }
 
-    state
-        .db
-        .cleanup_retention(settings.retention_days)
-        .map_err(|e| e.to_string())?;
+    if settings.retention_days != previous.retention_days {
+        state
+            .db
+            .cleanup_retention(settings.retention_days)
+            .map_err(|e| e.to_string())?;
+    }
     if let Err(e) = state.db.save_settings(&settings) {
         if autostart_changed {
             if let Err(revert_err) = apply_autostart(&app, previous.auto_start) {

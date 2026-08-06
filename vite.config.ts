@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -9,14 +12,14 @@ export default defineConfig({
   clearScreen: false,
   resolve: {
     alias: {
-      "@": resolve(__dirname, "src"),
+      "@": resolve(projectRoot, "src"),
     },
   },
   build: {
     rollupOptions: {
       input: {
-        main: resolve(__dirname, "index.html"),
-        trayMenu: resolve(__dirname, "tray-menu.html"),
+        main: resolve(projectRoot, "index.html"),
+        trayMenu: resolve(projectRoot, "tray-menu.html"),
       },
     },
   },

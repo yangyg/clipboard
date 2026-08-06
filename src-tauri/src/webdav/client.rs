@@ -1,8 +1,29 @@
 //! Minimal WebDAV client (Basic auth): MKCOL / PUT / GET / HEAD / PROPFIND.
 
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH};
 use reqwest::{Client, Method, StatusCode};
 use std::time::Duration;
+use url::Url;
+
+const MAX_REMOTE_RESPONSE_BYTES: usize = 64 * 1024 * 1024;
+const MAX_ERROR_RESPONSE_BYTES: usize = 64 * 1024;
+
+pub struct RemoteBytes {
+    pub bytes: Vec<u8>,
+    pub etag: Option<String>,
+}
+
+async fn limited_error_body(mut response: reqwest::Response) -> String {
+    let mut bytes = Vec::new();
+    while let Ok(Some(chunk)) = response.chunk().await {
+        let remaining = MAX_ERROR_RESPONSE_BYTES.saturating_sub(bytes.len());
+        if remaining == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&chunk[..chunk.len().min(remaining)]);
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
 
 #[derive(Clone)]
 pub struct WebDavClient {
@@ -36,9 +57,18 @@ impl WebDavClient {
         })
     }
 
-    fn url(&self, relative: &str) -> String {
-        let rel = relative.trim_start_matches('/');
-        format!("{}/{}", self.base_url, rel)
+    fn url(&self, relative: &str) -> Result<String, String> {
+        let mut url = Url::parse(self.base_url.trim_end_matches('/'))
+            .map_err(|e| format!("WebDAV URL 无效: {e}"))?;
+        {
+            let mut segments = url
+                .path_segments_mut()
+                .map_err(|_| "WebDAV URL 不支持路径追加".to_string())?;
+            for part in relative.split(['/', '\\']).filter(|part| !part.is_empty()) {
+                segments.push(part);
+            }
+        }
+        Ok(url.to_string())
     }
 
     fn auth_header(&self) -> String {
@@ -59,7 +89,7 @@ impl WebDavClient {
                 acc.push('/');
             }
             acc.push_str(part);
-            let url = self.url(&acc);
+            let url = self.url(&acc)?;
             let res = self
                 .client
                 .request(Method::from_bytes(b"MKCOL").unwrap(), &url)
@@ -86,7 +116,7 @@ impl WebDavClient {
                 if self.exists(&acc).await.unwrap_or(false) {
                     continue;
                 }
-                let body = res.text().await.unwrap_or_default();
+                let body = limited_error_body(res).await;
                 return Err(format!("MKCOL {acc} 失败: {status} {body}"));
             }
         }
@@ -99,7 +129,7 @@ impl WebDavClient {
         bytes: Vec<u8>,
         content_type: &str,
     ) -> Result<(), String> {
-        let url = self.url(relative);
+        let url = self.url(relative)?;
         let res = self
             .client
             .put(&url)
@@ -114,12 +144,78 @@ impl WebDavClient {
         {
             return Ok(());
         }
-        let body = res.text().await.unwrap_or_default();
+        let body = limited_error_body(res).await;
         Err(format!("PUT {relative} 失败: {status} {body}"))
     }
 
+    pub async fn put_bytes_if_match(
+        &self,
+        relative: &str,
+        bytes: Vec<u8>,
+        content_type: &str,
+        etag: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        let url = self.url(relative)?;
+        let request = self
+            .client
+            .put(&url)
+            .header(AUTHORIZATION, self.auth_header())
+            .header(CONTENT_TYPE, content_type);
+        let request = match etag {
+            Some(value) => request.header(IF_MATCH, value),
+            None => request.header(IF_NONE_MATCH, "*"),
+        };
+        let res = request
+            .body(bytes)
+            .send()
+            .await
+            .map_err(|e| format!("PUT {relative}: {e}"))?;
+        let status = res.status();
+        if status.is_success() || status == StatusCode::CREATED || status == StatusCode::NO_CONTENT
+        {
+            return Ok(res
+                .headers()
+                .get(ETAG)
+                .and_then(|value| value.to_str().ok())
+                .map(str::to_string));
+        }
+        if status == StatusCode::PRECONDITION_FAILED {
+            return Err(format!("PUT {relative} 被并发修改，已取消覆盖"));
+        }
+        let body = limited_error_body(res).await;
+        Err(format!("PUT {relative} 失败: {status} {body}"))
+    }
+
+    pub async fn delete_bytes_if_match(&self, relative: &str, etag: &str) -> Result<(), String> {
+        let url = self.url(relative)?;
+        let res = self
+            .client
+            .delete(&url)
+            .header(AUTHORIZATION, self.auth_header())
+            .header(IF_MATCH, etag)
+            .send()
+            .await
+            .map_err(|e| format!("DELETE {relative}: {e}"))?;
+        let status = res.status();
+        if status.is_success() || status == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        if status == StatusCode::PRECONDITION_FAILED {
+            return Err(format!("DELETE {relative} 被并发修改，未执行回滚"));
+        }
+        let body = limited_error_body(res).await;
+        Err(format!("DELETE {relative} 失败: {status} {body}"))
+    }
+
     pub async fn get_bytes(&self, relative: &str) -> Result<Option<Vec<u8>>, String> {
-        let url = self.url(relative);
+        Ok(self
+            .get_bytes_with_etag(relative)
+            .await?
+            .map(|remote| remote.bytes))
+    }
+
+    pub async fn get_bytes_with_etag(&self, relative: &str) -> Result<Option<RemoteBytes>, String> {
+        let url = self.url(relative)?;
         let res = self
             .client
             .get(&url)
@@ -132,18 +228,48 @@ impl WebDavClient {
             return Ok(None);
         }
         if !status.is_success() {
-            let body = res.text().await.unwrap_or_default();
+            let body = limited_error_body(res).await;
             return Err(format!("GET {relative} 失败: {status} {body}"));
         }
-        let bytes = res
-            .bytes()
+        if res
+            .content_length()
+            .is_some_and(|length| length > MAX_REMOTE_RESPONSE_BYTES as u64)
+        {
+            return Err(format!(
+                "远端文件过大（上限 {} MB）",
+                MAX_REMOTE_RESPONSE_BYTES / (1024 * 1024)
+            ));
+        }
+        let etag = res
+            .headers()
+            .get(ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_string);
+        let content_length = res.content_length();
+        let mut res = res;
+        let mut bytes = Vec::with_capacity(
+            content_length
+                .unwrap_or(0)
+                .min(MAX_REMOTE_RESPONSE_BYTES as u64) as usize,
+        );
+        while let Some(chunk) = res
+            .chunk()
             .await
-            .map_err(|e| format!("读取 {relative}: {e}"))?;
-        Ok(Some(bytes.to_vec()))
+            .map_err(|e| format!("读取 {relative}: {e}"))?
+        {
+            if bytes.len().saturating_add(chunk.len()) > MAX_REMOTE_RESPONSE_BYTES {
+                return Err(format!(
+                    "远端文件过大（上限 {} MB）",
+                    MAX_REMOTE_RESPONSE_BYTES / (1024 * 1024)
+                ));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(Some(RemoteBytes { bytes, etag }))
     }
 
     pub async fn exists(&self, relative: &str) -> Result<bool, String> {
-        let url = self.url(relative);
+        let url = self.url(relative)?;
         let res = self
             .client
             .head(&url)
@@ -175,7 +301,7 @@ impl WebDavClient {
 
     /// Lightweight auth probe: PROPFIND Depth:0 on base URL (or GET root).
     pub async fn test_connection(&self) -> Result<(), String> {
-        let url = format!("{}/", self.base_url.trim_end_matches('/'));
+        let url = self.url("")?;
         let res = self
             .client
             .request(Method::from_bytes(b"PROPFIND").unwrap(), &url)
@@ -211,5 +337,22 @@ impl WebDavClient {
             return Ok(());
         }
         Err(format!("连接失败: HTTP {}", get.status()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::WebDavClient;
+
+    #[test]
+    fn url_encodes_remote_path_segments() {
+        let client = WebDavClient::new("https://example.test/base", "user", "pass").unwrap();
+
+        let url = client.url("Clip Vault/#备份").unwrap();
+
+        assert_eq!(
+            url,
+            "https://example.test/base/Clip%20Vault/%23%E5%A4%87%E4%BB%BD"
+        );
     }
 }

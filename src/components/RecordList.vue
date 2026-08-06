@@ -1004,7 +1004,7 @@ function onListColResizeKey(e: KeyboardEvent) {
   border-radius: inherit;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   pointer-events: none;
-  animation: row-flash 900ms ease-out forwards;
+  animation: row-flash var(--animation-flash) forwards;
 }
 
 @keyframes row-flash {

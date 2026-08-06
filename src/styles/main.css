@@ -90,6 +90,9 @@
   --transition-fast: 100ms cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-normal: 180ms cubic-bezier(0.25, 0.1, 0.25, 1);
   --transition-smooth: 280ms cubic-bezier(0.16, 1, 0.3, 1);
+  --animation-spinner: 600ms linear;
+  --animation-flash: 900ms ease-out;
+  --animation-pulse: 1.2s ease-in-out;
 }
 
 /* ============================================================
@@ -482,7 +485,7 @@ body.anim-disabled *::after {
   border: 2px solid var(--border-default);
   border-top-color: var(--accent);
   border-radius: var(--radius-pill);
-  animation: spin 0.6s linear infinite;
+  animation: spin var(--animation-spinner) infinite;
 }
 
 .loading-spinner.small {

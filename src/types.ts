@@ -4,7 +4,10 @@
 //   ClipboardRecord, Settings, StatsData, TagInfo, SearchResult
 // ============================================================
 
+import type { ThemeKey } from "./utils/themeRegistry";
+
 export type ContentType = 'text' | 'code' | 'link' | 'image' | 'file';
+export type FilterTab = 'all' | 'text' | 'code' | 'link' | 'image' | 'file' | 'favorites';
 
 export interface ClipboardRecord {
   id: number;
@@ -75,7 +78,7 @@ export interface Settings {
   max_records: number;
   retention_days: number;
   // Appearance
-  theme: 'dark' | 'light' | 'oled' | 'dracula' | 'nord' | 'sunset' | 'dracula-light' | 'nord-light' | 'sunset-light' | 'handdrawn' | 'handdrawn-light' | 'mono' | 'mono-light';
+  theme: ThemeKey;
   panel_opacity: number;
   panel_radius: number;
   enable_blur: boolean;
@@ -86,7 +89,7 @@ export interface Settings {
   font_family: string;
   // Behavior
   app_mode: 'floating' | 'window';
-  default_paste_mode: 'original' | 'plain' | 'markdown';
+  default_paste_mode: 'original' | 'plain';
   auto_close_on_paste: boolean;
   // Privacy
   enable_sensitive_detection: boolean;

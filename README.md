@@ -91,7 +91,7 @@ CI（`.github/workflows/ci.yml`）在 push / PR 时自动运行前端 lint、类
 | 后端 | Rust、arboard、rusqlite |
 | 存储 | SQLite（WAL + FTS5 + 读写分离连接池）+ 本地 media 目录 |
 
-实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。架构决策记录（虚拟化引擎抽取、响应式网格列数等）见 [docs/adr/](./docs/adr/)；交互动效见 [docs/Clipboard-交互动效规范.md](./docs/Clipboard-交互动效规范.md)。
+实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。当前领域约束和术语以 [CONTEXT.md](./CONTEXT.md) 为准；历史架构决策见 [docs/adr/](./docs/adr/)；交互动效规范见 [docs/Clipboard-交互动效规范.md](./docs/Clipboard-交互动效规范.md)。
 
 ## 许可
 

@@ -9,6 +9,7 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import type { Window } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
+import type { ClipboardRecord } from "../types";
 import { isPasteFocusLock, setPasteFocusLock } from "./pasteFocusLock";
 
 export interface ClipboardEventsCtx {
@@ -28,7 +29,7 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
   onMounted(async () => {
     // Listen for new clipboard records from Rust backend
     unlisteners.push(
-      await listen<any>("clipboard-changed", (event) => {
+      await listen<ClipboardRecord>("clipboard-changed", (event) => {
         if (!clipboardStore.pauseCapture) {
           clipboardStore.onNewRecord(event.payload);
         }

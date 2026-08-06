@@ -34,13 +34,14 @@ impl ClipboardDb {
         let unreferenced: Vec<String> = files
             .into_iter()
             .filter(|p| {
-                conn.query_row(
-                    "SELECT 1 FROM records WHERE media_path = ?1 OR thumb_path = ?1 LIMIT 1",
-                    [p.as_str()],
-                    |row| row.get::<_, i64>(0),
+                matches!(
+                    conn.query_row(
+                        "SELECT 1 FROM records WHERE media_path = ?1 OR thumb_path = ?1 LIMIT 1",
+                        [p.as_str()],
+                        |row| row.get::<_, i64>(0),
+                    ),
+                    Err(rusqlite::Error::QueryReturnedNoRows)
                 )
-                .unwrap_or(0)
-                    == 0
             })
             .collect();
         drop(conn);

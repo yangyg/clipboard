@@ -3,22 +3,12 @@
  * chrome. Keeps the two `body`-level theme class lists in sync.
  */
 
-/** Every theme class `applyTheme` can attach to <body>; removing all of them
- *  on re-apply keeps the tree clean when switching between any two themes. */
-export const THEME_CLASSES = [
-  "light-theme",
-  "oled-theme",
-  "dracula-theme",
-  "nord-theme",
-  "sunset-theme",
-  "dracula-light-theme",
-  "nord-light-theme",
-  "sunset-light-theme",
-  "handdrawn-theme",
-  "handdrawn-light-theme",
-  "mono-theme",
-  "mono-light-theme",
-] as const;
+import { THEME_DEFINITIONS } from "./themeRegistry";
+
+/** Every non-default theme class `applyTheme` can attach to <body>. */
+export const THEME_CLASSES = THEME_DEFINITIONS
+  .filter(({ key }) => key !== "dark")
+  .map(({ key }) => `${key}-theme`);
 
 /** Attach the theme class for `theme` (dark = default, no class) to <body>. */
 export function applyTheme(theme: string) {

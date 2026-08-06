@@ -1,9 +1,55 @@
 //! Import (with hash merge) and full-content export paging.
-use rusqlite::{params, Result as SqlResult};
+use rusqlite::{params, Error as SqlError, Result as SqlResult};
 
 use super::{ClipboardDb, ALIAS_MAX_CHARS};
 use crate::security;
 use crate::ClipboardRecord;
+
+#[derive(Debug, Clone)]
+pub struct ExportCursor {
+    pub is_pinned: bool,
+    pub updated_at: String,
+    pub id: i64,
+}
+
+pub const MAX_IMPORT_RECORDS: usize = 100_000;
+pub const MAX_IMPORT_TOTAL_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_IMPORT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
+pub const MAX_IMPORT_HTML_BYTES: usize = 512 * 1024;
+
+pub fn validate_import_records(records: &[ClipboardRecord]) -> Result<(), String> {
+    if records.len() > MAX_IMPORT_RECORDS {
+        return Err(format!("导入记录过多（上限 {} 条）", MAX_IMPORT_RECORDS));
+    }
+
+    let mut total_bytes = 0usize;
+    for record in records {
+        if record.content.len() > MAX_IMPORT_CONTENT_BYTES {
+            return Err(format!(
+                "记录正文过大（单条上限 {} MB）",
+                MAX_IMPORT_CONTENT_BYTES / (1024 * 1024)
+            ));
+        }
+        if let Some(html) = record.content_html.as_deref() {
+            if html.len() > MAX_IMPORT_HTML_BYTES {
+                return Err("记录 HTML 过大（单条上限 512 KB）".into());
+            }
+            total_bytes = total_bytes.saturating_add(html.len());
+        }
+        total_bytes = total_bytes.saturating_add(record.content.len());
+        if total_bytes > MAX_IMPORT_TOTAL_BYTES {
+            return Err("导入内容过大（总上限 64 MB）".into());
+        }
+    }
+    Ok(())
+}
+
+fn validation_error(message: String) -> SqlError {
+    SqlError::ToSqlConversionFailure(Box::new(std::io::Error::new(
+        std::io::ErrorKind::InvalidInput,
+        message,
+    )))
+}
 
 impl ClipboardDb {
     pub fn import_records(&self, records: &[ClipboardRecord], max_records: i32) -> SqlResult<i32> {
@@ -20,6 +66,7 @@ impl ClipboardDb {
         records: &[ClipboardRecord],
         max_records: i32,
     ) -> SqlResult<(i32, i32, i32)> {
+        validate_import_records(records).map_err(validation_error)?;
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let mut imported = 0;
@@ -27,7 +74,7 @@ impl ClipboardDb {
         let mut tags_changed = 0;
 
         // Batch-load existing hashes in one query instead of per-record lookups.
-        let existing_hashes: std::collections::HashSet<String> = {
+        let mut existing_hashes: std::collections::HashSet<String> = {
             let mut stmt = tx.prepare("SELECT hash FROM records")?;
             let hashes: Vec<String> = stmt
                 .query_map([], |row| row.get::<_, String>(0))?
@@ -154,6 +201,7 @@ impl ClipboardDb {
                     alias,
                 ],
             )?;
+            existing_hashes.insert(record.hash.clone());
             if record.tags.iter().any(|t| !t.trim().is_empty()) {
                 let record_id = tx.last_insert_rowid();
                 if super::ClipboardDb::set_record_tags_by_name_conn(&tx, record_id, &record.tags)? {
@@ -186,6 +234,47 @@ impl ClipboardDb {
             .query_map(params![limit, offset], |row| self.map_record_row(row))?
             .collect::<SqlResult<Vec<_>>>()?;
         self.enrich_tags(&conn, &mut records, true)?;
+        for record in &mut records {
+            record.media_abs = None;
+            record.thumb_abs = None;
+        }
+        Ok(records)
+    }
+
+    pub fn get_records_for_export_page(
+        &self,
+        limit: i32,
+        cursor: Option<&ExportCursor>,
+    ) -> SqlResult<Vec<ClipboardRecord>> {
+        let conn = self.lock_read();
+        let mut sql = format!(
+            "SELECT {} FROM records WHERE is_trashed = 0",
+            super::RECORD_COLS
+        );
+        let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        if let Some(cursor) = cursor {
+            sql.push_str(
+                " AND (is_pinned < ? OR (is_pinned = ? AND (updated_at < ? OR (updated_at = ? AND id < ?))))",
+            );
+            values.push(Box::new(cursor.is_pinned as i32));
+            values.push(Box::new(cursor.is_pinned as i32));
+            values.push(Box::new(cursor.updated_at.clone()));
+            values.push(Box::new(cursor.updated_at.clone()));
+            values.push(Box::new(cursor.id));
+        }
+        sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
+        values.push(Box::new(limit.max(1)));
+        let refs: Vec<&dyn rusqlite::types::ToSql> =
+            values.iter().map(|value| value.as_ref()).collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let mut records: Vec<ClipboardRecord> = stmt
+            .query_map(refs.as_slice(), |row| self.map_record_row(row))?
+            .collect::<SqlResult<Vec<_>>>()?;
+        self.enrich_tags(&conn, &mut records, true)?;
+        for record in &mut records {
+            record.media_abs = None;
+            record.thumb_abs = None;
+        }
         Ok(records)
     }
 }
@@ -311,6 +400,57 @@ mod tests {
             .import_records_with_merge(&[make_record("a", "hash-tc", &[])], 100)
             .unwrap();
         assert_eq!(tc, 0);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_deduplicates_repeated_hashes_in_one_batch() {
+        let (db, dir) = temp_db();
+        let records = [
+            make_record("same", "batch-duplicate", &[]),
+            make_record("same", "batch-duplicate", &[]),
+        ];
+
+        let (imported, merged, _) = db.import_records_with_merge(&records, 100).unwrap();
+
+        assert_eq!((imported, merged), (1, 1));
+        assert_eq!(db.get_records_for_export(10, 0).unwrap().len(), 1);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_rejects_oversized_content() {
+        let record = make_record(
+            &"x".repeat(super::MAX_IMPORT_CONTENT_BYTES + 1),
+            "oversized-content",
+            &[],
+        );
+
+        let error = super::validate_import_records(&[record]).unwrap_err();
+
+        assert!(error.contains("正文过大"));
+    }
+
+    #[test]
+    fn export_cursor_pages_without_offset() {
+        let (db, dir) = temp_db();
+        let records = [
+            make_record("first", "cursor-1", &[]),
+            make_record("second", "cursor-2", &[]),
+        ];
+        db.import_records_with_merge(&records, 100).unwrap();
+
+        let first = db.get_records_for_export_page(1, None).unwrap();
+        let cursor = super::ExportCursor {
+            is_pinned: first[0].is_pinned,
+            updated_at: first[0].updated_at.clone(),
+            id: first[0].id,
+        };
+        let second = db.get_records_for_export_page(1, Some(&cursor)).unwrap();
+
+        assert_eq!(first.len(), 1);
+        assert_eq!(second.len(), 1);
+        assert_ne!(first[0].id, second[0].id);
         cleanup(dir);
     }
 }

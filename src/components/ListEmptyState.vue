@@ -24,17 +24,17 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { useClipboardStore } from "../stores/clipboard";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
+import { FILTER_DEFINITIONS } from "../utils/filterDefinitions";
 
 const clipboardStore = useClipboardStore();
 const { t } = useI18n();
 
-const TYPE_LABEL_KEYS: Record<string, string> = {
-  text: 'filter.text',
-  code: 'filter.code',
-  link: 'filter.link',
-  image: 'filter.image',
-  file: 'filter.file',
-};
+const TYPE_LABEL_KEYS = Object.fromEntries(
+  FILTER_DEFINITIONS.map((definition) => [definition.key, definition.filterLabelKey]),
+);
+const TYPE_ICON_MAP = Object.fromEntries(
+  FILTER_DEFINITIONS.map((definition) => [definition.key, definition.icon as AppIconName]),
+);
 
 const emptyState = computed(() => {
   if (clipboardStore.searchQuery) {
@@ -62,11 +62,8 @@ const emptyState = computed(() => {
     return { icon: "star" as AppIconName, title: t('emptyState.favoritesEmpty'), hint: t('emptyState.favoritesHint'), clearSearch: false };
   }
   if (clipboardStore.activeFilter !== "all") {
-    const typeIconMap: Record<string, AppIconName> = {
-      text: "type", code: "code", link: "link", image: "image", file: "file",
-    };
-    return {
-      icon: typeIconMap[clipboardStore.activeFilter] ?? ("clipboard" as AppIconName),
+      return {
+        icon: TYPE_ICON_MAP[clipboardStore.activeFilter] ?? ("clipboard" as AppIconName),
       title: t('emptyState.typeEmpty', { type: t(TYPE_LABEL_KEYS[clipboardStore.activeFilter] ?? '') }),
       hint: t('emptyState.typeHint'),
       clearSearch: false,

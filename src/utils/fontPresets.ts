@@ -78,10 +78,4 @@ export function resolveFontStack(fontFamily: string): string {
   return PRESET_BY_KEY.get(fontFamily) ?? PRESET_BY_KEY.get("default")!;
 }
 
-/** All option values (presets + the system-font marker) for the settings select. */
-export const FONT_OPTIONS = [
-  ...FONT_PRESETS.map((p) => p.key),
-  SYSTEM_PREFIX,
-] as const;
-
 export const SYSTEM_FONT_OPTION_KEY = SYSTEM_PREFIX;

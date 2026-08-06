@@ -7,6 +7,7 @@ import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
 import { resolveFontStack } from "../utils/fontPresets";
 import { applyTheme as applyThemeClass } from "../utils/themeClass";
+import { isThemeKey } from "../utils/themeRegistry";
 import { i18n } from "../locales";
 
 const DEFAULT_SETTINGS: Settings = {
@@ -54,13 +55,20 @@ const DEFAULT_SETTINGS: Settings = {
 };
 
 function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Settings {
+  const rawTheme = raw?.theme as string | undefined;
   return {
     ...DEFAULT_SETTINGS,
     ...(raw ?? {}),
     features: mergeFeatures(raw?.features),
     // Legacy "system" theme value (removed): collapse to the dark default so
     // existing users don't end up with an unselected theme card.
-    theme: (raw?.theme as string | undefined) === "system" ? "dark" : raw?.theme ?? DEFAULT_SETTINGS.theme,
+    theme:
+      rawTheme === "system"
+        ? "dark"
+        : rawTheme && isThemeKey(rawTheme)
+          ? rawTheme
+          : DEFAULT_SETTINGS.theme,
+    default_paste_mode: raw?.default_paste_mode === "plain" ? "plain" : "original",
     auto_tag_rules: (raw?.auto_tag_rules ?? DEFAULT_SETTINGS.auto_tag_rules).map((r) => ({
       ...r,
       keywords: [...r.keywords],

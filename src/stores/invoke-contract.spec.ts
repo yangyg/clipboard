@@ -86,6 +86,8 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   webdav_pull: { params: [] },
   webdav_push: { params: [] },
   webdav_sync: { params: [] },
+  get_sync_history: { params: ["limit"] },
+  clear_sync_history: { params: [] },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

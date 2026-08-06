@@ -77,6 +77,23 @@ fn fresh_db() -> rusqlite::Connection {
             search_count INTEGER NOT NULL DEFAULT 1,
             last_searched_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS sync_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            synced_at TEXT NOT NULL,
+            action TEXT NOT NULL,
+            success INTEGER NOT NULL,
+            pulled INTEGER NOT NULL DEFAULT 0,
+            pushed INTEGER NOT NULL DEFAULT 0,
+            merged INTEGER NOT NULL DEFAULT 0,
+            tags_pulled INTEGER NOT NULL DEFAULT 0,
+            tags_pushed INTEGER NOT NULL DEFAULT 0,
+            media_downloaded INTEGER NOT NULL DEFAULT 0,
+            media_uploaded INTEGER NOT NULL DEFAULT 0,
+            media_skipped INTEGER NOT NULL DEFAULT 0,
+            error TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_sync_history_synced_at
+            ON sync_history(synced_at DESC);
         "#,
     )
     .unwrap();
@@ -90,6 +107,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "record_tags",
     "settings",
     "search_history",
+    "sync_history",
 ];
 
 /// Expected columns for the `records` table (column_name → must be queryable).
@@ -129,6 +147,7 @@ const EXPECTED_INDEXES: &[&str] = &[
     "idx_records_hash_active",
     "idx_records_auto_expire",
     "idx_record_tags_tag_id",
+    "idx_sync_history_synced_at",
 ];
 
 #[test]

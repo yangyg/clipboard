@@ -128,10 +128,29 @@ export interface WebDavSyncResult {
   pulled: number;
   pushed: number;
   merged: number;
+  tags_pulled: number;
+  tags_pushed: number;
   media_downloaded: number;
   media_uploaded: number;
   media_skipped: number;
-  message: string;
+}
+
+/** One WebDAV sync operation log row (local-only, never synced). */
+export interface SyncHistoryEntry {
+  id: number;
+  synced_at: string;
+  /** "pull" | "push" | "sync" */
+  action: string;
+  success: boolean;
+  pulled: number;
+  pushed: number;
+  merged: number;
+  tags_pulled: number;
+  tags_pushed: number;
+  media_downloaded: number;
+  media_uploaded: number;
+  media_skipped: number;
+  error?: string | null;
 }
 
 /**

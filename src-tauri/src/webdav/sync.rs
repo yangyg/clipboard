@@ -114,22 +114,25 @@ pub async fn webdav_pull(
     }
 
     let max = settings.max_records;
-    let (pulled, merged) = db
+    let (pulled, merged, tags_pulled) = db
         .import_records_with_merge(&records, max)
         .map_err(|e| e.to_string())?;
 
     settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
     db.save_settings(settings).map_err(|e| e.to_string())?;
 
-    info!("WebDAV pull: new={pulled} merged={merged} media_dl={media_downloaded}");
+    info!(
+        "WebDAV pull: new={pulled} merged={merged} tags={tags_pulled} media_dl={media_downloaded}"
+    );
     Ok(WebDavSyncResult {
         pulled,
         pushed: 0,
         merged,
+        tags_pulled,
+        tags_pushed: 0,
         media_downloaded,
         media_uploaded: 0,
         media_skipped: 0,
-        message: format!("拉取完成：新增 {pulled}，合并 {merged}，下载媒体 {media_downloaded}"),
     })
 }
 
@@ -158,6 +161,10 @@ pub async fn webdav_push(
         .entries
         .into_iter()
         .map(|e| (e.hash.clone(), e))
+        .collect();
+    let remote_tags: HashMap<String, Vec<String>> = remote_records
+        .iter()
+        .map(|r| (r.hash.clone(), r.tags.clone()))
         .collect();
 
     let local = filter_syncable(load_all_export(db)?, settings.webdav_sync_sensitive);
@@ -211,6 +218,29 @@ pub async fn webdav_push(
         }
     }
 
+    // Tags diff vs the previous remote snapshot: count records whose published
+    // tag set differs (new records count when they carry any tag). Independent
+    // of `pushed` so a message can separate content changes from tag changes.
+    let mut tags_pushed = 0;
+    for (hash, rec) in &catalog {
+        match remote_tags.get(hash) {
+            None => {
+                if !rec.tags.is_empty() {
+                    tags_pushed += 1;
+                }
+            }
+            Some(remote) => {
+                let mut a = rec.tags.clone();
+                let mut b = remote.clone();
+                a.sort_unstable();
+                b.sort_unstable();
+                if a != b {
+                    tags_pushed += 1;
+                }
+            }
+        }
+    }
+
     let mut entries: Vec<ManifestEntry> = catalog.values().map(record_to_entry).collect();
     entries.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
@@ -245,17 +275,18 @@ pub async fn webdav_push(
     settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
     db.save_settings(settings).map_err(|e| e.to_string())?;
 
-    info!("WebDAV push: changed≈{pushed} media_up={media_uploaded} media_skip={media_skipped}");
+    info!(
+        "WebDAV push: changed≈{pushed} tags={tags_pushed} media_up={media_uploaded} media_skip={media_skipped}"
+    );
     Ok(WebDavSyncResult {
         pulled: 0,
         pushed,
         merged: 0,
+        tags_pulled: 0,
+        tags_pushed,
         media_downloaded: 0,
         media_uploaded,
         media_skipped,
-        message: format!(
-            "推送完成：变更约 {pushed}，上传媒体 {media_uploaded}，跳过已有媒体 {media_skipped}"
-        ),
     })
 }
 
@@ -269,18 +300,11 @@ pub async fn webdav_sync(
         pulled: pull.pulled,
         pushed: push.pushed,
         merged: pull.merged,
+        tags_pulled: pull.tags_pulled,
+        tags_pushed: push.tags_pushed,
         media_downloaded: pull.media_downloaded,
         media_uploaded: push.media_uploaded,
         media_skipped: push.media_skipped,
-        message: format!(
-            "同步完成：新增 {}，合并 {}，推送变更约 {}，媒体 ↓{} ↑{}（跳过 {}）",
-            pull.pulled,
-            pull.merged,
-            push.pushed,
-            pull.media_downloaded,
-            push.media_uploaded,
-            push.media_skipped
-        ),
     })
 }
 
@@ -290,8 +314,9 @@ pub struct WebDavSyncResult {
     pub pulled: i32,
     pub pushed: i32,
     pub merged: i32,
+    pub tags_pulled: i32,
+    pub tags_pushed: i32,
     pub media_downloaded: i32,
     pub media_uploaded: i32,
     pub media_skipped: i32,
-    pub message: String,
 }

@@ -327,6 +327,28 @@ pub struct TagInfo {
     pub count: i64,
 }
 
+/// One WebDAV sync operation log row (local-only, never synced).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct SyncHistoryEntry {
+    pub id: i64,
+    pub synced_at: String,
+    /// `pull` | `push` | `sync`
+    pub action: String,
+    pub success: bool,
+    pub pulled: i32,
+    pub pushed: i32,
+    pub merged: i32,
+    pub tags_pulled: i32,
+    pub tags_pushed: i32,
+    pub media_downloaded: i32,
+    pub media_uploaded: i32,
+    pub media_skipped: i32,
+    /// Failure detail (success entries carry `None`).
+    #[serde(default)]
+    pub error: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct StatsData {
     #[serde(rename = "total_records")]

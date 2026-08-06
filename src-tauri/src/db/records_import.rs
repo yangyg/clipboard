@@ -7,22 +7,24 @@ use crate::ClipboardRecord;
 
 impl ClipboardDb {
     pub fn import_records(&self, records: &[ClipboardRecord], max_records: i32) -> SqlResult<i32> {
-        let (imported, _) = self.import_records_with_merge(records, max_records)?;
+        let (imported, _, _) = self.import_records_with_merge(records, max_records)?;
         Ok(imported)
     }
 
     /// Import with hash dedup. Existing hashes get a shallow merge:
     /// newer `updated_at`, OR on favorite/pin, max `copy_count`, fill missing media paths.
-    /// Returns `(inserted, merged)`.
+    /// Returns `(inserted, merged, tags_changed)` — `tags_changed` counts records whose
+    /// tag links were actually written/changed (WebDAV pull surfaces this in its summary).
     pub fn import_records_with_merge(
         &self,
         records: &[ClipboardRecord],
         max_records: i32,
-    ) -> SqlResult<(i32, i32)> {
+    ) -> SqlResult<(i32, i32, i32)> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
         let mut imported = 0;
         let mut merged = 0;
+        let mut tags_changed = 0;
 
         // Batch-load existing hashes in one query instead of per-record lookups.
         let existing_hashes: std::collections::HashSet<String> = {
@@ -101,6 +103,20 @@ impl ClipboardDb {
                 if changed > 0 {
                     merged += 1;
                 }
+                // Tag sync: replace the links only when the incoming snapshot
+                // actually carries tags — a bundle written before tag-sync
+                // shipped has an empty `tags` array and must not wipe the
+                // local associations.
+                if record.tags.iter().any(|t| !t.trim().is_empty()) {
+                    let id: i64 = tx.query_row(
+                        "SELECT id FROM records WHERE hash = ?",
+                        [&record.hash],
+                        |row| row.get(0),
+                    )?;
+                    if super::ClipboardDb::set_record_tags_by_name_conn(&tx, id, &record.tags)? {
+                        tags_changed += 1;
+                    }
+                }
                 continue;
             }
 
@@ -138,6 +154,12 @@ impl ClipboardDb {
                     alias,
                 ],
             )?;
+            if record.tags.iter().any(|t| !t.trim().is_empty()) {
+                let record_id = tx.last_insert_rowid();
+                if super::ClipboardDb::set_record_tags_by_name_conn(&tx, record_id, &record.tags)? {
+                    tags_changed += 1;
+                }
+            }
             imported += 1;
         }
 
@@ -145,7 +167,7 @@ impl ClipboardDb {
         tx.commit()?;
         drop(conn);
         self.purge_media_pairs(&overflow_media);
-        Ok((imported, merged))
+        Ok((imported, merged, tags_changed))
     }
 
     /// Full-content page for export/backup (never use list truncation columns).
@@ -165,5 +187,130 @@ impl ClipboardDb {
             .collect::<SqlResult<Vec<_>>>()?;
         self.enrich_tags(&conn, &mut records, true)?;
         Ok(records)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClipboardDb;
+    use crate::ClipboardRecord;
+    use std::path::PathBuf;
+
+    fn temp_db() -> (ClipboardDb, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_import_tag_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+        (db, dir)
+    }
+
+    fn cleanup(dir: PathBuf) {
+        for name in ["test.db", "test.db-wal", "test.db-shm"] {
+            let _ = std::fs::remove_file(dir.join(name));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn make_record(content: &str, hash: &str, tags: &[&str]) -> ClipboardRecord {
+        let now = chrono::Utc::now().to_rfc3339();
+        ClipboardRecord {
+            id: 0,
+            content: content.to_string(),
+            content_type: "text".into(),
+            source_app: String::new(),
+            source_window: String::new(),
+            source_name: String::new(),
+            hash: hash.to_string(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive: false,
+            is_trashed: false,
+            auto_expire_at: None,
+            created_at: now.clone(),
+            updated_at: now,
+            tags: tags.iter().map(|s| s.to_string()).collect(),
+            content_html: None,
+            media_path: None,
+            thumb_path: None,
+            width: None,
+            height: None,
+            media_abs: None,
+            thumb_abs: None,
+            content_len: None,
+            alias: String::new(),
+        }
+    }
+
+    #[test]
+    fn import_creates_tags_and_links() {
+        let (db, dir) = temp_db();
+        db.import_records_with_merge(&[make_record("hello", "hash-1", &["重要", "链接"])], 100)
+            .unwrap();
+        let exported = db.get_records_for_export(10, 0).unwrap();
+        assert_eq!(exported.len(), 1);
+        let mut tags = exported[0].tags.clone();
+        tags.sort();
+        let mut want = vec!["链接".to_string(), "重要".to_string()];
+        want.sort();
+        assert_eq!(tags, want);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_merge_replaces_tags_when_incoming_has_tags() {
+        let (db, dir) = temp_db();
+        db.import_records_with_merge(&[make_record("same", "hash-x", &["重要"])], 100)
+            .unwrap();
+        db.import_records_with_merge(&[make_record("same", "hash-x", &["链接"])], 100)
+            .unwrap();
+        let exported = db.get_records_for_export(10, 0).unwrap();
+        assert_eq!(exported.len(), 1);
+        assert_eq!(exported[0].tags, ["链接"]);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_merge_preserves_local_tags_for_tagless_snapshot() {
+        let (db, dir) = temp_db();
+        db.import_records_with_merge(&[make_record("same", "hash-y", &["重要"])], 100)
+            .unwrap();
+        db.import_records_with_merge(&[make_record("same", "hash-y", &[])], 100)
+            .unwrap();
+        let exported = db.get_records_for_export(10, 0).unwrap();
+        assert_eq!(exported[0].tags, ["重要"]);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn tags_changed_counts_only_real_changes() {
+        let (db, dir) = temp_db();
+        // New record with tags → counts 1.
+        let (_, _, tc) = db
+            .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100)
+            .unwrap();
+        assert_eq!(tc, 1);
+        // Merge with identical tags → 0 (no spurious count).
+        let (_, _, tc) = db
+            .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100)
+            .unwrap();
+        assert_eq!(tc, 0);
+        // Merge with a changed tag set → 1.
+        let (_, _, tc) = db
+            .import_records_with_merge(&[make_record("a", "hash-tc", &["链接"])], 100)
+            .unwrap();
+        assert_eq!(tc, 1);
+        // Merge with empty tags → 0 (preserves local, counts nothing).
+        let (_, _, tc) = db
+            .import_records_with_merge(&[make_record("a", "hash-tc", &[])], 100)
+            .unwrap();
+        assert_eq!(tc, 0);
+        cleanup(dir);
     }
 }

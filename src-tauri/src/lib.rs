@@ -17,7 +17,7 @@ mod window;
 pub use features::{require_feature, FeatureFlags, FeatureId};
 pub use types::{
     AppState, AutoTagRule, ClipboardRecord, RecordsPage, SearchHistoryEntry, SearchResult,
-    Settings, StatsData, TagInfo,
+    Settings, StatsData, SyncHistoryEntry, TagInfo,
 };
 
 pub(crate) use panel::{apply_global_shortcut, show_main_panel, toggle_main_panel};
@@ -139,6 +139,8 @@ pub fn run() {
             commands::webdav_pull,
             commands::webdav_push,
             commands::webdav_sync,
+            commands::get_sync_history,
+            commands::clear_sync_history,
             commands::clear_history,
             commands::get_stats,
             commands::switch_app_mode,

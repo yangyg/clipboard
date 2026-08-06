@@ -12,6 +12,7 @@ import { useI18n } from "vue-i18n";
 import type { AppIconName } from "../components/icons/AppIcon.vue";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import type { WebDavSyncResult } from "../types";
+import { formatWebDavResult } from "../utils/webdavResult";
 
 export function useSidebarMenus(openSettings: (section?: string) => void) {
   const clipboardStore = useClipboardStore();
@@ -102,7 +103,7 @@ export function useSidebarMenus(openSettings: (section?: string) => void) {
       await settingsStore.loadSettings();
       await clipboardStore.loadRecords();
       await clipboardStore.loadStats();
-      toast(result.message || t('sidebar.webdavSyncDone'), "success");
+      toast(formatWebDavResult(result, "sync", t), "success");
     } catch (e) {
       toast(t('sidebar.webdavSyncFailed', { error: String(e) }), "error");
       quickMenu.visible = false;

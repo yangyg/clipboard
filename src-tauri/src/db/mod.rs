@@ -14,6 +14,7 @@ mod schema;
 mod search_history;
 mod settings;
 mod stats;
+mod sync_history;
 mod tags;
 mod types;
 
@@ -142,6 +143,26 @@ impl ClipboardDb {
                 search_count INTEGER NOT NULL DEFAULT 1,
                 last_searched_at TEXT NOT NULL
             );
+
+            -- WebDAV sync operation log. Local-only (never synced, avoids recursion).
+            -- Records every pull/push/sync with its outcome + counters.
+            CREATE TABLE IF NOT EXISTS sync_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                synced_at TEXT NOT NULL,
+                action TEXT NOT NULL,
+                success INTEGER NOT NULL,
+                pulled INTEGER NOT NULL DEFAULT 0,
+                pushed INTEGER NOT NULL DEFAULT 0,
+                merged INTEGER NOT NULL DEFAULT 0,
+                tags_pulled INTEGER NOT NULL DEFAULT 0,
+                tags_pushed INTEGER NOT NULL DEFAULT 0,
+                media_downloaded INTEGER NOT NULL DEFAULT 0,
+                media_uploaded INTEGER NOT NULL DEFAULT 0,
+                media_skipped INTEGER NOT NULL DEFAULT 0,
+                error TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_sync_history_synced_at
+                ON sync_history(synced_at DESC);
 
             INSERT OR IGNORE INTO tags (name, color, is_auto) VALUES
                 ('部署', '#22c55e', 1),

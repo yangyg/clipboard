@@ -1,0 +1,102 @@
+/* ============================================================
+   Sunset family (暖橙 / 暖阳)
+   Split out of main.css so each theme family owns its tokens.
+   ============================================================ */
+
+/* Sunset Theme (暖橙) — fixed dark-leaning colorful preset */
+body.sunset-theme,
+.sunset-theme {
+  --bg-base: #211915;
+  --bg-surface: #29201a;
+  --bg-elevated: #32281f;
+  --bg-hover: #3a2e24;
+  --bg-active: #43352a;
+  --bg-input: #1d1713;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-focus: #fb923c;
+  --text-primary: #f2e8dd;
+  --text-secondary: #bfa794;
+  --text-tertiary: #93776a;
+  --text-inverse: #221a15;
+  --accent: #fb923c;
+  --accent-hover: #fca15a;
+  --accent-light: #fecba1;
+  --accent-text: #fecba1;
+  --accent-soft: rgba(251, 146, 60, 0.15);
+  --accent-softer: rgba(251, 146, 60, 0.07);
+  --accent-pressed: #ef8230;
+  --bg-selected: rgba(251, 146, 60, 0.16);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --text-muted: var(--text-tertiary);
+  --type-text: #ffd9ad;
+  --type-code: #a8d8a0;
+  --type-link: #d9a6f5;
+  --type-image: #ff9e8f;
+  --type-file: #e8c97a;
+  --success: #9fcaa0;
+  --success-soft: rgba(159, 202, 160, 0.14);
+  --warning: #f2a96b;
+  --warning-soft: rgba(242, 169, 107, 0.14);
+  --pin: #c490ff;
+  --pin-soft: rgba(196, 144, 255, 0.15);
+  --danger: #ef6a5a;
+  --danger-soft: rgba(239, 106, 90, 0.15);
+  --code-bg: #201813;
+  --sensitive: #f2835b;
+  --sensitive-soft: rgba(242, 131, 91, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.75);
+  --shadow-glow: 0 0 20px rgba(251, 146, 60, 0.18);
+  --win-close-hover: #e81123;
+}
+
+/* Sunset Light (暖阳) — light counterpart of the sunset family */
+body.sunset-light-theme,
+.sunset-light-theme {
+  --bg-base: #f7efe4;
+  --bg-surface: #fdf7ee;
+  --bg-elevated: #f5ead9;
+  --bg-hover: #efe1cc;
+  --bg-active: #e8d6bd;
+  --bg-input: #f4e9db;
+  --border-subtle: rgba(120, 60, 0, 0.09);
+  --border-default: rgba(120, 60, 0, 0.13);
+  --border-focus: #ea580c;
+  --text-primary: #3d2c1d;
+  --text-secondary: #7a5c3e;
+  --text-tertiary: #9a7c5e;
+  --text-inverse: #fff7ed;
+  --accent: #ea580c;
+  --accent-hover: #c2410c;
+  --accent-light: #fb923c;
+  --accent-text: #c2410c;
+  --accent-soft: rgba(234, 88, 12, 0.11);
+  --accent-softer: rgba(234, 88, 12, 0.05);
+  --accent-pressed: #9a3412;
+  --bg-selected: rgba(234, 88, 12, 0.12);
+  --border-light: rgba(120, 60, 0, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #c2410c;
+  --type-code: #4d7c0f;
+  --type-link: #7c3aed;
+  --type-image: #be123c;
+  --type-file: #a16207;
+  --success: #4d7c0f;
+  --success-soft: rgba(77, 124, 15, 0.1);
+  --warning: #d97706;
+  --warning-soft: rgba(217, 119, 6, 0.1);
+  --pin: #a21caf;
+  --pin-soft: rgba(162, 28, 175, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --code-bg: #f2e6d5;
+  --sensitive: #ea580c;
+  --sensitive-soft: rgba(234, 88, 12, 0.1);
+  --shadow-sm: 0 1px 2px rgba(120, 60, 0, 0.14);
+  --shadow-md: 0 4px 16px rgba(120, 60, 0, 0.18);
+  --shadow-lg: 0 12px 48px rgba(120, 60, 0, 0.22);
+  --shadow-glow: 0 0 20px rgba(234, 88, 12, 0.14);
+  --win-close-hover: #e81123;
+}

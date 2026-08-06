@@ -1,0 +1,102 @@
+/* ============================================================
+   Dracula family (紫夜 / 紫霞)
+   Split out of main.css so each theme family owns its tokens.
+   ============================================================ */
+
+/* Dracula Theme (紫夜) — fixed dark-leaning colorful preset */
+body.dracula-theme,
+.dracula-theme {
+  --bg-base: #21222c;
+  --bg-surface: #282a36;
+  --bg-elevated: #2f3040;
+  --bg-hover: #34354a;
+  --bg-active: #3a3b52;
+  --bg-input: #1e1f2b;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.11);
+  --border-focus: #bd93f9;
+  --text-primary: #f8f8f2;
+  --text-secondary: #b4b4c8;
+  --text-tertiary: #8a8aa3;
+  --text-inverse: #1e1f29;
+  --accent: #bd93f9;
+  --accent-hover: #caa2fb;
+  --accent-light: #e3d0fd;
+  --accent-text: #d8c1fc;
+  --accent-soft: rgba(189, 147, 249, 0.15);
+  --accent-softer: rgba(189, 147, 249, 0.07);
+  --accent-pressed: #a882f0;
+  --bg-selected: rgba(189, 147, 249, 0.16);
+  --border-light: rgba(255, 255, 255, 0.09);
+  --text-muted: var(--text-tertiary);
+  --type-text: #8be9fd;
+  --type-code: #50fa7b;
+  --type-link: #9ab4ff;
+  --type-image: #3ec6e8;
+  --type-file: #f1fa8c;
+  --success: #50fa7b;
+  --success-soft: rgba(80, 250, 123, 0.13);
+  --warning: #ffb86c;
+  --warning-soft: rgba(255, 184, 108, 0.14);
+  --pin: #ff79c6;
+  --pin-soft: rgba(255, 121, 198, 0.15);
+  --danger: #ff5555;
+  --danger-soft: rgba(255, 85, 85, 0.15);
+  --code-bg: #1e1f29;
+  --sensitive: #ff9e64;
+  --sensitive-soft: rgba(255, 158, 100, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.75);
+  --shadow-glow: 0 0 20px rgba(189, 147, 249, 0.18);
+  --win-close-hover: #e81123;
+}
+
+/* Dracula Light (紫霞) — light counterpart of the dracula family */
+body.dracula-light-theme,
+.dracula-light-theme {
+  --bg-base: #f3eefb;
+  --bg-surface: #faf7ff;
+  --bg-elevated: #f0e9fa;
+  --bg-hover: #e9e0f6;
+  --bg-active: #e0d4f0;
+  --bg-input: #eee7f8;
+  --border-subtle: rgba(80, 40, 120, 0.08);
+  --border-default: rgba(80, 40, 120, 0.12);
+  --border-focus: #8b5cf6;
+  --text-primary: #2d2338;
+  --text-secondary: #6b5d7d;
+  --text-tertiary: #8a7c9c;
+  --text-inverse: #ffffff;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-light: #a78bfa;
+  --accent-text: #6d28d9;
+  --accent-soft: rgba(139, 92, 246, 0.1);
+  --accent-softer: rgba(139, 92, 246, 0.05);
+  --accent-pressed: #6d28d9;
+  --bg-selected: rgba(139, 92, 246, 0.12);
+  --border-light: rgba(80, 40, 120, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #7c3aed;
+  --type-code: #15803d;
+  --type-link: #2563eb;
+  --type-image: #0891b2;
+  --type-file: #b45309;
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --pin: #c026d3;
+  --pin-soft: rgba(192, 38, 211, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --code-bg: #efe8fa;
+  --sensitive: #ea580c;
+  --sensitive-soft: rgba(234, 88, 12, 0.1);
+  --shadow-sm: 0 1px 2px rgba(80, 40, 120, 0.14);
+  --shadow-md: 0 4px 16px rgba(80, 40, 120, 0.18);
+  --shadow-lg: 0 12px 48px rgba(80, 40, 120, 0.22);
+  --shadow-glow: 0 0 20px rgba(139, 92, 246, 0.14);
+  --win-close-hover: #e81123;
+}

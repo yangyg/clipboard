@@ -1,0 +1,102 @@
+/* ============================================================
+   Nord family (冰蓝 / 冰白)
+   Split out of main.css so each theme family owns its tokens.
+   ============================================================ */
+
+/* Nord Theme (冰蓝) — fixed dark-leaning colorful preset */
+body.nord-theme,
+.nord-theme {
+  --bg-base: #242933;
+  --bg-surface: #2e3440;
+  --bg-elevated: #353d4b;
+  --bg-hover: #3b4252;
+  --bg-active: #434c5e;
+  --bg-input: #20252e;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-focus: #88c0d0;
+  --text-primary: #eceff4;
+  --text-secondary: #a6b0c4;
+  --text-tertiary: #7b8598;
+  --text-inverse: #2e3440;
+  --accent: #88c0d0;
+  --accent-hover: #9ccddd;
+  --accent-light: #bfe0ea;
+  --accent-text: #bfe0ea;
+  --accent-soft: rgba(136, 192, 208, 0.14);
+  --accent-softer: rgba(136, 192, 208, 0.07);
+  --accent-pressed: #76b3c4;
+  --bg-selected: rgba(136, 192, 208, 0.16);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --text-muted: var(--text-tertiary);
+  --type-text: #9fd8e8;
+  --type-code: #a3be8c;
+  --type-link: #81a1c1;
+  --type-image: #8fbcbb;
+  --type-file: #ebcb8b;
+  --success: #a3be8c;
+  --success-soft: rgba(163, 190, 140, 0.14);
+  --warning: #ebcb8b;
+  --warning-soft: rgba(235, 203, 139, 0.14);
+  --pin: #b48ead;
+  --pin-soft: rgba(180, 142, 173, 0.15);
+  --danger: #bf616a;
+  --danger-soft: rgba(191, 97, 106, 0.15);
+  --code-bg: #20252e;
+  --sensitive: #d08770;
+  --sensitive-soft: rgba(208, 135, 112, 0.14);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.7);
+  --shadow-glow: 0 0 20px rgba(136, 192, 208, 0.16);
+  --win-close-hover: #e81123;
+}
+
+/* Nord Light (冰白) — light counterpart of the nord family */
+body.nord-light-theme,
+.nord-light-theme {
+  --bg-base: #e8edf3;
+  --bg-surface: #f0f4f8;
+  --bg-elevated: #e3e9f1;
+  --bg-hover: #dce4ee;
+  --bg-active: #d4dee9;
+  --bg-input: #e6ecf3;
+  --border-subtle: rgba(46, 52, 64, 0.08);
+  --border-default: rgba(46, 52, 64, 0.12);
+  --border-focus: #5e81ac;
+  --text-primary: #2e3440;
+  --text-secondary: #4c566a;
+  --text-tertiary: #616e85;
+  --text-inverse: #eceff4;
+  --accent: #5e81ac;
+  --accent-hover: #5279a3;
+  --accent-light: #81a1c1;
+  --accent-text: #41678f;
+  --accent-soft: rgba(94, 129, 172, 0.12);
+  --accent-softer: rgba(94, 129, 172, 0.06);
+  --accent-pressed: #4d7299;
+  --bg-selected: rgba(94, 129, 172, 0.12);
+  --border-light: rgba(46, 52, 64, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #47688d;
+  --type-code: #4e7d43;
+  --type-link: #2d6da3;
+  --type-image: #3a7c8c;
+  --type-file: #9a7310;
+  --success: #3f7d3f;
+  --success-soft: rgba(63, 125, 63, 0.1);
+  --warning: #9a7310;
+  --warning-soft: rgba(154, 115, 16, 0.1);
+  --pin: #8a5a83;
+  --pin-soft: rgba(138, 90, 131, 0.1);
+  --danger: #c24554;
+  --danger-soft: rgba(194, 69, 84, 0.1);
+  --code-bg: #e2e8f0;
+  --sensitive: #b05e1f;
+  --sensitive-soft: rgba(176, 94, 31, 0.1);
+  --shadow-sm: 0 1px 2px rgba(46, 52, 64, 0.14);
+  --shadow-md: 0 4px 16px rgba(46, 52, 64, 0.18);
+  --shadow-lg: 0 12px 48px rgba(46, 52, 64, 0.22);
+  --shadow-glow: 0 0 20px rgba(94, 129, 172, 0.14);
+  --win-close-hover: #e81123;
+}

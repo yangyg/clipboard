@@ -1,0 +1,72 @@
+/* ============================================================
+   Base Themes: Light + OLED
+   Split out of main.css so each theme family owns its tokens.
+   ============================================================ */
+
+/* Light Theme */
+body.light-theme,
+.light-theme {
+  --bg-base: #eef0f5;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8f9fc;
+  --bg-hover: #eef1f8;
+  --bg-active: #e4e7f4;
+  --bg-input: #f0f2f8;
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-focus: #0078d4;
+  --text-primary: #1a1c2e;
+  --text-secondary: #5c6078;
+  --text-tertiary: #6b7088;
+  --text-inverse: #ffffff;
+  --accent: #0078d4;
+  --accent-hover: #106ebe;
+  --accent-light: #1b86d9;
+  --accent-soft: rgba(0, 120, 212, 0.1);
+  --accent-softer: rgba(0, 120, 212, 0.05);
+  --bg-selected: rgba(0, 120, 212, 0.12);
+  --border-light: rgba(0, 0, 0, 0.06);
+  --text-muted: var(--text-tertiary);
+  --type-text: #0369a1;
+  --type-code: #047857;
+  --type-link: #2563eb;
+  --type-image: #0e7490;
+  --type-file: #a16207;
+  --accent-text: #0078d4;
+  --accent-pressed: #0c5a9e;
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --pin: #7c3aed;
+  --pin-soft: rgba(124, 58, 237, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --code-bg: #f0f2f8;
+  --sensitive: #c2410c;
+  --sensitive-soft: rgba(194, 65, 12, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.12);
+  --shadow-glow: 0 0 20px rgba(0, 120, 212, 0.1);
+}
+
+/* OLED Theme */
+body.oled-theme,
+.oled-theme {
+  --bg-base: #000000;
+  --bg-surface: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-hover: #1a1a1a;
+  --bg-active: #222222;
+  --bg-input: #080808;
+  --border-subtle: rgba(255, 255, 255, 0.04);
+  --border-default: rgba(255, 255, 255, 0.07);
+  --text-primary: #e8e8f0;
+  --text-secondary: #9090b6;
+  --text-tertiary: #6e6e92;
+  --code-bg: #050505;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.8);
+  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.9);
+}

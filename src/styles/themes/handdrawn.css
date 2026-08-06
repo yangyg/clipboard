@@ -7,7 +7,7 @@
 
 /* Hand-Drawn Theme (手绘) — fixed dark-leaning preset.
    Warm charcoal base + paper text + coral "marker" accent, chalk pastel
-   type colors. Sketch extras: sticker shadow ink + paper dot texture. */
+   type colors. Sketch extras: sticker shadow ink + paper texture. */
 body.handdrawn-theme,
 .handdrawn-theme {
   --bg-base: #262320;
@@ -57,6 +57,13 @@ body.handdrawn-theme,
   /* Hand-drawn extras */
   --sketch-ink: rgba(0, 0, 0, 0.38);
   --sketch-dot: rgba(255, 246, 224, 0.028);
+  --sketch-fiber: rgba(255, 246, 224, 0.014);
+  --sketch-wash: rgba(255, 246, 224, 0.012);
+  --sketch-paper-texture: radial-gradient(ellipse at 20% 10%, var(--sketch-wash), transparent 46%),
+    radial-gradient(ellipse at 80% 75%, var(--sketch-wash), transparent 42%),
+    radial-gradient(var(--sketch-dot) 1px, transparent 1.4px),
+    repeating-linear-gradient(103deg, transparent 0 9px, var(--sketch-fiber) 9px 10px, transparent 10px 18px),
+    repeating-linear-gradient(12deg, transparent 0 13px, var(--sketch-fiber) 13px 14px, transparent 14px 26px);
   --sketch-underline: rgba(242, 112, 89, 0.9);
   --sketch-select: #ffd84d;
   --sketch-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Cpath d='M0 2 Q 3 0.4 6 2 T 12 2 T 18 2 T 24 2' fill='none' stroke='%23f3eadd' stroke-opacity='0.12'/%3E%3C/svg%3E");
@@ -112,6 +119,13 @@ body.handdrawn-light-theme,
   --win-close-hover: #e81123;
   --sketch-ink: rgba(58, 38, 20, 0.28);
   --sketch-dot: rgba(58, 38, 20, 0.035);
+  --sketch-fiber: rgba(58, 38, 20, 0.018);
+  --sketch-wash: rgba(58, 38, 20, 0.012);
+  --sketch-paper-texture: radial-gradient(ellipse at 20% 10%, var(--sketch-wash), transparent 46%),
+    radial-gradient(ellipse at 80% 75%, var(--sketch-wash), transparent 42%),
+    radial-gradient(var(--sketch-dot) 1px, transparent 1.4px),
+    repeating-linear-gradient(103deg, transparent 0 9px, var(--sketch-fiber) 9px 10px, transparent 10px 18px),
+    repeating-linear-gradient(12deg, transparent 0 13px, var(--sketch-fiber) 13px 14px, transparent 14px 26px);
   --sketch-underline: rgba(232, 96, 63, 0.85);
   --sketch-select: #ffd84d;
   --sketch-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Cpath d='M0 2 Q 3 0.4 6 2 T 12 2 T 18 2 T 24 2' fill='none' stroke='%234a3220' stroke-opacity='0.16'/%3E%3C/svg%3E");
@@ -173,6 +187,14 @@ body.handdrawn-light-theme {
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .mode-card:nth-child(even) {
   transform: rotate(0.3deg);
 }
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .mode-card {
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    transform var(--transition-fast);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .mode-card:hover,
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .mode-card.selected {
+  transform: rotate(0deg);
+}
 
 /* Selected list rows get a hand-drawn dashed frame instead of a flat fill */
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .record-item.selected {
@@ -207,8 +229,8 @@ body.handdrawn-light-theme {
   text-decoration: none;
 }
 
-/* Dashed focus ring (sketched outline), except on nav/category/tag items
-   where the wavy underline above is the focus cue instead. */
+/* Dashed focus ring (sketched outline). The wavy underline remains a secondary
+   active-state cue, but keyboard focus also gets a complete visible boundary. */
 :is(body.handdrawn-theme, body.handdrawn-light-theme) :focus-visible {
   outline: 2px dashed var(--accent);
   outline-offset: 2px;
@@ -216,18 +238,26 @@ body.handdrawn-light-theme {
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .nav-item:focus-visible,
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .filter-tab:focus-visible,
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .tag-item:focus-visible {
-  outline: none;
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
 }
 
-/* Paper dot texture on the outer chrome (also after the blur shorthand) */
+/* Paper grain on the panel and the main content surfaces. Keep it as a
+   background layer so it remains cheap and does not add a paint overlay. */
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .panel-surface,
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .tray-menu,
 :is(body.handdrawn-theme.blur-enabled, body.handdrawn-light-theme.blur-enabled)
   .panel-surface,
 :is(body.handdrawn-theme.blur-enabled, body.handdrawn-light-theme.blur-enabled)
   .tray-menu {
-  background-image: radial-gradient(var(--sketch-dot) 1px, transparent 1.4px);
-  background-size: 16px 16px;
+  background-image: var(--sketch-paper-texture);
+  background-size: 100% 100%, 100% 100%, 16px 16px, 100% 100%, 100% 100%;
+}
+
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.sidebar, .list-column, .preview-pane, .settings-nav, .settings-body) {
+  background-image: var(--sketch-paper-texture);
+  background-size: 100% 100%, 100% 100%, 16px 16px, 100% 100%, 100% 100%;
 }
 
 /* Marker-highlighter text selection */
@@ -291,7 +321,6 @@ body.handdrawn-light-theme {
     .settings-header,
     .preview-header,
     .dialog-header,
-    .setting-row,
     .batch-bar
   ) {
   border-bottom: none;
@@ -299,6 +328,22 @@ body.handdrawn-light-theme {
   background-repeat: repeat-x;
   background-position: bottom;
   background-size: 24px 4px;
+}
+
+/* Keep repeated setting rows quiet so the larger section dividers carry the
+   hand-drawn character without turning the whole form into visual noise. */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .setting-row {
+  border-bottom: 1px dashed color-mix(in srgb, var(--text-tertiary) 30%, transparent);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .setting-row:last-child {
+  border-bottom: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(body.handdrawn-theme, body.handdrawn-light-theme)
+    :is(.theme-card, .mode-card) {
+    transform: none;
+  }
 }
 
 /* List footer divider (border-top) → wavy squiggle along the top edge */

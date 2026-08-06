@@ -309,9 +309,23 @@ const APP_MODES = [
 .theme-dracula-light { background: linear-gradient(135deg, #faf7ff, #f3eefb); }
 .theme-nord-light { background: linear-gradient(135deg, #f0f4f8, #e8edf3); }
 .theme-sunset-light { background: linear-gradient(135deg, #fdf7ee, #f7efe4); }
-.theme-handdrawn { background: linear-gradient(135deg, #2e2a26, #221f1c); }
+.theme-handdrawn {
+  background-color: #2e2a26;
+  background-image: radial-gradient(ellipse at 20% 10%, rgba(255, 246, 224, 0.08), transparent 46%),
+    radial-gradient(ellipse at 80% 75%, rgba(255, 246, 224, 0.08), transparent 42%),
+    radial-gradient(rgba(255, 246, 224, 0.12) 0.8px, transparent 1.2px),
+    repeating-linear-gradient(103deg, transparent 0 9px, rgba(255, 246, 224, 0.06) 9px 10px, transparent 10px 18px),
+    repeating-linear-gradient(12deg, transparent 0 13px, rgba(255, 246, 224, 0.06) 13px 14px, transparent 14px 26px);
+  background-size: 100% 100%, 100% 100%, 8px 8px, 100% 100%, 100% 100%;
+}
 .theme-handdrawn-light {
-  background: linear-gradient(135deg, #faf5ea, #f1eadd);
+  background-color: #faf5ea;
+  background-image: radial-gradient(ellipse at 20% 10%, rgba(58, 38, 20, 0.08), transparent 46%),
+    radial-gradient(ellipse at 80% 75%, rgba(58, 38, 20, 0.08), transparent 42%),
+    radial-gradient(rgba(58, 38, 20, 0.12) 0.8px, transparent 1.2px),
+    repeating-linear-gradient(103deg, transparent 0 9px, rgba(58, 38, 20, 0.05) 9px 10px, transparent 10px 18px),
+    repeating-linear-gradient(12deg, transparent 0 13px, rgba(58, 38, 20, 0.05) 13px 14px, transparent 14px 26px);
+  background-size: 100% 100%, 100% 100%, 8px 8px, 100% 100%, 100% 100%;
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
 .theme-mono { background: linear-gradient(135deg, #121212, #0a0a0a); }

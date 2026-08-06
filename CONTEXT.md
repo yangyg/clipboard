@@ -21,6 +21,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
 | **Soft cap** | In-memory list pages are soft-capped (`PAGE_SIZE × 2`). When dirty, the next `loadMore` reloads from DB. |
 | **WebDAV sync** | Cloud sync via WebDAV protocol `clipvault-webdav-v1`. Manifest + JSONL bundle; media files synced alongside. Default remote dir `ClipVaultSync`. |
+| **UI font** | `font_family` setting — a preset key (`default`/`yahei`/`simhei`/`simsun`/`kaiti`/`segoe`) or `system:<name>` for an OS-installed font. Applied as `--font-sans`; every stack carries a CJK-capable fallback (`Microsoft YaHei UI`). |
 
 ## Architecture Decision Records
 
@@ -28,8 +29,8 @@ See `docs/adr/` for immutable decision records:
 
 - **ADR-0001** — Virtual-list composable extraction & responsive grid column single-source-of-truth (JS, not CSS `auto-fill`).
 - **ADR-0002** — Native OS-theme watcher (invisible HWND + `WM_SETTINGCHANGE`) as the primary source for follow-system theme, because WebView2 matchMedia events are unreliable while hidden. **Superseded by ADR-0004 (feature removed).**
-- **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor.
-- **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 9 fixed cards in one radiogroup.
+- **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor. Later appended: per-family token files under `src/styles/themes/`, the hand-drawn family (`handdrawn`/`handdrawn-light`, with sketch styling + `@sketchyicons/vue` icons) and the monochrome family (`mono`/`mono-light`).
+- **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 13 fixed cards in one radiogroup.
 
 ## Key Design Constraints
 
@@ -40,6 +41,7 @@ See `docs/adr/` for immutable decision records:
 - **Loading/empty ↔ list transition is pure CSS** — Not `<Transition mode="out-in">`, because WebView2 drops `requestAnimationFrame` while hidden.
 - **Media open uses `ShellExecuteW`** — Not `cmd /c start` or `shell.open`.
 - **Link schemes are a shared whitelist** — `security::is_openable_link` is the single source for detect / `open_url` / import keep-as-link. WebView `<a href>` stays http(s)-only; other openable schemes go through Rust.
+- **UI font via presets / system fonts** — `font_family` resolves through `src/utils/fontPresets.ts` (`resolveFontStack`); system-font choices (`system:<name>`) are enumerated by the async Rust command `get_system_fonts` (DirectWrite via `font-kit`, CJK-glyph filtered, cached) and applied with a CJK-safe fallback stack. Settings is a JSON blob, so new fields need no DB migration (serde default).
 - **Brand name** — Product name is **Clipboard** everywhere in UI. Machine-readable names use `clipboard`. Compatibility identifiers (bundle ID, data dir, DB filename) retain legacy `ClipVault` names.
 
 ## Data Paths

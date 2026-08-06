@@ -518,6 +518,8 @@ export default {
       appModesText: '"Floating Panel" is frameless, always-on-top, auto-hides on focus loss — ideal for quick paste; "Standalone Window" has a sidebar and taskbar entry — ideal for long-term management. When frosted glass is enabled, both modes blur the background. Both modes remember your last window size. Switch in "Appearance".',
       dataUsage: 'Data & Usage',
       dataUsageText: 'Settings → Data shows the local storage estimate and the data directory absolute path (default: %LOCALAPPDATA%\\ClipVault); Settings → Statistics shows record overview and type distribution.',
+      fontFamily: 'UI Font',
+      fontFamilyText: 'In "Appearance → UI Font" choose the font for the interface text: six built-in presets (Default / Microsoft YaHei / SimHei / SimSun / KaiTi / Segoe UI), or pick "System font…" to choose from Chinese-capable fonts installed on this machine (first load ~1s). Missing glyphs automatically fall back to a Chinese system font; size is still controlled by "Font Size".',
     },
     about: {
       version: 'Version 0.1.0',

@@ -43,6 +43,11 @@
     </div>
 
     <div class="guide-block">
+      <div class="guide-heading"><AppIcon name="type" :size="14" /> {{ $t('settings.help.fontFamily') }}</div>
+      <div class="guide-text">{{ $t('settings.help.fontFamilyText') }}</div>
+    </div>
+
+    <div class="guide-block">
       <div class="guide-heading"><AppIcon name="stats" :size="14" /> {{ $t('settings.help.dataUsage') }}</div>
       <div class="guide-text">{{ $t('settings.help.dataUsageText') }}</div>
     </div>

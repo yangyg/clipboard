@@ -105,16 +105,112 @@
         <span class="slider-value">{{ settings.font_size }}px</span>
       </div>
     </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">{{ $t('settings.appearance.fontFamily') }}</div>
+        <div class="setting-desc">{{ $t('settings.appearance.fontFamilyDesc') }}</div>
+      </div>
+      <select
+        class="font-select"
+        :value="presetSelectValue"
+        :aria-label="$t('settings.appearance.fontFamily')"
+        @change="onPresetChange"
+      >
+        <option v-for="p in FONT_PRESETS" :key="p.key" :value="p.key">{{ $t(p.labelKey) }}</option>
+        <option :value="SYSTEM_FONT_OPTION_KEY">{{ $t('settings.appearance.fontSystem') }}</option>
+      </select>
+    </div>
+    <div v-if="showSystemSelect" class="setting-row">
+      <div class="setting-label">{{ $t('settings.appearance.fontSystemTitle') }}</div>
+      <select
+        v-if="systemFontsLoaded"
+        class="font-select"
+        :value="currentSystemFontName"
+        :aria-label="$t('settings.appearance.fontSystemTitle')"
+        @change="onSystemFontChange"
+      >
+        <option v-for="name in systemFonts" :key="name" :value="name">{{ name }}</option>
+      </select>
+      <span v-else class="setting-desc">{{ $t('settings.appearance.fontLoading') }}</span>
+    </div>
+    <div class="setting-row">
+      <div class="setting-label">{{ $t('settings.appearance.fontPreview') }}</div>
+      <div class="font-preview" :style="{ fontFamily: currentStack }">{{ $t('settings.appearance.fontPreviewSample') }}</div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettings } from "../../composables/useSettings";
+import {
+  FONT_PRESETS,
+  SYSTEM_FONT_OPTION_KEY,
+  isSystemFontValue,
+  resolveFontStack,
+  systemFontName,
+} from "../../utils/fontPresets";
+import { useToast } from "../../composables/useToast";
+import { i18n } from "../../locales";
 import type { Settings } from "../../types";
 import AppIcon, { type AppIconName } from "../icons/AppIcon.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, update } = useSettings();
+
+// --- Font family ---------------------------------------------------------
+
+const systemFonts = ref<string[]>([]);
+const systemFontsLoaded = ref(false);
+/** User opted into the "系统字体…" entry (no committed setting until a font is picked). */
+const showSystemMode = ref(false);
+
+const isSystemFontSelected = computed(() => isSystemFontValue(settings.font_family));
+const presetSelectValue = computed(() =>
+  isSystemFontSelected.value || showSystemMode.value ? SYSTEM_FONT_OPTION_KEY : settings.font_family,
+);
+const showSystemSelect = computed(() => isSystemFontSelected.value || showSystemMode.value);
+const currentSystemFontName = computed(() => systemFontName(settings.font_family));
+const currentStack = computed(() => resolveFontStack(settings.font_family));
+
+// Load the OS font list as soon as the system-font section is shown (also on
+// re-open when a system font is already active).
+watch(
+  showSystemSelect,
+  (visible) => {
+    if (visible) void loadSystemFonts();
+  },
+  { immediate: true },
+);
+
+async function loadSystemFonts() {
+  if (systemFontsLoaded.value) return;
+  try {
+    systemFonts.value = await invoke<string[]>("get_system_fonts");
+  } catch (e) {
+    console.error("Failed to load system fonts:", e);
+    useToast().toast(i18n.global.t("settings.appearance.fontLoadError"), "error");
+  } finally {
+    systemFontsLoaded.value = true;
+  }
+}
+
+function onPresetChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value;
+  if (value === SYSTEM_FONT_OPTION_KEY) {
+    showSystemMode.value = true;
+    void loadSystemFonts();
+    return;
+  }
+  showSystemMode.value = false;
+  update("font_family", value);
+}
+
+function onSystemFontChange(e: Event) {
+  update("font_family", `system:${(e.target as HTMLSelectElement).value}`);
+}
+
 
 type ThemeOption = { key: Settings["theme"]; icon: AppIconName; labelKey: string };
 
@@ -279,5 +375,41 @@ const APP_MODES = [
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   line-height: 1.4;
+}
+
+/* Font family select + live preview */
+.font-select {
+  height: var(--btn-height-sm);
+  max-width: 14rem;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.font-select:hover,
+.font-select:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.font-preview {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-lg);
+  color: var(--text-primary);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 </style>

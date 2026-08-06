@@ -116,6 +116,12 @@ fn default_language() -> String {
     "system".to_string()
 }
 
+/// Missing `font_family` in saved JSON (upgrade) → the "default" preset.
+/// Keep in sync with `FONT_PRESETS[0].key` in src/utils/fontPresets.ts.
+fn default_font_family() -> String {
+    "default".to_string()
+}
+
 /// L-3: Default auto-tag rules for new installs.
 /// IMPORTANT: Keep in sync with `DEFAULT_AUTO_TAG_RULES` in src/types.ts.
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
@@ -178,6 +184,9 @@ pub struct Settings {
     pub enable_animation: bool,
     #[serde(rename = "font_size")]
     pub font_size: i32,
+    /// UI font-family preset key, or `system:<name>` for an OS-installed font.
+    #[serde(default = "default_font_family", rename = "font_family")]
+    pub font_family: String,
     #[serde(rename = "app_mode")]
     pub app_mode: String,
     #[serde(rename = "default_paste_mode")]
@@ -251,6 +260,7 @@ impl Default for Settings {
             blur_strength: 45,
             enable_animation: true,
             font_size: 16,
+            font_family: default_font_family(),
             app_mode: "floating".to_string(),
             default_paste_mode: "original".to_string(),
             auto_close_on_paste: true,

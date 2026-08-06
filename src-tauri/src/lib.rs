@@ -104,6 +104,7 @@ pub fn run() {
             commands::get_records,
             commands::search_records,
             commands::get_record,
+            commands::get_system_fonts,
             commands::open_record_media,
             commands::open_url,
             commands::capture_paste_target,

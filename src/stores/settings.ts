@@ -5,6 +5,7 @@ import type { Settings } from "../types";
 import { DEFAULT_AUTO_TAG_RULES } from "../types";
 import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
+import { resolveFontStack } from "../utils/fontPresets";
 import { applyTheme as applyThemeClass } from "../utils/themeClass";
 import { i18n } from "../locales";
 
@@ -19,6 +20,7 @@ const DEFAULT_SETTINGS: Settings = {
   blur_strength: 45,
   enable_animation: true,
   font_size: 16,
+  font_family: "default",
   app_mode: "floating",
   default_paste_mode: "original",
   auto_close_on_paste: true,
@@ -136,6 +138,9 @@ export const useSettingsStore = defineStore("settings", () => {
     root.style.setProperty("--ui-font-scale", String(s.font_size / 16));
     root.style.fontSize = `${s.font_size}px`;
 
+    // UI font family (preset key or `system:<name>`)
+    root.style.setProperty("--font-sans", resolveFontStack(s.font_family));
+
     // Panel radius (used as CSS variable)
     root.style.setProperty("--panel-radius", `${s.panel_radius}px`);
 
@@ -189,7 +194,7 @@ export const useSettingsStore = defineStore("settings", () => {
     }
     // Apply appearance changes immediately for real-time preview
     if (
-      ["font_size", "panel_radius", "panel_opacity", "enable_blur", "blur_strength", "enable_animation", "app_mode"].includes(
+      ["font_size", "font_family", "panel_radius", "panel_opacity", "enable_blur", "blur_strength", "enable_animation", "app_mode"].includes(
         key as string,
       )
     ) {

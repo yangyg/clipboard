@@ -82,6 +82,8 @@ export interface Settings {
   blur_strength: number;
   enable_animation: boolean;
   font_size: number;
+  /** UI font-family preset key, or `system:<name>` for an OS-installed font. */
+  font_family: string;
   // Behavior
   app_mode: 'floating' | 'window';
   default_paste_mode: 'original' | 'plain' | 'markdown';

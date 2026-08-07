@@ -469,6 +469,22 @@ body.anim-disabled *::after {
   color: var(--danger);
   border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
 }
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+.btn-danger:active {
+  background: color-mix(in srgb, var(--danger) 24%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+}
+.btn-danger:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .btn:active {
   transform: scale(0.97);
   filter: brightness(0.94);

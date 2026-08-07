@@ -521,7 +521,8 @@ body.handdrawn-light-theme {
     .image-placeholder,
     .image-thumb,
     .color-swatch-lg,
-    .record-image-tile
+    .record-image-tile,
+    .app-tooltip
   ) {
   border-radius: var(--sketch-radius-sm);
 }
@@ -541,6 +542,14 @@ body.handdrawn-light-theme {
 :is(body.handdrawn-theme, body.handdrawn-light-theme)
   :is(.toast-item, .data-card, .batch-bar) {
   box-shadow: 3px 3px 0 var(--sketch-ink);
+}
+
+/* Tooltip: sticker shadow + paper grain, so the floating chip reads as
+   "pasted" too instead of a clean OS-style bubble. */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .app-tooltip {
+  box-shadow: 3px 3px 0 var(--sketch-ink);
+  background-image: var(--sketch-paper-texture);
+  background-size: 100% 100%, 100% 100%, 16px 16px, 100% 100%, 100% 100%;
 }
 
 /* Big preview color swatch: casual tilt */

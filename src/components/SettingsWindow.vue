@@ -13,7 +13,7 @@
         <!-- Nav: back stays pinned; sections scroll independently -->
         <nav class="settings-nav">
           <div class="nav-back-bar">
-            <button type="button" class="nav-item nav-back" :title="$t('settings.back')" :aria-label="$t('settings.back')" @click="emit('close')">
+            <button type="button" class="nav-item nav-back" :data-tooltip="isNarrow ? $t('settings.back') : undefined" :aria-label="$t('settings.back')" @click="emit('close')">
               <span class="nav-icon"><AppIcon name="back" :size="15" /></span>
               <span class="nav-label">{{ $t('settings.back') }}</span>
             </button>
@@ -28,7 +28,7 @@
                 type="button"
                 class="nav-item"
                 :class="{ active: activeSection === section.key }"
-                :title="$t(section.labelKey)"
+                :data-tooltip="isNarrow ? $t(section.labelKey) : undefined"
                 :aria-label="$t(section.labelKey)"
                 @click="activeSection = section.key"
               >
@@ -77,6 +77,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { isFeatureEnabled, type FeatureId } from "../features/capabilities";
 import AppIcon, { type AppIconName } from "./icons/AppIcon.vue";
 import WindowControls from "./WindowControls.vue";
+import { useMediaQuery } from "../composables/useMediaQuery";
 import SettingsShortcuts from "./settings/SettingsShortcuts.vue";
 import SettingsAppearance from "./settings/SettingsAppearance.vue";
 import SettingsHistory from "./settings/SettingsHistory.vue";
@@ -102,6 +103,9 @@ const isWindowMode = computed(() => settings.app_mode === "window");
 
 const activeSection = ref(props.initialSection ?? "appearance");
 const isRecordingShortcut = ref(false);
+
+/** Icon-rail layout hides nav labels via CSS; keep tooltips only there. */
+const isNarrow = useMediaQuery("(max-width: 720px)");
 
 type GroupId = "general" | "content" | "privacySystem" | "dataSync" | "infoSupport";
 

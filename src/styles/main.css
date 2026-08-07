@@ -97,6 +97,11 @@
   --animation-spinner: 600ms linear;
   --animation-flash: 900ms ease-out;
   --animation-pulse: 1.2s ease-in-out;
+  /* Override hooks for the tooltip skin. Theme-dependent values (bg/text/border/
+     shadow) are resolved on .app-tooltip itself, not here — see .app-tooltip. */
+  --tooltip-radius: var(--radius-sm);
+  --tooltip-max-width: 280px;
+  --tooltip-delay: 350ms;
 }
 
 /* ============================================================
@@ -228,6 +233,38 @@ body.anim-disabled *::after {
 /* ============================================================
    Utility Classes
    ============================================================ */
+
+/* Native `title` popups cannot follow our themes, so tooltips are rendered in
+   a fixed layer above the app and remain visible at clipped panel edges.
+   The theme-dependent tokens go through var() fallbacks that resolve here on
+   .app-tooltip (a child of the themed <body>). Defining them in :root would
+   compute dark defaults there and inherit them unchanged into light themes. */
+.app-tooltip {
+  position: fixed;
+  z-index: 1000;
+  max-width: min(var(--tooltip-max-width), calc(100vw - 16px));
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--tooltip-border, var(--border-default));
+  border-radius: var(--tooltip-radius);
+  background: var(--tooltip-bg, color-mix(in srgb, var(--bg-elevated) 96%, var(--accent) 4%));
+  color: var(--tooltip-text, var(--text-primary));
+  box-shadow: var(--tooltip-shadow, var(--shadow-md));
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(3px) scale(0.98);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.app-tooltip[data-placement="bottom"] {
+  transform: translateY(-3px) scale(0.98);
+}
+.app-tooltip[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
 .panel {
   background: var(--bg-surface);
   overflow: hidden;

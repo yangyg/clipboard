@@ -14,7 +14,7 @@
         }"
         :style="item.color ? { '--cat-color': item.color } : undefined"
         :aria-current="props.activeCategory === item.key ? 'page' : undefined"
-        :title="item.label"
+        :data-tooltip="isNarrow ? item.label : undefined"
         :aria-label="item.label"
         @click="selectCategory(item.key)"
       >
@@ -37,7 +37,7 @@
         class="nav-item"
         :class="{ active: props.activeCategory === 'trash' }"
         :aria-current="props.activeCategory === 'trash' ? 'page' : undefined"
-        :title="$t('sidebar.trash')"
+        :data-tooltip="isNarrow ? $t('sidebar.trash') : undefined"
         :aria-label="$t('sidebar.trash')"
         @click="selectCategory('trash')"
       >
@@ -175,9 +175,13 @@ import ContextMenu, { type ContextMenuItem } from "./ContextMenu.vue";
 import type { Tag } from "../types";
 import { useI18n } from "vue-i18n";
 import { useSidebarMenus } from "../composables/useSidebarMenus";
+import { useMediaQuery } from "../composables/useMediaQuery";
 import { FILTER_DEFINITIONS } from "../utils/filterDefinitions";
 
 const tagsEnabled = useFeature("tags");
+
+/** Icon-rail layout hides nav labels via CSS; keep tooltips only there. */
+const isNarrow = useMediaQuery("(max-width: 720px)");
 
 const clipboardStore = useClipboardStore();
 const { t } = useI18n();

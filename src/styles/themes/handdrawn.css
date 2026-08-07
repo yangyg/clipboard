@@ -426,6 +426,29 @@ body.handdrawn-light-theme {
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn {
   border-radius: var(--sketch-radius-sm);
 }
+
+@keyframes handdrawn-action-bounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-4px) rotate(-9deg); }
+  50% { transform: translateY(1px) rotate(6deg); }
+  75% { transform: translateY(-2px) rotate(-3deg); }
+}
+
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  .preview-actions .action-btn:hover .action-icon {
+  animation: handdrawn-action-bounce var(--transition-smooth);
+}
+
+@keyframes handdrawn-back-top-arrow {
+  0%, 100% { transform: translateY(2px); opacity: 0.7; }
+  50% { transform: translateY(-3px); opacity: 1; }
+}
+
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  .back-to-top-btn:hover .app-icon {
+  animation: handdrawn-back-top-arrow var(--animation-pulse) infinite;
+}
+
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn.action-primary {
   box-shadow: 3px 3px 0 var(--sketch-ink);
 }
@@ -465,12 +488,18 @@ body.handdrawn-light-theme {
 }
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip {
   border-radius: var(--sketch-radius-sm);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), filter var(--transition-fast);
 }
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip:nth-child(odd) {
   transform: rotate(-1deg);
 }
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip:nth-child(even) {
   transform: rotate(1deg);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .preview-tags .tag-chip:hover {
+  transform: translateY(-2px) rotate(0deg) scale(1.04);
+  box-shadow: 2px 2px 0 var(--sketch-ink);
+  filter: saturate(1.1);
 }
 
 /* ============================================================

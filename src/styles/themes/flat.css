@@ -1,0 +1,356 @@
+/* ============================================================
+   Flat family (扁平 / 扁平·浅)
+   Modern flat design: solid color fills and hairline borders,
+   no gradients, no glow. The component pass below is deliberately
+   thorough (mirroring the hand-drawn family's coverage) so the
+   flat language — square-ish corners, 1px hairline edges, solid
+   accent active states — is applied across the whole UI, not just
+   the token block.
+   ============================================================ */
+
+/* Flat Theme (扁平) — dark-leaning preset.
+   Cool near-black grays, flat vivid blue accent. */
+body.flat-theme,
+.flat-theme {
+  --bg-base: #13151a;
+  --bg-surface: #1a1d23;
+  --bg-elevated: #20242b;
+  --bg-hover: #262b33;
+  --bg-active: #2d333d;
+  --bg-input: #16181e;
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-focus: #5b8cff;
+  --text-primary: #eef1f6;
+  --text-secondary: #a2a8b8;
+  --text-tertiary: #7c8295;
+  --text-inverse: #13151a;
+  --accent: #5b8cff;
+  --text-on-accent: #ffffff;
+  --accent-hover: #6f9aff;
+  --accent-light: #9dbdff;
+  --accent-text: #9dbdff;
+  --accent-soft: rgba(91, 140, 255, 0.14);
+  --accent-softer: rgba(91, 140, 255, 0.07);
+  --accent-pressed: #4a76e8;
+  --bg-selected: rgba(91, 140, 255, 0.15);
+  --border-light: rgba(255, 255, 255, 0.09);
+  --text-muted: var(--text-tertiary);
+  --type-text: #7fd4f0;
+  --type-code: #7fdbae;
+  --type-link: #7fa6ff;
+  --type-image: #4ec3e6;
+  --type-file: #ffc766;
+  --success: #6fd493;
+  --success-soft: rgba(111, 212, 147, 0.13);
+  --warning: #ffb454;
+  --warning-soft: rgba(255, 180, 84, 0.14);
+  --pin: #c79aff;
+  --pin-soft: rgba(199, 154, 255, 0.15);
+  --danger: #ff7b77;
+  --danger-soft: rgba(255, 123, 119, 0.15);
+  --code-bg: #14171d;
+  --sensitive: #ff9d5c;
+  --sensitive-soft: rgba(255, 157, 92, 0.14);
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.14);
+  --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.18);
+  --shadow-glow: 0 0 0 transparent;
+  --win-close-hover: #e81123;
+}
+
+/* Flat Light (扁平·浅) — light counterpart.
+   Near-white surfaces, ink text, saturated blue accent. */
+body.flat-light-theme,
+.flat-light-theme {
+  --bg-base: #f3f4f7;
+  --bg-surface: #ffffff;
+  --bg-elevated: #f8f9fc;
+  --bg-hover: #eef0f5;
+  --bg-active: #e5e8f0;
+  --bg-input: #f5f6fa;
+  --border-subtle: rgba(20, 24, 36, 0.08);
+  --border-default: rgba(20, 24, 36, 0.13);
+  --border-focus: #2f6bff;
+  --text-primary: #1b1f2b;
+  --text-secondary: #5b6274;
+  --text-tertiary: #82889a;
+  --text-inverse: #ffffff;
+  --accent: #2f6bff;
+  --text-on-accent: #ffffff;
+  --accent-hover: #1f5bf0;
+  --accent-light: #5d8bff;
+  --accent-text: #1f56d6;
+  --accent-soft: rgba(47, 107, 255, 0.1);
+  --accent-softer: rgba(47, 107, 255, 0.05);
+  --accent-pressed: #1a4fd8;
+  --bg-selected: rgba(47, 107, 255, 0.12);
+  --border-light: rgba(20, 24, 36, 0.07);
+  --text-muted: var(--text-tertiary);
+  --type-text: #0b6f99;
+  --type-code: #1c7a44;
+  --type-link: #2458d6;
+  --type-image: #0e7490;
+  --type-file: #99610b;
+  --success: #1c8a4c;
+  --success-soft: rgba(28, 138, 76, 0.1);
+  --warning: #a6620c;
+  --warning-soft: rgba(166, 98, 12, 0.1);
+  --pin: #7c3aed;
+  --pin-soft: rgba(124, 58, 237, 0.1);
+  --danger: #d32f2f;
+  --danger-soft: rgba(211, 47, 47, 0.1);
+  --code-bg: #f0f2f8;
+  --sensitive: #c0560a;
+  --sensitive-soft: rgba(192, 86, 10, 0.1);
+  --shadow-sm: 0 1px 1px rgba(24, 28, 40, 0.05);
+  --shadow-md: 0 2px 10px rgba(24, 28, 40, 0.07);
+  --shadow-lg: 0 4px 24px rgba(24, 28, 40, 0.1);
+  --shadow-glow: 0 0 0 transparent;
+  --win-close-hover: #e81123;
+}
+
+/* ============================================================
+   Flat component pass (both variants)
+   Gated on body.flat-* so every other theme stays untouched.
+   `--panel-radius` is untouched (user-controlled in Settings).
+   ============================================================ */
+
+/* Crisp, square-ish corners across the whole surface */
+:is(body.flat-theme, body.flat-light-theme) {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+}
+
+/* Solid, hard-edged text selection + search highlight (no glow tint) */
+:is(body.flat-theme, body.flat-light-theme) ::selection {
+  background: var(--accent);
+  color: var(--text-inverse);
+}
+
+:is(body.flat-theme, body.flat-light-theme) mark.search-hit {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border-radius: 0;
+}
+
+/* Floating surfaces sit flat on the desktop: hairline edge, no drop shadow */
+:is(body.flat-theme, body.flat-light-theme) .panel-surface,
+:is(body.flat-theme, body.flat-light-theme) .tray-menu {
+  box-shadow: none;
+}
+
+/* Panel / window chrome keeps crisp hairline rules instead of soft tints */
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.titlebar, .panel-header, .list-toolbar, .settings-header, .preview-header, .dialog-header, .batch-bar) {
+  border-bottom: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.sidebar, .list-column:not(.list-column--full), .settings-nav) {
+  border-right: 1px solid var(--border-default);
+}
+
+/* ============================================================
+   Navigation & filters — flat solid accent for the active state.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .nav-item:not(.has-cat-color).active,
+:is(body.flat-theme, body.flat-light-theme) .filter-tab.active,
+:is(body.flat-theme, body.flat-light-theme) .tag-item.active,
+:is(body.flat-theme, body.flat-light-theme) .list-tool-btn.active,
+:is(body.flat-theme, body.flat-light-theme) .view-toggle-btn.active,
+:is(body.flat-theme, body.flat-light-theme) .icon-btn.active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.filter-tab.active .filter-count, .nav-item:not(.has-cat-color).active .nav-count) {
+  background: transparent;
+  color: var(--text-on-accent);
+  opacity: 0.85;
+}
+
+:is(body.flat-theme, body.flat-light-theme) .segment-btn.selected {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: none;
+}
+
+/* ============================================================
+   Buttons — flat fills, hairline secondary controls.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.btn-primary, .btn-primary:hover, .action-btn.action-primary, .action-btn.action-primary:hover)
+  :is(.action-label, .action-icon) {
+  color: var(--text-on-accent);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .btn-secondary {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .btn-danger {
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+/* ============================================================
+   Inputs & fields — hairline edges, flat focus (no glow).
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(
+    .search-box,
+    .auto-tag-input,
+    .font-select,
+    .list-sort,
+    .shortcut-btn,
+    .ignore-input,
+    .source-input,
+    .field-input,
+    input[type="text"],
+    input[type="password"],
+    input[type="url"],
+    input[type="number"],
+    select,
+    textarea
+  ) {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .search-box {
+  background: var(--bg-input);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .search-box:hover,
+:is(body.flat-theme, body.flat-light-theme) .search-box:focus {
+  box-shadow: none;
+  background: var(--bg-surface);
+}
+
+/* Flat switch: square-ish track + knob, solid on-state */
+:is(body.flat-theme, body.flat-light-theme) .toggle {
+  border-radius: 4px;
+}
+
+:is(body.flat-theme, body.flat-light-theme) .toggle::after {
+  border-radius: 3px;
+}
+
+/* ============================================================
+   Chips & badges — hairline edges on tinted fills.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.badge, .type-chip, .tag-badge, .record-sensitive, .kbd, .kbd-display) {
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .tag-chip {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: var(--radius-sm);
+}
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.badge, .type-chip, .tag-badge, .tag-chip, .record-sensitive, .kbd, .kbd-display) {
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   List rows & preview — solid flat selection + hairline media.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .record-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .record-color-swatch,
+:is(body.flat-theme, body.flat-light-theme) .record-type-icon,
+:is(body.flat-theme, body.flat-light-theme) .preview-type-icon,
+:is(body.flat-theme, body.flat-light-theme) .record-image-tile {
+  border-radius: var(--radius-sm);
+}
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.code-box, .link-card, .file-card, .image-placeholder, .empty-icon, .color-preview-card) {
+  border: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .image-card img,
+:is(body.flat-theme, body.flat-light-theme) .image-thumb {
+  box-shadow: none;
+  border: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .back-to-top-btn {
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   Floating chrome — batch bar, menus, dialogs.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .batch-bar {
+  background: var(--bg-elevated);
+  box-shadow: none;
+}
+
+:is(body.flat-theme, body.flat-light-theme) .context-menu,
+:is(body.flat-theme, body.flat-light-theme) .dialog-card {
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-md);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .live-dot {
+  box-shadow: none;
+  outline: 2px solid var(--success-soft);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .live-dot.paused {
+  outline-color: var(--warning-soft);
+}
+
+/* ============================================================
+   Cards & stats — hairline, flat.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.theme-card, .mode-card, .data-card, .stats-card, .storage-card, .guide-block) {
+  border: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .theme-card.selected,
+:is(body.flat-theme, body.flat-light-theme) .mode-card.selected {
+  border: 2px solid var(--accent);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .type-track {
+  border-radius: var(--radius-xs);
+}
+
+/* Flat scrollbars: thin square thumb */
+:is(body.flat-theme, body.flat-light-theme) ::-webkit-scrollbar-thumb {
+  border-radius: 2px;
+}
+
+/* ============================================================
+   Alignment cleanups — flat family prefers straight edges.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .record-item.is-new::before {
+  border-radius: var(--radius-sm);
+}

@@ -11,6 +11,7 @@
 @import "./themes/mono.css";
 @import "./themes/editorial.css";
 @import "./themes/sticker.css";
+@import "./themes/flat.css";
 
 :root {
   /* Dark Theme (default) */

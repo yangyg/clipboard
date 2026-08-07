@@ -16,6 +16,8 @@ export const THEME_DEFINITIONS = [
   { key: "editorial-light", icon: "component", labelKey: "settings.appearance.themeEditorialLight" },
   { key: "sticker", icon: "palette", labelKey: "settings.appearance.themeSticker" },
   { key: "sticker-light", icon: "palette", labelKey: "settings.appearance.themeStickerLight" },
+  { key: "flat", icon: "grid", labelKey: "settings.appearance.themeFlat" },
+  { key: "flat-light", icon: "grid", labelKey: "settings.appearance.themeFlatLight" },
 ] as const;
 
 export type ThemeKey = (typeof THEME_DEFINITIONS)[number]["key"];

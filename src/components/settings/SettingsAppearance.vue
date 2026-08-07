@@ -342,6 +342,13 @@ const APP_MODES = [
     linear-gradient(135deg, transparent 0 45%, #73b9b2 45% 62%, transparent 62%);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
+.theme-flat {
+  background: linear-gradient(90deg, #5b8cff 0 3px, #1a1d23 3px);
+}
+.theme-flat-light {
+  background: linear-gradient(90deg, #2f6bff 0 3px, #ffffff 3px);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
 
 .theme-name {
   font-size: var(--text-sm);

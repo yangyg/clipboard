@@ -356,6 +356,8 @@ export default {
       themeEditorialLight: 'Editorial Light',
       themeSticker: 'Sticker Collage',
       themeStickerLight: 'Sticker Collage Light',
+      themeFlat: 'Flat',
+      themeFlatLight: 'Flat Light',
       appMode: 'App Mode',
       modeFloating: 'Floating Panel',
       modeFloatingDesc: 'Frameless always-on-top, auto-hides on focus loss. Best for quick paste.',

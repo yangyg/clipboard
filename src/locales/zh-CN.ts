@@ -356,6 +356,8 @@ export default {
       themeEditorialLight: '杂志编辑·浅',
       themeSticker: '贴纸拼贴',
       themeStickerLight: '贴纸拼贴·浅',
+      themeFlat: '扁平',
+      themeFlatLight: '扁平·浅',
       appMode: '应用模式',
       modeFloating: '悬浮面板',
       modeFloatingDesc: '无边框置顶，失焦后自动隐藏，适合快速粘贴。',

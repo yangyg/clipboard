@@ -298,6 +298,19 @@ body.flat-light-theme,
 
 :is(body.flat-theme, body.flat-light-theme) .back-to-top-btn {
   border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast), transform var(--transition-fast);
+}
+:is(body.flat-theme, body.flat-light-theme) .back-to-top-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+:is(body.flat-theme, body.flat-light-theme) .back-to-top-btn:active {
+  transform: translateY(0) scale(0.92);
 }
 
 /* ============================================================
@@ -353,4 +366,253 @@ body.flat-light-theme,
 
 :is(body.flat-theme, body.flat-light-theme) .record-item.is-new::before {
   border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   Flat interaction pass (both variants)
+   The hand-drawn family tilts/stamps; the flat family answers
+   with the same coverage but in its own language: crisp solid
+   fills, hairline edges, a small hover lift and a pressed
+   squash. No gradients, no glow, no wobble.
+   ============================================================ */
+
+/* Crisp solid focus ring (flat counterpart of the dashed sketch ring) */
+:is(body.flat-theme, body.flat-light-theme) :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Navigation, filters & toolbar buttons: neutral flat hover fill */
+:is(body.flat-theme, body.flat-light-theme)
+  :is(
+    .nav-item:not(.has-cat-color):hover,
+    .tag-item:hover,
+    .tag-add:hover,
+    .filter-tab:hover,
+    .list-tool-btn:hover,
+    .view-toggle-btn:hover
+  ) {
+  background: var(--bg-hover);
+  color: var(--accent-text);
+  border-color: var(--border-default);
+}
+
+/* Category nav rows keep their own color on hover, flat-tinted */
+:is(body.flat-theme, body.flat-light-theme) .nav-item.has-cat-color:hover {
+  background: color-mix(in srgb, var(--cat-color) 10%, transparent);
+}
+
+/* Icon buttons & search clear: flat hover fill + pressed state */
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.icon-btn, .clear-btn) {
+  transition: background var(--transition-fast), color var(--transition-fast),
+    transform var(--transition-instant);
+}
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.icon-btn, .clear-btn):hover {
+  background: var(--bg-hover);
+  color: var(--accent-text);
+}
+:is(body.flat-theme, body.flat-light-theme)
+  :is(.icon-btn, .clear-btn):active {
+  background: var(--bg-active);
+  transform: scale(0.88);
+}
+
+/* List-row action buttons: compact square chips; neutral fill on
+   hover, semantic tints kept for favorite/pin/danger. */
+:is(body.flat-theme, body.flat-light-theme) .record-action-btn {
+  border-radius: var(--radius-xs);
+  transition: background var(--transition-fast), color var(--transition-fast),
+    transform var(--transition-instant);
+}
+:is(body.flat-theme, body.flat-light-theme) .record-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-text);
+}
+:is(body.flat-theme, body.flat-light-theme) .record-action-btn.action-fav:hover {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+:is(body.flat-theme, body.flat-light-theme) .record-action-btn.action-pin:hover {
+  background: var(--pin-soft);
+  color: var(--pin);
+}
+:is(body.flat-theme, body.flat-light-theme) .record-action-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+:is(body.flat-theme, body.flat-light-theme) .record-action-btn:active {
+  background: var(--bg-active);
+  transform: scale(0.88);
+}
+
+/* Preview action bar: flat chips with a crisp hover edge */
+:is(body.flat-theme, body.flat-light-theme) .action-btn {
+  border-radius: var(--radius-sm);
+}
+:is(body.flat-theme, body.flat-light-theme) .action-btn:hover {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border-default));
+  transform: translateY(-1px);
+}
+:is(body.flat-theme, body.flat-light-theme) .action-btn:active {
+  transform: translateY(0) scale(0.96);
+}
+
+/* Settings theme/mode cards: hairline hover lift, solid selected */
+:is(body.flat-theme, body.flat-light-theme) .theme-card,
+:is(body.flat-theme, body.flat-light-theme) .mode-card {
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+:is(body.flat-theme, body.flat-light-theme) .theme-card:hover,
+:is(body.flat-theme, body.flat-light-theme) .mode-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+:is(body.flat-theme, body.flat-light-theme) .theme-card.selected,
+:is(body.flat-theme, body.flat-light-theme) .mode-card.selected {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Segmented control: hairline frame, solid selected segment */
+:is(body.flat-theme, body.flat-light-theme) .segmented {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  padding: 1px;
+}
+:is(body.flat-theme, body.flat-light-theme) .segment-btn {
+  border-radius: var(--radius-xs);
+}
+:is(body.flat-theme, body.flat-light-theme) .segment-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-text);
+}
+
+/* Capture pause/resume chip: flat hover + pressed */
+:is(body.flat-theme, body.flat-light-theme) .capture-toggle {
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast), transform var(--transition-instant);
+}
+:is(body.flat-theme, body.flat-light-theme) .capture-toggle:hover {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  border-color: color-mix(in srgb, var(--success) 34%, transparent);
+}
+:is(body.flat-theme, body.flat-light-theme) .capture-toggle.paused:hover {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 38%, transparent);
+}
+:is(body.flat-theme, body.flat-light-theme) .capture-toggle:active {
+  transform: scale(0.96);
+}
+
+/* Toggle switch: solid pressed feedback (knob keeps its on/off slot) */
+:is(body.flat-theme, body.flat-light-theme) .toggle:active::after {
+  transform: scale(0.9);
+}
+:is(body.flat-theme, body.flat-light-theme) .toggle.on:active::after {
+  transform: translateX(16px) scale(0.9);
+}
+
+/* Grid cards: crisp hairline frame, accent hover edge */
+:is(body.flat-theme, body.flat-light-theme) .view-grid .record-item {
+  border-color: var(--border-default);
+  border-radius: var(--radius-sm);
+}
+:is(body.flat-theme, body.flat-light-theme) .view-grid .record-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+/* Preview tag chips: flat hover lift */
+:is(body.flat-theme, body.flat-light-theme) .preview-tags .tag-chip {
+  border-radius: var(--radius-sm);
+  transition: transform var(--transition-fast), border-color var(--transition-fast),
+    background var(--transition-fast);
+}
+:is(body.flat-theme, body.flat-light-theme) .preview-tags .tag-chip:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, currentColor 46%, transparent);
+  background: color-mix(in srgb, currentColor 11%, transparent);
+}
+
+/* ============================================================
+   Flat floating chrome: tooltips, toasts, drawer close.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .app-tooltip {
+  border-radius: var(--radius-sm);
+  border-color: var(--border-default);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-md);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .toast-item {
+  border-radius: var(--radius-sm);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .preview-drawer-close {
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  box-shadow: none;
+}
+:is(body.flat-theme, body.flat-light-theme) .preview-drawer-close:hover {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-default));
+}
+
+/* Inline status banners: hairline frame in the banner's own color */
+:is(body.flat-theme, body.flat-light-theme) .status-line {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+}
+:is(body.flat-theme, body.flat-light-theme) .sensitive-warning {
+  border-bottom-color: color-mix(in srgb, var(--danger) 30%, transparent);
+}
+
+/* ============================================================
+   Flat dividers & labels: hairline rules, solid accent marks.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .setting-row {
+  border-bottom: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .list-footer {
+  border-top: 1px solid var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .pin-section-divider::after {
+  background: var(--border-default);
+}
+
+:is(body.flat-theme, body.flat-light-theme) .sidebar-label {
+  color: var(--text-secondary);
+}
+
+/* Settings section titles: clean 2px accent rule (flat answer to the
+   hand-drawn wavy marker line). */
+:is(body.flat-theme, body.flat-light-theme) .settings-section-title {
+  width: fit-content;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--accent);
+}
+
+/* ============================================================
+   Flat form details: square-ish slider thumb, flat scrollbar.
+   ============================================================ */
+
+:is(body.flat-theme, body.flat-light-theme) .settings-body input[type="range"]::-webkit-slider-thumb {
+  border-radius: var(--radius-xs);
+}
+
+:is(body.flat-theme, body.flat-light-theme) ::-webkit-scrollbar-thumb {
+  border-radius: 0;
 }

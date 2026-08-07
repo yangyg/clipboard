@@ -45,8 +45,10 @@ body.handdrawn-theme,
   --warning-soft: rgba(234, 181, 102, 0.14);
   --pin: #c490ff;
   --pin-soft: rgba(196, 144, 255, 0.15);
-  --danger: #f26d6d;
-  --danger-soft: rgba(242, 109, 109, 0.15);
+  /* Danger is a watermelon-rose rather than coral, so destructive actions
+     stay clearly distinct from the accent in dark mode. */
+  --danger: #ef5f7a;
+  --danger-soft: rgba(239, 95, 122, 0.15);
   --code-bg: #221f1c;
   --sensitive: #f2a25b;
   --sensitive-soft: rgba(242, 162, 91, 0.14);

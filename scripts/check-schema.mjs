@@ -12,7 +12,8 @@
  *      in the CREATE TABLE block (drift detection).
  *   4. RECORD_COLS and RECORD_COLS_LIST have the same arity.
  *
- * Exit 0 = pass, exit 1 = schema drift detected.
+ * Exit 0 = pass, exit 1 = schema drift detected, exit 2 = input files
+ * missing/unreadable (not drift — likely a refactor/rename).
  * Run via: npm run check:schema
  */
 
@@ -37,9 +38,16 @@ function pass(msg) {
 
 console.log('Schema compatibility check\n');
 
-const src = readFileSync(DB_MOD, 'utf-8');
-const schemaSrc = readFileSync(DB_SCHEMA, 'utf-8');
-const typesSrc = readFileSync(DB_TYPES, 'utf-8');
+let src, schemaSrc, typesSrc;
+try {
+  src = readFileSync(DB_MOD, 'utf-8');
+  schemaSrc = readFileSync(DB_SCHEMA, 'utf-8');
+  typesSrc = readFileSync(DB_TYPES, 'utf-8');
+} catch (e) {
+  console.error(`  ✗ Cannot read schema source files: ${e.message}`);
+  console.error('    (This is an environment/refactor problem, not schema drift.)');
+  process.exit(2);
+}
 const schemaSources = `${src}\n${schemaSrc}`;
 
 // ── 1. SCHEMA_VERSION ──────────────────────────────────────────────
@@ -167,8 +175,8 @@ if (!recordCols || !recordColsList) {
 
   const fullColNames = extractColNames(recordCols);
   for (const col of fullColNames) {
-    // Skip SQL functions/keywords that aren't raw column names
-    if (/^(NULL|substr|id)$/i.test(col) && col.toLowerCase() === 'null') continue;
+    // Skip SQL keywords/expressions that aren't raw column names.
+    if (col.toLowerCase() === 'null') continue;
     if (col === 'id' || createCols.has(col)) continue;
     // Some RECORD_COLS entries are expressions like "substr(content, 1, 400) as content"
     // Already handled by the AS alias extraction above

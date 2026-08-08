@@ -1,0 +1,9 @@
+# Pin the Rust toolchain so local builds and CI produce reproducible results.
+# Kept at the repo root because rustup resolves the toolchain from the CWD
+# (all npm scripts invoke cargo from here via --manifest-path src-tauri).
+# Minor-level pin: patch updates (1.94.x) are allowed automatically.
+[toolchain]
+channel = "1.94"
+# minimal profile: skip rust-docs (~200MB, not needed for build/lint/test)
+profile = "minimal"
+components = ["rustfmt", "clippy"]

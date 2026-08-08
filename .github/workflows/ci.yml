@@ -27,7 +27,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # lockfile resolved URLs point to registry.npmmirror.com (maintainer's
+        # local registry). replace-registry-host rewrites them to the runner's
+        # registry so CI doesn't depend on the mirror; integrity is still enforced.
+        run: npm ci --registry=https://registry.npmjs.org/ --replace-registry-host=registry.npmmirror.com
 
       - name: Lint
         run: npm run lint
@@ -52,8 +55,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Must match channel in rust-toolchain.toml, otherwise cargo's override
+      # would download a second toolchain on the runner.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.94"
           components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
@@ -82,9 +88,25 @@ jobs:
           cache: npm
 
       - name: Install frontend dependencies
-        run: npm ci
+        # See the frontend job: fetch from npmjs.org instead of the npmmirror
+        # resolved URLs baked into package-lock.json.
+        run: npm ci --registry=https://registry.npmjs.org/ --replace-registry-host=registry.npmmirror.com
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Must match channel in rust-toolchain.toml (see backend job).
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Build Tauri bundle
         run: npm run tauri build
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error

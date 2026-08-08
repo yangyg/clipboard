@@ -12,11 +12,12 @@
     "lint": "eslint .",
     "doctor": "node scripts/doctor.mjs",
     "clippy": "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings",
+    "fmt:check": "cargo fmt --manifest-path src-tauri/Cargo.toml --check",
     "typecheck": "vue-tsc --noEmit",
     "cargo-test": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "check:ipc-contract": "node scripts/check-ipc-contract.mjs",
     "check:schema": "node scripts/check-schema.mjs",
-    "validate": "npm run lint && npm run typecheck && npm run check:ipc-contract && npm run check:schema && npm run test && npm run clippy && npm run cargo-test"
+    "validate": "npm run lint && npm run typecheck && npm run check:ipc-contract && npm run check:schema && npm run test && npm run fmt:check && npm run clippy && npm run cargo-test"
   },
   "dependencies": {
     "@sketchyicons/vue": "^0.5.0",

@@ -29,18 +29,55 @@ static CODE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
     .collect()
 });
 
-// `\b…\b` keeps the digit run *delimited*: a longer number (e.g. a 20-digit id)
-// no longer matches, cutting false positives on ordinary numeric content.
-static VERIFICATION_CODE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\b\d{4,8}\b").unwrap());
-static API_KEY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"sk-[a-zA-Z0-9]{20,}").unwrap());
-static BANK_CARD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\d{16,19}\b").unwrap());
+// Digit-run detection uses *maximal* ASCII digit runs instead of `\b…\b`:
+// Rust regex word boundaries are Unicode-aware, so CJK characters adjacent to
+// digits (e.g. 「验证码为837261」) defeat `\b` and leak OTPs. A run of exactly
+// N digits is delimiter-independent and still rejects longer digit blobs
+// (e.g. a 20-digit id is not a 4-8 digit code).
+static DIGIT_RUN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?-u)\d+").unwrap());
+static API_KEY_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)\bsk-[a-zA-Z0-9_-]{20,}").unwrap());
+// JWT: three base64url segments (header always starts with "eyJ").
+static JWT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?-u)eyJ[a-zA-Z0-9_-]{4,}\.[a-zA-Z0-9_-]{4,}\.[a-zA-Z0-9_-]{4,}").unwrap()
+});
+// GitHub personal access / OAuth / server-to-server / fine-grained tokens.
+static GITHUB_TOKEN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?-u)\b(gh[pousr]_[a-zA-Z0-9]{20,}|github_pat_[a-zA-Z0-9_]{20,})").unwrap()
+});
+static AWS_KEY_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)\bAKIA[0-9A-Z]{16}").unwrap());
+static GOOGLE_KEY_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)\bAIza[0-9A-Za-z_-]{35}").unwrap());
+static SLACK_TOKEN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)\bxox[baprs]-[a-zA-Z0-9-]{10,}").unwrap());
+// Stripe secret keys use underscores — the `sk-` rule above does not cover them.
+static STRIPE_KEY_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)\bsk_(live|test)_[a-zA-Z0-9]{10,}").unwrap());
+static PEM_PRIVATE_KEY_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"-----BEGIN [A-Z ]*PRIVATE KEY-----").unwrap());
+// ASCII word boundaries so `barcode`/`zipcode` don't match, while CJK-adjacent
+// text still does (`(?-u)` treats non-ASCII bytes as non-word).
+static CODE_OR_OTP_WORD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?-u)\b(code|otp)\b").unwrap());
 
 /// Length ceilings for the digit-based heuristics. Verification codes / card
 /// numbers arrive in short messages; a long document that merely contains
 /// digits should not be flagged as sensitive.
 const VERIFICATION_MAX_CHARS: usize = 60;
 const BANK_CARD_MAX_CHARS: usize = 25;
+/// Password keywords only flag short snippets ("password: xxx" notes). Long
+/// source/config/doc copies that merely mention the word must not be
+/// auto-expired — a false positive here silently destroys user data.
+const PASSWORD_KEYWORD_MAX_CHARS: usize = 200;
+
+/// True if the content contains a maximal ASCII digit run whose byte length
+/// (== char count, digits are single-byte) falls in `min..=max`.
+fn has_digit_run(content: &str, min: usize, max: usize) -> bool {
+    DIGIT_RUN_RE
+        .find_iter(content)
+        .any(|m| (min..=max).contains(&(m.end() - m.start())))
+}
 
 // ============================================================
 // Classification
@@ -95,33 +132,41 @@ pub fn detect_content_type(content: &str) -> ContentType {
 pub fn detect_sensitive(content: &str) -> bool {
     let trimmed = content.trim();
     let lower = trimmed.to_lowercase();
-
-    // Password-like keywords
-    if lower.contains("password") || lower.contains("passwd") || lower.contains("pwd") {
-        return true;
-    }
-
-    // API keys (sk-...)
-    if API_KEY_RE.is_match(trimmed) {
-        return true;
-    }
-
     let char_count = trimmed.chars().count();
 
-    // Verification codes: a standalone 4-8 digit group in a short message that
-    // also mentions a verification keyword.
-    if char_count <= VERIFICATION_MAX_CHARS
-        && VERIFICATION_CODE_RE.is_match(trimmed)
-        && (trimmed.contains("验证码")
-            || lower.contains("code")
-            || lower.contains("verification")
-            || lower.contains("otp"))
+    // Password-like keywords — short snippets only (see cap doc above).
+    if char_count <= PASSWORD_KEYWORD_MAX_CHARS
+        && (lower.contains("password") || lower.contains("passwd") || lower.contains("pwd"))
     {
         return true;
     }
 
-    // Bank card numbers: a delimited 16-19 digit group in a short string.
-    if char_count <= BANK_CARD_MAX_CHARS && BANK_CARD_RE.is_match(trimmed) {
+    // Credential formats: API keys, JWTs, platform tokens, private keys.
+    if API_KEY_RE.is_match(trimmed)
+        || JWT_RE.is_match(trimmed)
+        || GITHUB_TOKEN_RE.is_match(trimmed)
+        || AWS_KEY_RE.is_match(trimmed)
+        || GOOGLE_KEY_RE.is_match(trimmed)
+        || SLACK_TOKEN_RE.is_match(trimmed)
+        || STRIPE_KEY_RE.is_match(trimmed)
+        || PEM_PRIVATE_KEY_RE.is_match(trimmed)
+    {
+        return true;
+    }
+
+    // Verification codes: a standalone 4-8 digit run in a short message that
+    // also mentions a verification keyword.
+    if char_count <= VERIFICATION_MAX_CHARS
+        && has_digit_run(trimmed, 4, 8)
+        && (trimmed.contains("验证码")
+            || lower.contains("verification")
+            || CODE_OR_OTP_WORD_RE.is_match(&lower))
+    {
+        return true;
+    }
+
+    // Bank card numbers: a 16-19 digit run in a short string.
+    if char_count <= BANK_CARD_MAX_CHARS && has_digit_run(trimmed, 16, 19) {
         return true;
     }
 
@@ -229,9 +274,45 @@ mod tests {
     #[test]
     fn verification_code_needs_keyword_and_short_message() {
         assert!(detect_sensitive("您的验证码是 837261，请勿泄露"));
+        // No space around the digits — CJK chars must not defeat detection.
+        assert!(detect_sensitive("您的验证码为837261请勿泄露"));
         assert!(detect_sensitive("Your code: 123456"));
         // Digits without a keyword are not sensitive.
         assert!(!detect_sensitive("订单号 837261 已发货"));
+    }
+
+    #[test]
+    fn code_keyword_needs_word_boundary() {
+        // Substring matches (barcode/zipcode) must not flag content.
+        assert!(!detect_sensitive("barcode 940123"));
+        assert!(!detect_sensitive("zipcode 10001"));
+    }
+
+    #[test]
+    fn password_keyword_requires_short_text() {
+        assert!(detect_sensitive("my password is hunter2"));
+        // A long document merely mentioning the word is not a password snippet.
+        let mut long = String::from("password ");
+        long.push_str(&"x".repeat(300));
+        assert!(!detect_sensitive(&long));
+    }
+
+    #[test]
+    fn credential_formats_are_sensitive() {
+        // OpenAI project-style keys contain an inner hyphen.
+        assert!(detect_sensitive("sk-proj-abcdefghijklmnopqrstuvwxyz012345"));
+        assert!(detect_sensitive("ghp_ABCDEFghijkl0123456789mnopQRSTUVWXyz"));
+        assert!(detect_sensitive("AKIAIOSFODNN7EXAMPLE"));
+        assert!(detect_sensitive(
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+        ));
+        assert!(detect_sensitive("-----BEGIN RSA PRIVATE KEY-----"));
+        assert!(detect_sensitive("xoxb-123456789012-abcdef"));
+        assert!(detect_sensitive("sk_live_51ABCdefGHIjklMNOpqr"));
+        // Hyphenated prose containing "sk-" (e.g. "task-…") is not a key.
+        assert!(!detect_sensitive(
+            "task-management-system-version-two-notes"
+        ));
     }
 
     #[test]

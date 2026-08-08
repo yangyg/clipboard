@@ -46,10 +46,14 @@ impl ClipboardDb {
                                 Ok(pw) => s.webdav_password = pw,
                                 Err(e) => {
                                     tracing::error!(
-                                        "Failed to decrypt stored WebDAV password; cleared: {}",
+                                        "Failed to decrypt stored WebDAV password; \
+                                         keeping the stored value (a later save would otherwise \
+                                         overwrite the only remaining copy with an empty string): {}",
                                         e
                                     );
-                                    s.webdav_password = String::new();
+                                    // Keep the ciphertext as loaded; the settings UI will show
+                                    // it until the user re-enters the password. The encryption
+                                    // guard in `save_settings` must never double-encrypt it.
                                 }
                             }
                         }
@@ -85,7 +89,11 @@ impl ClipboardDb {
         // A serialize failure must not write "" — the next load would silently
         // reset every setting to defaults. Fail loud instead.
         let mut for_json = settings.clone();
-        if !for_json.webdav_password.is_empty() {
+        if !for_json.webdav_password.is_empty()
+            && !for_json
+                .webdav_password
+                .starts_with(crate::security::DPAPI_PREFIX)
+        {
             for_json.webdav_password = crate::security::encrypt_secret(&for_json.webdav_password)
                 .map_err(SettingsError::Encryption)?;
         }
@@ -125,10 +133,13 @@ impl ClipboardDb {
         // Respect pin/favorite, consistent with retention and max-record
         // eviction: a user who pinned/favorited a sensitive record (e.g. an OTP
         // kept for later) must not have it hard-deleted at expiry.
+        // Trashed rows are also excluded — once a record is in the trash,
+        // `cleanup_retention` (the trash-retention window) owns its lifecycle,
+        // and a trashed sensitive record must stay recoverable.
         let ids: Vec<i64> = {
             let mut stmt = conn.prepare(
                 "SELECT id FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?
-                 AND is_favorite = 0 AND is_pinned = 0",
+                 AND is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0",
             )?;
             let ids = stmt
                 .query_map([&now], |row| row.get(0))?
@@ -141,7 +152,7 @@ impl ClipboardDb {
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         conn.execute(
             "DELETE FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?
-             AND is_favorite = 0 AND is_pinned = 0",
+             AND is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0",
             [now],
         )?;
         drop(conn);
@@ -173,5 +184,152 @@ impl ClipboardDb {
         drop(conn);
         self.purge_media_pairs(&media);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClipboardDb;
+    use crate::ClipboardRecord;
+    use std::path::PathBuf;
+
+    fn temp_db() -> (ClipboardDb, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_settings_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+        (db, dir)
+    }
+
+    fn cleanup(dir: PathBuf) {
+        for name in ["test.db", "test.db-wal", "test.db-shm"] {
+            let _ = std::fs::remove_file(dir.join(name));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn make_record(content: &str, hash: &str, auto_expire_at: Option<&str>) -> ClipboardRecord {
+        let now = chrono::Utc::now().to_rfc3339();
+        ClipboardRecord {
+            id: 0,
+            content: content.to_string(),
+            content_type: "text".into(),
+            source_app: String::new(),
+            source_window: String::new(),
+            source_name: String::new(),
+            hash: hash.to_string(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive: true,
+            is_trashed: false,
+            auto_expire_at: auto_expire_at.map(str::to_string),
+            created_at: now.clone(),
+            updated_at: now,
+            tags: vec![],
+            content_html: None,
+            media_path: None,
+            thumb_path: None,
+            width: None,
+            height: None,
+            media_abs: None,
+            thumb_abs: None,
+            content_len: None,
+            alias: String::new(),
+        }
+    }
+
+    #[test]
+    fn cleanup_expired_skips_trashed_records() {
+        let (db, dir) = temp_db();
+        db.import_records_with_merge(
+            &[make_record(
+                "expired-trash",
+                "exp-trash-1",
+                Some("2000-01-01T00:00:00Z"),
+            )],
+            100,
+            None,
+        )
+        .unwrap();
+        let id = db.get_records_for_export(10, 0).unwrap()[0].id;
+        db.trash_record(id).unwrap();
+
+        // Simulate a row that somehow still carries a past expiry while trashed
+        // (e.g. a legacy DB or a future code path that restores it).
+        {
+            let conn = db.conn.lock();
+            conn.execute(
+                "UPDATE records SET auto_expire_at = '2000-01-01T00:00:00Z' WHERE id = ?",
+                [id],
+            )
+            .unwrap();
+        }
+
+        let expired = db.cleanup_expired().unwrap();
+        assert!(
+            expired.is_empty(),
+            "trashed rows must survive cleanup_expired"
+        );
+        assert_eq!(db.get_trash_count().unwrap(), 1);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn cleanup_expired_still_deletes_active_expired_rows() {
+        let (db, dir) = temp_db();
+        db.import_records_with_merge(
+            &[make_record(
+                "expired-active",
+                "exp-active-1",
+                Some("2000-01-01T00:00:00Z"),
+            )],
+            100,
+            None,
+        )
+        .unwrap();
+
+        let expired = db.cleanup_expired().unwrap();
+        assert_eq!(expired.len(), 1);
+        assert_eq!(db.get_records_for_export(10, 0).unwrap().len(), 0);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn trash_record_clears_auto_expire() {
+        let (db, dir) = temp_db();
+        db.import_records_with_merge(
+            &[make_record(
+                "expiring",
+                "exp-clear-1",
+                Some("2030-01-01T00:00:00Z"),
+            )],
+            100,
+            None,
+        )
+        .unwrap();
+        let id = db.get_records_for_export(10, 0).unwrap()[0].id;
+
+        db.trash_record(id).unwrap();
+
+        let conn = db.conn.lock();
+        let expiry: Option<String> = conn
+            .query_row(
+                "SELECT auto_expire_at FROM records WHERE id = ?",
+                [id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(
+            expiry.is_none(),
+            "trash must clear the sensitive auto-expiry"
+        );
+        cleanup(dir);
     }
 }

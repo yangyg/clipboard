@@ -41,11 +41,24 @@ impl ClipboardDb {
 
         if let Some(id) = existing {
             let now = chrono::Utc::now().to_rfc3339();
+            // FTS indexes source_app/source_window, but the content-only
+            // trigger (`AFTER UPDATE OF content`) never fires on a dedup
+            // re-copy — refresh the FTS row only when the source actually
+            // changed, so searching by the new source still matches.
+            let source_changed: bool = conn.query_row(
+                "SELECT source_app != ?1 OR source_window != ?2 OR source_name != ?3
+                 FROM records WHERE id = ?4",
+                params![source_app, source_window, source_name, id],
+                |row| row.get(0),
+            )?;
             // Re-copy only refreshes source/timestamp — paste count is separate.
             conn.execute(
                 "UPDATE records SET updated_at = ?, source_app = ?, source_window = ?, source_name = ? WHERE id = ?",
                 params![now, source_app, source_window, source_name, id],
             )?;
+            if source_changed {
+                Self::refresh_record_fts(&conn, id)?;
+            }
             let record = self
                 .get_record_list_locked(&conn, id)?
                 .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
@@ -301,8 +314,10 @@ impl ClipboardDb {
         // Bump `updated_at` so the trash-retention window (measured from
         // `updated_at`) starts at the moment of trashing — otherwise a record
         // copied weeks ago and trashed today is purged immediately.
+        // Clear the sensitive auto-expiry too: the record now belongs to the
+        // trash lifecycle, not the capture-expiry one.
         conn.execute(
-            "UPDATE records SET is_trashed = 1, is_pinned = 0, updated_at = ? WHERE id = ?",
+            "UPDATE records SET is_trashed = 1, is_pinned = 0, auto_expire_at = NULL, updated_at = ? WHERE id = ?",
             params![chrono::Utc::now().to_rfc3339(), id],
         )?;
         Ok(())
@@ -315,7 +330,7 @@ impl ClipboardDb {
         let conn = self.conn.lock();
         let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
-            "UPDATE records SET is_trashed = 1, is_pinned = 0, updated_at = ? WHERE id IN ({})",
+            "UPDATE records SET is_trashed = 1, is_pinned = 0, auto_expire_at = NULL, updated_at = ? WHERE id IN ({})",
             placeholders
         );
         let now = chrono::Utc::now().to_rfc3339();

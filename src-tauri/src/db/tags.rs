@@ -502,7 +502,7 @@ mod tests {
             content_len: None,
             alias: String::new(),
         };
-        db.import_records_with_merge(&[rec], 100).unwrap();
+        db.import_records_with_merge(&[rec], 100, None).unwrap();
         let record_id = db.get_records_for_export(10, 0).unwrap()[0].id;
         let read_updated = || {
             db.get_records_for_export(10, 0)
@@ -583,7 +583,7 @@ mod tests {
             content_len: None,
             alias: String::new(),
         };
-        db.import_records_with_merge(&[record], 100).unwrap();
+        db.import_records_with_merge(&[record], 100, None).unwrap();
         let record_id = db.get_records_for_export(10, 0).unwrap()[0].id;
         let tag_id = db.create_tag("stale-search-tag", "#ef4444").unwrap();
         db.add_tag_to_record(record_id, tag_id).unwrap();

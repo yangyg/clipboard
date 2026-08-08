@@ -56,10 +56,28 @@ static STRIPE_KEY_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?-u)\bsk_(live|test)_[a-zA-Z0-9]{10,}").unwrap());
 static PEM_PRIVATE_KEY_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"-----BEGIN [A-Z ]*PRIVATE KEY-----").unwrap());
-// ASCII word boundaries so `barcode`/`zipcode` don't match, while CJK-adjacent
-// text still does (`(?-u)` treats non-ASCII bytes as non-word).
-static CODE_OR_OTP_WORD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?-u)\b(code|otp)\b").unwrap());
+/// Password-like keywords (word-boundary). A username like `mypassword123`,
+/// `upwd`, or a bare `pwd` shell command must not trip the detector.
+static PASSWORD_KEYWORD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\b(?:password|passwd)s?\b").unwrap());
+/// `pwd` is only a credential when it carries an assignment marker
+/// (`pwd=…` / `pwd: …`), so shell usage and prose stay unflagged.
+static PWD_ASSIGN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\bpwd\b\s*[:=：]").unwrap());
+/// Chinese password keywords need the same assignment marker — "重置密码" /
+/// "密码规则" documentation must not auto-expire a record.
+static CN_PASSWORD_ASSIGN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(密码|口令)\s*[:=：]").unwrap());
+/// Verification-code keywords: only *qualified* "code" mentions count
+/// (verification / OTP / auth / security / access / sms / one-time / 2FA),
+/// plus standalone `otp` / `2fa`. "zip code 10001" and "promo code 123456"
+/// are not verification codes.
+static CODE_OR_OTP_WORD_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\b(?:verification|verify|otp|one[ -]?time|2fa|two[ -]?factor|auth(?:entication)?|security|access|sms)[ -]?(?:code|pin)\b|\b(?:otp|2fa)\b",
+    )
+    .unwrap()
+});
 
 /// Length ceilings for the digit-based heuristics. Verification codes / card
 /// numbers arrive in short messages; a long document that merely contains
@@ -135,10 +153,17 @@ pub fn detect_sensitive(content: &str) -> bool {
     let char_count = trimmed.chars().count();
 
     // Password-like keywords — short snippets only (see cap doc above).
-    if char_count <= PASSWORD_KEYWORD_MAX_CHARS
-        && (lower.contains("password") || lower.contains("passwd") || lower.contains("pwd"))
-    {
-        return true;
+    if char_count <= PASSWORD_KEYWORD_MAX_CHARS {
+        // URL-ish payloads (e.g. a password-reset link) are not secrets
+        // themselves; flagging them would auto-expire the user's link.
+        let link_like = trimmed.contains("://") || crate::security::is_openable_link(trimmed);
+        if !link_like
+            && (PASSWORD_KEYWORD_RE.is_match(trimmed)
+                || PWD_ASSIGN_RE.is_match(trimmed)
+                || CN_PASSWORD_ASSIGN_RE.is_match(trimmed))
+        {
+            return true;
+        }
     }
 
     // Credential formats: API keys, JWTs, platform tokens, private keys.
@@ -159,7 +184,8 @@ pub fn detect_sensitive(content: &str) -> bool {
     if char_count <= VERIFICATION_MAX_CHARS
         && has_digit_run(trimmed, 4, 8)
         && (trimmed.contains("验证码")
-            || lower.contains("verification")
+            || trimmed.contains("校验码")
+            || trimmed.contains("动态口令")
             || CODE_OR_OTP_WORD_RE.is_match(&lower))
     {
         return true;
@@ -262,6 +288,7 @@ mod tests {
     fn password_keywords_are_sensitive() {
         assert!(detect_sensitive("my password is hunter2"));
         assert!(detect_sensitive("PWD=secret"));
+        assert!(detect_sensitive("登录密码：hunter2"));
     }
 
     #[test]
@@ -276,9 +303,15 @@ mod tests {
         assert!(detect_sensitive("您的验证码是 837261，请勿泄露"));
         // No space around the digits — CJK chars must not defeat detection.
         assert!(detect_sensitive("您的验证码为837261请勿泄露"));
-        assert!(detect_sensitive("Your code: 123456"));
+        assert!(detect_sensitive("您的动态口令为837261请勿泄露"));
+        assert!(detect_sensitive("Your verification code: 123456"));
+        assert!(detect_sensitive("Your OTP is 123456"));
         // Digits without a keyword are not sensitive.
         assert!(!detect_sensitive("订单号 837261 已发货"));
+        // Unqualified "code" mentions (zip / promo) are not verification codes.
+        assert!(!detect_sensitive("zip code 10001"));
+        assert!(!detect_sensitive("promo code 123456"));
+        assert!(!detect_sensitive("Your code: 123456"));
     }
 
     #[test]
@@ -295,6 +328,24 @@ mod tests {
         let mut long = String::from("password ");
         long.push_str(&"x".repeat(300));
         assert!(!detect_sensitive(&long));
+    }
+
+    #[test]
+    fn password_keyword_requires_word_boundary() {
+        // Embedded words / bare shell commands must not auto-expire.
+        assert!(!detect_sensitive("mypassword123"));
+        assert!(!detect_sensitive("upwd"));
+        assert!(!detect_sensitive("pwd"));
+        assert!(!detect_sensitive("run pwd to see the directory"));
+    }
+
+    #[test]
+    fn password_reset_links_are_not_sensitive() {
+        // A reset link contains "password" and a digit run — flagging it would
+        // auto-expire the very link the user is trying to keep.
+        assert!(!detect_sensitive(
+            "https://example.com/reset-password?id=123456"
+        ));
     }
 
     #[test]

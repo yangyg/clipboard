@@ -80,7 +80,16 @@ impl ClipboardDb {
             _ => "updated_at DESC",
         };
         if trashed {
-            return secondary;
+            // Trash lists carry no pinned rows, but batch trashes share one
+            // `updated_at` timestamp. The id tiebreak keeps the order strictly
+            // total, matching the keyset predicate (updated_at + id) so paging
+            // cannot skip or duplicate rows with identical timestamps.
+            return match secondary {
+                "updated_at ASC" => "updated_at ASC, id ASC",
+                "created_at DESC" => "created_at DESC, id DESC",
+                "copy_count DESC, updated_at DESC" => "copy_count DESC, updated_at DESC, id DESC",
+                _ => "updated_at DESC, id DESC",
+            };
         }
         match secondary {
             "updated_at ASC" => "is_pinned DESC, updated_at ASC",
@@ -347,5 +356,26 @@ mod tests {
         assert_eq!(ClipboardDb::id_placeholders(0), "");
         assert_eq!(ClipboardDb::id_placeholders(1), "?");
         assert_eq!(ClipboardDb::id_placeholders(3), "?,?,?");
+    }
+
+    #[test]
+    fn trash_order_has_id_tiebreak() {
+        assert_eq!(
+            ClipboardDb::order_by_clause(true, Some("updated_desc")),
+            "updated_at DESC, id DESC"
+        );
+        assert_eq!(
+            ClipboardDb::order_by_clause(true, Some("updated_asc")),
+            "updated_at ASC, id ASC"
+        );
+        assert_eq!(
+            ClipboardDb::order_by_clause(true, Some("copies_desc")),
+            "copy_count DESC, updated_at DESC, id DESC"
+        );
+        // Active lists keep pinned-first semantics.
+        assert_eq!(
+            ClipboardDb::order_by_clause(false, Some("updated_desc")),
+            "is_pinned DESC, updated_at DESC"
+        );
     }
 }

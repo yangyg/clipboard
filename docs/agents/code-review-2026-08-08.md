@@ -59,3 +59,30 @@
 - 死锁：写锁在 `purge_media_pairs` 重新拿读锁前全部释放；无嵌套重入。
 - 有界队列：文本/图片 channel 满时丢弃不阻塞轮询线程。
 - 剪贴板监控 watermark：占用/抑制窗口期间正确保留（不提交 seq）防丢数据。
+
+## 第二轮修复（2026-08-08，未提交）
+
+基于第二轮全库审查（IPC/数据库/检测/前端/脚本/CI）修复以下问题：
+
+| 编号 | 风险 | 位置 | 修复 |
+|------|------|------|------|
+| P1-1 | 高 | `src-tauri/src/detect.rs` | 敏感检测误报：password/passwd 改为词边界匹配，`pwd` 与中文「密码/口令」要求赋值标记（`:`/`=`），URL 形态内容跳过关键字规则；验证码仅认可限定词（verification/OTP/auth/security/access/sms/one-time/2FA/验证码/校验码/动态口令），`zip code`/`promo code` 不再命中；补充误报回归测试 |
+| P1-2 | 高 | `src-tauri/src/db/records_import.rs` + `commands/import_export.rs` + `webdav/sync.rs` | 导入/WebDAV 元数据消毒：新增 `ImportSanitize`（源自设置），导入时重新检测敏感、重算 `auto_expire_at = now + TTL`，合并路径只 OR 敏感标记不降级；JSON 导入与 WebDAV 拉取均启用 |
+| P1-3 | 高 | `src-tauri/src/db/settings.rs` + `records_write.rs` | 过期清理排除回收站行；trash 时清除 `auto_expire_at`，回收站生命周期完全交给 retention；补测试 |
+| P2-4 | 中 | `src-tauri/src/db/records_query.rs` | 回收站排序补 `id` tiebreak，与 keyset 谓词严格一致（批量删除同时间戳翻页不再可能丢行） |
+| P2-5 | 中 | `src-tauri/src/db/records_write.rs` + `schema_tests.rs` | 去重更新来源时刷新 FTS source 列（内容不变不触发触发器）；补测试 |
+| P2-6 | 中 | `src-tauri/src/db/settings.rs` + `security.rs` | DPAPI 解密失败保留密文（不再清空），`save_settings` 防二次加密；凭据不再被静默覆盖为空 |
+| P2-8 | 中 | `src/App.vue` | window 模式收到 `toggle-panel:false` 不再重新 `show()` 窗口（托盘隐藏不再被立即撤销） |
+| P2-9 | 中 | `src-tauri/src/window.rs` | `apply_window_round_corners` 通过 `GetWindowRgn` 副本释放被替换的旧 region，消除 GDI 句柄泄漏 |
+| P2-10 | 中 | `src-tauri/src/webdav/media.rs` | 媒体读写移入 `spawn_blocking`，不再阻塞 Tokio worker |
+| P3-1 | 低 | `src/stores/clipboardList.ts` | 新置顶记录插入置顶区顶部而非末尾；detail 缓存增加 8MB 字节上限 |
+| P3-2 | 低 | `src/composables/useClipboardEvents.ts` | 事件监听改用 `Promise.allSettled`，单个监听失败不再吞掉其余注册 |
+| P3-5 | 低 | `src-tauri/src/security.rs` | `link_scheme` 在解析前后都拒绝含空白/控制字符的内容（`Url::parse` 对空格宽容），补测试 |
+| P3-6 | 低 | `src-tauri/src/commands/tags.rs` + `db/mod.rs` | 标签颜色在 IPC 边界归一化到 12 色轮，杜绝 CSS 注入面 |
+| P3-7 | 低 | `scripts/doctor.mjs` | sqlite3 增加 `.timeout 5000`（应用运行中不再假失败）；semver 解析容忍预发布后缀 |
+| P3-10 | 低 | `src-tauri/src/clipboard/paste.rs` | 前台锁超时只在读取成功时还原，避免崩溃/失败时系统级设置被写 0 持久化 |
+| P3-11 | 低 | `src-tauri/src/media.rs` | `media/` 目录缺失时统计返回 0，不再把整个 appdata 根当媒体 |
+
+仍需运行验证：P2-7（paste 图片自写基线与 arboard RGBA 往返保真度，透明通道图片可能不匹配）。
+
+验证基线：`cargo test` 101 通过、`cargo clippy -D warnings` 通过、`cargo fmt --check` 通过、Vitest 164 通过、typecheck/lint/build/check:ipc-contract/check:schema 全部通过。

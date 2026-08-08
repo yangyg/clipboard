@@ -331,9 +331,9 @@ fn media_dir_size(root: &Path) -> i64 {
     let media = root.join("media");
     if media.is_dir() {
         walk(&media, &mut total);
-    } else {
-        walk(root, &mut total);
     }
+    // Missing media dir → 0. The historical fallback walked the whole appdata
+    // root and counted the DB/log files as "media" storage.
     total.min(i64::MAX as u64) as i64
 }
 

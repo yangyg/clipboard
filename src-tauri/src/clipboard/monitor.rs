@@ -527,10 +527,7 @@ mod tests {
         };
         // Baseline must equal the fingerprint the poll loop computes, so the
         // post-suppression re-read of our own paste is absorbed (no emit).
-        assert_eq!(
-            *monitor.last_text_fp.lock(),
-            Some(captured.fingerprint())
-        );
+        assert_eq!(*monitor.last_text_fp.lock(), Some(captured.fingerprint()));
     }
 
     #[test]

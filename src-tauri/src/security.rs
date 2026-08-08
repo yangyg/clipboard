@@ -200,6 +200,12 @@ pub fn link_scheme(s: &str) -> Option<&'static str> {
     if trimmed.is_empty() || trimmed.contains('\0') {
         return None;
     }
+    // The contract is "the whole string is one URI". `Url::parse` is lenient
+    // about some characters (it percent-encodes spaces in paths), so prose
+    // that merely embeds a link would otherwise be accepted as a link record.
+    if trimmed.chars().any(|c| c.is_whitespace() || c.is_control()) {
+        return None;
+    }
     if let Ok(url) = url::Url::parse(trimmed) {
         let scheme = url.scheme();
         if let Some(&known) = LINK_SCHEMES.iter().find(|&&k| k == scheme) {
@@ -213,7 +219,16 @@ pub fn link_scheme(s: &str) -> Option<&'static str> {
     }
     let lower = trimmed.to_ascii_lowercase();
     for &prefix in LINK_PREFIXES {
-        if lower.starts_with(prefix) && trimmed.len() > prefix.len() {
+        if lower.starts_with(prefix)
+            && trimmed.len() > prefix.len()
+            // Url::parse already failed above, so this is the fallback path for
+            // schemes url cannot parse (ed2k pipes etc.). Enforce the
+            // "whole string" contract manually: embedded whitespace / control
+            // characters after the prefix mean this is prose, not a URI.
+            && !trimmed[prefix.len()..]
+                .chars()
+                .any(|c| c.is_whitespace() || c.is_control())
+        {
             let scheme = prefix.split([':', '/']).next().unwrap_or(prefix);
             if let Some(&known) = LINK_SCHEMES.iter().find(|&&k| k == scheme) {
                 return Some(known);
@@ -450,6 +465,10 @@ mod tests {
         assert!(!is_openable_link("http://"));
         assert!(!is_openable_link("see magnet:?xt=urn:btih:abc more text"));
         assert!(!is_openable_link("plain text"));
+        // Fallback path must also reject non-whole strings (Url::parse fails
+        // on whitespace, so the prefix branch would otherwise accept prose).
+        assert!(!is_openable_link("https://example.com/a b"));
+        assert!(!is_openable_link("https://evil.com\njavascript:alert(1)"));
         // http(s) subset still openable; download schemes are not "browser-only" but are openable
         assert!(matches!(link_scheme("https://a.com"), Some("https")));
         assert!(matches!(

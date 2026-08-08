@@ -34,6 +34,13 @@ fn write_downloaded_media(path: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Read a media file off the async executor (std::fs blocks the Tokio worker).
+async fn read_media_file(abs: std::path::PathBuf) -> Result<Vec<u8>, String> {
+    tokio::task::spawn_blocking(move || fs::read(&abs).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| format!("媒体读取任务失败: {e}"))?
+}
+
 pub(super) async fn download_media_if_needed(
     client: &WebDavClient,
     root: &str,
@@ -57,10 +64,15 @@ pub(super) async fn download_media_if_needed(
         }
         let remote = join_remote(root, rel);
         if let Some(bytes) = client.get_bytes(&remote).await? {
-            if let Some(parent) = abs.parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-            }
-            write_downloaded_media(&abs, &bytes)?;
+            let path = abs.clone();
+            tokio::task::spawn_blocking(move || {
+                if let Some(parent) = path.parent() {
+                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                }
+                write_downloaded_media(&path, &bytes)
+            })
+            .await
+            .map_err(|e| format!("媒体下载任务失败: {e}"))??;
             downloaded = true;
         }
     }
@@ -97,7 +109,7 @@ pub(super) async fn upload_media_if_needed(
                 let thumb_abs = media::absolute(media_root, thumb_rel);
                 let thumb_remote = join_remote(root, thumb_rel);
                 if thumb_abs.exists() && !client.exists(&thumb_remote).await? {
-                    let bytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
+                    let bytes = read_media_file(thumb_abs).await?;
                     client.put_bytes(&thumb_remote, bytes, "image/jpeg").await?;
                     uploaded = true;
                     skipped = false;
@@ -106,7 +118,7 @@ pub(super) async fn upload_media_if_needed(
         }
         return Ok((uploaded, skipped));
     }
-    let bytes = fs::read(&abs).map_err(|e| e.to_string())?;
+    let bytes = read_media_file(abs).await?;
     let ct = if media_rel.ends_with(".png") {
         "image/png"
     } else if media_rel.ends_with(".jpg") || media_rel.ends_with(".jpeg") {
@@ -121,7 +133,7 @@ pub(super) async fn upload_media_if_needed(
             if thumb_abs.exists() {
                 let thumb_remote = join_remote(root, thumb_rel);
                 if !client.exists(&thumb_remote).await? {
-                    let tbytes = fs::read(&thumb_abs).map_err(|e| e.to_string())?;
+                    let tbytes = read_media_file(thumb_abs).await?;
                     client
                         .put_bytes(&thumb_remote, tbytes, "image/jpeg")
                         .await?;

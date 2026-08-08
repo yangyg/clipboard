@@ -77,6 +77,9 @@ export interface ListActionsCtx {
 export function createListActions(ctx: ListActionsCtx) {
   const PAGE_SIZE = 60;
   const DETAIL_CACHE_MAX = 6;
+  /** Byte budget for cached full bodies (content + HTML) — huge clips must
+   * not balloon memory just because the row cap is small. */
+  const DETAIL_CACHE_MAX_BYTES = 8 * 1024 * 1024;
   /** Soft cap for in-memory list (onNewRecord prepend without bound was a leak). */
   const LIST_SOFT_CAP = PAGE_SIZE * 2;
   let searchSeq = 0;
@@ -313,11 +316,26 @@ export function createListActions(ctx: ListActionsCtx) {
     for (const [id, detail] of ctx.recordDetails.value) {
       if (alive.has(id)) next.set(id, detail);
     }
+    const bytesOf = (d: ClipboardRecord) =>
+      (d.content_len ?? d.content.length) + (d.content_html?.length ?? 0);
     // Cap cache size (LRU-ish: prefer selected, then newest inserts order)
     if (next.size > DETAIL_CACHE_MAX) {
       const ids = [...next.keys()].filter((id) => id !== keepId && id !== ctx.selectedId.value);
       for (const id of ids) {
         if (next.size <= DETAIL_CACHE_MAX) break;
+        next.delete(id);
+      }
+    }
+    // Byte budget: evict non-selected rows until the cache fits the budget.
+    let total = 0;
+    for (const d of next.values()) total += bytesOf(d);
+    if (total > DETAIL_CACHE_MAX_BYTES) {
+      const ids = [...next.keys()].filter((id) => id !== keepId && id !== ctx.selectedId.value);
+      for (const id of ids) {
+        if (total <= DETAIL_CACHE_MAX_BYTES) break;
+        const d = next.get(id);
+        if (!d) continue;
+        total -= bytesOf(d);
         next.delete(id);
       }
     }
@@ -449,7 +467,10 @@ export function createListActions(ctx: ListActionsCtx) {
     }
     const next = list.slice();
     if (existingIdx !== -1) next.splice(existingIdx, 1);
-    next.splice(pinCount, 0, record);
+    // Pinned records go to the top of the pinned section (newest first);
+    // unpinned ones land right after the pinned block.
+    const insertAt = record.is_pinned ? 0 : pinCount;
+    next.splice(insertAt, 0, record);
     ctx.records.value = applySoftCap(next);
     flashIncoming(record.id);
   }

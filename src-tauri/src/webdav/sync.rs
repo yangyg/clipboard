@@ -7,7 +7,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use tracing::info;
 
-use crate::db::ClipboardDb;
+use crate::db::{ClipboardDb, ImportSanitize};
 use crate::media;
 use crate::Settings;
 
@@ -166,12 +166,13 @@ pub async fn webdav_pull(
     }
 
     let max = settings.max_records;
+    let sanitize = ImportSanitize::from(&*settings);
     // The merge is a full-content transaction over the pulled bundle — run it
     // off the async worker so large imported sets don't hold a Tokio executor thread.
     let merge_db = Arc::clone(db);
     let (pulled, merged, tags_pulled) = tokio::task::spawn_blocking(move || {
         merge_db
-            .import_records_with_merge(&records, max)
+            .import_records_with_merge(&records, max, Some(sanitize))
             .map_err(|e| e.to_string())
     })
     .await

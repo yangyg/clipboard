@@ -1,7 +1,7 @@
 //! Schema compatibility tests (test-only module, kept separate from schema.rs
 //! so the production file stays under the 500-line cap).
 
-use crate::db::{ClipboardDb, RECORD_COLS, RECORD_COLS_LIST};
+use crate::db::{ClipboardDb, ContentType, RECORD_COLS, RECORD_COLS_LIST};
 
 /// Helper: create a fresh in-memory DB and run the full schema init.
 fn fresh_db() -> rusqlite::Connection {
@@ -290,4 +290,72 @@ fn schema_record_col_constants_have_same_arity() {
         col_count >= full_arity,
         "records table has {col_count} columns but RECORD_COLS expects {full_arity}"
     );
+}
+
+#[test]
+fn dedup_recopy_refreshes_fts_source_columns() {
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_fts_dedup_test_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+    let hash = crate::detect::sha256_hash(&crate::detect::sha256_hash("same text"));
+
+    let (id, is_new, _) = db
+        .insert_record(
+            "same text",
+            &ContentType::Text,
+            &hash,
+            false,
+            100,
+            600,
+            "first.exe",
+            "First",
+            "First",
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(is_new);
+
+    // Re-copy from a different app must refresh the FTS source columns even
+    // though the content (and therefore the content-only trigger) is unchanged.
+    let (_, is_new2, _) = db
+        .insert_record(
+            "same text",
+            &ContentType::Text,
+            &hash,
+            false,
+            100,
+            600,
+            "second.exe",
+            "Second",
+            "Second",
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(!is_new2);
+
+    let conn = db.conn.lock();
+    let (app, win): (String, String) = conn
+        .query_row(
+            "SELECT source_app, source_window FROM records_fts WHERE rowid = ?",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(app, "second.exe");
+    assert_eq!(win, "Second");
+    drop(conn);
+
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
 }

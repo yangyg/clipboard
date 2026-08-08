@@ -104,11 +104,9 @@ pub async fn paste_record(
                         // Absorb the post-suppression re-read of our own write;
                         // otherwise it re-captures with the paste-target window
                         // as source.
-                        monitor
-                            .read()
-                            .mark_image_written(&clipboard::image_quick_fingerprint_rgba(
-                                &rgba, w, h,
-                            ));
+                        monitor.read().mark_image_written(
+                            &clipboard::image_quick_fingerprint_rgba(&rgba, w, h),
+                        );
                     }
                     ok
                 }

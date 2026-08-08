@@ -1,6 +1,7 @@
 //! Tag CRUD and record↔tag commands.
 use tauri::State;
 
+use crate::db::nearest_palette_color;
 use crate::{require_feature, AppState, FeatureId, TagInfo};
 
 use super::cap_ids;
@@ -31,6 +32,9 @@ pub async fn create_tag(
         &(*state.db.get_settings().map_err(|e| e.to_string())?),
         FeatureId::Tags,
     )?;
+    // Snap arbitrary input onto the fixed 12-color wheel at the IPC boundary so
+    // the DB never stores a string that could be injected into CSS color-mix.
+    let color = nearest_palette_color(&color).to_string();
     let id = state
         .db
         .create_tag(&name, &color)
@@ -64,6 +68,7 @@ pub async fn update_tag(
         &(*state.db.get_settings().map_err(|e| e.to_string())?),
         FeatureId::Tags,
     )?;
+    let color = nearest_palette_color(&color).to_string();
     state
         .db
         .update_tag(id, &name, &color)

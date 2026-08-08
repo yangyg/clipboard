@@ -27,26 +27,25 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
   const unlisteners: Array<() => void> = [];
 
   onMounted(async () => {
-    // Listen for new clipboard records from Rust backend
-    unlisteners.push(
-      await listen<ClipboardRecord>("clipboard-changed", (event) => {
+    // Register all event listeners concurrently. A single rejected listen
+    // (e.g. a plugin event channel missing in an old runtime) must not stop
+    // the remaining listeners from being wired up.
+    const registrations = [
+      // Listen for new clipboard records from Rust backend
+      listen<ClipboardRecord>("clipboard-changed", (event) => {
         if (!clipboardStore.pauseCapture) {
           clipboardStore.onNewRecord(event.payload);
         }
-      })
-    );
+      }),
 
-    // Sensitive auto-expire deleted in Rust (periodic cleanup thread) → sync list
-    unlisteners.push(
-      await listen<number[]>("records-expired", (event) => {
+      // Sensitive auto-expire deleted in Rust (periodic cleanup thread) → sync list
+      listen<number[]>("records-expired", (event) => {
         clipboardStore.removeExpiredFromList(event.payload ?? []);
         clipboardStore.scheduleLoadStats();
-      })
-    );
+      }),
 
-    // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
-    unlisteners.push(
-      await listen<boolean>("toggle-panel", (event) => {
+      // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
+      listen<boolean>("toggle-panel", (event) => {
         if (isPasteFocusLock() && event.payload) {
           // Mid-paste / keep-open: sync flag only — never setFocus (would steal from target).
           ctx.panelVisible.value = true;
@@ -64,20 +63,16 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
             void ctx.hidePanel();
           }
         }
-      })
-    );
+      }),
 
-    unlisteners.push(
-      await listen<boolean>("paste-focus-lock", (event) => {
+      listen<boolean>("paste-focus-lock", (event) => {
         setPasteFocusLock(!!event.payload);
-      })
-    );
+      }),
 
-    // Auto-close panel when window loses focus (click outside).
-    // When we lose focus the other app is already FG — snapshot it for paste.
-    // Skip when custom tray-menu took focus (right-click tray while panel open).
-    unlisteners.push(
-      await ctx.appWindow.onFocusChanged(({ payload: focused }) => {
+      // Auto-close panel when window loses focus (click outside).
+      // When we lose focus the other app is already FG — snapshot it for paste.
+      // Skip when custom tray-menu took focus (right-click tray while panel open).
+      ctx.appWindow.onFocusChanged(({ payload: focused }) => {
         if (isPasteFocusLock()) return;
         if (!focused && !ctx.isWindowMode()) {
           void (async () => {
@@ -93,22 +88,26 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
             void ctx.hidePanel();
           })();
         }
-      })
-    );
+      }),
 
-    // Listen for open-settings from Rust tray menu
-    unlisteners.push(
-      await listen("open-settings", () => {
+      // Listen for open-settings from Rust tray menu
+      listen("open-settings", () => {
         void ctx.openSettings();
-      })
-    );
+      }),
 
-    // Tray pause/resume syncs Rust → frontend
-    unlisteners.push(
-      await listen<boolean>("capture-paused", (event) => {
+      // Tray pause/resume syncs Rust → frontend
+      listen<boolean>("capture-paused", (event) => {
         clipboardStore.setPauseCapture(event.payload);
-      })
-    );
+      }),
+    ];
+    const settled = await Promise.allSettled(registrations);
+    for (const result of settled) {
+      if (result.status === "fulfilled") {
+        unlisteners.push(result.value);
+      } else {
+        console.error("[App] failed to register Tauri event listener:", result.reason);
+      }
+    }
   });
 
   onUnmounted(() => {

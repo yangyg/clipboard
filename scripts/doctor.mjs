@@ -40,8 +40,10 @@ function run(cmd, args, options = {}) {
 }
 
 function compareSemver(a, b) {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
+  // Tolerate suffixes (e.g. "1.2.3-rc.1"): compare numeric prefixes only.
+  const toParts = (s) => s.split(/[.\-+]/).map((p) => parseInt(p, 10) || 0);
+  const pa = toParts(a);
+  const pb = toParts(b);
   for (let i = 0; i < 3; i++) {
     if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) - (pb[i] ?? 0);
   }
@@ -204,7 +206,9 @@ console.log("== Clipboard 环境诊断 ==");
         if (existsSync(dbPath + suffix)) notes.push(`WAL 文件存在: clipvault.db${suffix}`);
       }
 
-      const sqlite3 = run("sqlite3", [dbPath, "PRAGMA integrity_check;"]);
+      // Give the CLI a busy timeout: the app may hold a write transaction while
+      // doctor runs, and sqlite3's default timeout is 0 (instant SQLITE_BUSY).
+      const sqlite3 = run("sqlite3", ["-cmd", ".timeout 5000", dbPath, "PRAGMA integrity_check;"]);
       if (sqlite3.error) {
         notes.push("sqlite3 CLI 不可用");
         console.log("  [-] sqlite3 CLI 未安装，跳过完整 integrity_check（文件头校验已通过）");
@@ -221,7 +225,12 @@ console.log("== Clipboard 环境诊断 ==");
       // --- Schema 版本校验 ---
       // 期望: settings 表中存在 key='schema_version' 且值为正整数。
       // 缺失意味着数据库由旧版本（无版本控制）创建，应用启动时会自动补全。
-      const schemaVer = run("sqlite3", [dbPath, "SELECT value FROM settings WHERE key='schema_version';"]);
+      const schemaVer = run("sqlite3", [
+        "-cmd",
+        ".timeout 5000",
+        dbPath,
+        "SELECT value FROM settings WHERE key='schema_version';",
+      ]);
       if (schemaVer.error) {
         notes.push("schema_version 检查跳过（sqlite3 CLI 不可用）");
         console.log("  [-] schema_version 检查跳过（sqlite3 CLI 不可用）");

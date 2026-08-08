@@ -96,9 +96,10 @@ async function showPanel() {
 
 async function hidePanel() {
   if (isWindowMode.value) {
+    // Window mode: Rust already hid/minimized the window on the toggle-panel
+    // false event. Re-showing it here would undo the tray "hide" immediately.
     panelVisible.value = true;
     settingsVisible.value = false;
-    await appWindow.show();
     return;
   }
   // Settle any open confirm so its promise does not hang across hide/show.

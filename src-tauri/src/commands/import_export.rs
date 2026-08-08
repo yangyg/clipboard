@@ -6,7 +6,7 @@ use tauri::State;
 
 use crate::security;
 use crate::{
-    db::{validate_import_records, ExportCursor, MAX_IMPORT_TOTAL_BYTES},
+    db::{validate_import_records, ExportCursor, ImportSanitize, MAX_IMPORT_TOTAL_BYTES},
     require_feature, AppState, ClipboardRecord, FeatureId, StatsData,
 };
 
@@ -66,8 +66,12 @@ pub async fn import_data(state: State<'_, AppState>, records_json: String) -> Re
         let records: Vec<ClipboardRecord> =
             serde_json::from_str(&records_json).map_err(|e| format!("导入内容格式不正确: {e}"))?;
         validate_import_records(&records)?;
-        db.import_records(&records, settings.max_records)
-            .map_err(|e| e.to_string())
+        db.import_records(
+            &records,
+            settings.max_records,
+            Some(ImportSanitize::from(&*settings)),
+        )
+        .map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| format!("导入任务失败: {e}"))?
@@ -96,8 +100,12 @@ pub async fn import_data_from_path(
         let records: Vec<ClipboardRecord> =
             serde_json::from_str(&text).map_err(|e| format!("备份文件格式不正确: {e}"))?;
         validate_import_records(&records)?;
-        db.import_records(&records, settings.max_records)
-            .map_err(|e| e.to_string())
+        db.import_records(
+            &records,
+            settings.max_records,
+            Some(ImportSanitize::from(&*settings)),
+        )
+        .map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| format!("导入任务失败: {e}"))?

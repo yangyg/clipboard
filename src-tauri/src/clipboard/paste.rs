@@ -214,12 +214,12 @@ pub fn focus_window(hwnd_id: isize) -> bool {
 
         // Bypass foreground lock timeout (clipboard-manager standard technique).
         let mut lock_timeout: u32 = 0;
-        let _ = SystemParametersInfoW(
+        let got_timeout = SystemParametersInfoW(
             SPI_GETFOREGROUNDLOCKTIMEOUT,
             0,
             &mut lock_timeout as *mut u32 as *mut _,
             0,
-        );
+        ) != 0;
         let mut zero: u32 = 0;
         let _ = SystemParametersInfoW(
             SPI_SETFOREGROUNDLOCKTIMEOUT,
@@ -265,12 +265,16 @@ pub fn focus_window(hwnd_id: isize) -> bool {
             AttachThreadInput(cur_tid, fg_tid, FALSE);
         }
 
-        let _ = SystemParametersInfoW(
-            SPI_SETFOREGROUNDLOCKTIMEOUT,
-            0,
-            &mut lock_timeout as *mut u32 as *mut _,
-            SPIF_SENDCHANGE | SPIF_UPDATEINIFILE,
-        );
+        // Only restore when the read succeeded. Restoring a zero value would
+        // persist "foreground lock disabled" system-wide (SPIF_UPDATEINIFILE).
+        if got_timeout {
+            let _ = SystemParametersInfoW(
+                SPI_SETFOREGROUNDLOCKTIMEOUT,
+                0,
+                &mut lock_timeout as *mut u32 as *mut _,
+                SPIF_SENDCHANGE | SPIF_UPDATEINIFILE,
+            );
+        }
 
         let now = GetForegroundWindow();
         let ok = !now.is_null() && root_hwnd(now) == hwnd;

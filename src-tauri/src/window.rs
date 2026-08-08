@@ -157,7 +157,9 @@ pub(crate) fn apply_window_round_corners(
 ) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use windows_sys::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, SetWindowRgn};
+        use windows_sys::Win32::Graphics::Gdi::{
+            CreateRectRgn, CreateRoundRectRgn, DeleteObject, GetWindowRgn, SetWindowRgn,
+        };
 
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
         let size = window.outer_size().map_err(|e| e.to_string())?;
@@ -166,9 +168,25 @@ pub(crate) fn apply_window_round_corners(
         let scale = window.scale_factor().unwrap_or(1.0);
         let radius = ((radius_logical.max(0) as f64) * scale).round() as i32;
 
+        // GetWindowRgn returns a *copy* of the current region that we own.
+        // Repeated SetWindowRgn calls (resize events, radius changes) would
+        // otherwise leak one GDI region handle each. GetWindowRgn's return
+        // value is ignored: ERROR just means the window currently has no
+        // region, and the empty rect handle stays valid and deletable.
+        let old_region = unsafe { CreateRectRgn(0, 0, 0, 0) };
+        if old_region.is_null() {
+            return Err("CreateRectRgn failed".into());
+        }
+        unsafe {
+            GetWindowRgn(hwnd.0 as _, old_region);
+        }
+
         // Clear region → rectangular window
         if radius <= 0 {
             let ok = unsafe { SetWindowRgn(hwnd.0 as _, std::ptr::null_mut(), 1) };
+            unsafe {
+                DeleteObject(old_region);
+            }
             if ok == 0 {
                 return Err("SetWindowRgn(null) failed".into());
             }
@@ -180,9 +198,15 @@ pub(crate) fn apply_window_round_corners(
         // +1 on bottom-right is required by CreateRoundRectRgn (exclusive edge)
         let hrgn = unsafe { CreateRoundRectRgn(0, 0, w + 1, h + 1, ellipse, ellipse) };
         if hrgn.is_null() {
+            unsafe {
+                DeleteObject(old_region);
+            }
             return Err("CreateRoundRectRgn failed".into());
         }
         let ok = unsafe { SetWindowRgn(hwnd.0 as _, hrgn, 1) };
+        unsafe {
+            DeleteObject(old_region);
+        }
         if ok == 0 {
             unsafe {
                 DeleteObject(hrgn);

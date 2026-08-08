@@ -2,8 +2,9 @@
 use rusqlite::{params, Error as SqlError, Result as SqlResult};
 
 use super::{ClipboardDb, ALIAS_MAX_CHARS};
+use crate::detect::detect_sensitive;
 use crate::security;
-use crate::ClipboardRecord;
+use crate::{ClipboardRecord, Settings};
 
 #[derive(Debug, Clone)]
 pub struct ExportCursor {
@@ -16,6 +17,29 @@ pub const MAX_IMPORT_RECORDS: usize = 100_000;
 pub const MAX_IMPORT_TOTAL_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_IMPORT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_IMPORT_HTML_BYTES: usize = 512 * 1024;
+
+/// Sanitization policy applied to untrusted record bundles (JSON import /
+/// WebDAV pull). Mirrors the capture pipeline so remote `is_sensitive` /
+/// `auto_expire_at` metadata cannot silently delete or mislabel local data.
+#[derive(Debug, Clone, Copy)]
+pub struct ImportSanitize {
+    /// Re-run `detect_sensitive` on incoming text so a bundle that flips
+    /// `is_sensitive=false` cannot bypass the local privacy filter.
+    pub recheck_sensitive: bool,
+    /// Fresh TTL applied to sensitive rows. Overrides the remote expiry,
+    /// which may already be in the past and would otherwise be hard-deleted
+    /// by the next cleanup sweep immediately after import.
+    pub sensitive_auto_expire_seconds: i32,
+}
+
+impl From<&Settings> for ImportSanitize {
+    fn from(s: &Settings) -> Self {
+        Self {
+            recheck_sensitive: s.enable_sensitive_detection,
+            sensitive_auto_expire_seconds: s.sensitive_auto_expire_seconds,
+        }
+    }
+}
 
 pub fn validate_import_records(records: &[ClipboardRecord]) -> Result<(), String> {
     if records.len() > MAX_IMPORT_RECORDS {
@@ -52,8 +76,13 @@ fn validation_error(message: String) -> SqlError {
 }
 
 impl ClipboardDb {
-    pub fn import_records(&self, records: &[ClipboardRecord], max_records: i32) -> SqlResult<i32> {
-        let (imported, _, _) = self.import_records_with_merge(records, max_records)?;
+    pub fn import_records(
+        &self,
+        records: &[ClipboardRecord],
+        max_records: i32,
+        sanitize: Option<ImportSanitize>,
+    ) -> SqlResult<i32> {
+        let (imported, _, _) = self.import_records_with_merge(records, max_records, sanitize)?;
         Ok(imported)
     }
 
@@ -65,6 +94,7 @@ impl ClipboardDb {
         &self,
         records: &[ClipboardRecord],
         max_records: i32,
+        sanitize: Option<ImportSanitize>,
     ) -> SqlResult<(i32, i32, i32)> {
         validate_import_records(records).map_err(validation_error)?;
         let mut conn = self.conn.lock();
@@ -130,6 +160,32 @@ impl ClipboardDb {
                 crate::detect::sha256_hash(&crate::detect::sha256_hash(&record.content))
             };
 
+            // Boundary sanitization: `is_sensitive` / `auto_expire_at` come from
+            // an untrusted bundle. Never downgrade sensitivity; recompute any
+            // expiry from *now* so a past remote TTL cannot delete imported
+            // data moments after it lands.
+            let (is_sensitive, auto_expire_at) = match sanitize {
+                Some(policy) => {
+                    let sensitive = record.is_sensitive
+                        || (policy.recheck_sensitive
+                            && !is_image
+                            && detect_sensitive(&record.content));
+                    let expire = if sensitive && policy.sensitive_auto_expire_seconds > 0 {
+                        Some(
+                            (chrono::Utc::now()
+                                + chrono::Duration::seconds(
+                                    policy.sensitive_auto_expire_seconds as i64,
+                                ))
+                            .to_rfc3339(),
+                        )
+                    } else {
+                        None
+                    };
+                    (sensitive, expire)
+                }
+                None => (record.is_sensitive, record.auto_expire_at.clone()),
+            };
+
             if existing_hashes.contains(&hash) {
                 let changed = tx.execute(
                     "UPDATE records SET
@@ -142,7 +198,13 @@ impl ClipboardDb {
                             THEN ? ELSE media_path END,
                         thumb_path = CASE
                             WHEN (thumb_path IS NULL OR thumb_path = '') AND ? IS NOT NULL AND ? != ''
-                            THEN ? ELSE thumb_path END
+                            THEN ? ELSE thumb_path END,
+                        is_sensitive = CASE WHEN is_sensitive = 1 OR ? = 1 THEN 1 ELSE is_sensitive END,
+                        auto_expire_at = CASE
+                            WHEN (is_sensitive = 1 OR ? = 1)
+                                 AND (auto_expire_at IS NULL OR auto_expire_at = '')
+                                 AND ? IS NOT NULL
+                            THEN ? ELSE auto_expire_at END
                      WHERE hash = ? AND is_trashed = 0",
                     params![
                         record.is_favorite as i32,
@@ -157,6 +219,10 @@ impl ClipboardDb {
                         thumb_path,
                         thumb_path,
                         thumb_path,
+                        is_sensitive as i32,
+                        auto_expire_at,
+                        auto_expire_at,
+                        auto_expire_at,
                         hash,
                     ],
                 )?;
@@ -204,9 +270,9 @@ impl ClipboardDb {
                     record.copy_count,
                     record.is_favorite as i32,
                     record.is_pinned as i32,
-                    record.is_sensitive as i32,
+                    is_sensitive as i32,
                     record.is_trashed as i32,
-                    record.auto_expire_at,
+                    auto_expire_at,
                     record.created_at,
                     record.updated_at,
                     media_path,
@@ -357,8 +423,12 @@ mod tests {
     #[test]
     fn import_creates_tags_and_links() {
         let (db, dir) = temp_db();
-        db.import_records_with_merge(&[make_record("hello", "hash-1", &["重要", "链接"])], 100)
-            .unwrap();
+        db.import_records_with_merge(
+            &[make_record("hello", "hash-1", &["重要", "链接"])],
+            100,
+            None,
+        )
+        .unwrap();
         let exported = db.get_records_for_export(10, 0).unwrap();
         assert_eq!(exported.len(), 1);
         let mut tags = exported[0].tags.clone();
@@ -372,9 +442,9 @@ mod tests {
     #[test]
     fn import_merge_replaces_tags_when_incoming_has_tags() {
         let (db, dir) = temp_db();
-        db.import_records_with_merge(&[make_record("same", "hash-x", &["重要"])], 100)
+        db.import_records_with_merge(&[make_record("same", "hash-x", &["重要"])], 100, None)
             .unwrap();
-        db.import_records_with_merge(&[make_record("same", "hash-x", &["链接"])], 100)
+        db.import_records_with_merge(&[make_record("same", "hash-x", &["链接"])], 100, None)
             .unwrap();
         let exported = db.get_records_for_export(10, 0).unwrap();
         assert_eq!(exported.len(), 1);
@@ -385,9 +455,9 @@ mod tests {
     #[test]
     fn import_merge_preserves_local_tags_for_tagless_snapshot() {
         let (db, dir) = temp_db();
-        db.import_records_with_merge(&[make_record("same", "hash-y", &["重要"])], 100)
+        db.import_records_with_merge(&[make_record("same", "hash-y", &["重要"])], 100, None)
             .unwrap();
-        db.import_records_with_merge(&[make_record("same", "hash-y", &[])], 100)
+        db.import_records_with_merge(&[make_record("same", "hash-y", &[])], 100, None)
             .unwrap();
         let exported = db.get_records_for_export(10, 0).unwrap();
         assert_eq!(exported[0].tags, ["重要"]);
@@ -399,22 +469,22 @@ mod tests {
         let (db, dir) = temp_db();
         // New record with tags → counts 1.
         let (_, _, tc) = db
-            .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100)
+            .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100, None)
             .unwrap();
         assert_eq!(tc, 1);
         // Merge with identical tags → 0 (no spurious count).
         let (_, _, tc) = db
-            .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100)
+            .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100, None)
             .unwrap();
         assert_eq!(tc, 0);
         // Merge with a changed tag set → 1.
         let (_, _, tc) = db
-            .import_records_with_merge(&[make_record("a", "hash-tc", &["链接"])], 100)
+            .import_records_with_merge(&[make_record("a", "hash-tc", &["链接"])], 100, None)
             .unwrap();
         assert_eq!(tc, 1);
         // Merge with empty tags → 0 (preserves local, counts nothing).
         let (_, _, tc) = db
-            .import_records_with_merge(&[make_record("a", "hash-tc", &[])], 100)
+            .import_records_with_merge(&[make_record("a", "hash-tc", &[])], 100, None)
             .unwrap();
         assert_eq!(tc, 0);
         cleanup(dir);
@@ -428,7 +498,7 @@ mod tests {
             make_record("same", "batch-duplicate", &[]),
         ];
 
-        let (imported, merged, _) = db.import_records_with_merge(&records, 100).unwrap();
+        let (imported, merged, _) = db.import_records_with_merge(&records, 100, None).unwrap();
 
         assert_eq!((imported, merged), (1, 1));
         assert_eq!(db.get_records_for_export(10, 0).unwrap().len(), 1);
@@ -455,7 +525,7 @@ mod tests {
             make_record("first", "cursor-1", &[]),
             make_record("second", "cursor-2", &[]),
         ];
-        db.import_records_with_merge(&records, 100).unwrap();
+        db.import_records_with_merge(&records, 100, None).unwrap();
 
         let first = db.get_records_for_export_page(1, None).unwrap();
         let cursor = super::ExportCursor {
@@ -468,6 +538,71 @@ mod tests {
         assert_eq!(first.len(), 1);
         assert_eq!(second.len(), 1);
         assert_ne!(first[0].id, second[0].id);
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_sanitize_recomputes_expiry_and_rechecks_sensitive() {
+        let (db, dir) = temp_db();
+        let mut rec = make_record("Your verification code: 123456", "sanitize-1", &[]);
+        // Hostile/stale bundle: marks content non-sensitive and carries a past
+        // expiry. With sanitization enabled neither may survive the import.
+        rec.is_sensitive = false;
+        rec.auto_expire_at = Some("2020-01-01T00:00:00Z".into());
+        let policy = super::ImportSanitize {
+            recheck_sensitive: true,
+            sensitive_auto_expire_seconds: 600,
+        };
+
+        db.import_records_with_merge(&[rec], 100, Some(policy))
+            .unwrap();
+
+        let rows = db.get_records_for_export(10, 0).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].is_sensitive, "detection must re-flag the record");
+        let expiry = rows[0].auto_expire_at.as_deref().expect("expiry set");
+        assert!(
+            expiry > "2026-01-01T00:00:00Z",
+            "expiry must be recomputed from now, got {expiry}"
+        );
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_sanitize_never_downgrades_sensitive_flag() {
+        let (db, dir) = temp_db();
+        let mut rec = make_record("plain text", "sanitize-2", &[]);
+        rec.is_sensitive = true; // remote says sensitive even though text is plain
+        let policy = super::ImportSanitize {
+            recheck_sensitive: true,
+            sensitive_auto_expire_seconds: 600,
+        };
+
+        db.import_records_with_merge(&[rec], 100, Some(policy))
+            .unwrap();
+
+        let rows = db.get_records_for_export(10, 0).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].is_sensitive);
+        assert!(rows[0].auto_expire_at.is_some());
+        cleanup(dir);
+    }
+
+    #[test]
+    fn import_sanitize_preserves_past_expiry_when_disabled() {
+        let (db, dir) = temp_db();
+        let mut rec = make_record("plain text", "sanitize-3", &[]);
+        rec.is_sensitive = true;
+        rec.auto_expire_at = Some("2020-01-01T00:00:00Z".into());
+
+        // Legacy callers (no policy) keep the previous passthrough behaviour.
+        db.import_records_with_merge(&[rec], 100, None).unwrap();
+
+        let rows = db.get_records_for_export(10, 0).unwrap();
+        assert_eq!(
+            rows[0].auto_expire_at.as_deref(),
+            Some("2020-01-01T00:00:00Z")
+        );
         cleanup(dir);
     }
 }

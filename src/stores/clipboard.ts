@@ -12,6 +12,8 @@ import {
 } from "./clipboardList";
 import { createRecordActions } from "./clipboardRecordActions";
 import { useSettingsStore } from "./settings";
+import { useToast } from "../composables/useToast";
+import { i18n } from "../locales";
 
 export type { FilterTab, ListSort } from "./clipboardList";
 export { LIST_SORT_OPTIONS } from "./clipboardList";
@@ -258,6 +260,9 @@ export const useClipboardStore = defineStore("clipboard", () => {
     } catch (e) {
       pauseCapture.value = !next;
       console.error("Toggle pause failed:", e);
+      // Silent failure here means the user believes capture is paused while
+      // it keeps recording — always surface the error.
+      useToast().toast(i18n.global.t("common.operationFailed"), "error");
     }
   }
 

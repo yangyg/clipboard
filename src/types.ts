@@ -94,8 +94,6 @@ export interface Settings {
   // Privacy
   enable_sensitive_detection: boolean;
   sensitive_auto_expire_seconds: number;
-  // Storage
-  data_path: string;
   // System
   auto_start: boolean;
   minimize_to_tray: boolean;

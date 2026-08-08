@@ -270,6 +270,13 @@ export function useVirtualList(
   /** id → index in filteredRecords; rebuilt with layout only (not on content churn). */
   const recordIndexById = shallowRef(buildRecordIndex());
 
+  // Build grid rows eagerly when mounted already in grid layout: none of the
+  // rebuild watchers below are immediate, so data present at setup would
+  // otherwise render an empty grid until the next layout/data/width change.
+  if (listLayout.value === "grid") {
+    gridRows.value = buildGridRows(flatItems.value);
+  }
+
   watch(layoutSig, () => {
     flatItems.value = buildFlatItems();
     recordIndexById.value = buildRecordIndex();

@@ -2,7 +2,7 @@
   <div class="app-root">
     <!-- Floating mode: keep panel mounted (v-show) to avoid full remount cost -->
     <template v-if="!isWindowMode">
-      <FloatingPanel v-show="panelVisible && !settingsVisible" @close="hidePanel" @openSettings="openSettings" />
+      <FloatingPanel v-show="panelVisible && !settingsVisible" :settings-visible="settingsVisible" @close="hidePanel" @openSettings="openSettings" />
       <SettingsWindow v-if="settingsVisible" :initial-section="settingsInitialSection" @close="closeSettings" />
     </template>
     <!-- Window mode: panel always visible, settings replaces panel -->

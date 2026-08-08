@@ -107,6 +107,12 @@ const emit = defineEmits<{
   close: [];
 }>();
 
+// Floating mode keeps this panel mounted behind the settings window (v-show);
+// hotkeys must be suspended while settings is open to avoid stray paste/delete.
+const props = defineProps<{
+  settingsVisible?: boolean;
+}>();
+
 const clipboardStore = useClipboardStore();
 const batchEnabled = useFeature("batch");
 const { confirm } = useConfirm();
@@ -119,6 +125,7 @@ const { height: batchBarHeight } = useBatchBarHeight(batchBarRef);
 useClipboardHotkeys({
   onClose: () => emit("close"),
   allowCloseOnEscape: true,
+  enabled: () => !props.settingsVisible,
 });
 
 const FILTER_TABS = CONTENT_FILTER_DEFINITIONS;

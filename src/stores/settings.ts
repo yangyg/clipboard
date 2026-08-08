@@ -27,10 +27,17 @@ const DEFAULT_SETTINGS: Settings = {
   auto_close_on_paste: true,
   enable_sensitive_detection: true,
   sensitive_auto_expire_seconds: 600,
-  data_path: "",
   auto_start: false,
   minimize_to_tray: true,
-  ignored_apps: ["1Password.exe", "ICBCNetBank.exe"],
+  ignored_apps: [
+    "1Password.exe",
+    "Bitwarden.exe",
+    "KeePass.exe",
+    "KeePassXC.exe",
+    "Enpass.exe",
+    "Dashlane.exe",
+    "ICBCNetBank.exe",
+  ],
   source_name_overrides: [],
   floating_width: 0,
   floating_height: 0,
@@ -84,6 +91,11 @@ export const useSettingsStore = defineStore("settings", () => {
   const isLoaded = ref(false);
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   let saveGeneration = 0;
+  /** Set when restoring settings after a failed save. The restore assignment
+   * fires the deep watch only AFTER isLoaded is back to true (watch jobs flush
+   * later), so isLoaded alone cannot suppress the redundant retry — an explicit
+   * one-shot flag can. */
+  let suppressNextSave = false;
 
   async function loadSettings() {
     try {
@@ -110,6 +122,7 @@ export const useSettingsStore = defineStore("settings", () => {
       isLoaded.value = false;
       try {
         const saved = await invoke<Settings>("get_settings");
+        suppressNextSave = true; // the restore below must not re-trigger auto-save
         settings.value = normalizeSettings(saved);
         applyTheme(settings.value.theme);
         applyAppearance();
@@ -215,6 +228,10 @@ export const useSettingsStore = defineStore("settings", () => {
   watch(
     settings,
     () => {
+      if (suppressNextSave) {
+        suppressNextSave = false;
+        return;
+      }
       scheduleSave();
     },
     { deep: true }

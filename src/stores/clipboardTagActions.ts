@@ -118,7 +118,7 @@ export function createTagActions(ctx: TagActionsCtx) {
 
   async function addTagToRecord(recordId: number, tagId: number, tagName: string) {
     try {
-      await invoke("add_tag_to_record", { recordId, tagId });
+      await invoke("add_tag_to_record", { record_id: recordId, tag_id: tagId });
       const record = ctx.records.value.find((r) => r.id === recordId);
       if (record && !record.tags.includes(tagName)) {
         ctx.patchRecord(recordId, { tags: [...record.tags, tagName] });
@@ -132,7 +132,7 @@ export function createTagActions(ctx: TagActionsCtx) {
 
   async function removeTagFromRecord(recordId: number, tagId: number, tagName: string) {
     try {
-      await invoke("remove_tag_from_record", { recordId, tagId });
+      await invoke("remove_tag_from_record", { record_id: recordId, tag_id: tagId });
       const record = ctx.records.value.find((r) => r.id === recordId);
       if (record) {
         ctx.patchRecord(recordId, {

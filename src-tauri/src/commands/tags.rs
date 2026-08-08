@@ -70,7 +70,7 @@ pub async fn update_tag(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn add_tag_to_record(
     state: State<'_, AppState>,
     record_id: i64,
@@ -86,7 +86,7 @@ pub async fn add_tag_to_record(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn remove_tag_from_record(
     state: State<'_, AppState>,
     record_id: i64,

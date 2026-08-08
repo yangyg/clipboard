@@ -463,6 +463,12 @@ export function createListActions(ctx: ListActionsCtx) {
   /** Invalidate in-flight list loads (e.g. after emptyTrash clears the list). */
   function invalidateLoads() {
     loadSeq += 1;
+    // The visible window was replaced out-of-band: reset server-side pagination
+    // too, otherwise a stale offset/hasMore yields mis-paged or redundant
+    // loadMore requests on the next scroll.
+    listFetchOffset = 0;
+    listWindowDirty = false;
+    ctx.hasMore.value = false;
   }
 
   return {

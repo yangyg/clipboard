@@ -10,6 +10,12 @@ export interface ClipboardHotkeyOptions {
   onClose?: () => void;
   /** Allow Escape to close the panel after clearing selection. Default true. */
   allowCloseOnEscape?: boolean;
+  /**
+   * When provided and returning false, all hotkeys are ignored. Needed in
+   * floating mode where the panel stays mounted (v-show) behind the settings
+   * window — otherwise Enter/Delete would paste/delete into the hidden list.
+   */
+  enabled?: () => boolean;
 }
 
 function isTypingTarget(el: EventTarget | null): boolean {
@@ -73,6 +79,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
   }
 
   function onKeyDown(e: KeyboardEvent) {
+    if (options.enabled && !options.enabled()) return;
     if (confirmOpen.value) return;
 
     // Let SearchBar / inputs own Escape and typing shortcuts

@@ -194,6 +194,8 @@ export default {
     deleteTagFailed: 'Delete failed',
   },
   preview: {
+    empty: 'Select a record to preview',
+    emptyHint: 'Click a record in the list to see its full content here',
     typeText: 'Plain text',
     typeCode: 'Code snippet',
     typeLink: 'Link',

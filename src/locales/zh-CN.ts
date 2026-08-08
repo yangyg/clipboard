@@ -194,6 +194,8 @@ export default {
     deleteTagFailed: '删除失败',
   },
   preview: {
+    empty: '选择一条记录以预览',
+    emptyHint: '点击列表中的记录，这里会展示它的完整内容',
     typeText: '纯文本',
     typeCode: '代码片段',
     typeLink: '链接',

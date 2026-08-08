@@ -135,7 +135,7 @@
 
     <!-- Resizer between list and preview (side-by-side only) -->
     <div
-      v-if="previewVisible && !usePreviewDrawer"
+      v-if="showPreviewHost && !usePreviewDrawer"
       class="resizer"
       :class="{ active: listColDragging }"
       role="separator"
@@ -156,7 +156,7 @@
       @click="clipboardStore.clearSelection()"
     />
     <div
-      v-if="previewVisible"
+      v-if="showPreviewHost"
       class="preview-host"
       :class="{ 'preview-host--drawer': usePreviewDrawer }"
     >
@@ -314,8 +314,15 @@ const PREVIEW_DRAWER_BREAKPOINT = 560;
 const wrapperRef = ref<HTMLElement | null>(null);
 const wrapperWidth = ref(0);
 let wrapperRo: ResizeObserver | null = null;
-const usePreviewDrawer = computed(
-  () => previewVisible.value && wrapperWidth.value > 0 && wrapperWidth.value < PREVIEW_DRAWER_BREAKPOINT
+const isNarrowHost = computed(
+  () => wrapperWidth.value > 0 && wrapperWidth.value < PREVIEW_DRAWER_BREAKPOINT
+);
+const usePreviewDrawer = computed(() => previewVisible.value && isNarrowHost.value);
+
+/** Right preview column: persistent in wide layouts (empty-state when nothing
+ * is selected), drawer-only on selection in narrow layouts, hidden in batch. */
+const showPreviewHost = computed(
+  () => previewVisible.value || (!clipboardStore.batchMode && !isNarrowHost.value)
 );
 
 const {

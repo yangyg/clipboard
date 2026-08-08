@@ -1,5 +1,6 @@
 <template>
-  <div class="preview-pane" v-if="record">
+  <div class="preview-pane">
+    <template v-if="record">
     <!-- Drawer close when parent hosts preview as overlay -->
     <button
       v-if="drawer"
@@ -86,6 +87,14 @@
       @restore="restore"
       @permanent-delete="permanentDel"
     />
+    </template>
+
+    <!-- Empty: nothing selected (side-by-side layout keeps this pane mounted) -->
+    <div v-else class="preview-empty">
+      <div class="preview-empty-icon"><AppIcon name="clipboard" :size="36" :stroke-width="1.5" /></div>
+      <div class="preview-empty-text">{{ $t('preview.empty') }}</div>
+      <div class="preview-empty-hint">{{ $t('preview.emptyHint') }}</div>
+    </div>
   </div>
 </template>
 
@@ -289,6 +298,66 @@ const aliasDialogVisible = ref(false);
   margin-left: auto;
   font-size: var(--text-xs);
   opacity: 0.8;
+}
+
+/* Empty state: same pure-CSS-animation pattern as ListEmptyState — a JS
+   <Transition> can stall unmounted while the WebView2 window is hidden. */
+.preview-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-md);
+  animation: preview-empty-in var(--transition-smooth) ease;
+}
+
+@keyframes preview-empty-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:global(body.anim-disabled) .preview-empty {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-empty {
+    animation: none;
+  }
+}
+
+.preview-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  opacity: 0.9;
+  margin-bottom: 4px;
+}
+
+.preview-empty-text {
+  font-size: var(--text-base);
+}
+
+.preview-empty-hint {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 @media (max-width: 560px) {

@@ -18,7 +18,7 @@ mod sync_history;
 mod tags;
 mod types;
 
-pub use records_import::{validate_import_records, ExportCursor};
+pub use records_import::{validate_import_records, ExportCursor, MAX_IMPORT_TOTAL_BYTES};
 
 // Schema compatibility tests live in `schema_tests.rs` (test-only module) to
 // keep schema.rs under the 500-line cap.

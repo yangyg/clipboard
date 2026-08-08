@@ -43,6 +43,21 @@ fn ensure_device_id(settings: &mut Settings) -> String {
     settings.webdav_device_id.clone()
 }
 
+/// Persist settings with a fresh `webdav_last_sync_at` stamp, off the async worker.
+async fn persist_last_sync(db: &Arc<ClipboardDb>, settings: &mut Settings) -> Result<(), String> {
+    let db = Arc::clone(db);
+    let mut next = settings.clone();
+    next.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
+    let next = tokio::task::spawn_blocking(move || -> Result<Settings, String> {
+        db.save_settings(&next).map_err(|e| e.to_string())?;
+        Ok(next)
+    })
+    .await
+    .map_err(|e| format!("WebDAV 保存设置任务失败: {e}"))??;
+    *settings = next;
+    Ok(())
+}
+
 fn client_from_settings(settings: &Settings) -> Result<WebDavClient, String> {
     if settings.webdav_url.trim().is_empty() {
         return Err("请先填写 WebDAV 服务器地址".into());
@@ -152,23 +167,16 @@ pub async fn webdav_pull(
 
     let max = settings.max_records;
     // The merge is a full-content transaction over the pulled bundle — run it
-    // (plus the settings persist) off the async worker so large imported sets
-    // don't hold a Tokio executor thread.
+    // off the async worker so large imported sets don't hold a Tokio executor thread.
     let merge_db = Arc::clone(db);
-    let mut last_settings = settings.clone();
-    last_settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
-    let (pulled, merged, tags_pulled, last_settings) = tokio::task::spawn_blocking(move || {
-        let (pulled, merged, tags_pulled) = merge_db
-            .import_records_with_merge(&records, max)
-            .map_err(|e| e.to_string())?;
+    let (pulled, merged, tags_pulled) = tokio::task::spawn_blocking(move || {
         merge_db
-            .save_settings(&last_settings)
-            .map_err(|e| e.to_string())?;
-        Ok::<_, String>((pulled, merged, tags_pulled, last_settings))
+            .import_records_with_merge(&records, max)
+            .map_err(|e| e.to_string())
     })
     .await
     .map_err(|e| format!("WebDAV 导入任务失败: {e}"))??;
-    *settings = last_settings;
+    persist_last_sync(db, settings).await?;
 
     info!(
         "WebDAV pull: new={pulled} merged={merged} tags={tags_pulled} media_dl={media_downloaded}"
@@ -385,18 +393,7 @@ pub async fn webdav_push(
         };
     }
 
-    let save_db = Arc::clone(db);
-    let mut last_settings = settings.clone();
-    last_settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
-    let last_settings = tokio::task::spawn_blocking(move || -> Result<Settings, String> {
-        save_db
-            .save_settings(&last_settings)
-            .map_err(|e| e.to_string())?;
-        Ok(last_settings)
-    })
-    .await
-    .map_err(|e| format!("WebDAV 保存设置任务失败: {e}"))??;
-    *settings = last_settings;
+    persist_last_sync(db, settings).await?;
 
     info!(
         "WebDAV push: changed≈{pushed} tags={tags_pushed} media_up={media_uploaded} media_skip={media_skipped}"

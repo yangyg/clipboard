@@ -155,9 +155,12 @@ impl ClipboardDb {
             content_html: row.get(18)?,
             media_abs,
             thumb_abs,
-            content_len: row.get(19).ok(),
-            alias: row.get::<_, String>(20).unwrap_or_default(),
-            source_name: row.get::<_, String>(21).unwrap_or_default(),
+            // Strict reads: all three columns are NOT NULL in the schema, so a
+            // drift between RECORD_COLS* and the positional mapping must fail
+            // loudly (tests + runtime) instead of silently defaulting.
+            content_len: Some(row.get(19)?),
+            alias: row.get(20)?,
+            source_name: row.get(21)?,
         })
     }
 

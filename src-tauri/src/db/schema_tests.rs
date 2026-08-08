@@ -359,3 +359,146 @@ fn dedup_recopy_refreshes_fts_source_columns() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn map_record_row_binds_column_order_for_both_column_lists() {
+    use crate::ClipboardRecord;
+
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_map_row_test_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let rec = ClipboardRecord {
+        id: 0,
+        content: "hello <b>world</b>".into(),
+        content_type: "text".into(),
+        source_app: "app.exe".into(),
+        source_window: "Window".into(),
+        source_name: "Friendly".into(),
+        hash: "map-row-hash".into(),
+        copy_count: 3,
+        is_favorite: true,
+        is_pinned: false,
+        is_sensitive: false,
+        is_trashed: false,
+        auto_expire_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+        tags: vec!["重要".into()],
+        content_html: Some("<b>world</b>".into()),
+        media_path: None,
+        thumb_path: None,
+        width: None,
+        height: None,
+        media_abs: None,
+        thumb_abs: None,
+        content_len: None,
+        alias: "my-alias".into(),
+    };
+    db.import_records_with_merge(&[rec], 100, None).unwrap();
+    let id = db.get_records_for_export(10, 0).unwrap()[0].id;
+
+    let conn = db.conn.lock();
+    for cols in [RECORD_COLS, RECORD_COLS_LIST] {
+        let mut stmt = conn
+            .prepare(&format!("SELECT {cols} FROM records WHERE id = ?"))
+            .unwrap();
+        let mut rows = stmt.query([id]).unwrap();
+        let row = rows.next().unwrap().unwrap();
+        let mapped = db.map_record_row(row).unwrap();
+        assert_eq!(mapped.content, "hello <b>world</b>");
+        assert_eq!(mapped.source_app, "app.exe");
+        assert_eq!(mapped.source_window, "Window");
+        assert_eq!(mapped.source_name, "Friendly");
+        // Import re-derives text hashes (sha256(sha256(content))), matching the
+        // capture identity scheme — assert the stored value, not the input.
+        let expected_hash =
+            crate::detect::sha256_hash(&crate::detect::sha256_hash("hello <b>world</b>"));
+        assert_eq!(mapped.hash, expected_hash);
+        assert_eq!(mapped.copy_count, 3);
+        assert!(mapped.is_favorite);
+        assert_eq!(mapped.alias, "my-alias");
+        assert_eq!(mapped.content_len, Some(18));
+        if cols == RECORD_COLS {
+            assert_eq!(mapped.content_html.as_deref(), Some("<b>world</b>"));
+        } else {
+            assert!(mapped.content_html.is_none(), "list rows must omit HTML");
+        }
+    }
+    drop(conn);
+
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn new_succeeds_when_legacy_db_has_no_fts() {
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_legacy_no_fts_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Simulate a pre-FTS database: current tables/columns, but the FTS virtual
+    // table, its triggers and the fts_version stamp are absent.
+    let conn = rusqlite::Connection::open(dir.join("test.db")).unwrap();
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+        .unwrap();
+    ClipboardDb::initialize_schema(&conn).unwrap();
+    conn.execute_batch(
+        "DROP TRIGGER IF EXISTS records_fts_ai;
+         DROP TRIGGER IF EXISTS records_fts_ad;
+         DROP TRIGGER IF EXISTS records_fts_au;
+         DROP TRIGGER IF EXISTS record_tags_fts_ai;
+         DROP TRIGGER IF EXISTS record_tags_fts_ad;
+         DROP TRIGGER IF EXISTS tags_fts_au;
+         DROP TABLE IF EXISTS records_fts;",
+    )
+    .unwrap();
+    conn.execute("DELETE FROM settings WHERE key = 'fts_version'", [])
+        .unwrap();
+    // Seed duplicate text hashes so migrate_text_hash_v2 exercises its merge
+    // path (refresh_record_fts) during startup.
+    conn.execute(
+        "INSERT INTO records (content, content_type, hash, created_at, updated_at)
+         VALUES ('dup text', 'text', 'legacy-x', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO records (content, content_type, hash, created_at, updated_at)
+         VALUES ('dup text', 'text', 'legacy-y', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    drop(conn);
+
+    // Startup must succeed and rebuild FTS before the hash-merge migration runs.
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+    assert_eq!(db.get_records_for_export(10, 0).unwrap().len(), 1);
+    let conn = db.conn.lock();
+    let fts_rows: i64 = conn
+        .query_row("SELECT COUNT(*) FROM records_fts", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(fts_rows, 1);
+    drop(conn);
+
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}

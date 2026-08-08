@@ -86,3 +86,13 @@
 仍需运行验证：P2-7（paste 图片自写基线与 arboard RGBA 往返保真度，透明通道图片可能不匹配）。
 
 验证基线：`cargo test` 101 通过、`cargo clippy -D warnings` 通过、`cargo fmt --check` 通过、Vitest 164 通过、typecheck/lint/build/check:ipc-contract/check:schema 全部通过。
+
+## 第三轮收尾（2026-08-08，未提交）
+
+| 编号 | 风险 | 位置 | 修复 |
+|------|------|------|------|
+| P3-3 | 低 | `src-tauri/src/db/records_query.rs` + `schema_tests.rs` | `map_record_row` 去除 `content_len/alias/source_name` 的静默兜底（三列均 NOT NULL），列序/类型漂移改为大声失败；新增双列清单（RECORD_COLS / RECORD_COLS_LIST）位置绑定回归测试 |
+| P3-8 | 低 | `scripts/check-schema.mjs` | 新增 RECORD_COLS 与 RECORD_COLS_LIST 逐位置列名序列校验；`extractColNames` 改为按顶层逗号切分，正确处理 `substr(content, 1, 400)` 类括号表达式 |
+| 启动健壮性 | 低 | `src-tauri/src/db/mod.rs` + `schema_tests.rs` | `ensure_fts` 提前到迁移之前执行——legacy 库缺 `records_fts`/`fts_version` 时，`migrate_text_hash_v2` 的 `refresh_record_fts` 与删除触发器不再因表缺失导致 `ClipboardDb::new` 失败、应用无法启动；补 legacy 无 FTS 库启动回归测试 |
+
+验证基线：`npm run validate` 全绿（Rust 103 用例，前端 164 用例，lint/typecheck/fmt/clippy/契约/构建全部通过）。

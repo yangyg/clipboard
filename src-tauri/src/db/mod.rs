@@ -70,6 +70,13 @@ impl ClipboardDb {
 
         Self::initialize_schema(&conn)?;
 
+        // FTS must exist before any migration touches records:
+        // migrate_text_hash_v2 deletes/merges rows and calls refresh_record_fts,
+        // both of which require records_fts + its triggers. On a legacy DB that
+        // predates FTS (or where FTS creation previously failed), running the
+        // migrations first would fail and block app startup entirely.
+        Self::ensure_fts(&conn)?;
+
         // One-time backfill of content_len (avoids length(content) on every list query).
         let backfilled: Option<String> = conn
             .query_row(
@@ -100,8 +107,6 @@ impl ClipboardDb {
         // All migrations above are idempotent (CREATE IF NOT EXISTS / ALTER … .ok()).
         // After they run, stamp the expected version so doctor can verify it.
         Self::apply_schema_version(&conn)?;
-
-        Self::ensure_fts(&conn)?;
 
         // media/ dirs were already created by the caller (lib.rs::run) before
         // the DB opens; a failure here is recorded rather than swallowed so a

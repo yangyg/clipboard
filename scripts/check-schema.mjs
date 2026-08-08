@@ -163,14 +163,33 @@ if (!recordCols || !recordColsList) {
   // Verify all columns in RECORD_COLS exist in CREATE TABLE
   const extractColNames = (s) => {
     const cleaned = s.replace(/--.*$/gm, '').replace(/\n/g, ' ');
-    return cleaned.split(',').map((part) => {
-      // Handle "expr AS alias" → take the alias
-      const asMatch = part.trim().match(/\bas\s+(\w+)\s*$/i);
-      if (asMatch) return asMatch[1];
-      // Otherwise take the first word (column name)
-      const nameMatch = part.trim().match(/^(\w+)/);
-      return nameMatch ? nameMatch[1] : part.trim();
-    }).filter(Boolean);
+    // Split on top-level commas only — expressions like
+    // "substr(content, 1, 400) as content" contain inner commas that a naive
+    // split would turn into phantom columns.
+    const parts = [];
+    let depth = 0;
+    let current = '';
+    for (const ch of cleaned) {
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      if (ch === ',' && depth === 0) {
+        parts.push(current);
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim()) parts.push(current);
+    return parts
+      .map((part) => {
+        // Handle "expr AS alias" → take the alias
+        const asMatch = part.trim().match(/\bas\s+(\w+)\s*$/i);
+        if (asMatch) return asMatch[1];
+        // Otherwise take the first word (column name)
+        const nameMatch = part.trim().match(/^(\w+)/);
+        return nameMatch ? nameMatch[1] : part.trim();
+      })
+      .filter(Boolean);
   };
 
   const fullColNames = extractColNames(recordCols);
@@ -181,6 +200,33 @@ if (!recordCols || !recordColsList) {
     // Some RECORD_COLS entries are expressions like "substr(content, 1, 400) as content"
     // Already handled by the AS alias extraction above
     fail(`RECORD_COLS references column '${col}' which is NOT in the CREATE TABLE block`);
+  }
+
+  // Positional binding: map_record_row reads by index, so the *order* of
+  // RECORD_COLS and RECORD_COLS_LIST must match exactly (same alias at each
+  // position). A reorder with equal arity would otherwise silently mis-map.
+  const listColNames = extractColNames(recordColsList);
+  if (fullColNames.length !== listColNames.length) {
+    fail(
+      `RECORD_COLS (${fullColNames.length}) and RECORD_COLS_LIST (${listColNames.length}) ` +
+      `resolve to different column-name counts`
+    );
+  } else {
+    let mismatch = -1;
+    for (let i = 0; i < fullColNames.length; i++) {
+      if (fullColNames[i] !== listColNames[i]) {
+        mismatch = i;
+        break;
+      }
+    }
+    if (mismatch >= 0) {
+      fail(
+        `Column #${mismatch + 1} order differs: RECORD_COLS '${fullColNames[mismatch]}' vs ` +
+        `RECORD_COLS_LIST '${listColNames[mismatch]}' (map_record_row reads positionally)`
+      );
+    } else {
+      pass(`RECORD_COLS and RECORD_COLS_LIST column order match (${fullColNames.length} columns)`);
+    }
   }
 }
 

@@ -583,14 +583,38 @@ mod tests {
         db.add_tag_to_record(record_id, tag_id).unwrap();
 
         assert_eq!(
-            db.search_records("stale-search-tag", 10, 0, None, false, None, None, true)
-                .unwrap()
-                .len(),
+            db.search_records(
+                "stale-search-tag",
+                10,
+                0,
+                None,
+                false,
+                None,
+                None,
+                true,
+                None,
+                None,
+                None
+            )
+            .unwrap()
+            .len(),
             1
         );
         db.delete_tag(tag_id).unwrap();
         assert!(db
-            .search_records("stale-search-tag", 10, 0, None, false, None, None, true)
+            .search_records(
+                "stale-search-tag",
+                10,
+                0,
+                None,
+                false,
+                None,
+                None,
+                true,
+                None,
+                None,
+                None
+            )
             .unwrap()
             .is_empty());
 

@@ -118,7 +118,11 @@ export function createListActions(ctx: ListActionsCtx) {
     };
   }
 
-  function searchFilterArgs() {
+  function searchFilterArgs(cursor?: {
+    before_pinned: number
+    before_updated_at: string
+    before_id: number
+  }) {
     const favoritesOnly = ctx.activeFilter.value === "favorites";
     // Must match #[tauri::command(rename_all = "snake_case")] on search_records.
     return {
@@ -127,6 +131,10 @@ export function createListActions(ctx: ListActionsCtx) {
       favorites_only: favoritesOnly,
       tag: featureEnabled("tags") ? ctx.activeTag.value : null,
       sort: ctx.listSort.value,
+      // Keyset cursor for the default newest-first sort (null → OFFSET page).
+      before_pinned: cursor?.before_pinned ?? null,
+      before_updated_at: cursor?.before_updated_at ?? null,
+      before_id: cursor?.before_id ?? null,
     };
   }
 
@@ -193,17 +201,37 @@ export function createListActions(ctx: ListActionsCtx) {
     ctx.isLoadingMore.value = true;
     try {
       if (ctx.searchQuery.value.trim()) {
-        const offset = listFetchOffset;
-        const result = await invoke<SearchResult>("search_records", {
-          query: ctx.searchQuery.value,
-          limit: PAGE_SIZE,
-          offset,
-          ...searchFilterArgs(),
-        });
-        if (seq !== loadSeq || ctx.trashFilter.value) return;
-        appendRecords(result.records);
-        listFetchOffset = offset + result.records.length;
-        ctx.hasMore.value = result.has_more;
+        if (ctx.listSort.value === "updated_desc" && ctx.records.value.length > 0) {
+          // Keyset cursor — search results are stable against new captures that
+          // match the query (no OFFSET drift across pages).
+          const last = ctx.records.value[ctx.records.value.length - 1];
+          const result = await invoke<SearchResult>("search_records", {
+            query: ctx.searchQuery.value,
+            limit: PAGE_SIZE,
+            offset: 0,
+            ...searchFilterArgs({
+              before_pinned: last.is_pinned ? 1 : 0,
+              before_updated_at: last.updated_at,
+              before_id: last.id,
+            }),
+          });
+          if (seq !== loadSeq || ctx.trashFilter.value) return;
+          appendRecords(result.records);
+          listFetchOffset = 0;
+          ctx.hasMore.value = result.has_more;
+        } else {
+          const offset = listFetchOffset;
+          const result = await invoke<SearchResult>("search_records", {
+            query: ctx.searchQuery.value,
+            limit: PAGE_SIZE,
+            offset,
+            ...searchFilterArgs(),
+          });
+          if (seq !== loadSeq || ctx.trashFilter.value) return;
+          appendRecords(result.records);
+          listFetchOffset = offset + result.records.length;
+          ctx.hasMore.value = result.has_more;
+        }
       } else if (ctx.listSort.value === "updated_desc" && ctx.records.value.length > 0) {
         // Keyset cursor — stable when new rows are prepended during scroll.
         const last = ctx.records.value[ctx.records.value.length - 1];

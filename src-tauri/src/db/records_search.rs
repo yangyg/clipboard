@@ -15,6 +15,11 @@ impl ClipboardDb {
         tag_name: Option<&str>,
         sort: Option<&str>,
         include_tags: bool,
+        // Keyset cursor (preferred over OFFSET for the default sort so page 2+
+        // does not skip/duplicate rows when new clips match the query).
+        before_pinned: Option<i32>,
+        before_updated_at: Option<&str>,
+        before_id: Option<i64>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let query = query.trim();
         if query.is_empty() {
@@ -45,11 +50,41 @@ impl ClipboardDb {
             sql.push_str(" AND is_favorite = 1");
         }
         Self::push_tag_filter(&mut sql, &mut params, tag_name, include_tags);
-        sql.push_str(" ORDER BY ");
-        sql.push_str(Self::order_by_clause(false, sort));
-        sql.push_str(" LIMIT ? OFFSET ?");
-        params.push(Box::new(limit.max(1)));
-        params.push(Box::new(offset.max(0)));
+
+        // Keyset for the default newest-first (+ pinned) sort, mirroring
+        // get_records. Avoids OFFSET drift when a new matching clip is captured
+        // while the user scrolls search results.
+        let use_keyset = before_id.is_some()
+            && before_updated_at.is_some()
+            && matches!(sort.unwrap_or("updated_desc"), "updated_desc");
+
+        if use_keyset {
+            let pin = before_pinned.unwrap_or(0);
+            let ts = before_updated_at.unwrap().to_string();
+            let id = before_id.unwrap();
+            // ORDER BY is_pinned DESC, updated_at DESC, id DESC → next page
+            sql.push_str(
+                " AND (
+                    is_pinned < ?
+                    OR (is_pinned = ? AND updated_at < ?)
+                    OR (is_pinned = ? AND updated_at = ? AND id < ?)
+                )",
+            );
+            params.push(Box::new(pin));
+            params.push(Box::new(pin));
+            params.push(Box::new(ts.clone()));
+            params.push(Box::new(pin));
+            params.push(Box::new(ts));
+            params.push(Box::new(id));
+            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
+            params.push(Box::new(limit.max(1)));
+        } else {
+            sql.push_str(" ORDER BY ");
+            sql.push_str(Self::order_by_clause(false, sort));
+            sql.push_str(" LIMIT ? OFFSET ?");
+            params.push(Box::new(limit.max(1)));
+            params.push(Box::new(offset.max(0)));
+        }
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();

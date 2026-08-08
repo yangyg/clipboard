@@ -11,10 +11,100 @@ static MEDIA_REL_RE: LazyLock<Regex> =
 // Event-handler attributes that could execute when the HTML is pasted into a
 // rich-text editor. Scoped to known handler names so plain text like "one="
 // never triggers a false positive.
+//
+// Keep the list additive: it must cover every `on*` attribute a hostile HTML
+// blob could carry. In particular pointer/touch/drag handlers and media-event
+// handlers (`<video oncanplay=...>`) were historically missing.
+const HTML_HANDLER_NAMES: &[&str] = &[
+    "click",
+    "dblclick",
+    "auxclick",
+    "mousedown",
+    "mouseup",
+    "mousemove",
+    "mouseover",
+    "mouseout",
+    "mouseenter",
+    "mouseleave",
+    "contextmenu",
+    "pointerdown",
+    "pointerup",
+    "pointermove",
+    "pointerover",
+    "pointerout",
+    "pointerenter",
+    "pointerleave",
+    "pointercancel",
+    "pointerrawupdate",
+    "gotpointercapture",
+    "lostpointercapture",
+    "touchstart",
+    "touchend",
+    "touchmove",
+    "touchcancel",
+    "drag",
+    "dragstart",
+    "dragend",
+    "dragover",
+    "dragenter",
+    "dragleave",
+    "dragexit",
+    "drop",
+    "keydown",
+    "keypress",
+    "keyup",
+    "input",
+    "beforeinput",
+    "change",
+    "submit",
+    "reset",
+    "select",
+    "scroll",
+    "wheel",
+    "focus",
+    "blur",
+    "load",
+    "error",
+    "unload",
+    "abort",
+    "readystatechange",
+    "propertychange",
+    "canplay",
+    "canplaythrough",
+    "durationchange",
+    "emptied",
+    "ended",
+    "loadeddata",
+    "loadedmetadata",
+    "loadstart",
+    "pause",
+    "play",
+    "playing",
+    "progress",
+    "ratechange",
+    "seeked",
+    "seeking",
+    "stalled",
+    "suspend",
+    "timeupdate",
+    "volumechange",
+    "waiting",
+    "copy",
+    "cut",
+    "paste",
+    "beforecopy",
+    "beforecut",
+    "beforepaste",
+    "toggle",
+    "animationstart",
+    "transitionend",
+];
+
 static HTML_HANDLER_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)\bon(?:click|dblclick|mousedown|mouseup|mouseover|mouseout|mousemove|mouseenter|mouseleave|load|error|unload|focus|blur|change|submit|keydown|keypress|keyup|drag|dragstart|dragend|dragover|drop|input|scroll|wheel|pointerdown|pointerup|pointerover|pointerout|touchstart|touchend|contextmenu|select|toggle|animationstart|transitionend|auxclick)\s*=",
-    )
+    Regex::new(&format!(
+        r"(?i)\bon(?:{})\s*=",
+        HTML_HANDLER_NAMES.join("|")
+    ))
     .unwrap()
 });
 
@@ -381,6 +471,31 @@ mod tests {
             "<iframe src=\"https://evil\"></iframe>"
         ));
         assert!(!is_safe_import_html("<svg onload=alert(1)>"));
+    }
+
+    #[test]
+    fn import_html_rejects_full_handler_attr_names() {
+        // Pointer / touch / drag / media handlers that were historically missing
+        // from the blocklist — each must be rejected too.
+        assert!(!is_safe_import_html("<div onpointerenter=alert(1)>x</div>"));
+        assert!(!is_safe_import_html(
+            "<div onpointerrawupdate=alert(1)>x</div>"
+        ));
+        assert!(!is_safe_import_html("<div ondragenter=alert(1)>x</div>"));
+        assert!(!is_safe_import_html("<video oncanplay=alert(1)>"));
+        assert!(!is_safe_import_html("<video onloadeddata=alert(1)>"));
+        assert!(!is_safe_import_html("<div onpaste=alert(1)>x</div>"));
+        assert!(!is_safe_import_html(
+            "<div onanimationstart=alert(1)>x</div>"
+        ));
+        // Case-insensitivity + attribute spacing still honoured.
+        assert!(!is_safe_import_html(
+            "<div OnPointerEnter =alert(1)>x</div>"
+        ));
+        // Plain text that merely contains "on" words must stay safe.
+        assert!(is_safe_import_html("<p>turn it on click here</p>"));
+        assert!(is_safe_import_html("<p>consider progress done</p>"));
+        assert!(is_safe_import_html("<p>set one=2 and two=3</p>"));
     }
 
     #[test]

@@ -100,9 +100,13 @@ impl ClipboardDb {
     pub fn cleanup_expired(&self) -> SqlResult<Vec<i64>> {
         let conn = self.conn.lock();
         let now = chrono::Utc::now().to_rfc3339();
+        // Respect pin/favorite, consistent with retention and max-record
+        // eviction: a user who pinned/favorited a sensitive record (e.g. an OTP
+        // kept for later) must not have it hard-deleted at expiry.
         let ids: Vec<i64> = {
             let mut stmt = conn.prepare(
-                "SELECT id FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?",
+                "SELECT id FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?
+                 AND is_favorite = 0 AND is_pinned = 0",
             )?;
             let ids = stmt
                 .query_map([&now], |row| row.get(0))?
@@ -114,7 +118,8 @@ impl ClipboardDb {
         }
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         conn.execute(
-            "DELETE FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?",
+            "DELETE FROM records WHERE auto_expire_at IS NOT NULL AND auto_expire_at <= ?
+             AND is_favorite = 0 AND is_pinned = 0",
             [now],
         )?;
         drop(conn);

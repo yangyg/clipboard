@@ -84,6 +84,10 @@ pub struct StoredImage {
     pub thumb_path: String,
     pub width: u32,
     pub height: u32,
+    /// True when this call actually wrote the files (false on a dedup hit).
+    /// Lets callers clean up on a *later* failure (e.g. a DB insert error)
+    /// without risking a file that another row still references.
+    pub created: bool,
 }
 
 /// Ensure media directories exist under the app data root.
@@ -126,6 +130,7 @@ pub fn store_clipboard_image(
             thumb_path: thumb_rel,
             width: w,
             height: h,
+            created: false,
         });
     }
 
@@ -144,17 +149,18 @@ pub fn store_clipboard_image(
     };
 
     // Main PNG
-    {
+    let encode_png = || {
         let mut buf = Cursor::new(Vec::new());
         let encoder = image::codecs::png::PngEncoder::new(&mut buf);
         encoder
             .write_image(img.as_raw(), out_w, out_h, image::ColorType::Rgba8.into())
             .map_err(|e| format!("PNG encode error: {e}"))?;
-        fs::write(&media_abs, buf.into_inner()).map_err(|e| e.to_string())?;
-    }
+        fs::write(&media_abs, buf.into_inner()).map_err(|e| e.to_string())
+    };
+    encode_png()?;
 
     // Thumbnail JPEG
-    {
+    let encode_thumb = || {
         let scale = (THUMB_MAX_EDGE as f32 / out_w.max(out_h) as f32).min(1.0);
         let tw = ((out_w as f32) * scale).round().max(1.0) as u32;
         let th = ((out_h as f32) * scale).round().max(1.0) as u32;
@@ -163,7 +169,16 @@ pub fn store_clipboard_image(
         let mut buf = Cursor::new(Vec::new());
         rgb.write_to(&mut buf, ImageFormat::Jpeg)
             .map_err(|e| format!("JPEG thumb encode error: {e}"))?;
-        fs::write(&thumb_abs, buf.into_inner()).map_err(|e| e.to_string())?;
+        fs::write(&thumb_abs, buf.into_inner()).map_err(|e| e.to_string())
+    };
+    if let Err(e) = encode_thumb() {
+        // Don't leak the PNG written above when the thumb step fails — no row
+        // references it yet, so nothing else would ever clean it up. The size
+        // cache was not bumped, so no adjustment needed.
+        if fs::remove_file(&media_abs).is_ok() {
+            warn!("store_clipboard_image: cleaned up orphaned PNG after thumb failure");
+        }
+        return Err(e);
     }
 
     let added = file_len(&media_abs).saturating_add(file_len(&thumb_abs));
@@ -175,6 +190,7 @@ pub fn store_clipboard_image(
         thumb_path: thumb_rel,
         width: out_w,
         height: out_h,
+        created: true,
     })
 }
 

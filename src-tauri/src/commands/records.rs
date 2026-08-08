@@ -55,6 +55,9 @@ pub async fn search_records(
     favorites_only: Option<bool>,
     tag: Option<String>,
     sort: Option<String>,
+    before_pinned: Option<i32>,
+    before_updated_at: Option<String>,
+    before_id: Option<i64>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
     let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
@@ -71,6 +74,9 @@ pub async fn search_records(
             tag.as_deref(),
             sort.as_deref(),
             include_tags,
+            before_pinned,
+            before_updated_at.as_deref(),
+            before_id,
         )
         .map_err(|e| e.to_string())?;
     let has_more = records.len() as i32 >= limit;

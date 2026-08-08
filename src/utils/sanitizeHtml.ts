@@ -1,23 +1,16 @@
 import DOMPurify from "dompurify";
 
 const CACHE_MAX = 24;
-/** Fingerprint → sanitized HTML (avoids re-running DOMPurify on the same clipboard body). */
+/** HTML → sanitized HTML (avoids re-running DOMPurify on the same clipboard body). */
 const sanitizeCache = new Map<string, string>();
-
-function htmlCacheKey(html: string): string {
-  // Cheap stable fingerprint — do not store the full HTML as the Map key.
-  let h = html.length | 0;
-  const step = Math.max(1, (html.length / 48) | 0);
-  for (let i = 0; i < html.length; i += step) {
-    h = (Math.imul(h, 31) + html.charCodeAt(i)) | 0;
-  }
-  return `${html.length}:${h}:${html.slice(0, 48)}:${html.slice(-48)}`;
-}
 
 /** Sanitize clipboard HTML for safe inline preview (no iframe). */
 export function sanitizeClipboardHtml(html: string): string {
-  const key = htmlCacheKey(html);
-  const hit = sanitizeCache.get(key);
+  // The full HTML is the cache key. A sampled fingerprint (length + every Nth
+  // char + head/tail) can collide across different bodies and would return
+  // another record's sanitized output; the cache is bounded to CACHE_MAX
+  // entries so keying on the whole string costs at most a few KB per entry.
+  const hit = sanitizeCache.get(html);
   if (hit !== undefined) return hit;
 
   const cleaned = DOMPurify.sanitize(html, {
@@ -30,7 +23,7 @@ export function sanitizeClipboardHtml(html: string): string {
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto):)/i,
   });
 
-  sanitizeCache.set(key, cleaned);
+  sanitizeCache.set(html, cleaned);
   if (sanitizeCache.size > CACHE_MAX) {
     const oldest = sanitizeCache.keys().next().value;
     if (oldest !== undefined) sanitizeCache.delete(oldest);

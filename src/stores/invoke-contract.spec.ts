@@ -32,7 +32,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   search_records: {
     params: [
       "query", "limit", "offset", "content_type", "favorites_only",
-      "tag", "sort",
+      "tag", "sort", "before_pinned", "before_updated_at", "before_id",
     ],
   },
   get_search_history: { params: ["limit"] },

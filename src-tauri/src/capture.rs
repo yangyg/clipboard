@@ -221,13 +221,22 @@ fn process_image_job(
         &hash,
     ) {
         Ok(stored) => {
+            // Destructure upfront — `image_meta` consumes media_path/thumb_path,
+            // but the insert-error branch below still needs them for cleanup.
+            let media::StoredImage {
+                media_path,
+                thumb_path,
+                width,
+                height,
+                created,
+            } = stored;
             let image_meta = ImageMeta {
-                media_path: stored.media_path,
-                thumb_path: stored.thumb_path,
-                width: stored.width as i32,
-                height: stored.height as i32,
+                media_path,
+                thumb_path,
+                width: width as i32,
+                height: height as i32,
             };
-            let label = format!("[image {}x{}]", stored.width, stored.height);
+            let label = format!("[image {}x{}]", width, height);
             match db.insert_record(
                 &label,
                 &ContentType::Image,
@@ -260,7 +269,20 @@ fn process_image_job(
                     );
                     app.emit("clipboard-changed", list_ipc_payload(record)).ok();
                 }
-                Err(e) => warn!("Failed to insert image record: {}", e),
+                Err(e) => {
+                    warn!("Failed to insert image record: {}", e);
+                    // The files were freshly written by this store call — without
+                    // a row to reference them they are orphans. Only delete when
+                    // `created` is true so we never touch a file another active
+                    // row may share (file-level dedup hit).
+                    if created {
+                        media::delete_media_files(
+                            media_root,
+                            Some(&image_meta.media_path),
+                            Some(&image_meta.thumb_path),
+                        );
+                    }
+                }
             }
         }
         Err(e) => warn!("Failed to store clipboard image: {}", e),

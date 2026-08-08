@@ -125,7 +125,7 @@ const { t } = useI18n();
 .record-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
 .record-body { flex: 1; min-width: 0; }
 .record-title { font-size: var(--text-base, 0.8125rem); font-weight: 500; color: var(--text-primary); line-height: 1.4; display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
-.record-title > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-title > span { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
 .record-title .alias-mark { flex-shrink: 0; margin-top: 2px; color: var(--text-tertiary); text-decoration: none; }
 .record-item.is-link .record-title { color: var(--type-link); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--type-link) 35%, transparent); text-underline-offset: 2px; }
 .record-item.is-link .record-title .alias-mark { text-decoration: none; color: var(--text-tertiary); }
@@ -135,9 +135,30 @@ const { t } = useI18n();
 .record-source { display: inline-flex; align-items: center; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .record-dims { white-space: nowrap; opacity: 0.85; }
 .record-sensitive { font-size: var(--text-xs, 0.625rem); font-weight: 600; color: var(--sensitive); background: var(--sensitive-soft); padding: 1px 6px; border-radius: 4px; }
-.record-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); margin-top: -2px; }
+.record-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); position: absolute; top: var(--space-2); right: var(--space-3); margin: 0; z-index: 2; }
 .record-item:hover .record-actions, .record-item:focus-within .record-actions, .record-item.selected .record-actions, .record-actions:has(.active), .record-actions:has(.starred) { opacity: 1; pointer-events: auto; }
 .record-item:not(:hover):not(:focus-within):not(.selected) .record-action-btn:not(.active):not(.starred) { display: none; }
+.record-list:not(.view-grid) .record-item:hover .record-title > span,
+.record-list:not(.view-grid) .record-item:focus-within .record-title > span,
+.record-list:not(.view-grid) .record-item.selected .record-title > span,
+.record-list:not(.view-grid) .record-item:has(.record-actions .active) .record-title > span,
+.record-list:not(.view-grid) .record-item:has(.record-actions .starred) .record-title > span {
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 118px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 118px), transparent 100%);
+}
+.record-list:not(.view-grid) .record-item:not(:hover):not(:focus-within):not(.selected):has(.record-actions .active) .record-title > span,
+.record-list:not(.view-grid) .record-item:not(:hover):not(:focus-within):not(.selected):has(.record-actions .starred) .record-title > span {
+  -webkit-mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 30px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0%, #000 calc(100% - 30px), transparent 100%);
+}
+/* 列表视图：行悬停/选中时给操作按钮组加底色（按钮本身保持透明，保留各自专属 hover 色） */
+.record-list:not(.view-grid) .record-item:hover .record-actions,
+.record-list:not(.view-grid) .record-item:focus-within .record-actions,
+.record-list:not(.view-grid) .record-item.selected .record-actions {
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 1px;
+}
 .record-action-btn { width: 28px; height: 28px; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-instant); }
 .record-action-btn:active { transform: scale(0.88); }
 .record-action-btn:hover { background: var(--accent-soft); color: var(--accent-text); }

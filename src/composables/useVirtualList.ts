@@ -36,7 +36,7 @@ interface GridRow {
 }
 
 /** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
-const BASE_ROW_HEIGHT = 68;
+const BASE_ROW_HEIGHT = 84;
 const BASE_LABEL_HEIGHT = 28;
 const BASE_DIVIDER_HEIGHT = 17;
 const OVERSCAN = 6;

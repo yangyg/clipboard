@@ -358,6 +358,8 @@ export default {
       themeStickerLight: 'Sticker Collage Light',
       themeFlat: 'Flat',
       themeFlatLight: 'Flat Light',
+      themePencil: 'Pencil',
+      themePencilLight: 'Pencil Light',
       appMode: 'App Mode',
       modeFloating: 'Floating Panel',
       modeFloatingDesc: 'Frameless always-on-top, auto-hides on focus loss. Best for quick paste.',

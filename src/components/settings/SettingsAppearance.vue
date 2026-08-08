@@ -349,6 +349,17 @@ const APP_MODES = [
   background: linear-gradient(90deg, #2f6bff 0 3px, #ffffff 3px);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
+.theme-pencil {
+  background-color: #26272c;
+  background-image: radial-gradient(ellipse at 20% 10%, rgba(236, 236, 240, 0.07), transparent 46%),
+    repeating-linear-gradient(45deg, transparent 0 2px, rgba(236, 236, 240, 0.07) 2px 3px, transparent 3px 6px);
+}
+.theme-pencil-light {
+  background-color: #f6f7fa;
+  background-image: radial-gradient(ellipse at 20% 10%, rgba(30, 31, 36, 0.05), transparent 46%),
+    repeating-linear-gradient(45deg, transparent 0 2px, rgba(30, 31, 36, 0.06) 2px 3px, transparent 3px 6px);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
 
 .theme-name {
   font-size: var(--text-sm);

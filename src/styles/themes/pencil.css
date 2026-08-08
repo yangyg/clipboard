@@ -1,164 +1,204 @@
 /* ============================================================
-   Pencil family (铅笔 / 铅笔·浅)
-   Strict black-and-white "graphite sketch": every token is
-   grayscale, but the surfaces read as drawing paper and the
-   interactions as pencil strokes — hatched shading, dashed
-   pencil outlines, paper grain, graphite smudge shadows.
+   Colored Pencil family (彩铅 / 彩铅·浅)
+   Pencil-sketch chrome driven by a colored-pencil palette:
+   warm drawing paper, waxy colored strokes, hatched shading,
+   dashed pencil outlines and smudge shadows. The hue mapping
+   follows the standard type colors made "colored pencil".
    ============================================================ */
 
-/* Pencil Theme (铅笔) — dark-leaning preset.
-   Charcoal drawing paper, lead-thin grays, light graphite accent. */
+/* Colored Pencil Theme (彩铅) — dark-leaning preset.
+   Warm charcoal drawing paper, soft colored-pencil accent. */
 body.pencil-theme,
 .pencil-theme {
-  --bg-base: #1a1b1e;
-  --bg-surface: #232429;
-  --bg-elevated: #2c2d34;
-  --bg-hover: #35363e;
-  --bg-active: #3f414a;
-  --bg-input: #1d1e22;
-  --border-subtle: rgba(228, 228, 233, 0.08);
-  --border-default: rgba(228, 228, 233, 0.14);
-  --border-focus: #cdcfd3;
-  --text-primary: #ececf0;
-  --text-secondary: #a7a9b0;
-  --text-tertiary: #7a7c83;
-  --text-inverse: #1a1b1e;
-  --accent: #c4c6cb;
-  --text-on-accent: #1a1b1e;
-  --accent-hover: #b4b6bb;
-  --accent-light: #eef0f3;
-  --accent-pressed: #9ea0a6;
-  --accent-text: #b9bbbf;
-  --accent-soft: rgba(196, 198, 203, 0.15);
-  --accent-softer: rgba(196, 198, 203, 0.08);
-  --bg-selected: rgba(196, 198, 203, 0.16);
-  --border-light: rgba(228, 228, 233, 0.09);
+  --bg-base: #211c1a;
+  --bg-surface: #262220;
+  --bg-elevated: #2f2a27;
+  --bg-hover: #38322e;
+  --bg-active: #413a35;
+  --bg-input: #1f1c1a;
+  --border-subtle: rgba(255, 240, 230, 0.08);
+  --border-default: rgba(255, 240, 230, 0.13);
+  --border-focus: #ff988b;
+  --text-primary: #f3efe8;
+  --text-secondary: #b8afa3;
+  --text-tertiary: #8d8376;
+  --text-inverse: #211c19;
+  --accent: #ee8777;
+  --text-on-accent: #24140f;
+  --accent-hover: #ff9a89;
+  --accent-light: #ffc3b6;
+  --accent-pressed: #d96858;
+  --accent-text: #ff9d8f;
+  --accent-soft: rgba(238, 135, 119, 0.16);
+  --accent-softer: rgba(238, 135, 119, 0.08);
+  --bg-selected: rgba(238, 135, 119, 0.18);
+  --border-light: rgba(255, 240, 230, 0.09);
   --text-muted: var(--text-tertiary);
-  --type-text: #c2c6cc;
-  --type-code: #a6aab1;
-  --type-link: #e1e2e6;
-  --type-image: #b8bcc4;
-  --type-file: #8f9299;
-  --success: #c8cdd2;
-  --success-soft: rgba(200, 205, 210, 0.13);
-  --warning: #b4b8bf;
-  --warning-soft: rgba(180, 184, 191, 0.13);
-  --pin: #d4d6dc;
-  --pin-soft: rgba(212, 214, 220, 0.15);
-  --danger: #ededf0;
-  --danger-soft: rgba(237, 237, 240, 0.16);
-  --code-bg: #202126;
-  --sensitive: #c5c8ce;
-  --sensitive-soft: rgba(197, 200, 206, 0.14);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.55);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.65);
-  --shadow-lg: 0 12px 48px rgba(0, 0, 0, 0.8);
-  --shadow-glow: 0 0 20px rgba(196, 198, 203, 0.13);
-  --win-close-hover: #ecedf0;
+  --type-text: #8fd0f0;
+  --type-code: #a0d693;
+  --type-link: #9cb7f2;
+  --type-image: #7ad4c4;
+  --type-file: #eec980;
+  --success: #9bd39a;
+  --success-soft: rgba(155, 211, 154, 0.15);
+  --warning: #f0be66;
+  --warning-soft: rgba(240, 190, 102, 0.15);
+  --pin: #c4a6ee;
+  --pin-soft: rgba(196, 166, 238, 0.16);
+  --danger: #ec8fa6;
+  --danger-soft: rgba(236, 143, 166, 0.16);
+  --code-bg: #211e1c;
+  --sensitive: #e7a05f;
+  --sensitive-soft: rgba(231, 160, 95, 0.15);
+  --shadow-sm: 0 1px 2px rgba(15, 8, 4, 0.5);
+  --shadow-md: 0 4px 16px rgba(15, 8, 4, 0.6);
+  --shadow-lg: 0 12px 48px rgba(15, 8, 4, 0.75);
+  --shadow-glow: 0 0 20px rgba(238, 135, 119, 0.18);
+  --win-close-hover: #e81123;
   /* Pencil extras */
-  --pencil-ink: rgba(0, 0, 0, 0.42);
-  --pencil-shadow: rgba(0, 0, 0, 0.38);
-  --pencil-dot: rgba(236, 236, 240, 0.05);
-  --pencil-fiber: rgba(236, 236, 240, 0.024);
-  --pencil-wash: rgba(236, 236, 240, 0.012);
+  --pencil-ink: rgba(22, 10, 6, 0.38);
+  --pencil-shadow: rgba(15, 8, 4, 0.46);
+  --pencil-dot: rgba(255, 236, 224, 0.06);
+  --pencil-fiber: rgba(255, 236, 224, 0.02);
+  --pencil-wash: rgba(255, 236, 224, 0.01);
   --pencil-hatch: repeating-linear-gradient(
     45deg,
     transparent 0 2px,
     color-mix(in srgb, var(--accent) 30%, transparent) 2px 3px,
-    transparent 3px 6px
+    transparent 3px 7px
   );
-  --pencil-hi: #dcdce0;
-  --pencil-hi-text: #16171b;
+  --pencil-crosshatch: repeating-linear-gradient(
+      45deg,
+      transparent 0 2px,
+      color-mix(in srgb, var(--accent) 26%, transparent) 2px 3px,
+      transparent 3px 7px
+    ),
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 2px,
+      color-mix(in srgb, var(--accent) 20%, transparent) 2px 3px,
+      transparent 3px 7px
+    );
+  --pencil-press: repeating-linear-gradient(
+    45deg,
+    transparent 0 2px,
+    rgba(20, 8, 4, 0.16) 2px 3px,
+    transparent 3px 7px
+  );
+  --pencil-hi: #f5c249;
+  --pencil-hi-text: #3a2410;
+  /* Colored-pencil "tooth": fine dense pigment grain on drawing paper */
+  --pencil-tooth: radial-gradient(var(--pencil-dot) 0.8px, transparent 1.3px);
   --pencil-paper-texture: radial-gradient(ellipse at 20% 10%, var(--pencil-wash), transparent 46%),
     radial-gradient(ellipse at 80% 75%, var(--pencil-wash), transparent 42%),
-    radial-gradient(var(--pencil-dot) 1px, transparent 1.4px),
+    var(--pencil-tooth),
     repeating-linear-gradient(103deg, transparent 0 9px, var(--pencil-fiber) 9px 10px, transparent 10px 18px),
     repeating-linear-gradient(17deg, transparent 0 13px, var(--pencil-fiber) 13px 14px, transparent 14px 26px);
-  --pencil-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Cpath d='M0 2 Q 3 0.4 6 2 T 12 2 T 18 2 T 24 2' fill='none' stroke='%23ecedf0' stroke-opacity='0.14'/%3E%3C/svg%3E");
+  /* Two pencil strokes — a solid rule over a broken (dashed) one */
+  --pencil-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='6' viewBox='0 0 48 6'%3E%3Cpath d='M1 1.6 H47' fill='none' stroke='%23f3efe8' stroke-opacity='0.16' stroke-width='1'/%3E%3Cpath d='M1 4.4 H47' fill='none' stroke='%23f3efe8' stroke-opacity='0.11' stroke-width='1' stroke-dasharray='6 4'/%3E%3C/svg%3E");
 }
 
-/* Pencil Light (铅笔·浅) — light counterpart.
-   White drawing paper, dark graphite strokes, ink accent. */
+/* Colored Pencil Light (彩铅·浅) — light counterpart.
+   White drawing paper, saturated colored pencils, ink accent. */
 body.pencil-light-theme,
 .pencil-light-theme {
-  --bg-base: #ecede8;
-  --bg-surface: #f8f7fa;
-  --bg-elevated: #ffffff;
-  --bg-hover: #e9eaef;
-  --bg-active: #dcdde3;
-  --bg-input: #eff0f4;
-  --border-subtle: rgba(26, 27, 32, 0.09);
-  --border-default: rgba(26, 27, 32, 0.15);
-  --border-focus: #232428;
-  --text-primary: #1d1e23;
-  --text-secondary: #55575f;
-  --text-tertiary: #7a7c84;
-  --text-inverse: #f6f7fa;
-  --accent: #232428;
-  --text-on-accent: #f6f7fa;
-  --accent-hover: #3a3b42;
-  --accent-light: #4c4e56;
-  --accent-pressed: #131417;
-  --accent-text: #1a1b1f;
-  --accent-soft: rgba(35, 36, 40, 0.11);
-  --accent-softer: rgba(35, 36, 40, 0.05);
-  --bg-selected: rgba(35, 36, 40, 0.12);
-  --border-light: rgba(26, 27, 32, 0.08);
+  --bg-base: #efe8da;
+  --bg-surface: #faf4eb;
+  --bg-elevated: #fffdf6;
+  --bg-hover: #efe5d3;
+  --bg-active: #e3d4bf;
+  --bg-input: #f5eee1;
+  --border-subtle: rgba(74, 52, 32, 0.09);
+  --border-default: rgba(74, 52, 32, 0.15);
+  --border-focus: #c24a2d;
+  --text-primary: #2d261f;
+  --text-secondary: #6b5f50;
+  --text-tertiary: #887c6c;
+  --text-inverse: #fdf7ef;
+  --accent: #c24a2d;
+  --text-on-accent: #fdf4ea;
+  --accent-hover: #ab3c20;
+  --accent-light: #f08a67;
+  --accent-pressed: #983a20;
+  --accent-text: #9a3f22;
+  --accent-soft: rgba(194, 74, 45, 0.12);
+  --accent-softer: rgba(194, 74, 45, 0.06);
+  --bg-selected: rgba(194, 74, 45, 0.14);
+  --border-light: rgba(66, 58, 32, 0.08);
   --text-muted: var(--text-tertiary);
-  --type-text: #26272c;
-  --type-code: #44454c;
-  --type-link: #141518;
-  --type-image: #393a41;
-  --type-file: #5d5f67;
-  --success: #404149;
-  --success-soft: rgba(64, 65, 73, 0.11);
-  --warning: #4a4c53;
-  --warning-soft: rgba(74, 76, 83, 0.11);
-  --pin: #1b1c20;
-  --pin-soft: rgba(27, 28, 32, 0.1);
-  --danger: #181920;
-  --danger-soft: rgba(24, 25, 32, 0.1);
-  --code-bg: #efeff2;
-  --sensitive: #2e2f34;
-  --sensitive-soft: rgba(46, 47, 52, 0.1);
-  --shadow-sm: 0 1px 2px rgba(24, 25, 30, 0.12);
-  --shadow-md: 0 4px 16px rgba(24, 25, 30, 0.14);
-  --shadow-lg: 0 12px 48px rgba(24, 25, 30, 0.18);
-  --shadow-glow: 0 0 20px rgba(35, 36, 40, 0.1);
-  --win-close-hover: #232428;
-  --pencil-ink: rgba(30, 31, 36, 0.3);
-  --pencil-shadow: rgba(30, 31, 36, 0.2);
-  --pencil-dot: rgba(30, 31, 36, 0.06);
-  --pencil-fiber: rgba(30, 31, 36, 0.03);
-  --pencil-wash: rgba(30, 31, 36, 0.014);
+  --type-text: #1f7ab9;
+  --type-code: #3b834c;
+  --type-link: #2c62cc;
+  --type-image: #0f8286;
+  --type-file: #a26a0e;
+  --success: #3f9147;
+  --success-soft: rgba(63, 145, 71, 0.12);
+  --warning: #a8730e;
+  --warning-soft: rgba(168, 115, 14, 0.12);
+  --pin: #8a4db4;
+  --pin-soft: rgba(138, 77, 180, 0.11);
+  --danger: #d32f3f;
+  --danger-soft: rgba(211, 47, 63, 0.1);
+  --code-bg: #f3ecdd;
+  --sensitive: #c0571a;
+  --sensitive-soft: rgba(192, 87, 26, 0.11);
+  --shadow-sm: 0 1px 2px rgba(70, 48, 20, 0.12);
+  --shadow-md: 0 4px 16px rgba(70, 48, 20, 0.15);
+  --shadow-lg: 0 12px 48px rgba(70, 48, 20, 0.18);
+  --shadow-glow: 0 0 20px rgba(194, 74, 45, 0.14);
+  --win-close-hover: #e81123;
+  --pencil-ink: rgba(64, 40, 16, 0.32);
+  --pencil-shadow: rgba(64, 40, 16, 0.24);
+  --pencil-dot: rgba(64, 40, 16, 0.06);
+  --pencil-fiber: rgba(64, 40, 16, 0.024);
+  --pencil-wash: rgba(64, 40, 16, 0.012);
   --pencil-hatch: repeating-linear-gradient(
     45deg,
     transparent 0 2px,
     color-mix(in srgb, var(--accent) 22%, transparent) 2px 3px,
-    transparent 3px 6px
+    transparent 3px 7px
   );
-  --pencil-hi: #27282d;
-  --pencil-hi-text: #f2f2f5;
+  --pencil-crosshatch: repeating-linear-gradient(
+      45deg,
+      transparent 0 2px,
+      color-mix(in srgb, var(--accent) 20%, transparent) 2px 3px,
+      transparent 3px 7px
+    ),
+    repeating-linear-gradient(
+      135deg,
+      transparent 0 2px,
+      color-mix(in srgb, var(--accent) 15%, transparent) 2px 3px,
+      transparent 3px 7px
+    );
+  --pencil-press: repeating-linear-gradient(
+    45deg,
+    transparent 0 2px,
+    rgba(20, 8, 4, 0.14) 2px 3px,
+    transparent 3px 7px
+  );
+  --pencil-hi: #ffd43d;
+  --pencil-hi-text: #4a2c06;
+  --pencil-tooth: radial-gradient(var(--pencil-dot) 0.8px, transparent 1.3px);
   --pencil-paper-texture: radial-gradient(ellipse at 20% 10%, var(--pencil-wash), transparent 46%),
     radial-gradient(ellipse at 80% 75%, var(--pencil-wash), transparent 42%),
-    radial-gradient(var(--pencil-dot) 1px, transparent 1.4px),
+    var(--pencil-tooth),
     repeating-linear-gradient(103deg, transparent 0 9px, var(--pencil-fiber) 9px 10px, transparent 10px 18px),
     repeating-linear-gradient(17deg, transparent 0 13px, var(--pencil-fiber) 13px 14px, transparent 14px 26px);
-  --pencil-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Cpath d='M0 2 Q 3 0.4 6 2 T 12 2 T 18 2 T 24 2' fill='none' stroke='%2316191e' stroke-opacity='0.25'/%3E%3C/svg%3E");
+  --pencil-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='6' viewBox='0 0 48 6'%3E%3Cpath d='M1 1.6 H47' fill='none' stroke='%232d261f' stroke-opacity='0.24' stroke-width='1'/%3E%3Cpath d='M1 4.4 H47' fill='none' stroke='%232d261f' stroke-opacity='0.16' stroke-width='1' stroke-dasharray='6 4'/%3E%3C/svg%3E");
 }
 
 /* ============================================================
    Pencil visual styling (both variants)
-   "Drawn with graphite" — sketchy corners, hatching, dashed
-   pencil outlines, graphite smudge shadows.
+   "Drawn, not clicked" — sketchy corners, colored hatching,
+   dashed pencil outlines, smudge shadows.
    ============================================================ */
 
-/* Restrained sketchy corner radii (between flat's straightness and the
-   hand-drawn family's wobble) */
+/* Restrained, near-straight sketchy corners — the crisp ruler-pencil answer
+   to the hand-drawn family's large wobbly curves */
 body.pencil-theme,
 body.pencil-light-theme {
-  --pencil-radius: 225px 16px 185px 18px / 16px 185px 18px 225px;
-  --pencil-radius-sm: 75px 10px 65px 10px / 10px 65px 10px 75px;
+  --pencil-radius: 20px 10px 16px 8px / 8px 16px 10px 20px;
+  --pencil-radius-sm: 7px 4px 6px 4px / 4px 6px 4px 7px;
 }
 
 /* Sketchy corners on panel-scale surfaces */
@@ -173,9 +213,10 @@ body.pencil-light-theme {
   border-radius: var(--pencil-radius-sm);
 }
 
-/* Dashed focus ring = a pencil sketch outline */
+/* Dotted focus ring — a pencil-tip dot-dash outline (hand-drawn uses a wide
+   dashed doodle line, so the two families read apart on focus too) */
 :is(body.pencil-theme, body.pencil-light-theme) :focus-visible {
-  outline: 2px dashed var(--accent);
+  outline: 2px dotted var(--accent);
   outline-offset: 2px;
 }
 
@@ -183,16 +224,16 @@ body.pencil-light-theme {
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(.panel-surface, .tray-menu) {
   background-image: var(--pencil-paper-texture);
-  background-size: 100% 100%, 100% 100%, 16px 16px, 100% 100%, 100% 100%;
+  background-size: 100% 100%, 100% 100%, 6px 6px, 100% 100%, 100% 100%;
 }
 
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(.sidebar, .list-column, .preview-pane, .settings-nav, .settings-body, .app-tooltip) {
   background-image: var(--pencil-paper-texture);
-  background-size: 100% 100%, 100% 100%, 16px 16px, 100% 100%, 100% 100%;
+  background-size: 100% 100%, 100% 100%, 6px 6px, 100% 100%, 100% 100%;
 }
 
-/* Graphite-smudge offset shadow on small floating pieces */
+/* Smudge offset shadow on small floating pieces */
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(.btn, .theme-card, .mode-card, .toast-item, .data-card, .batch-bar) {
   box-shadow: 3px 3px 6px var(--pencil-shadow);
@@ -218,14 +259,14 @@ body.pencil-light-theme {
   transform: rotate(0deg);
 }
 
-/* Selected list rows: pencil-shaded (hatched) fill + sketched edge */
+/* Selected list rows: crosshatched colored-pencil shading + sketched edge */
 :is(body.pencil-theme, body.pencil-light-theme) .record-item.selected {
   border-color: var(--accent);
   background-color: var(--accent-soft);
-  background-image: var(--pencil-hatch);
+  background-image: var(--pencil-crosshatch);
 }
 
-/* Crosshatch on the color-swatch chip so it reads as graphite */
+/* Crosshatch on the color-swatch chip so it reads as pencil work */
 :is(body.pencil-theme, body.pencil-light-theme) .record-color-swatch {
   border-radius: var(--pencil-radius-sm);
 }
@@ -245,7 +286,7 @@ body.pencil-light-theme {
   background-image: var(--pencil-divider-line);
   background-repeat: repeat-x;
   background-position: bottom;
-  background-size: 24px 4px;
+  background-size: 48px 6px;
 }
 
 :is(body.pencil-theme, body.pencil-light-theme) .list-footer {
@@ -253,16 +294,16 @@ body.pencil-light-theme {
   background-image: var(--pencil-divider-line);
   background-repeat: repeat-x;
   background-position: top;
-  background-size: 24px 4px;
+  background-size: 48px 6px;
 }
 
 :is(body.pencil-theme, body.pencil-light-theme) .pin-section-divider::after {
-  height: 4px;
+  height: 6px;
   background-color: transparent;
   background-image: var(--pencil-divider-line);
   background-repeat: repeat-x;
   background-position: center;
-  background-size: 24px 4px;
+  background-size: 48px 6px;
 }
 
 /* Pencil-underscored section titles + sidebar captions */
@@ -280,7 +321,7 @@ body.pencil-light-theme {
   text-decoration-skip-ink: none;
 }
 
-/* Graphite pencil search highlight + text selection */
+/* Colored marker search highlight + text selection */
 :is(body.pencil-theme, body.pencil-light-theme) mark.search-hit {
   background: var(--pencil-hi);
   color: var(--pencil-hi-text);
@@ -307,35 +348,14 @@ body.pencil-light-theme {
   box-shadow: 3px 3px 6px var(--pencil-shadow);
 }
 
-/* Ink knob on the pale accent track (pencil dark) */
-body.pencil-theme .toggle.on::after {
-  background: #0d0e11;
-}
-/* Ink text on the pale primary accent (pencil dark) */
-body.pencil-theme .btn-primary,
-body.pencil-theme .btn-primary.danger,
-body.pencil-theme .action-btn.action-primary,
-body.pencil-theme .action-btn.action-primary:hover {
-  color: #1a1b1e;
-}
-body.pencil-theme .btn-primary:hover {
-  background: var(--accent-hover);
-}
-body.pencil-theme .action-btn.action-primary .action-label,
-body.pencil-theme .action-btn.action-primary .action-icon,
-body.pencil-theme .action-btn.action-primary:hover .action-label,
-body.pencil-theme .action-btn.action-primary:hover .action-icon {
-  color: #1a1b1e;
-}
-
 /* ============================================================
    Pencil interaction pass (both variants)
-   "Drawn with graphite": hover = a light pencil wash, selected /
-   active = hatched or sketched edge stroke, press = a graphite
+   "Drawn, not clicked": hover = a colored pencil wash, selected /
+   active = hatched or sketched edge stroke, press = a colored
    squish. Covers the same chrome as the flat family's pass.
    ============================================================ */
 
-/* Navigation, filters & toolbar buttons: graphite wash hover */
+/* Navigation, filters & toolbar buttons: pencil wash hover */
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(
     .nav-item:not(.has-cat-color):hover,
@@ -349,18 +369,43 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
   color: var(--accent-text);
 }
 
-/* Active nav / tag items: hatched left edge stroke (pencil underline) */
+/* Active states are shaded with pencil strokes (hatching) instead of flat fills */
+:is(body.pencil-theme, body.pencil-light-theme)
+  :is(
+    .nav-item:not(.has-cat-color).active,
+    .tag-item.active,
+    .filter-tab.active,
+    .list-tool-btn.active,
+    .view-toggle-btn.active,
+    .icon-btn.active
+  ) {
+  background-color: var(--accent-soft);
+  background-image: var(--pencil-hatch);
+  color: var(--accent-text);
+}
+
+/* Non-category active nav / tag items: hatched left edge stroke too */
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(.nav-item:not(.has-cat-color).active, .tag-item.active) {
-  background: var(--accent-soft);
-  color: var(--accent-text);
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 75%, transparent);
 }
 
-/* Filter tabs: active sketched with a dotted pencil underline */
+/* Category (type / favorites) active: hatched fill + left-edge stroke in the
+   category's own colored-pencil hue */
+:is(body.pencil-theme, body.pencil-light-theme) .nav-item.has-cat-color.active {
+  background-color: color-mix(in srgb, var(--cat-color) 16%, transparent);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent 0 2px,
+    color-mix(in srgb, var(--cat-color) 30%, transparent) 2px 3px,
+    transparent 3px 7px
+  );
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--cat-color) 70%, transparent);
+}
+
+/* Filter tabs: the active sketched with a dotted pencil underline on top of
+   the hatched fill (the shared active rule above paints the shading) */
 :is(body.pencil-theme, body.pencil-light-theme) .filter-tab.active {
-  background: var(--accent-soft);
-  color: var(--accent-text);
   border-bottom: 2px dotted var(--accent);
 }
 :is(body.pencil-theme, body.pencil-light-theme) .filter-tab.active .filter-count {
@@ -368,7 +413,7 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
   color: var(--accent-text);
 }
 
-/* Icon buttons: graphite wash + pressed squish */
+/* Icon buttons: pencil wash + pressed squish */
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(.icon-btn, .clear-btn) {
   transition: background var(--transition-fast), color var(--transition-fast),
@@ -481,6 +526,17 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
   box-shadow: none;
 }
 
+/* Primary CTAs + on-state toggles read as densely scribbled pencil fills:
+   the solid color is overlaid with fine pencil strokes */
+:is(body.pencil-theme, body.pencil-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary, .toggle.on) {
+  background-image: var(--pencil-press);
+  background-blend-mode: multiply;
+}
+:is(body.pencil-theme, body.pencil-light-theme) .toggle.on {
+  background-color: var(--accent);
+}
+
 /* Toggle switch: pressed knob squish behaviors */
 :is(body.pencil-theme, body.pencil-light-theme) .toggle:active::after {
   transform: scale(0.9);
@@ -511,7 +567,7 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
   background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
-/* Back-to-top + capture toggle: graphite-smudged floating chips */
+/* Back-to-top + capture toggle: smudged floating chips */
 :is(body.pencil-theme, body.pencil-light-theme) .back-to-top-btn {
   border-radius: var(--pencil-radius-sm);
   box-shadow: 3px 3px 6px var(--pencil-shadow);
@@ -536,16 +592,6 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
 :is(body.pencil-theme, body.pencil-light-theme) .capture-toggle.paused:hover {
   background: color-mix(in srgb, var(--warning) 22%, transparent);
   border-color: color-mix(in srgb, var(--warning) 38%, transparent);
-}
-
-/* Search input: sketched pencil underline on hover/focus */
-:is(body.pencil-theme, body.pencil-light-theme) .search-box {
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-}
-:is(body.pencil-theme, body.pencil-light-theme) .search-box:hover,
-:is(body.pencil-theme, body.pencil-light-theme) .search-box:focus {
-  border-bottom: 2px dotted var(--accent);
-  box-shadow: none;
 }
 
 /* Text-ish form fields take the small sketchy radius */
@@ -574,7 +620,7 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
   border-radius: var(--pencil-radius-sm);
 }
 
-/* Content boxes: hairline slate frame + sketchy radius */
+/* Content boxes: hairline frame + sketchy radius */
 :is(body.pencil-theme, body.pencil-light-theme)
   :is(
     .code-box,
@@ -627,7 +673,7 @@ body.pencil-theme .action-btn.action-primary:hover .action-icon {
   box-shadow: 2px 2px 4px var(--pencil-shadow);
 }
 
-/* Thin graphite scrollbar thumb */
+/* Thin scrollbar thumb */
 :is(body.pencil-theme, body.pencil-light-theme) ::-webkit-scrollbar-thumb {
   border-radius: 2px;
 }

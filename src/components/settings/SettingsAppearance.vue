@@ -350,14 +350,16 @@ const APP_MODES = [
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
 .theme-pencil {
-  background-color: #26272c;
-  background-image: radial-gradient(ellipse at 20% 10%, rgba(236, 236, 240, 0.07), transparent 46%),
-    repeating-linear-gradient(45deg, transparent 0 2px, rgba(236, 236, 240, 0.07) 2px 3px, transparent 3px 6px);
+  background-color: #272220;
+  background-image: linear-gradient(115deg, transparent 0 36%, #ee8777 36% 44%, transparent 44% 100%),
+    linear-gradient(115deg, transparent 0 62%, #8fd0f0 62% 70%, transparent 70% 100%),
+    linear-gradient(115deg, transparent 0 88%, #eec980 88% 96%, transparent 96% 100%);
 }
 .theme-pencil-light {
-  background-color: #f6f7fa;
-  background-image: radial-gradient(ellipse at 20% 10%, rgba(30, 31, 36, 0.05), transparent 46%),
-    repeating-linear-gradient(45deg, transparent 0 2px, rgba(30, 31, 36, 0.06) 2px 3px, transparent 3px 6px);
+  background-color: #faf4eb;
+  background-image: linear-gradient(115deg, transparent 0 36%, #c24a2d 36% 44%, transparent 44% 100%),
+    linear-gradient(115deg, transparent 0 62%, #1f7ab9 62% 70%, transparent 70% 100%),
+    linear-gradient(115deg, transparent 0 88%, #a26a0e 88% 96%, transparent 96% 100%);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
 

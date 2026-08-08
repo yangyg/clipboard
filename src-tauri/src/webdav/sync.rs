@@ -2,6 +2,7 @@
 //! Bundle (de)serialization lives in `bundle.rs`; media transfer in `media.rs`.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use chrono::Utc;
 use tracing::info;
@@ -78,7 +79,13 @@ async fn fetch_remote_state(
     let (records, bundle_etag, bundle_exists, bundle_bytes) = match bundle_remote {
         Some(remote) => {
             let bytes = remote.bytes;
-            let records = parse_bundle(&bytes)?;
+            // Bundle parse is pure CPU over up-to-64MB — run off the async worker.
+            let (records, bytes) = tokio::task::spawn_blocking(move || -> Result<_, String> {
+                let records = parse_bundle(&bytes)?;
+                Ok((records, bytes))
+            })
+            .await
+            .map_err(|e| format!("解析 bundle 任务失败: {e}"))??;
             (records, remote.etag, true, Some(bytes))
         }
         None => (Vec::new(), None, false, None),
@@ -110,7 +117,7 @@ pub async fn webdav_test_connection(settings: &Settings) -> Result<(), String> {
 }
 
 pub async fn webdav_pull(
-    db: &ClipboardDb,
+    db: &Arc<ClipboardDb>,
     settings: &mut Settings,
 ) -> Result<WebDavSyncResult, String> {
     let device_id = ensure_device_id(settings);
@@ -144,12 +151,24 @@ pub async fn webdav_pull(
     }
 
     let max = settings.max_records;
-    let (pulled, merged, tags_pulled) = db
-        .import_records_with_merge(&records, max)
-        .map_err(|e| e.to_string())?;
-
-    settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
-    db.save_settings(settings).map_err(|e| e.to_string())?;
+    // The merge is a full-content transaction over the pulled bundle — run it
+    // (plus the settings persist) off the async worker so large imported sets
+    // don't hold a Tokio executor thread.
+    let merge_db = Arc::clone(db);
+    let mut last_settings = settings.clone();
+    last_settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
+    let (pulled, merged, tags_pulled, last_settings) = tokio::task::spawn_blocking(move || {
+        let (pulled, merged, tags_pulled) = merge_db
+            .import_records_with_merge(&records, max)
+            .map_err(|e| e.to_string())?;
+        merge_db
+            .save_settings(&last_settings)
+            .map_err(|e| e.to_string())?;
+        Ok::<_, String>((pulled, merged, tags_pulled, last_settings))
+    })
+    .await
+    .map_err(|e| format!("WebDAV 导入任务失败: {e}"))??;
+    *settings = last_settings;
 
     info!(
         "WebDAV pull: new={pulled} merged={merged} tags={tags_pulled} media_dl={media_downloaded}"
@@ -167,7 +186,7 @@ pub async fn webdav_pull(
 }
 
 pub async fn webdav_push(
-    db: &ClipboardDb,
+    db: &Arc<ClipboardDb>,
     settings: &mut Settings,
 ) -> Result<WebDavSyncResult, String> {
     let device_id = ensure_device_id(settings);
@@ -205,7 +224,15 @@ pub async fn webdav_push(
         .map(|r| (r.hash.clone(), r.tags.clone()))
         .collect();
 
-    let local = filter_syncable(load_all_export(db)?, settings.webdav_sync_sensitive);
+    // Full-content export (content + content_html + tags for every record) is the
+    // heaviest DB read in the app — keep it off the async worker.
+    let load_db = Arc::clone(db);
+    let local = filter_syncable(
+        tokio::task::spawn_blocking(move || load_all_export(&load_db))
+            .await
+            .map_err(|e| format!("WebDAV 加载本地记录任务失败: {e}"))??,
+        settings.webdav_sync_sensitive,
+    );
     let local_by_hash: HashMap<String, crate::ClipboardRecord> =
         local.iter().map(|r| (r.hash.clone(), r.clone())).collect();
 
@@ -285,7 +312,9 @@ pub async fn webdav_push(
     let mut records: Vec<crate::ClipboardRecord> = catalog.into_values().collect();
     records.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
-    let bundle_payload = serialize_bundle(&records)?;
+    let bundle_payload = tokio::task::spawn_blocking(move || serialize_bundle(&records))
+        .await
+        .map_err(|e| format!("WebDAV 打包 bundle 任务失败: {e}"))??;
     let manifest = SyncManifest {
         version: 1,
         protocol: PROTOCOL.to_string(),
@@ -356,8 +385,18 @@ pub async fn webdav_push(
         };
     }
 
-    settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
-    db.save_settings(settings).map_err(|e| e.to_string())?;
+    let save_db = Arc::clone(db);
+    let mut last_settings = settings.clone();
+    last_settings.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
+    let last_settings = tokio::task::spawn_blocking(move || -> Result<Settings, String> {
+        save_db
+            .save_settings(&last_settings)
+            .map_err(|e| e.to_string())?;
+        Ok(last_settings)
+    })
+    .await
+    .map_err(|e| format!("WebDAV 保存设置任务失败: {e}"))??;
+    *settings = last_settings;
 
     info!(
         "WebDAV push: changed≈{pushed} tags={tags_pushed} media_up={media_uploaded} media_skip={media_skipped}"
@@ -375,7 +414,7 @@ pub async fn webdav_push(
 }
 
 pub async fn webdav_sync(
-    db: &ClipboardDb,
+    db: &Arc<ClipboardDb>,
     settings: &mut Settings,
 ) -> Result<WebDavSyncResult, String> {
     let pull = webdav_pull(db, settings).await?;

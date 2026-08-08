@@ -262,7 +262,11 @@ export const useClipboardStore = defineStore("clipboard", () => {
   }
 
   async function importRecords(importedRecords: ClipboardRecord[]) {
-    const imported = await invoke<number>("import_data", { records: importedRecords });
+    // Raw JSON string: the backend validates size/count before materializing
+    // the Vec instead of deserializing an unbounded argument.
+    const imported = await invoke<number>("import_data", {
+      records_json: JSON.stringify(importedRecords),
+    });
     await loadRecords();
     return imported;
   }

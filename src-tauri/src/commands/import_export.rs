@@ -49,11 +49,18 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
     Ok(())
 }
 
-#[tauri::command]
-pub async fn import_data(
-    state: State<'_, AppState>,
-    records: Vec<ClipboardRecord>,
-) -> Result<i32, String> {
+/// Import records from the renderer. The payload travels as a raw JSON string
+/// so size/count validation runs BEFORE Tauri materializes a `Vec<ClipboardRecord>`
+/// (a compromised webview could otherwise drive a multi-hundred-MB allocation
+/// through argument deserialization alone).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn import_data(state: State<'_, AppState>, records_json: String) -> Result<i32, String> {
+    const MAX_IMPORT_BYTES: usize = 64 * 1024 * 1024;
+    if records_json.len() > MAX_IMPORT_BYTES {
+        return Err("导入内容过大（上限 64MB）".into());
+    }
+    let records: Vec<ClipboardRecord> =
+        serde_json::from_str(&records_json).map_err(|e| format!("导入内容格式不正确: {e}"))?;
     validate_import_records(&records)?;
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
     state

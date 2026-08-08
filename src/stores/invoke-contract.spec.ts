@@ -57,7 +57,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   get_trash_count: { params: [] },
   set_capture_paused: { params: ["paused"] },
   get_stats: { params: [] },
-  import_data: { params: ["records"] },
+  import_data: { params: ["records_json"] },
   get_all_tags: { params: ["content_type", "favorites_only"] },
   create_tag: { params: ["name", "color"] },
   delete_tag: { params: ["id"] },
@@ -355,13 +355,16 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
     expect(args === undefined || Object.keys(args as object).length === 0).toBe(true);
   });
 
-  it("importRecords → import_data with { records }", async () => {
+  it("importRecords → import_data with { records_json }", async () => {
     const store = useClipboardStore();
     await store.importRecords([makeRecord({ id: 99 })]);
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "import_data");
     expect(call).toBeTruthy();
     const params = call![1] as Record<string, unknown>;
-    expect(Array.isArray(params.records)).toBe(true);
+    // Payload is a raw JSON string so the backend validates size before deserialize.
+    expect(typeof params.records_json).toBe("string");
+    const parsed = JSON.parse(params.records_json as string);
+    expect(Array.isArray(parsed)).toBe(true);
   });
 
   it("loadTags → get_all_tags with { content_type, favorites_only }", async () => {

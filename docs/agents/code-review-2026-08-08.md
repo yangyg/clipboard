@@ -96,3 +96,19 @@
 | 启动健壮性 | 低 | `src-tauri/src/db/mod.rs` + `schema_tests.rs` | `ensure_fts` 提前到迁移之前执行——legacy 库缺 `records_fts`/`fts_version` 时，`migrate_text_hash_v2` 的 `refresh_record_fts` 与删除触发器不再因表缺失导致 `ClipboardDb::new` 失败、应用无法启动；补 legacy 无 FTS 库启动回归测试 |
 
 验证基线：`npm run validate` 全绿（Rust 103 用例，前端 164 用例，lint/typecheck/fmt/clippy/契约/构建全部通过）。
+
+## 第四轮：WebDAV 删除传播（tombstone，未提交）
+
+解决「软删除不进推送、无 tombstone、删除在设备间复活」问题（原 M8）。
+
+设计（按用户确认的默认语义）：
+- 显式删除（单条/批量删除、清空回收站、清空历史）写入本地 `sync_tombstones(hash, deleted_at, is_sensitive)`；
+- manifest 升级到 version 2，新增 `tombstones` 与 `device_acks` 字段（serde default，向后兼容；旧客户端忽略新字段，仅保持记录不传播删除）；
+- 推送：newer-wins 裁决——严格更新于 tombstone 的活动副本压制并清除本地 tombstone；否则从 catalog 移除并发布 tombstone；所有设备 ack 后 GC；
+- 拉取：比 tombstone 旧的活动副本移入回收站（可恢复），保留远端 deleted_at；新副本（重新复制）保留；ack 水印推进；
+- 恢复 = 删除 tombstone + bump `updated_at`，反向传播复活；
+- 自动清理（最大条数淘汰、敏感到期）不写 tombstone，纯本地策略。
+
+实现位置：`db/schema.rs`（表 + SCHEMA_VERSION 4）、`db/tombstones.rs`（新模块）、`db/records_write.rs`（删除/恢复钩子）、`webdav/bundle.rs`（TombstoneEntry + merge/resolve/gc 纯函数）、`webdav/sync.rs`（push/pull 集成）。
+
+验证基线：Rust 112 用例（新增 tombstone 单元测试、manifest 往返、resolve/gc 规则）、clippy/fmt 通过。

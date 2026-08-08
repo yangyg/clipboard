@@ -1,5 +1,5 @@
 //! Record inserts, soft-delete/trash, restore, favorites, pin, alias.
-use rusqlite::{params, Connection, Result as SqlResult};
+use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
 use super::{ClipboardDb, ContentType, ImageMeta, ALIAS_MAX_CHARS};
 use crate::detect::sha256_hash;
@@ -316,10 +316,23 @@ impl ClipboardDb {
         // copied weeks ago and trashed today is purged immediately.
         // Clear the sensitive auto-expiry too: the record now belongs to the
         // trash lifecycle, not the capture-expiry one.
+        // Record a deletion tombstone so WebDAV can propagate the delete.
+        let Some((hash, is_sensitive)) = conn
+            .query_row(
+                "SELECT hash, is_sensitive FROM records WHERE id = ?",
+                [id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0)),
+            )
+            .optional()?
+        else {
+            return Ok(());
+        };
+        let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
             "UPDATE records SET is_trashed = 1, is_pinned = 0, auto_expire_at = NULL, updated_at = ? WHERE id = ?",
-            params![chrono::Utc::now().to_rfc3339(), id],
+            params![now, id],
         )?;
+        Self::upsert_tombstone_conn(&conn, &hash, &now, is_sensitive)?;
         Ok(())
     }
 
@@ -334,16 +347,47 @@ impl ClipboardDb {
             placeholders
         );
         let now = chrono::Utc::now().to_rfc3339();
+        let rows: Vec<(String, bool)> = {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT hash, is_sensitive FROM records WHERE id IN ({placeholders})"
+            ))?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
+                })?
+                .collect::<SqlResult<Vec<_>>>()?;
+            rows
+        };
         let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() + 1);
         params.push(&now);
         params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
         let count = conn.execute(&sql, params.as_slice())?;
+        for (hash, is_sensitive) in rows {
+            Self::upsert_tombstone_conn(&conn, &hash, &now, is_sensitive)?;
+        }
         Ok(count)
     }
 
     pub fn restore_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
-        conn.execute("UPDATE records SET is_trashed = 0 WHERE id = ?", [id])?;
+        let hash: Option<String> = conn
+            .query_row("SELECT hash FROM records WHERE id = ?", [id], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        // Bump `updated_at` so a restore is "newer than the deletion" and beats
+        // any remote tombstone on the next push (un-delete propagation).
+        conn.execute(
+            "UPDATE records SET is_trashed = 0, updated_at = ? WHERE id = ?",
+            params![chrono::Utc::now().to_rfc3339(), id],
+        )?;
+        if let Some(hash) = hash {
+            conn.execute("DELETE FROM sync_tombstones WHERE hash = ?", [hash])?;
+        }
         Ok(())
     }
 
@@ -354,23 +398,52 @@ impl ClipboardDb {
         let conn = self.conn.lock();
         let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
-            "UPDATE records SET is_trashed = 0 WHERE id IN ({})",
+            "UPDATE records SET is_trashed = 0, updated_at = ? WHERE id IN ({})",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
+        let now = chrono::Utc::now().to_rfc3339();
+        let hashes: Vec<String> = {
+            let mut stmt = conn.prepare(&format!(
+                "SELECT hash FROM records WHERE id IN ({placeholders})"
+            ))?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows = stmt
+                .query_map(params.as_slice(), |row| row.get::<_, String>(0))?
+                .collect::<SqlResult<Vec<_>>>()?;
+            rows
+        };
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() + 1);
+        params.push(&now);
+        params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
         let count = conn.execute(&sql, params.as_slice())?;
+        for hash in hashes {
+            conn.execute("DELETE FROM sync_tombstones WHERE hash = ?", [hash])?;
+        }
         Ok(count)
     }
 
     pub fn permanently_delete_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
         let media = self.fetch_media_paths_by_ids(&conn, &[id])?;
+        // Only trashed rows can be permanently deleted; keep their tombstone
+        // (already written on trash) and fill gaps for legacy pre-tombstone rows.
+        let info: Option<(String, bool)> = conn
+            .query_row(
+                "SELECT hash, is_sensitive FROM records WHERE id = ? AND is_trashed = 1",
+                [id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0)),
+            )
+            .optional()?;
         let n = conn.execute("DELETE FROM records WHERE id = ? AND is_trashed = 1", [id])?;
         drop(conn);
         if n > 0 {
+            if let Some((hash, is_sensitive)) = info {
+                let now = chrono::Utc::now().to_rfc3339();
+                let _ = self.upsert_tombstone(&hash, &now, is_sensitive);
+            }
             self.purge_media_pairs(&media);
         }
         Ok(())
@@ -382,6 +455,23 @@ impl ClipboardDb {
         }
         let conn = self.conn.lock();
         let media = self.fetch_media_paths_by_ids(&conn, ids)?;
+        let rows: Vec<(String, bool)> = {
+            let placeholders = Self::id_placeholders(ids.len());
+            let mut stmt = conn.prepare(&format!(
+                "SELECT hash, is_sensitive FROM records
+                 WHERE is_trashed = 1 AND id IN ({placeholders})"
+            ))?;
+            let params: Vec<&dyn rusqlite::types::ToSql> = ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            let rows = stmt
+                .query_map(params.as_slice(), |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
+                })?
+                .collect::<SqlResult<Vec<_>>>()?;
+            rows
+        };
         let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
             "DELETE FROM records WHERE is_trashed = 1 AND id IN ({})",
@@ -394,6 +484,10 @@ impl ClipboardDb {
         let count = conn.execute(&sql, params.as_slice())?;
         drop(conn);
         if count > 0 {
+            let now = chrono::Utc::now().to_rfc3339();
+            for (hash, is_sensitive) in rows {
+                let _ = self.upsert_tombstone(&hash, &now, is_sensitive);
+            }
             self.purge_media_pairs(&media);
         }
         Ok(count)
@@ -401,14 +495,26 @@ impl ClipboardDb {
 
     pub fn empty_trash(&self) -> SqlResult<usize> {
         let conn = self.conn.lock();
-        let ids: Vec<i64> = {
-            let mut stmt = conn.prepare("SELECT id FROM records WHERE is_trashed = 1")?;
-            let ids = stmt
-                .query_map([], |row| row.get(0))?
+        let rows: Vec<(i64, String, bool)> = {
+            let mut stmt =
+                conn.prepare("SELECT id, hash, is_sensitive FROM records WHERE is_trashed = 1")?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i32>(2)? != 0,
+                    ))
+                })?
                 .collect::<SqlResult<Vec<_>>>()?;
-            ids
+            rows
         };
+        let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        for (_, hash, is_sensitive) in &rows {
+            Self::upsert_tombstone_conn(&conn, hash, &now, *is_sensitive)?;
+        }
         let count = conn.execute("DELETE FROM records WHERE is_trashed = 1", [])?;
         drop(conn);
         self.purge_media_pairs(&media);
@@ -501,15 +607,28 @@ impl ClipboardDb {
 
     pub fn clear_non_favorite(&self) -> SqlResult<()> {
         let conn = self.conn.lock();
-        let ids: Vec<i64> = {
-            let mut stmt =
-                conn.prepare("SELECT id FROM records WHERE is_favorite = 0 AND is_trashed = 0")?;
-            let ids = stmt
-                .query_map([], |row| row.get(0))?
+        let rows: Vec<(i64, String, bool)> = {
+            let mut stmt = conn.prepare(
+                "SELECT id, hash, is_sensitive FROM records
+                     WHERE is_favorite = 0 AND is_trashed = 0",
+            )?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i32>(2)? != 0,
+                    ))
+                })?
                 .collect::<SqlResult<Vec<_>>>()?;
-            ids
+            rows
         };
+        let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
+        let now = chrono::Utc::now().to_rfc3339();
+        for (_, hash, is_sensitive) in &rows {
+            Self::upsert_tombstone_conn(&conn, hash, &now, *is_sensitive)?;
+        }
         conn.execute(
             "DELETE FROM records WHERE is_favorite = 0 AND is_trashed = 0",
             [],

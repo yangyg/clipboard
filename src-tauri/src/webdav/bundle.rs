@@ -23,6 +23,15 @@ pub struct ManifestEntry {
     pub content_type: String,
 }
 
+/// A deletion marker: content with this hash was explicitly deleted at
+/// `deleted_at` (RFC3339). Recipients move their older copies to the trash;
+/// a strictly newer local copy (deliberate re-copy) wins and supersedes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TombstoneEntry {
+    pub hash: String,
+    pub deleted_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SyncManifest {
     pub version: u32,
@@ -31,18 +40,106 @@ pub struct SyncManifest {
     pub device_id: String,
     #[serde(default)]
     pub entries: Vec<ManifestEntry>,
+    /// Deletion tombstones (additive; old clients ignore unknown fields and
+    /// simply keep their records until they upgrade).
+    #[serde(default)]
+    pub tombstones: Vec<TombstoneEntry>,
+    /// device_id → newest tombstone `deleted_at` that device has applied.
+    /// Used to garbage-collect tombstones only once every device has seen them.
+    #[serde(default)]
+    pub device_acks: std::collections::HashMap<String, String>,
 }
 
 impl SyncManifest {
     pub fn empty(device_id: &str) -> Self {
         Self {
-            version: 1,
+            version: 2,
             protocol: PROTOCOL.to_string(),
             updated_at: Utc::now().to_rfc3339(),
             device_id: device_id.to_string(),
             entries: vec![],
+            tombstones: vec![],
+            device_acks: std::collections::HashMap::new(),
         }
     }
+}
+
+/// Merge local + remote tombstone candidates into one map (hash → latest
+/// `deleted_at`). `local` is `(hash, deleted_at)` pairs already filtered by
+/// the sync_sensitive policy.
+pub fn merge_tombstone_candidates(
+    local: &[(String, String)],
+    remote: &[TombstoneEntry],
+) -> std::collections::HashMap<String, String> {
+    let mut out: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    for (hash, deleted_at) in local {
+        out.entry(hash.clone())
+            .and_modify(|t| {
+                if deleted_at > t {
+                    *t = deleted_at.clone();
+                }
+            })
+            .or_insert_with(|| deleted_at.clone());
+    }
+    for t in remote {
+        out.entry(t.hash.clone())
+            .and_modify(|existing| {
+                if t.deleted_at > *existing {
+                    *existing = t.deleted_at.clone();
+                }
+            })
+            .or_insert_with(|| t.deleted_at.clone());
+    }
+    out
+}
+
+/// Decide which tombstone candidates to publish against the final active
+/// catalog (`hash → updated_at`), using the newer-wins rule:
+/// - a catalog record strictly newer than the tombstone supersedes it
+///   (`prune` — drop the stale local tombstone, keep the record);
+/// - a catalog record at most as new as the tombstone is deleted
+///   (`drop_active` — remove it from the catalog, publish the tombstone);
+/// - no catalog record → publish the tombstone.
+pub fn resolve_tombstones(
+    active: &std::collections::HashMap<String, String>,
+    candidates: &std::collections::HashMap<String, String>,
+) -> (Vec<TombstoneEntry>, Vec<String>, Vec<String>) {
+    let mut publish: Vec<TombstoneEntry> = Vec::new();
+    let mut prune: Vec<String> = Vec::new();
+    let mut drop_active: Vec<String> = Vec::new();
+    for (hash, deleted_at) in candidates {
+        match active.get(hash) {
+            Some(updated_at) if updated_at > deleted_at => prune.push(hash.clone()),
+            Some(_) => {
+                drop_active.push(hash.clone());
+                publish.push(TombstoneEntry {
+                    hash: hash.clone(),
+                    deleted_at: deleted_at.clone(),
+                });
+            }
+            None => publish.push(TombstoneEntry {
+                hash: hash.clone(),
+                deleted_at: deleted_at.clone(),
+            }),
+        }
+    }
+    (publish, prune, drop_active)
+}
+
+/// Garbage-collect tombstones once every device in `acks` has applied them.
+/// A device that never pushed an ack (or a fresh device) blocks GC, which is
+/// the safe direction: missing acks must never cause a resurrection.
+pub fn gc_tombstones(
+    tombstones: Vec<TombstoneEntry>,
+    acks: &std::collections::HashMap<String, String>,
+) -> Vec<TombstoneEntry> {
+    let Some(min_ack) = acks.values().min().cloned() else {
+        return tombstones;
+    };
+    tombstones
+        .into_iter()
+        .filter(|t| t.deleted_at > min_ack)
+        .collect()
 }
 
 pub fn record_to_entry(rec: &ClipboardRecord) -> ManifestEntry {
@@ -126,4 +223,115 @@ pub fn load_all_export(db: &ClipboardDb) -> Result<Vec<ClipboardRecord>, String>
         }
     }
     Ok(all)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        gc_tombstones, merge_tombstone_candidates, resolve_tombstones, SyncManifest, TombstoneEntry,
+    };
+    use std::collections::HashMap;
+
+    fn tomb(hash: &str, deleted_at: &str) -> TombstoneEntry {
+        TombstoneEntry {
+            hash: hash.to_string(),
+            deleted_at: deleted_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn manifest_round_trips_tombstones_and_acks() {
+        let mut acks = HashMap::new();
+        acks.insert("dev-a".to_string(), "2026-02-01T00:00:00Z".to_string());
+        let manifest = SyncManifest {
+            version: 2,
+            protocol: super::PROTOCOL.to_string(),
+            updated_at: "2026-02-02T00:00:00Z".to_string(),
+            device_id: "dev-a".to_string(),
+            entries: vec![],
+            tombstones: vec![tomb("h1", "2026-01-30T00:00:00Z")],
+            device_acks: acks.clone(),
+        };
+        let json = serde_json::to_string(&manifest).unwrap();
+        let parsed: SyncManifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.tombstones, manifest.tombstones);
+        assert_eq!(parsed.device_acks, acks);
+        assert_eq!(parsed.version, 2);
+    }
+
+    #[test]
+    fn legacy_manifest_without_new_fields_parses() {
+        let json = r#"{
+            "version": 1,
+            "protocol": "clipvault-webdav-v1",
+            "updated_at": "2026-01-01T00:00:00Z",
+            "device_id": "legacy",
+            "entries": []
+        }"#;
+        let parsed: SyncManifest = serde_json::from_str(json).unwrap();
+        assert!(parsed.tombstones.is_empty());
+        assert!(parsed.device_acks.is_empty());
+    }
+
+    #[test]
+    fn merge_candidates_keeps_latest_deleted_at() {
+        let local = vec![
+            ("h1".to_string(), "2026-01-02T00:00:00Z".to_string()),
+            ("h2".to_string(), "2026-01-01T00:00:00Z".to_string()),
+        ];
+        let remote = vec![
+            tomb("h1", "2026-01-01T00:00:00Z"),
+            tomb("h2", "2026-01-03T00:00:00Z"),
+        ];
+        let merged = merge_tombstone_candidates(&local, &remote);
+        assert_eq!(merged["h1"], "2026-01-02T00:00:00Z");
+        assert_eq!(merged["h2"], "2026-01-03T00:00:00Z");
+    }
+
+    #[test]
+    fn resolve_tombstones_handles_supersede_drop_and_missing() {
+        let active = HashMap::from([
+            ("newer".to_string(), "2026-03-01T00:00:00Z".to_string()),
+            ("stale".to_string(), "2026-01-01T00:00:00Z".to_string()),
+        ]);
+        let candidates = HashMap::from([
+            ("newer".to_string(), "2026-02-01T00:00:00Z".to_string()),
+            ("stale".to_string(), "2026-02-01T00:00:00Z".to_string()),
+            ("gone".to_string(), "2026-02-01T00:00:00Z".to_string()),
+        ]);
+
+        let (publish, prune, drop_active) = resolve_tombstones(&active, &candidates);
+
+        assert_eq!(prune, vec!["newer"]);
+        assert_eq!(drop_active, vec!["stale"]);
+        let mut published: Vec<&str> = publish.iter().map(|t| t.hash.as_str()).collect();
+        published.sort_unstable();
+        assert_eq!(published, vec!["gone", "stale"]);
+    }
+
+    #[test]
+    fn gc_requires_every_device_ack() {
+        let ts = vec![
+            tomb("old", "2026-01-01T00:00:00Z"),
+            tomb("newer", "2026-03-01T00:00:00Z"),
+        ];
+        // No acks → keep everything (safe direction).
+        assert_eq!(gc_tombstones(ts.clone(), &HashMap::new()).len(), 2);
+
+        // All devices acked past the old tombstone → only the newer one remains.
+        let acks = HashMap::from([
+            ("a".to_string(), "2026-02-01T00:00:00Z".to_string()),
+            ("b".to_string(), "2026-02-01T00:00:00Z".to_string()),
+        ]);
+        let kept = gc_tombstones(ts.clone(), &acks);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].hash, "newer");
+
+        // One device lagging → the old tombstone is retained.
+        let lagging = HashMap::from([
+            ("a".to_string(), "2026-02-01T00:00:00Z".to_string()),
+            ("b".to_string(), "2025-12-01T00:00:00Z".to_string()),
+        ]);
+        assert_eq!(gc_tombstones(ts, &lagging).len(), 2);
+    }
 }

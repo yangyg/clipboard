@@ -6,7 +6,7 @@ use super::ClipboardDb;
 /// Increment when adding tables, columns, or indexes that older DBs must migrate.
 /// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
 /// the on-disk schema matches what this binary expects.
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 impl ClipboardDb {
     pub(super) fn initialize_schema(conn: &Connection) -> SqlResult<()> {
@@ -73,6 +73,11 @@ impl ClipboardDb {
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sync_tombstones (
+                hash TEXT PRIMARY KEY,
+                deleted_at TEXT NOT NULL,
+                is_sensitive INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS search_history (
                 query TEXT PRIMARY KEY,

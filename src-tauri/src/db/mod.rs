@@ -16,6 +16,7 @@ mod settings;
 mod stats;
 mod sync_history;
 mod tags;
+mod tombstones;
 mod types;
 
 pub use records_import::{

@@ -92,6 +92,7 @@ const EXPECTED_TABLES: &[&str] = &[
     "tags",
     "record_tags",
     "settings",
+    "sync_tombstones",
     "search_history",
     "sync_history",
 ];

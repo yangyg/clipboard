@@ -21,6 +21,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
 | **Soft cap** | In-memory list pages are soft-capped (`PAGE_SIZE × 2`). When dirty, the next `loadMore` reloads from DB. |
 | **WebDAV sync** | Cloud sync via WebDAV protocol `clipvault-webdav-v1`. Manifest + JSONL bundle; media files synced alongside. Default remote dir `ClipVaultSync`. |
+| **Tombstone** | Deletion marker `(hash, deleted_at)` published in the WebDAV manifest (manifest version 2). Explicit deletions propagate cross-device: recipients move their older copies to trash (recoverable); a strictly newer re-copy wins and supersedes the tombstone. Automatic cleanup (eviction / sensitive expiry) never writes tombstones. |
 | **Search history** | Distinct search terms submitted via Enter / suggestion-select, stored in the `search_history` table (query PK + count + last_searched_at). Drives the search-box autocomplete dropdown (top 10, recency-ordered). **Local-only** — excluded from export/import and WebDAV sync. |
 | **UI font** | `font_family` setting — a preset key (`default`/`yahei`/`simhei`/`simsun`/`kaiti`/`segoe`) or `system:<name>` for an OS-installed font. Applied as `--font-sans`; every stack carries a CJK-capable fallback (`Microsoft YaHei UI`). |
 

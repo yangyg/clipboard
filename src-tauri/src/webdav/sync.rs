@@ -12,8 +12,9 @@ use crate::media;
 use crate::Settings;
 
 use super::bundle::{
-    filter_syncable, load_all_export, parse_bundle, record_to_entry, serialize_bundle,
-    strip_abs_paths, ManifestEntry, SyncManifest, BUNDLE_REL, MANIFEST_NAME, PROTOCOL,
+    filter_syncable, gc_tombstones, load_all_export, merge_tombstone_candidates, parse_bundle,
+    record_to_entry, resolve_tombstones, serialize_bundle, strip_abs_paths, ManifestEntry,
+    SyncManifest, BUNDLE_REL, MANIFEST_NAME, PROTOCOL,
 };
 use super::client::WebDavClient;
 use super::media::{download_media_if_needed, upload_media_if_needed};
@@ -143,6 +144,11 @@ pub async fn webdav_pull(
 
     let state = fetch_remote_state(&client, &root, &device_id).await?;
     let manifest = state.manifest;
+    let remote_tombstones: Vec<(String, String)> = manifest
+        .tombstones
+        .iter()
+        .map(|t| (t.hash.clone(), t.deleted_at.clone()))
+        .collect();
     let mut records = state.records;
     if !settings.webdav_sync_sensitive {
         records.retain(|r| !r.is_sensitive);
@@ -170,13 +176,22 @@ pub async fn webdav_pull(
     // The merge is a full-content transaction over the pulled bundle — run it
     // off the async worker so large imported sets don't hold a Tokio executor thread.
     let merge_db = Arc::clone(db);
-    let (pulled, merged, tags_pulled) = tokio::task::spawn_blocking(move || {
-        merge_db
+    let (pulled, merged, tags_pulled, trashed) = tokio::task::spawn_blocking(move || {
+        let (pulled, merged, tags_pulled) = merge_db
             .import_records_with_merge(&records, max, Some(sanitize))
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        // Apply deletion tombstones after the merge so a record that was
+        // deleted elsewhere is trashed (recoverably) on this device too.
+        let (trashed, _ack) = merge_db
+            .apply_remote_tombstones(&remote_tombstones)
+            .map_err(|e| e.to_string())?;
+        Ok::<_, String>((pulled, merged, tags_pulled, trashed))
     })
     .await
     .map_err(|e| format!("WebDAV 导入任务失败: {e}"))??;
+    if trashed > 0 {
+        info!("WebDAV pull: applied {trashed} deletion tombstone(s)");
+    }
     persist_last_sync(db, settings).await?;
 
     info!(
@@ -266,6 +281,55 @@ pub async fn webdav_push(
         }
     }
 
+    // --- Deletion tombstones (cross-device delete propagation) ---
+    // Resolve local + remote tombstones against the final catalog with the
+    // newer-wins rule, then GC once every device has acked them.
+    let sync_sensitive = settings.webdav_sync_sensitive;
+    let load_db = Arc::clone(db);
+    let (local_tombstones, local_ack) = tokio::task::spawn_blocking(move || {
+        let ts = load_db.get_sync_tombstones().map_err(|e| e.to_string())?;
+        let ack = load_db.get_tombstone_ack().map_err(|e| e.to_string())?;
+        Ok::<_, String>((ts, ack))
+    })
+    .await
+    .map_err(|e| format!("WebDAV 加载 tombstone 任务失败: {e}"))??;
+    let local_tombstones: Vec<(String, String)> = local_tombstones
+        .into_iter()
+        // Sensitive tombstones follow the same policy as sensitive records.
+        .filter(|(_, _, is_sensitive)| sync_sensitive || !is_sensitive)
+        .map(|(hash, deleted_at, _)| (hash, deleted_at))
+        .collect();
+
+    let active: HashMap<String, String> = catalog
+        .iter()
+        .map(|(hash, rec)| (hash.clone(), rec.updated_at.clone()))
+        .collect();
+    let candidates = merge_tombstone_candidates(&local_tombstones, &remote_manifest.tombstones);
+    let (mut tombstones, prune_local, drop_active) = resolve_tombstones(&active, &candidates);
+    for hash in &drop_active {
+        catalog.remove(hash);
+    }
+    if !prune_local.is_empty() {
+        // Superseded by a strictly newer active copy — drop the stale local
+        // tombstone so a later deletion starts from a clean slate.
+        let prune_db = Arc::clone(db);
+        let hashes = prune_local;
+        tokio::task::spawn_blocking(move || {
+            for hash in &hashes {
+                if let Err(e) = prune_db.remove_tombstone(hash) {
+                    tracing::warn!("Failed to prune superseded tombstone {hash}: {e}");
+                }
+            }
+        })
+        .await
+        .map_err(|e| format!("WebDAV tombstone 清理任务失败: {e}"))?;
+    }
+    let mut device_acks = remote_manifest.device_acks.clone();
+    if let Some(ack) = &local_ack {
+        device_acks.insert(device_id.clone(), ack.clone());
+    }
+    tombstones = gc_tombstones(tombstones, &device_acks);
+
     let mut media_uploaded = 0;
     let mut media_skipped = 0;
     let mut pushed = 0;
@@ -325,11 +389,13 @@ pub async fn webdav_push(
         .await
         .map_err(|e| format!("WebDAV 打包 bundle 任务失败: {e}"))??;
     let manifest = SyncManifest {
-        version: 1,
+        version: 2,
         protocol: PROTOCOL.to_string(),
         updated_at: Utc::now().to_rfc3339(),
         device_id,
         entries,
+        tombstones,
+        device_acks,
     };
     let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     let expected_manifest_etag = if manifest_exists {

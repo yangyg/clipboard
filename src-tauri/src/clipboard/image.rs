@@ -31,6 +31,18 @@ pub fn image_quick_fingerprint(img: &ImageData<'_>) -> String {
     format!("{:016x}", h)
 }
 
+/// Quick fingerprint for raw RGBA bytes we write to the clipboard ourselves
+/// (paste). Must match what the poll loop computes over the `get_image()`
+/// round-trip of the same pixels, so the self-write can be absorbed.
+pub fn image_quick_fingerprint_rgba(bytes: &[u8], width: usize, height: usize) -> String {
+    let img = ImageData {
+        width,
+        height,
+        bytes: std::borrow::Cow::Borrowed(bytes),
+    };
+    image_quick_fingerprint(&img)
+}
+
 /// Downscale an RGBA clipboard bitmap to at most `media::MAX_EDGE` on its
 /// longest side before it is moved into the bounded capture channel.
 ///

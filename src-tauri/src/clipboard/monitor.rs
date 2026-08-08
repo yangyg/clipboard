@@ -74,6 +74,25 @@ impl ClipboardMonitor {
         *self.suppress_until.lock() = Some(Instant::now() + duration);
     }
 
+    /// Mark self-written text as already captured.
+    ///
+    /// The suppression window only delays reads (the sequence watermark does
+    /// not advance), so after it expires the poll re-reads our own paste. If
+    /// the pasted record is not the latest capture, its fingerprint differs
+    /// from `last_text_fp` and the re-read is emitted as a fresh capture —
+    /// whose foreground source is the paste-target window, overwriting the
+    /// record's original source via the re-copy dedup path. Syncing the
+    /// baseline makes the poll absorb the re-read silently.
+    pub fn mark_text_written(&self, text: &str) {
+        *self.last_text_fp.lock() = Some(crate::detect::sha256_hash(text));
+    }
+
+    /// Mark a self-written image (RGBA path) as already captured; see
+    /// [`mark_text_written`] for why the baseline must be synced.
+    pub fn mark_image_written(&self, quick_fp: &str) {
+        *self.last_image_hash.lock() = Some(quick_fp.to_string());
+    }
+
     pub fn start<F>(&mut self, on_change: F)
     where
         F: Fn(ClipboardEvent) + Send + 'static,
@@ -494,5 +513,33 @@ mod tests {
     fn suppress_none_is_not_suppressed() {
         let suppress = parking_lot::Mutex::new(None);
         assert!(!is_capture_suppressed(&suppress));
+    }
+
+    // --- mark_text_written / mark_image_written ---
+
+    #[test]
+    fn mark_text_written_syncs_last_text_fp() {
+        let monitor = ClipboardMonitor::new();
+        monitor.mark_text_written("hello");
+        let captured = CapturedText {
+            text: "hello".into(),
+            html: None,
+        };
+        // Baseline must equal the fingerprint the poll loop computes, so the
+        // post-suppression re-read of our own paste is absorbed (no emit).
+        assert_eq!(
+            *monitor.last_text_fp.lock(),
+            Some(captured.fingerprint())
+        );
+    }
+
+    #[test]
+    fn mark_image_written_syncs_quick_fp() {
+        let monitor = ClipboardMonitor::new();
+        monitor.mark_image_written("0123456789abcdef");
+        assert_eq!(
+            *monitor.last_image_hash.lock(),
+            Some("0123456789abcdef".to_string())
+        );
     }
 }

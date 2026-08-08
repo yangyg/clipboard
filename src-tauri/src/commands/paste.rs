@@ -94,19 +94,36 @@ pub async fn paste_record(
             if let Some(media_path) = r.media_path.as_deref() {
                 let abs = crate::security::resolve_media_file(&media_root, media_path)?;
                 if clipboard::write_clipboard_png_file(&abs) {
+                    // PNG-only format carries no CF_BITMAP/CF_UNICODETEXT, so the
+                    // monitor emits nothing for it — no baseline sync needed.
                     true
                 } else {
                     let (rgba, w, h) = media::load_image_rgba(&media_root, media_path)?;
-                    clipboard::write_clipboard_image(&rgba, w, h)
+                    let ok = clipboard::write_clipboard_image(&rgba, w, h);
+                    if ok {
+                        // Absorb the post-suppression re-read of our own write;
+                        // otherwise it re-captures with the paste-target window
+                        // as source.
+                        monitor
+                            .read()
+                            .mark_image_written(&clipboard::image_quick_fingerprint_rgba(
+                                &rgba, w, h,
+                            ));
+                    }
+                    ok
                 }
             } else {
                 return Err("该记录的图片文件缺失".into());
             }
         } else {
-            match mode.as_deref() {
+            let ok = match mode.as_deref() {
                 Some("plain") => clipboard::write_clipboard_plain(&r.content),
                 _ => clipboard::write_clipboard_text(&r.content, r.content_html.as_deref()),
+            };
+            if ok {
+                monitor.read().mark_text_written(&r.content);
             }
+            ok
         };
         if !wrote {
             return Err("写入剪贴板失败".into());

@@ -158,8 +158,11 @@ impl ClipboardDb {
                 // shipped has an empty `tags` array and must not wipe the
                 // local associations.
                 if record.tags.iter().any(|t| !t.trim().is_empty()) {
+                    // Same predicate as the UPDATE above: a trashed row may
+                    // share the hash with an active row, and tags belong to
+                    // the active one.
                     let id: i64 = tx.query_row(
-                        "SELECT id FROM records WHERE hash = ?",
+                        "SELECT id FROM records WHERE hash = ? AND is_trashed = 0",
                         [&record.hash],
                         |row| row.get(0),
                     )?;

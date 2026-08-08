@@ -17,6 +17,8 @@ pub enum SettingsError {
     Sql(#[from] rusqlite::Error),
     #[error("settings encryption failed: {0}")]
     Encryption(String),
+    #[error("stored settings blob is corrupt; refusing to overwrite it")]
+    CorruptStoredBlob,
 }
 
 impl ClipboardDb {
@@ -55,17 +57,19 @@ impl ClipboardDb {
                     }
                     Err(e) => {
                         // Fail loudly instead of silently resetting every setting:
-                        // a corrupt settings blob must not masquerade as "defaults".
-                        tracing::error!(
-                            "Corrupt app_settings JSON; falling back to defaults: {}",
-                            e
-                        );
+                        // a corrupt blob masquerading as "defaults" would be
+                        // overwritten by the next save (incl. WebDAV
+                        // persist_last_sync), destroying the original data.
+                        tracing::error!("Corrupt app_settings JSON: {}", e);
+                        return Err(rusqlite::Error::FromSqlConversionFailure(
+                            0,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        ));
                     }
                 },
                 Err(rusqlite::Error::QueryReturnedNoRows) => {}
-                Err(e) => {
-                    tracing::warn!("Failed to read app_settings: {}", e);
-                }
+                Err(e) => return Err(e),
             }
         }
 
@@ -86,6 +90,24 @@ impl ClipboardDb {
                 .map_err(SettingsError::Encryption)?;
         }
         let json = serde_json::to_string(&for_json)?;
+        // Refuse to overwrite a stored blob we never successfully loaded: a
+        // save built from defaults (e.g. WebDAV persist_last_sync) would
+        // silently destroy the corrupt-but-recoverable original data.
+        if self.settings_cache.read().is_none() {
+            let stored = self
+                .lock_read()
+                .query_row::<String, _, _>(
+                    "SELECT value FROM settings WHERE key = 'app_settings'",
+                    [],
+                    |row| row.get(0),
+                )
+                .ok();
+            if let Some(blob) = stored {
+                if serde_json::from_str::<Settings>(&blob).is_err() {
+                    return Err(SettingsError::CorruptStoredBlob);
+                }
+            }
+        }
         {
             let conn = self.conn.lock();
             conn.execute(

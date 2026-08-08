@@ -356,27 +356,33 @@ impl ClipboardDb {
 
     pub fn add_tag_to_record(&self, record_id: i64, tag_id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
-        let n = conn.execute(
+        // Link + watermark + FTS refresh in one transaction so a crash cannot
+        // leave a record without its FTS row.
+        let tx = conn.unchecked_transaction()?;
+        let n = tx.execute(
             "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
             params![record_id, tag_id],
         )?;
         if n > 0 {
-            Self::touch_record_updated_at(&conn, record_id)?;
+            Self::touch_record_updated_at(&tx, record_id)?;
         }
-        Self::refresh_record_fts(&conn, record_id)?;
+        Self::refresh_record_fts(&tx, record_id)?;
+        tx.commit()?;
         Ok(())
     }
 
     pub fn remove_tag_from_record(&self, record_id: i64, tag_id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
-        let n = conn.execute(
+        let tx = conn.unchecked_transaction()?;
+        let n = tx.execute(
             "DELETE FROM record_tags WHERE record_id = ? AND tag_id = ?",
             params![record_id, tag_id],
         )?;
         if n > 0 {
-            Self::touch_record_updated_at(&conn, record_id)?;
+            Self::touch_record_updated_at(&tx, record_id)?;
         }
-        Self::refresh_record_fts(&conn, record_id)?;
+        Self::refresh_record_fts(&tx, record_id)?;
+        tx.commit()?;
         Ok(())
     }
 

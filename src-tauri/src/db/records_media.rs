@@ -46,9 +46,42 @@ impl ClipboardDb {
             .collect();
         drop(conn);
 
+        // Quarantine each unreferenced file, then re-check references before
+        // finishing the delete. A concurrent capture of the same image content
+        // lands on the same hash path; if its row was inserted between the
+        // scan above and the quarantine, deleting would break its preview.
+        let mut quarantined: Vec<(String, std::path::PathBuf)> = Vec::new();
         for rel in unreferenced {
-            media::delete_media_files(&self.media_root, Some(&rel), None);
+            if let Some(pending) = media::quarantine_media_file(&self.media_root, &rel) {
+                quarantined.push((rel, pending));
+            }
         }
+        if quarantined.is_empty() {
+            return;
+        }
+
+        let conn = self.lock_read();
+        let mut removed: u64 = 0;
+        for (rel, pending) in quarantined {
+            let referenced = conn
+                .query_row(
+                    "SELECT 1 FROM records WHERE media_path = ?1 OR thumb_path = ?1 LIMIT 1",
+                    [rel.as_str()],
+                    |row| row.get::<_, i64>(0),
+                )
+                .is_ok();
+            if referenced {
+                media::restore_media_file(&self.media_root, &rel, &pending);
+            } else if let Ok(meta) = std::fs::metadata(&pending) {
+                let size = meta.len();
+                if std::fs::remove_file(&pending).is_err() {
+                    continue;
+                }
+                removed = removed.saturating_add(size);
+            }
+        }
+        drop(conn);
+        media::note_media_removed(&self.media_root, removed);
     }
 
     pub(super) fn fetch_media_paths_by_ids(

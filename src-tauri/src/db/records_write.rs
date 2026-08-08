@@ -339,14 +339,18 @@ impl ClipboardDb {
             alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
         }
         let conn = self.conn.lock();
-        let n = conn.execute(
+        // UPDATE + FTS refresh in one transaction: a crash between the two
+        // would otherwise drop the FTS row permanently (search misses).
+        let tx = conn.unchecked_transaction()?;
+        let n = tx.execute(
             "UPDATE records SET alias = ? WHERE id = ?",
             params![alias, id],
         )?;
         if n == 0 {
             return Err(rusqlite::Error::QueryReturnedNoRows);
         }
-        Self::refresh_record_fts(&conn, id)?;
+        Self::refresh_record_fts(&tx, id)?;
+        tx.commit()?;
         Ok(alias)
     }
 

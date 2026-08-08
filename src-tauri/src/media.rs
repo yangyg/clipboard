@@ -194,28 +194,70 @@ pub fn store_clipboard_image(
     })
 }
 
+/// Rename one media file to a `.pending-delete` sibling (quarantine).
+/// Returns the pending path on success so callers can finish the delete — or
+/// restore it if a late reference appears. `None` when the file is absent or
+/// the rename fails.
+pub fn quarantine_media_file(app_data_dir: &Path, rel: &str) -> Option<PathBuf> {
+    let path = absolute(app_data_dir, rel);
+    if !path.exists() {
+        return None;
+    }
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("media");
+    let pending = path.with_file_name(format!(".{name}.pending-delete"));
+    match fs::rename(&path, &pending) {
+        Ok(()) => Some(pending),
+        Err(e) => {
+            warn!("Failed to quarantine media file {:?}: {}", path, e);
+            None
+        }
+    }
+}
+
+/// Undo a quarantine: move the pending file back to its canonical path. If a
+/// concurrent capture already re-created the canonical file (same hash content),
+/// just drop the quarantine copy.
+pub fn restore_media_file(app_data_dir: &Path, rel: &str, pending: &Path) {
+    let path = absolute(app_data_dir, rel);
+    if path.exists() {
+        if let Err(e) = fs::remove_file(pending) {
+            warn!(
+                "Failed to remove superseded quarantine file {:?}: {}",
+                pending, e
+            );
+        }
+        return;
+    }
+    if let Err(e) = fs::rename(pending, &path) {
+        warn!("Failed to restore quarantined media file {:?}: {}", path, e);
+    }
+}
+
+/// Note bytes removed from the media tree (purge paths delete quarantined
+/// files outside `delete_media_files`).
+pub fn note_media_removed(app_data_dir: &Path, bytes: u64) {
+    if bytes > 0 {
+        bump_media_dir_size_cache(app_data_dir, -(bytes as i64));
+    }
+}
+
 pub fn delete_media_files(app_data_dir: &Path, media_path: Option<&str>, thumb_path: Option<&str>) {
     let mut removed: u64 = 0;
     for rel in [media_path, thumb_path].into_iter().flatten() {
         let path = absolute(app_data_dir, rel);
-        if path.exists() {
-            let size = file_len(&path);
-            let name = path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .unwrap_or("media");
-            let pending = path.with_file_name(format!(".{name}.pending-delete"));
-            // Quarantine before deleting. If a concurrent capture recreates the
-            // canonical path after the reference check, it cannot be removed.
-            if let Err(e) = fs::rename(&path, &pending) {
-                warn!("Failed to quarantine media file {:?}: {}", path, e);
-                continue;
-            }
-            if let Err(e) = fs::remove_file(&pending) {
-                warn!("Failed to delete media file {:?}: {}", path, e);
-            } else {
-                removed = removed.saturating_add(size);
-            }
+        let size = file_len(&path);
+        // Quarantine before deleting. If a concurrent capture recreates the
+        // canonical path after the reference check, it cannot be removed.
+        let Some(pending) = quarantine_media_file(app_data_dir, rel) else {
+            continue;
+        };
+        if let Err(e) = fs::remove_file(&pending) {
+            warn!("Failed to delete media file {:?}: {}", path, e);
+        } else {
+            removed = removed.saturating_add(size);
         }
     }
     if removed > 0 {

@@ -74,8 +74,11 @@ impl ClipboardDb {
         let mut tags_changed = 0;
 
         // Batch-load existing hashes in one query instead of per-record lookups.
+        // Active rows only: importing a hash that exists *only in the trash* must
+        // insert a fresh active record (resurrect) rather than silently merge into
+        // the trashed row (which the capture-dedup path also treats as not present).
         let mut existing_hashes: std::collections::HashSet<String> = {
-            let mut stmt = tx.prepare("SELECT hash FROM records")?;
+            let mut stmt = tx.prepare("SELECT hash FROM records WHERE is_trashed = 0")?;
             let hashes: Vec<String> = stmt
                 .query_map([], |row| row.get::<_, String>(0))?
                 .collect::<SqlResult<Vec<_>>>()?;
@@ -130,7 +133,7 @@ impl ClipboardDb {
                         thumb_path = CASE
                             WHEN (thumb_path IS NULL OR thumb_path = '') AND ? IS NOT NULL AND ? != ''
                             THEN ? ELSE thumb_path END
-                     WHERE hash = ?",
+                     WHERE hash = ? AND is_trashed = 0",
                     params![
                         record.is_favorite as i32,
                         record.is_pinned as i32,
@@ -176,8 +179,8 @@ impl ClipboardDb {
                 "INSERT INTO records (
                     content, content_type, source_app, source_window, source_name, hash, copy_count,
                     is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at,
-                    media_path, thumb_path, width, height, content_html, alias
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    media_path, thumb_path, width, height, content_html, alias, content_len
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
                     content_type,
@@ -199,6 +202,7 @@ impl ClipboardDb {
                     record.height,
                     content_html,
                     alias,
+                    record.content.chars().count() as i64,
                 ],
             )?;
             existing_hashes.insert(record.hash.clone());

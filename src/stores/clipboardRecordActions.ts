@@ -101,7 +101,9 @@ export function createRecordActions(ctx: RecordActionsCtx) {
       if (ctx.listSort.value === "updated_desc") {
         // Re-sort: pinned first, then by updated_at desc.
         // Use string comparison on ISO timestamps (lexicographic = chronological).
-        ctx.records.value.sort((a, b) => {
+        // Assign a fresh array — never mutate the reactive list in place, or the
+        // change bypasses reactivity and can drift from the keyset pagination state.
+        ctx.records.value = [...ctx.records.value].sort((a, b) => {
           if (a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
           return b.updated_at.localeCompare(a.updated_at);
         });

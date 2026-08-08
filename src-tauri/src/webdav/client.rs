@@ -1,6 +1,7 @@
 //! Minimal WebDAV client (Basic auth): MKCOL / PUT / GET / HEAD / PROPFIND.
 
 use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH};
+use reqwest::redirect;
 use reqwest::{Client, Method, StatusCode};
 use std::time::Duration;
 use url::Url;
@@ -44,9 +45,32 @@ impl WebDavClient {
         if !base.starts_with("https://") {
             return Err("WebDAV 必须使用 https://（明文 http 会泄露密码与剪贴板内容）".into());
         }
+        // Redirects are the default reqwest behavior (follow up to 10 hops
+        // across schemes/hosts). That is unsafe here:
+        //  - A 30x to `http://` on the same host would re-send the Basic-auth
+        //    header and the whole clipboard bundle over cleartext (TLS downgrade).
+        //  - A 307/308 to an internal host (127.0.0.1, cloud metadata, …) would
+        //    stream clipboard data to an attacker-influenced endpoint (SSRF).
+        // We therefore only ever follow redirects that stay on HTTPS to the
+        // exact host the user configured; everything else is treated as a final
+        // (non-success) response.
+        let base_host = Url::parse(&base)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_string));
+        let redirect_policy = redirect::Policy::custom(move |attempt| {
+            let url = attempt.url();
+            if url.scheme() != "https" {
+                return attempt.stop();
+            }
+            match (&base_host, url.host_str()) {
+                (Some(host), Some(candidate)) if host == candidate => attempt.follow(),
+                _ => attempt.stop(),
+            }
+        });
         let client = Client::builder()
             .timeout(Duration::from_secs(120))
             .connect_timeout(Duration::from_secs(20))
+            .redirect(redirect_policy)
             .build()
             .map_err(|e| format!("创建 HTTP 客户端失败: {e}"))?;
         Ok(Self {

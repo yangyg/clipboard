@@ -14,15 +14,31 @@ const THUMB_MAX_EDGE: u32 = 160;
 /// pre-channel buffer target the same cap.
 pub const MAX_EDGE: u32 = 2560;
 
+/// Hard ceiling for a *declared* clipboard bitmap edge. Far beyond any real
+/// display capture, this exists only to reject a crafted DIB header that claims
+/// an absurd size before we ever allocate `width*height*4` bytes off it.
+const MAX_DECLARED_EDGE: u32 = 32_768;
+
+/// Largest "expected" size we will zero-pad a short RGBA buffer up to. A
+/// hostile DIB header can claim a size far larger than the actual pixel block;
+/// padding to match would be a multi-GB allocation and an easy local DoS.
+/// Anything bigger is left as-is so the downstream decode fails cleanly.
+const MAX_PAD_BYTES: usize = MAX_EDGE as usize * MAX_EDGE as usize * 4;
+
 /// Normalize an RGBA buffer to exactly `width*height*4` bytes (some clipboard
 /// sources carry stride padding or truncation). Zero-fills short buffers,
-/// truncates over-long ones. Never fails.
+/// truncates over-long ones. Never grows a short buffer beyond [`MAX_PAD_BYTES`].
 pub fn normalize_rgba_len(mut rgba: Vec<u8>, width: u32, height: u32) -> Vec<u8> {
+    if width > MAX_DECLARED_EDGE || height > MAX_DECLARED_EDGE {
+        return rgba;
+    }
     let expected = (width as usize)
         .saturating_mul(height as usize)
         .saturating_mul(4);
     if rgba.len() < expected {
-        rgba.resize(expected, 0);
+        if expected <= MAX_PAD_BYTES {
+            rgba.resize(expected, 0);
+        }
     } else if rgba.len() > expected {
         rgba.truncate(expected);
     }
@@ -38,6 +54,11 @@ pub fn downscale_rgba(
     height: u32,
     max_edge: u32,
 ) -> (Vec<u8>, u32, u32) {
+    // Untrusted clipboard DIB dimensions — reject absurd declared sizes before
+    // any decode/alloc attempt; empty buffer signals corrupt input downstream.
+    if width > MAX_DECLARED_EDGE || height > MAX_DECLARED_EDGE {
+        return (Vec::new(), width, height);
+    }
     if width <= max_edge && height <= max_edge {
         return (rgba, width, height);
     }

@@ -356,8 +356,13 @@ fn is_primarily_url(t: &str) -> bool {
     let Some(start) = start else {
         return false;
     };
-    let before = t[..start].trim();
-    let from_url = &t[start..];
+    // NOTE: slice `lower`, not the original `t`. `to_lowercase()` can change the
+    // byte length of a string (e.g. `ẞ`→`ss`, `İ`→`i̇`), so a byte offset computed
+    // against `lower` may not be a char boundary in `t`, and slicing `t` at it
+    // would panic, killing the capture monitor thread. Casing is irrelevant to
+    // the whitespace-strip / char-count decisions made here.
+    let before = lower[..start].trim();
+    let from_url = &lower[start..];
     let url_len = from_url
         .find(|c: char| c.is_whitespace())
         .unwrap_or(from_url.len());

@@ -170,9 +170,12 @@ impl ClipboardDb {
 
     pub fn trash_record(&self, id: i64) -> SqlResult<()> {
         let conn = self.conn.lock();
+        // Bump `updated_at` so the trash-retention window (measured from
+        // `updated_at`) starts at the moment of trashing — otherwise a record
+        // copied weeks ago and trashed today is purged immediately.
         conn.execute(
-            "UPDATE records SET is_trashed = 1, is_pinned = 0 WHERE id = ?",
-            [id],
+            "UPDATE records SET is_trashed = 1, is_pinned = 0, updated_at = ? WHERE id = ?",
+            params![chrono::Utc::now().to_rfc3339(), id],
         )?;
         Ok(())
     }
@@ -184,13 +187,13 @@ impl ClipboardDb {
         let conn = self.conn.lock();
         let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
-            "UPDATE records SET is_trashed = 1, is_pinned = 0 WHERE id IN ({})",
+            "UPDATE records SET is_trashed = 1, is_pinned = 0, updated_at = ? WHERE id IN ({})",
             placeholders
         );
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() + 1);
+        params.push(&now);
+        params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
         let count = conn.execute(&sql, params.as_slice())?;
         Ok(count)
     }

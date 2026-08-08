@@ -2,6 +2,7 @@
 use rusqlite::{params, Connection, Result as SqlResult};
 
 use super::{ClipboardDb, ContentType, ImageMeta, ALIAS_MAX_CHARS};
+use crate::detect::sha256_hash;
 use crate::ClipboardRecord;
 
 impl ClipboardDb {
@@ -164,6 +165,133 @@ impl ClipboardDb {
             )?;
         }
         Ok(overflow_media)
+    }
+
+    /// One-shot (settings flag `text_hash_v2`): re-derive text-record hashes
+    /// from plain content and merge the duplicates the old scheme created.
+    ///
+    /// Historical hashes baked CF_HTML bytes into the fingerprint, so the same
+    /// text copied from a different source (or re-written by our own paste)
+    /// hashed differently and inserted a duplicate row. New identity is
+    /// sha256(sha256(text)) — matching what capture stores now. Rows that
+    /// collide after re-derivation are merged into the most recently updated
+    /// one: favorite/pin OR'd, copy_count summed, tags unioned.
+    pub(super) fn migrate_text_hash_v2(conn: &Connection) -> SqlResult<()> {
+        let done: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'text_hash_v2'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if done.as_deref() == Some("1") {
+            return Ok(());
+        }
+
+        // 1) Group candidate rows by the re-derived hash BEFORE writing
+        // anything. Image rows hash pixels, not content — skip them. Updating
+        // hashes row-by-row would trip UNIQUE(hash) mid-way: two legacy rows
+        // with identical content re-derive to the same hash, so the second
+        // UPDATE collides before any merge could run.
+        // (id, is_favorite, is_pinned, copy_count, alias, is_trashed, updated_at)
+        type LegacyRow = (i64, i32, i32, i32, String, i32, String);
+        let mut groups: std::collections::HashMap<String, Vec<LegacyRow>> =
+            std::collections::HashMap::new();
+        {
+            let mut stmt = conn.prepare(
+                "SELECT id, content, is_favorite, is_pinned, copy_count, alias, is_trashed, updated_at
+                 FROM records
+                 WHERE content_type != 'image' AND media_path IS NULL",
+            )?;
+            let mapped = stmt.query_map([], |row| {
+                let content: String = row.get(1)?;
+                Ok((
+                    sha256_hash(&sha256_hash(&content)),
+                    (
+                        row.get(0)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                        row.get(7)?,
+                    ),
+                ))
+            })?;
+            for item in mapped {
+                let (hash, entry) = item?;
+                groups.entry(hash).or_default().push(entry);
+            }
+        }
+
+        // 2) Per group: merge active duplicates into one survivor, delete the
+        // rest, and apply the new hash last — with losers already gone the
+        // UNIQUE(hash) constraint can never fire.
+        for (new_hash, mut group) in groups {
+            if group.len() == 1 {
+                conn.execute(
+                    "UPDATE records SET hash = ? WHERE id = ?",
+                    params![new_hash, group[0].0],
+                )?;
+                continue;
+            }
+            // Winner: prefer active rows, then most recently updated.
+            group.sort_by(|a, b| {
+                a.5.cmp(&b.5) // is_trashed ASC (active first)
+                    .then(b.6.cmp(&a.6)) // updated_at DESC
+                    .then(b.0.cmp(&a.0)) // id DESC
+            });
+            let (winner_id, fav, pin, count, mut alias, _, _) = group.remove(0);
+            let mut fav = fav != 0;
+            let mut pin = pin != 0;
+            let mut count = count;
+            let mut loser_ids: Vec<i64> = Vec::new();
+            for (id, f, p, c, a, trashed, _) in &group {
+                loser_ids.push(*id);
+                if *trashed == 0 {
+                    // Only active rows contribute state; trashed dupes just vanish.
+                    fav |= *f != 0;
+                    pin |= *p != 0;
+                    count += c;
+                    if alias.is_empty() && !a.is_empty() {
+                        alias = a.clone();
+                    }
+                }
+            }
+            conn.execute(
+                "UPDATE records SET is_favorite = ?, is_pinned = ?, copy_count = ?, alias = ?
+                 WHERE id = ?",
+                params![fav as i32, pin as i32, count, alias, winner_id],
+            )?;
+            for loser in &loser_ids {
+                conn.execute(
+                    "INSERT OR IGNORE INTO record_tags (record_id, tag_id)
+                     SELECT ?, tag_id FROM record_tags WHERE record_id = ?",
+                    params![winner_id, loser],
+                )?;
+            }
+            Self::refresh_record_fts(conn, winner_id)?;
+            // FTS row + record_tags links of losers cascade on delete.
+            let placeholders = Self::id_placeholders(loser_ids.len());
+            let params: Vec<&dyn rusqlite::types::ToSql> = loser_ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            conn.execute(
+                &format!("DELETE FROM records WHERE id IN ({placeholders})"),
+                params.as_slice(),
+            )?;
+            conn.execute(
+                "UPDATE records SET hash = ? WHERE id = ?",
+                params![new_hash, winner_id],
+            )?;
+        }
+
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('text_hash_v2', '1')",
+            [],
+        )?;
+        Ok(())
     }
 
     // === Delete / Trash ===

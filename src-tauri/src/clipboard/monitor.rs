@@ -31,12 +31,14 @@ pub struct CapturedText {
 }
 
 impl CapturedText {
-    /// Fingerprint for change detection (plain + html) — hash only, no huge string retention.
+    /// Fingerprint for change detection — plain text only.
+    ///
+    /// CF_HTML bytes are unstable identity: different apps emit different
+    /// fragments for the same text, and our own paste re-write round-trips
+    /// them with changed bytes. Including html here made identical text
+    /// fork into duplicate records, so HTML is payload, not identity.
     pub fn fingerprint(&self) -> String {
-        match &self.html {
-            Some(h) => crate::detect::sha256_hash_slices(&[self.text.as_bytes(), h.as_bytes()]),
-            None => crate::detect::sha256_hash_slices(&[self.text.as_bytes()]),
-        }
+        crate::detect::sha256_hash(&self.text)
     }
 }
 
@@ -65,8 +67,9 @@ impl ClipboardMonitor {
     }
 
     /// Ignore clipboard changes for a short window after we write the clipboard ourselves.
-    /// Paste re-writes OS clipboard; CF_HTML round-trips often change the HTML bytes, so the
-    /// text+html fingerprint no longer matches the DB hash and would insert a duplicate row.
+    /// Paste re-writes the OS clipboard; the window stops the re-write from being treated
+    /// as a fresh capture (extra reads, image re-encode). Text dedup identity is text-only
+    /// (`fingerprint`), so a byte-changed CF_HTML round-trip can no longer fork a duplicate.
     pub fn suppress_self_writes(&self, duration: Duration) {
         *self.suppress_until.lock() = Some(Instant::now() + duration);
     }
@@ -425,7 +428,9 @@ mod tests {
     }
 
     #[test]
-    fn fingerprint_changes_with_html() {
+    fn fingerprint_ignores_html_variant() {
+        // Identity is the plain text: CF_HTML bytes differ across sources and
+        // paste round-trips, so they must not fork the dedup identity.
         let a = CapturedText {
             text: "hello".into(),
             html: None,
@@ -434,7 +439,7 @@ mod tests {
             text: "hello".into(),
             html: Some("<p>hi</p>".into()),
         };
-        assert_ne!(a.fingerprint(), b.fingerprint());
+        assert_eq!(a.fingerprint(), b.fingerprint());
     }
 
     // --- is_primarily_url / is_meaningful_share_text ---

@@ -120,7 +120,17 @@ impl ClipboardDb {
                 continue;
             }
 
-            if existing_hashes.contains(&record.hash) {
+            // Normalize legacy hashes: old builds baked CF_HTML bytes into the
+            // hash, so a legacy bundle could re-insert duplicates of local rows.
+            // Text identity is sha256(sha256(content)) now (see migrate_text_hash_v2);
+            // images keep their pixel hash untouched.
+            let hash: String = if is_image {
+                record.hash.clone()
+            } else {
+                crate::detect::sha256_hash(&crate::detect::sha256_hash(&record.content))
+            };
+
+            if existing_hashes.contains(&hash) {
                 let changed = tx.execute(
                     "UPDATE records SET
                         is_favorite = CASE WHEN is_favorite = 1 OR ? = 1 THEN 1 ELSE 0 END,
@@ -147,7 +157,7 @@ impl ClipboardDb {
                         thumb_path,
                         thumb_path,
                         thumb_path,
-                        record.hash,
+                        hash,
                     ],
                 )?;
                 if changed > 0 {
@@ -163,7 +173,7 @@ impl ClipboardDb {
                     // the active one.
                     let id: i64 = tx.query_row(
                         "SELECT id FROM records WHERE hash = ? AND is_trashed = 0",
-                        [&record.hash],
+                        [&hash],
                         |row| row.get(0),
                     )?;
                     if super::ClipboardDb::set_record_tags_by_name_conn(&tx, id, &record.tags)? {
@@ -190,7 +200,7 @@ impl ClipboardDb {
                     record.source_app,
                     record.source_window,
                     record.source_name,
-                    record.hash,
+                    hash,
                     record.copy_count,
                     record.is_favorite as i32,
                     record.is_pinned as i32,
@@ -208,7 +218,7 @@ impl ClipboardDb {
                     record.content.chars().count() as i64,
                 ],
             )?;
-            existing_hashes.insert(record.hash.clone());
+            existing_hashes.insert(hash);
             if record.tags.iter().any(|t| !t.trim().is_empty()) {
                 let record_id = tx.last_insert_rowid();
                 if super::ClipboardDb::set_record_tags_by_name_conn(&tx, record_id, &record.tags)? {

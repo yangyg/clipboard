@@ -12,6 +12,80 @@ fn fresh_db() -> rusqlite::Connection {
     conn
 }
 
+#[test]
+fn text_hash_v2_rehashes_and_merges_html_variant_duplicates() {
+    let conn = fresh_db();
+    ClipboardDb::ensure_fts(&conn).unwrap();
+    // Simulate legacy rows: identical content, different hashes (the old
+    // scheme baked CF_HTML bytes into the fingerprint).
+    conn.execute(
+        "INSERT INTO records (content, content_type, hash, copy_count, is_favorite, created_at, updated_at)
+         VALUES ('hello world', 'text', 'legacy-a', 1, 1, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO records (content, content_type, hash, copy_count, created_at, updated_at)
+         VALUES ('hello world', 'text', 'legacy-b', 2, '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    // Tag on the loser (older updated_at) must survive the merge.
+    conn.execute(
+        "INSERT INTO tags (name, color) VALUES ('work', '#ef4444')",
+        [],
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO record_tags (record_id, tag_id) VALUES (1, 1)",
+        [],
+    )
+    .unwrap();
+
+    ClipboardDb::migrate_text_hash_v2(&conn).unwrap();
+
+    let expected_hash = crate::detect::sha256_hash(&crate::detect::sha256_hash("hello world"));
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM records WHERE is_trashed = 0",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(count, 1);
+    // Winner is id=2 (newer updated_at); favorite OR'd, copy_count summed.
+    let (hash, fav, copies): (String, i32, i32) = conn
+        .query_row(
+            "SELECT hash, is_favorite, copy_count FROM records",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(hash, expected_hash);
+    assert_eq!(fav, 1);
+    assert_eq!(copies, 3);
+    let tag_links: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM record_tags WHERE record_id = 2",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(tag_links, 1);
+    // FTS keeps exactly one row for the surviving record.
+    let fts: i64 = conn
+        .query_row("SELECT COUNT(*) FROM records_fts", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(fts, 1);
+
+    // Idempotent: the settings flag short-circuits a second run.
+    ClipboardDb::migrate_text_hash_v2(&conn).unwrap();
+    let count2: i64 = conn
+        .query_row("SELECT COUNT(*) FROM records", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count2, 1);
+}
+
 /// Expected tables that must exist after schema init.
 const EXPECTED_TABLES: &[&str] = &[
     "records",

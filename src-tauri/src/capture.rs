@@ -149,8 +149,10 @@ fn process_text_job(job: TextCaptureJob, db: &ClipboardDb, app: &tauri::AppHandl
 
     let content_type = detect_content_type(&captured.text);
     let is_sensitive = settings.enable_sensitive_detection && detect_sensitive(&captured.text);
-    // Keep wrapping fingerprint for DB hash so existing rows still dedupe
-    // (historical inserts stored sha256(fingerprint), not fingerprint itself).
+    // fingerprint is already sha256(text); the extra wrap keeps the stored
+    // value in the historical double-hash format so the one-shot
+    // `text_hash_v2` migration can re-derive identical hashes from stored
+    // content alone (no html needed).
     let hash = sha256_hash(&captured.fingerprint());
 
     match db.insert_record(

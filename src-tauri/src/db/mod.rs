@@ -89,6 +89,10 @@ impl ClipboardDb {
         // Snap legacy tag hex values onto the fixed 12-color hue wheel.
         tags::migrate_tag_palette_v2(&conn)?;
 
+        // Re-derive text hashes from plain content and merge the duplicates
+        // the old html-in-hash scheme produced (capture now hashes text only).
+        Self::migrate_text_hash_v2(&conn)?;
+
         // --- Schema version gate ---
         // All migrations above are idempotent (CREATE IF NOT EXISTS / ALTER … .ok()).
         // After they run, stamp the expected version so doctor can verify it.

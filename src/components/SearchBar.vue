@@ -59,45 +59,17 @@
 
   <Teleport to="body">
     <Transition name="fade-instant">
-      <div
+      <SearchSuggest
         v-if="showDropdown && suggestions.length > 0"
-        ref="dropdownRef"
-        class="search-suggest"
-        role="listbox"
-        :aria-label="$t('search.suggestionsHistory')"
-        :style="{ left: pos.x + 'px', top: pos.y + 'px', width: pos.width + 'px' }"
-      >
-        <div
-          v-for="(s, i) in suggestions"
-          :key="s.label"
-          class="suggest-item"
-          :class="{ active: i === activeIndex }"
-          :id="'suggest-' + i"
-          role="option"
-          :aria-selected="i === activeIndex"
-          @mousedown.prevent="acceptSuggestion(s)"
-          @mouseenter="activeIndex = i"
-        >
-          <span class="suggest-icon"><AppIcon name="history" :size="13" /></span>
-          <span class="suggest-label" v-html="s.html"></span>
-          <button
-            type="button"
-            class="suggest-delete"
-            tabindex="-1"
-            :aria-label="$t('search.removeHistory')"
-            @mousedown.stop.prevent="removeSuggestion(s)"
-            @mouseenter.stop="activeIndex = i"
-          ><AppIcon name="close" :size="11" /></button>
-        </div>
-        <div class="suggest-footer">
-          <button
-            type="button"
-            class="suggest-clear-all"
-            tabindex="-1"
-            @mousedown.prevent="clearAllHistory"
-          >{{ $t('search.clearHistory') }}</button>
-        </div>
-      </div>
+        :suggestions="suggestions"
+        :active-index="activeIndex"
+        :pos="pos"
+        :el-ref="setDropdownEl"
+        @accept="acceptSuggestion"
+        @remove="removeSuggestion"
+        @clear-all="clearAllHistory"
+        @hover="activeIndex = $event"
+      />
     </Transition>
   </Teleport>
 </template>
@@ -109,13 +81,9 @@ import { useSettingsStore } from "../stores/settings";
 import { useSearchHistory } from "../composables/useSearchHistory";
 import { highlightSearchHtml } from "../utils/highlightSearch";
 import AppIcon from "./icons/AppIcon.vue";
+import SearchSuggest, { type Suggestion } from "./SearchSuggest.vue";
 
 const MAX_HISTORY = 10;
-
-interface Suggestion {
-  label: string;
-  html: string;
-}
 
 defineProps<{
   compact?: boolean;
@@ -135,6 +103,12 @@ const expanded = ref(false);
 
 const inputRef = ref<HTMLInputElement | null>(null);
 const dropdownRef = ref<HTMLElement | null>(null);
+
+/** Callback ref so SearchSuggest can forward its root element up —
+ * positionDropdown needs its height for flip-above detection. */
+function setDropdownEl(el: unknown) {
+  dropdownRef.value = el as HTMLElement | null;
+}
 const query = ref("");
 const isFocused = ref(false);
 
@@ -506,117 +480,5 @@ onUnmounted(() => {
   outline-offset: 1px;
 }
 
-/* ── Suggestion dropdown ─────────────────────────────────────────────── */
-.search-suggest {
-  position: fixed;
-  z-index: 1200;
-  max-height: 300px;
-  overflow-y: auto;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-1);
-}
-
-.suggest-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-md);
-  color: var(--text-secondary);
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.suggest-item:hover,
-.suggest-item.active,
-.suggest-item:focus-visible {
-  background: var(--accent-softer);
-  color: var(--accent-text);
-  outline: none;
-}
-
-.suggest-icon {
-  flex-shrink: 0;
-  display: flex;
-  color: var(--text-tertiary);
-  transition: color var(--transition-fast);
-}
-
-.suggest-item.active .suggest-icon {
-  color: var(--accent-text);
-}
-
-.suggest-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.suggest-delete {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: none;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast);
-}
-
-.suggest-item:hover .suggest-delete,
-.suggest-item.active .suggest-delete,
-.suggest-delete:focus-visible {
-  opacity: 1;
-}
-
-.suggest-delete:hover {
-  background: var(--accent-soft);
-  color: var(--accent-text);
-}
-
-.suggest-footer {
-  border-top: 1px solid var(--border-subtle);
-  margin-top: var(--space-1);
-  padding-top: var(--space-1);
-}
-
-.suggest-clear-all {
-  width: 100%;
-  padding: 6px 10px;
-  border: none;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-md);
-  color: var(--text-tertiary);
-  text-align: left;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background var(--transition-fast), color var(--transition-fast);
-}
-
-.suggest-clear-all:hover,
-.suggest-clear-all:focus-visible {
-  background: var(--danger-soft);
-  color: var(--danger);
-  outline: none;
-}
+/* Suggestion dropdown styles live in SearchSuggest.vue alongside its markup. */
 </style>

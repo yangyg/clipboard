@@ -46,76 +46,31 @@
           <span class="loading-spinner small"></span>
           <span>{{ $t('common.loading') }}</span>
         </div>
-        <div
-          class="record-list"
-          :class="{
-            'view-grid': listLayout === 'grid',
-            reloading: isListReloading,
-            'view-fade-a': layoutFadeArmed && !layoutFadeOn,
-            'view-fade-b': layoutFadeArmed && layoutFadeOn,
-          }"
-          :style="listLayout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
-          ref="listRef"
-          role="listbox"
-          :aria-label="$t('record.clipboardRecords')"
-          :aria-activedescendant="activeDescendantId"
-          :aria-busy="isListReloading"
-          tabindex="-1"
-          @scroll="onListScroll"
-        >
-      <div
-        class="virtual-spacer"
-        :class="{ 'grid-span': listLayout === 'grid' }"
-        :style="{ height: `${virtualPadTop}px` }"
-        aria-hidden="true"
-      />
-      <template v-for="item in displayItems" :key="item.key">
-        <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> {{ $t('record.pinnedSection') }}</div>
-        <div
-          v-else-if="item.type === 'divider'"
-          class="pin-section-divider"
-          :style="{ height: `${item.height}px` }"
-          aria-hidden="true"
-        />
-        <RecordListItem
-          v-else
-          :record="item.record!"
-          :thumb="item.thumb"
-          :batch-mode="clipboardStore.batchMode"
-          :checked="clipboardStore.selectedIds.has(item.record!.id)"
-          :selected="clipboardStore.selectedId === item.record!.id"
-          :tabbable="isOptionTabbable(item.record!.id)"
-          :trash-filter="clipboardStore.trashFilter"
-          :pinned="isPinned(item.record!)"
-          :is-new="item.record!.id === clipboardStore.lastIncomingId"
-          :is-leaving="leavingIds.has(item.record!.id)"
-          :search-query="clipboardStore.searchQuery"
+        <RecordVirtualList
+          :layout="listLayout"
+          :grid-cols="gridCols"
+          :display-items="displayItems"
+          :pad-top="virtualPadTop"
+          :pad-bottom="virtualPadBottom"
+          :reloading="isListReloading"
+          :fade-armed="layoutFadeArmed"
+          :fade-on="layoutFadeOn"
+          :scroll-el="setScrollEl"
+          :leaving-ids="leavingIds"
           :source-overrides="sourceOverrides"
-          @click="onItemClick"
-          @activate="onItemActivate"
-          @context-menu="showContextMenu"
-          @paste="quickPaste"
-          @favorite="onRowFavorite"
-          @toggle-pin="scheduleTogglePin"
-          @delete="quickDelete"
-          @restore="onRowRestore"
+          :active-descendant-id="activeDescendantId"
+          :is-pinned="isPinned"
+          :is-option-tabbable="isOptionTabbable"
+          @scroll="onListScroll"
+          @item-click="onItemClick"
+          @item-activate="onItemActivate"
+          @item-context-menu="showContextMenu"
+          @item-paste="quickPaste"
+          @item-favorite="onRowFavorite"
+          @item-toggle-pin="scheduleTogglePin"
+          @item-delete="quickDelete"
+          @item-restore="onRowRestore"
         />
-      </template>
-      <div
-        class="virtual-spacer"
-        :class="{ 'grid-span': listLayout === 'grid' }"
-        :style="{ height: `${virtualPadBottom}px` }"
-        aria-hidden="true"
-      />
-
-      <!-- Footer: load-more status only -->
-      <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
-        <span v-if="clipboardStore.isLoadingMore" class="footer-loading">
-          <span class="loading-spinner small" aria-hidden="true"></span>{{ $t('common.loadMore') }}
-        </span>
-        <span v-else>{{ $t('common.scrollForMore') }}</span>
-      </div>
-        </div>
       </div>
 
       <!-- Back to top: floats over the list column, scrolls only the list area -->
@@ -133,35 +88,20 @@
       </Transition>
     </div>
 
-    <!-- Resizer between list and preview (side-by-side only) -->
-    <div
-      v-if="showPreviewHost && !usePreviewDrawer"
-      class="resizer"
-      :class="{ active: listColDragging }"
-      role="separator"
-      aria-orientation="vertical"
-      :aria-valuenow="listColWidth"
-      :aria-valuemin="280"
-      :aria-valuemax="720"
-      tabindex="0"
-      :aria-label="$t('record.resizeList')"
-      @pointerdown="startListColResize"
-      @keydown="onListColResizeKey"
+    <!-- Preview area: resizer + side-by-side column / drawer overlay -->
+    <PreviewHost
+      :visible="previewVisible"
+      :drawer="usePreviewDrawer"
+      :show-host="showPreviewHost"
+      :show-resizer="showPreviewHost && !usePreviewDrawer"
+      :col-width="listColWidth"
+      :col-min="LIST_COL_MIN"
+      :col-max="LIST_COL_MAX"
+      :dragging="listColDragging"
+      @close="clipboardStore.clearSelection()"
+      @resize-start="startListColResize"
+      @resize-key="onListColResizeKey"
     />
-
-    <!-- Preview Pane: side-by-side (wide) or overlay drawer (tight host) -->
-    <div
-      v-if="previewVisible && usePreviewDrawer"
-      class="preview-drawer-backdrop"
-      @click="clipboardStore.clearSelection()"
-    />
-    <div
-      v-if="showPreviewHost"
-      class="preview-host"
-      :class="{ 'preview-host--drawer': usePreviewDrawer }"
-    >
-      <PreviewPane :drawer="usePreviewDrawer" />
-    </div>
 
     <!-- Context Menu -->
     <ContextMenu
@@ -186,12 +126,12 @@
 import { computed, ref, nextTick, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
-import PreviewPane from "./PreviewPane.vue";
+import PreviewHost from "./PreviewHost.vue";
 import ContextMenu from "./ContextMenu.vue";
 import AliasDialog from "./AliasDialog.vue";
 import BatchBar from "./BatchBar.vue";
 import AppIcon from "./icons/AppIcon.vue";
-import RecordListItem from "./RecordListItem.vue";
+import RecordVirtualList from "./RecordVirtualList.vue";
 import ListToolbar from "./ListToolbar.vue";
 import ListEmptyState from "./ListEmptyState.vue";
 import { useVirtualList, type ListLayout } from "../composables/useVirtualList";
@@ -204,6 +144,12 @@ const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
 const listRef = ref<HTMLElement | null>(null);
 
+/** Callback ref so RecordVirtualList can forward its scroll element up —
+ * useVirtualList / useRecordActions need direct element access. */
+function setScrollEl(el: unknown) {
+  listRef.value = el as HTMLElement | null;
+}
+
 const sourceOverrides = computed(() =>
   buildSourceOverrides(settingsStore.settings.source_name_overrides),
 );
@@ -213,6 +159,9 @@ const batchBarRef = ref<HTMLElement | null>(null);
 const { height: batchBarHeight } = useBatchBarHeight(batchBarRef);
 
 // --- List / Preview column resize ---
+/** Column width bounds — shared with PreviewHost's ARIA attributes. */
+const LIST_COL_MIN = 280;
+const LIST_COL_MAX = 720;
 const previewVisible = computed(
   () => !!clipboardStore.selectedRecord && !clipboardStore.batchMode
 );
@@ -225,8 +174,8 @@ const {
 } = useColumnResize({
   storageKey: "clipboard-list-col-width",
   defaultWidth: 400,
-  min: 280,
-  max: 720,
+  min: LIST_COL_MIN,
+  max: LIST_COL_MAX,
 });
 const listColRef = ref<HTMLElement | null>(null);
 
@@ -364,10 +313,10 @@ function onListColResizeKey(e: KeyboardEvent) {
     setListColWidth(listColWidth.value + step);
   } else if (e.key === "Home") {
     e.preventDefault();
-    setListColWidth(280);
+    setListColWidth(LIST_COL_MIN);
   } else if (e.key === "End") {
     e.preventDefault();
-    setListColWidth(720);
+    setListColWidth(LIST_COL_MAX);
   }
 }
 </script>
@@ -442,86 +391,8 @@ function onListColResizeKey(e: KeyboardEvent) {
   pointer-events: none;
 }
 
-.record-list.reloading {
-  opacity: 0.72;
-  transition: opacity var(--transition-fast);
-}
-
-.preview-host {
-  flex: 1.15;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.preview-host--drawer {
-  position: absolute;
-  inset: 0 0 0 auto;
-  width: min(100%, 420px);
-  max-width: 100%;
-  z-index: 20;
-  flex: none;
-  box-shadow: var(--shadow-lg);
-  border-left: 1px solid var(--border-subtle);
-  animation: preview-drawer-in var(--transition-smooth);
-}
-
-:global(body.anim-disabled) .preview-host--drawer,
-:global(body.anim-disabled) .preview-drawer-backdrop {
-  animation: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .preview-host--drawer,
-  .preview-drawer-backdrop {
-    animation: none;
-  }
-}
-
-.preview-drawer-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 15;
-  background: var(--overlay-bg);
-  animation: fade-in var(--transition-fast);
-}
-
-@keyframes preview-drawer-in {
-  from {
-    transform: translateX(12px);
-    opacity: 0.6;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.resizer {
-  width: 4px;
-  /* Overlay the list column's right edge instead of reserving flex space,
-     keeping the list/preview layout fully compact. z-index keeps it above
-     the column's positioned rows so hover/drag pointer events still land. */
-  margin-left: -4px;
-  position: relative;
-  z-index: 10;
-  cursor: col-resize;
-  background: transparent;
-  flex-shrink: 0;
-  transition: background var(--transition-fast);
-  touch-action: none;
-}
-
-.resizer:hover,
-.resizer.active {
-  background: var(--accent);
-}
+/* Record-list and preview-area styles live in RecordVirtualList.vue /
+   PreviewHost.vue alongside their markup. */
 
 .list-column {
   flex: 1.35;
@@ -542,132 +413,6 @@ function onListColResizeKey(e: KeyboardEvent) {
   width: auto;
   min-width: 0;
   border-right: none;
-}
-
-.resizer:focus-visible {
-  background: var(--accent);
-  outline: none;
-}
-
-.record-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--space-1) 0 var(--space-2);
-}
-
-/* Layout switch cross-fade (spec §3.5): a fresh one-way fade runs per toggle.
-   Two identical keyframes alternate by class name so switching restarts the
-   animation without remounting the scroll container (which would lose the
-   scroll position). Pure CSS — never gates mounting, honors anim-disabled /
-   prefers-reduced-motion. */
-.view-fade-a {
-  animation: view-fade-a var(--transition-normal) ease;
-}
-.view-fade-b {
-  animation: view-fade-b var(--transition-normal) ease;
-}
-@keyframes view-fade-a {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes view-fade-b {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-:global(body.anim-disabled) .view-fade-a,
-:global(body.anim-disabled) .view-fade-b {
-  animation: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .view-fade-a,
-  .view-fade-b {
-    animation: none;
-  }
-}
-
-/* —— Grid view: vertical cards (original structure) —— */
-.record-list.view-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px; /* must match GRID_GAP in script */
-  padding: var(--space-3);
-  align-content: start;
-}
-
-.view-grid .section-label {
-  grid-column: 1 / -1;
-  padding: var(--space-1) 2px 0;
-}
-
-.view-grid .pin-section-divider {
-  grid-column: 1 / -1;
-  margin-inline: 2px;
-}
-
-.view-grid .list-footer {
-  grid-column: 1 / -1;
-  margin-top: 0;
-  border-top: none;
-  padding: var(--space-1) 0 var(--space-2);
-}
-
-.virtual-spacer {
-  width: 100%;
-  flex-shrink: 0;
-  pointer-events: none;
-}
-
-/* H-3: Grid spacer must span all columns to maintain scroll height */
-.virtual-spacer.grid-span {
-  grid-column: 1 / -1;
-}
-
-.section-label {
-  font-size: var(--text-xs, 0.625rem);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pin);
-  padding: var(--space-3) var(--space-4) var(--space-1);
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.pin-section-divider {
-  box-sizing: border-box;
-  flex-shrink: 0;
-  width: 100%;
-  margin: 0;
-  padding: 0 var(--space-4);
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-}
-
-.pin-section-divider::after {
-  content: "";
-  display: block;
-  width: 100%;
-  height: 1px;
-  background: var(--border-subtle);
-}
-
-/* Footer */
-.list-footer {
-  padding: var(--space-3) var(--space-4);
-  text-align: center;
-  font-size: var(--text-md);
-  color: var(--text-muted, var(--text-tertiary));
-  border-top: 1px solid var(--border-light, var(--border-subtle));
-  margin-top: var(--space-1);
-}
-
-.footer-loading {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* —— Back to top —— */

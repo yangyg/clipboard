@@ -188,7 +188,8 @@ body.sticker-light-theme,
    edge for hover, so navigation remains visibly playful and directional. */
 :is(body.sticker-theme, body.sticker-light-theme)
   :is(.nav-item:not(.has-cat-color):hover, .tag-item:hover, .filter-tab:hover,
-    .icon-btn:hover, .list-tool-btn:hover, .view-toggle-btn:hover) {
+    .icon-btn:hover, .list-tool-btn:hover, .view-toggle-btn:hover,
+    .batch-btn:not(.danger):hover:not(:disabled)) {
   background: color-mix(in srgb, var(--sticker-coral) 18%, transparent);
   color: var(--accent-text);
 }

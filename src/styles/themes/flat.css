@@ -201,7 +201,8 @@ body.flat-light-theme,
   color: var(--text-primary);
 }
 
-:is(body.flat-theme, body.flat-light-theme) .btn-danger {
+:is(body.flat-theme, body.flat-light-theme) .btn-danger,
+:is(body.flat-theme, body.flat-light-theme) .empty-trash-btn {
   background: var(--danger-soft);
   border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
 }
@@ -390,7 +391,8 @@ body.flat-light-theme,
     .tag-add:hover,
     .filter-tab:hover,
     .list-tool-btn:hover,
-    .view-toggle-btn:hover
+    .view-toggle-btn:hover,
+    .batch-btn:not(.danger):hover:not(:disabled)
   ) {
   background: var(--bg-hover);
   color: var(--accent-text);

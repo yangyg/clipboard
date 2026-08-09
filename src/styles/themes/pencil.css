@@ -363,7 +363,8 @@ body.pencil-light-theme {
     .tag-add:hover,
     .filter-tab:hover,
     .list-tool-btn:hover,
-    .view-toggle-btn:hover
+    .view-toggle-btn:hover,
+    .batch-btn:not(.danger):hover:not(:disabled)
   ) {
   background: var(--accent-softer);
   color: var(--accent-text);
@@ -479,12 +480,14 @@ body.pencil-light-theme {
   color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border-default));
 }
-:is(body.pencil-theme, body.pencil-light-theme) .btn-danger {
+:is(body.pencil-theme, body.pencil-light-theme) .btn-danger,
+:is(body.pencil-theme, body.pencil-light-theme) .empty-trash-btn {
   background: var(--danger-soft);
   border-style: dashed;
   border-color: color-mix(in srgb, var(--danger) 42%, transparent);
 }
-:is(body.pencil-theme, body.pencil-light-theme) .btn-danger:hover:not(:disabled) {
+:is(body.pencil-theme, body.pencil-light-theme) .btn-danger:hover:not(:disabled),
+:is(body.pencil-theme, body.pencil-light-theme) .empty-trash-btn:hover {
   background: color-mix(in srgb, var(--danger) 20%, transparent);
   border-color: color-mix(in srgb, var(--danger) 60%, transparent);
 }

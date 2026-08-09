@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS: Settings = {
   enable_animation: true,
   font_size: 16,
   font_family: "default",
+  search_mode: "full",
   app_mode: "floating",
   default_paste_mode: "original",
   auto_close_on_paste: true,
@@ -77,6 +78,10 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
           ? rawTheme
           : DEFAULT_SETTINGS.theme,
     default_paste_mode: raw?.default_paste_mode === "plain" ? "plain" : "original",
+    search_mode:
+      raw?.search_mode === "icon" || raw?.search_mode === "hidden"
+        ? raw.search_mode
+        : "full",
     auto_tag_rules: (raw?.auto_tag_rules ?? DEFAULT_SETTINGS.auto_tag_rules).map((r) => ({
       ...r,
       keywords: [...r.keywords],

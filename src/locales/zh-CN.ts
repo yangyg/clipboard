@@ -390,6 +390,12 @@ export default {
       fontLoadError: '加载系统字体失败',
       fontPreview: '字体预览',
       fontPreviewSample: '汉字 ABC 123 界面预览',
+      searchBar: '搜索栏',
+      searchBarTitle: '显示方式',
+      searchBarDesc: '悬浮面板与窗口模式共用；图标/隐藏状态下按 / 或 Ctrl+K 可临时唤出',
+      searchFull: '完整搜索框',
+      searchIcon: '仅图标',
+      searchHidden: '隐藏',
     },
     history: {
       title: '历史记录',

@@ -122,6 +122,12 @@ fn default_font_family() -> String {
     "default".to_string()
 }
 
+/// Missing `search_mode` in saved JSON (upgrade) → full search box.
+/// Keep in sync with `DEFAULT_SETTINGS.search_mode` in src/stores/settings.ts.
+fn default_search_mode() -> String {
+    "full".to_string()
+}
+
 /// L-3: Default auto-tag rules for new installs.
 /// IMPORTANT: Keep in sync with `DEFAULT_AUTO_TAG_RULES` in src/types.ts.
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
@@ -187,6 +193,10 @@ pub struct Settings {
     /// UI font-family preset key, or `system:<name>` for an OS-installed font.
     #[serde(default = "default_font_family", rename = "font_family")]
     pub font_family: String,
+    /// Search bar display mode (`full` | `icon` | `hidden`), shared by the
+    /// floating panel and the window title bar.
+    #[serde(default = "default_search_mode", rename = "search_mode")]
+    pub search_mode: String,
     #[serde(rename = "app_mode")]
     pub app_mode: String,
     #[serde(rename = "default_paste_mode")]
@@ -266,6 +276,7 @@ impl Default for Settings {
             enable_animation: true,
             font_size: 16,
             font_family: default_font_family(),
+            search_mode: default_search_mode(),
             app_mode: "floating".to_string(),
             default_paste_mode: "original".to_string(),
             auto_close_on_paste: true,
@@ -398,5 +409,6 @@ mod settings_onboarding_tests {
         let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(s.onboarding_completed);
+        assert_eq!(s.search_mode, "full");
     }
 }

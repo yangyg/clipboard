@@ -18,6 +18,7 @@ describe("settingsStore (smoke)", () => {
     expect(store.settings.font_size).toBe(16);
     expect(store.settings.font_family).toBe("default");
     expect(store.settings.max_records).toBe(1000);
+    expect(store.settings.search_mode).toBe("full");
     expect(store.settings.onboarding_completed).toBe(false);
     expect(store.isLoaded).toBe(false);
   });

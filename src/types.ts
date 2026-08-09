@@ -87,6 +87,8 @@ export interface Settings {
   font_size: number;
   /** UI font-family preset key, or `system:<name>` for an OS-installed font. */
   font_family: string;
+  /** Search bar display mode (floating + window share this setting). */
+  search_mode: 'full' | 'icon' | 'hidden';
   // Behavior
   app_mode: 'floating' | 'window';
   default_paste_mode: 'original' | 'plain';

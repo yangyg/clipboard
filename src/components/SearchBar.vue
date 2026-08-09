@@ -1,43 +1,59 @@
 <template>
-  <div class="search-row" :class="{ focused: isFocused, compact: compact }">
-    <span class="search-icon"><AppIcon name="search" :size="14" /></span>
-    <input
-      ref="inputRef"
-      v-model="query"
-      class="search-box"
-      type="text"
+  <div class="search-root" :class="{ compact: compact }">
+    <button
+      v-if="mode === 'icon' && !expanded"
+      type="button"
+      class="icon-btn search-trigger"
+      :class="{ 'icon-btn-md': compact }"
       :aria-label="$t('search.ariaLabel')"
-      aria-autocomplete="list"
-      :aria-expanded="showDropdown"
-      :aria-activedescendant="showDropdown && activeIndex >= 0 ? 'suggest-' + activeIndex : undefined"
-      :placeholder="compact ? $t('search.placeholderCompact') : $t('search.placeholder')"
-      @focus="onFocus"
-      @blur="onBlur"
-      @input="onInput"
-      @keydown="onInputKeydown"
-    />
-    <div class="search-trailing">
-      <span
-        v-if="!query"
-        class="kbd search-kbd"
-        :class="{ dimmed: isFocused }"
-        aria-hidden="true"
-      >{{ searchHint }}</span>
-      <span
-        v-else-if="clipboardStore.isSearching"
-        class="loading-spinner small search-spinner"
-        role="status"
-        :aria-label="$t('search.searching')"
-      ></span>
-      <Transition name="fade-instant">
-        <button
-          v-if="query && !clipboardStore.isSearching"
-          type="button"
-          class="clear-btn"
-          :aria-label="$t('search.clear')"
-          @click="clearSearch"
-        ><AppIcon name="close" :size="11" /></button>
-      </Transition>
+      :title="searchHint"
+      @click="expandAndFocus"
+    ><AppIcon name="search" :size="compact ? 15 : 16" /></button>
+
+    <div
+      v-show="mode === 'full' || expanded"
+      class="search-row"
+      :class="{ focused: isFocused, compact: compact }"
+    >
+      <span class="search-icon"><AppIcon name="search" :size="14" /></span>
+      <input
+        ref="inputRef"
+        v-model="query"
+        class="search-box"
+        type="text"
+        :aria-label="$t('search.ariaLabel')"
+        aria-autocomplete="list"
+        :aria-expanded="showDropdown"
+        :aria-activedescendant="showDropdown && activeIndex >= 0 ? 'suggest-' + activeIndex : undefined"
+        :placeholder="compact ? $t('search.placeholderCompact') : $t('search.placeholder')"
+        @focus="onFocus"
+        @blur="onBlur"
+        @input="onInput"
+        @keydown="onInputKeydown"
+      />
+      <div class="search-trailing">
+        <span
+          v-if="!query"
+          class="kbd search-kbd"
+          :class="{ dimmed: isFocused }"
+          aria-hidden="true"
+        >{{ searchHint }}</span>
+        <span
+          v-else-if="clipboardStore.isSearching"
+          class="loading-spinner small search-spinner"
+          role="status"
+          :aria-label="$t('search.searching')"
+        ></span>
+        <Transition name="fade-instant">
+          <button
+            v-if="query && !clipboardStore.isSearching"
+            type="button"
+            class="clear-btn"
+            :aria-label="$t('search.clear')"
+            @click="clearSearch"
+          ><AppIcon name="close" :size="11" /></button>
+        </Transition>
+      </div>
     </div>
   </div>
 
@@ -89,6 +105,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, reactive, onMounted, onUnmounted } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
+import { useSettingsStore } from "../stores/settings";
 import { useSearchHistory } from "../composables/useSearchHistory";
 import { highlightSearchHtml } from "../utils/highlightSearch";
 import AppIcon from "./icons/AppIcon.vue";
@@ -105,7 +122,16 @@ defineProps<{
 }>();
 
 const clipboardStore = useClipboardStore();
+const settingsStore = useSettingsStore();
 const { history, loadHistory, recordHistory, clearHistory, removeHistory } = useSearchHistory();
+
+/** Search bar display mode from settings (`full` | `icon` | `hidden`). */
+const mode = computed(() => settingsStore.settings.search_mode);
+/**
+ * Whether the input is temporarily revealed in `icon` / `hidden` mode.
+ * `full` mode keeps the box always shown; `expanded` is irrelevant there.
+ */
+const expanded = ref(false);
 
 const inputRef = ref<HTMLInputElement | null>(null);
 const dropdownRef = ref<HTMLElement | null>(null);
@@ -166,6 +192,17 @@ function onFocus() {
 
 function onBlur() {
   isFocused.value = false;
+  // Icon / hidden modes: collapse back once the user leaves an empty box.
+  // A non-empty query keeps the box visible so the active search stays clear.
+  if (mode.value !== "full" && !query.value) {
+    expanded.value = false;
+  }
+}
+
+/** Reveal the input (icon / hidden modes) and focus it. */
+function expandAndFocus() {
+  if (mode.value !== "full") expanded.value = true;
+  nextTick(() => inputRef.value?.focus());
 }
 
 function onInput() {
@@ -269,7 +306,7 @@ function onGlobalKey(e: KeyboardEvent) {
     const tag = (e.target as HTMLElement)?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     e.preventDefault();
-    inputRef.value?.focus();
+    expandAndFocus();
   }
 }
 
@@ -321,6 +358,24 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.search-root {
+  width: 100%;
+  display: flex;
+  min-width: 0;
+}
+
+.search-root.compact {
+  max-width: 500px;
+  min-width: 200px;
+  flex-shrink: 1;
+  justify-content: center;
+}
+
+/* Icon-only trigger (icon mode, collapsed) */
+.search-trigger {
+  flex-shrink: 0;
+}
+
 .search-row {
   position: relative;
   display: flex;
@@ -329,9 +384,7 @@ onUnmounted(() => {
 }
 
 .search-row.compact {
-  max-width: 500px;
-  min-width: 200px;
-  flex-shrink: 1;
+  min-width: 0;
 }
 
 .search-icon {

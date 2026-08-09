@@ -45,6 +45,27 @@
     </div>
   </div>
   <div class="settings-section">
+    <div class="settings-section-title">{{ $t('settings.appearance.searchBar') }}</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">{{ $t('settings.appearance.searchBarTitle') }}</div>
+        <div class="setting-desc">{{ $t('settings.appearance.searchBarDesc') }}</div>
+      </div>
+      <div class="segmented">
+        <button
+          v-for="sm in SEARCH_MODES"
+          :key="sm.key"
+          type="button"
+          class="segment-btn"
+          :class="{ selected: settings.search_mode === sm.key }"
+          @click="update('search_mode', sm.key)"
+        >
+          {{ $t(sm.labelKey) }}
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <div class="settings-section-title">{{ $t('settings.appearance.panelAppearance') }}</div>
     <div class="setting-row">
       <div class="setting-label">{{ $t('settings.appearance.cornerRadius') }}</div>
@@ -239,6 +260,13 @@ const APP_MODES = [
     labelKey: "settings.appearance.modeWindow",
     descKey: "settings.appearance.modeWindowDesc",
   },
+] as const;
+
+/** Search bar display modes — keep in sync with `settings.search_mode`. */
+const SEARCH_MODES = [
+  { key: "full", labelKey: "settings.appearance.searchFull" },
+  { key: "icon", labelKey: "settings.appearance.searchIcon" },
+  { key: "hidden", labelKey: "settings.appearance.searchHidden" },
 ] as const;
 </script>
 

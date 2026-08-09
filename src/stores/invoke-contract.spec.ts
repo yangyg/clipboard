@@ -108,7 +108,7 @@ function makeRecord(overrides: Partial<ClipboardRecord> = {}): ClipboardRecord {
 const MOCK_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V", max_records: 1000, retention_days: 30,
   theme: "dark", panel_opacity: 94, panel_radius: 20, enable_blur: false,
-  blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", app_mode: "floating",
+  blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", search_mode: "full", app_mode: "floating",
   default_paste_mode: "original", auto_close_on_paste: true,
   enable_sensitive_detection: true, sensitive_auto_expire_seconds: 600,
   import_system_history_on_start: false, auto_start: false, minimize_to_tray: true,

@@ -390,6 +390,12 @@ export default {
       fontLoadError: 'Failed to load system fonts',
       fontPreview: 'Preview',
       fontPreviewSample: 'Chinese ABC 123 UI preview',
+      searchBar: 'Search bar',
+      searchBarTitle: 'Display mode',
+      searchBarDesc: 'Applies to both the floating panel and window mode; press / or Ctrl+K to reveal when collapsed',
+      searchFull: 'Full box',
+      searchIcon: 'Icon only',
+      searchHidden: 'Hidden',
     },
     history: {
       title: 'History',

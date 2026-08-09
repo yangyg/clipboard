@@ -208,13 +208,13 @@ body.sticker-light-theme,
 }
 
 :is(body.sticker-theme, body.sticker-light-theme)
-  :is(.btn-primary:not(.danger), .action-btn.action-primary):hover {
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
 
 :is(body.sticker-theme, body.sticker-light-theme)
-  :is(.btn-primary:not(.danger), .action-btn.action-primary):active {
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):active:not(:disabled) {
   background: var(--accent-pressed);
   border-color: var(--accent-pressed);
 }

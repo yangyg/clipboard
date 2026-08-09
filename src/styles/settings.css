@@ -199,9 +199,3 @@
   border-color: var(--accent);
   background: var(--bg-base);
 }
-
-/* Disabled button treatment, scoped to the settings body. */
-.settings-body .btn:disabled {
-  cursor: default;
-  opacity: 0.55;
-}

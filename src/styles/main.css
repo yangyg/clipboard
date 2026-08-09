@@ -424,6 +424,7 @@ body.anim-disabled *::after {
     border-color var(--transition-fast),
     color var(--transition-fast),
     filter var(--transition-fast),
+    opacity var(--transition-fast),
     transform var(--transition-fast);
   display: inline-flex;
   align-items: center;
@@ -442,17 +443,13 @@ body.anim-disabled *::after {
   color: var(--text-on-accent, white);
   font-weight: 600;
 }
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background: var(--accent-pressed);
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 .btn-primary.danger {
   background: var(--danger);
 }
-.btn-primary.danger:hover {
+.btn-primary.danger:hover:not(:disabled) {
   filter: brightness(1.08);
 }
 .btn-secondary {
@@ -460,7 +457,7 @@ body.anim-disabled *::after {
   color: var(--text-secondary);
   border: 1px solid var(--border-subtle);
 }
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: var(--accent-softer);
   color: var(--accent-text);
   border-color: color-mix(in srgb, var(--accent) 36%, var(--border-default));
@@ -482,13 +479,17 @@ body.anim-disabled *::after {
   outline: 2px solid var(--danger);
   outline-offset: 2px;
 }
-.btn-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 .btn:active {
   transform: scale(0.97);
   filter: brightness(0.94);
+}
+/* Shared disabled treatment for every .btn variant (primary / secondary /
+   danger). Opacity alone still reads as clickable on dark surfaces, so add
+   desaturation; not-allowed cursor matches the dialog buttons. */
+.btn:disabled {
+  opacity: 0.5;
+  filter: grayscale(0.45);
+  cursor: not-allowed;
 }
 
 /* Batch bar floats over the list (absolute, out of flow) so toggling batch

@@ -118,7 +118,7 @@ body.mono-theme .action-btn.action-primary,
 body.mono-theme .action-btn.action-primary:hover {
   color: #0a0a0a;
 }
-body.mono-theme .btn-primary:hover {
+body.mono-theme .btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 body.mono-theme .action-btn.action-primary .action-label,

@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -110,3 +111,48 @@ jobs:
           name: windows-installers
           path: src-tauri/target/release/bundle/**
           if-no-files-found: error
+
+  release:
+    name: Windows release (tag → GitHub Release)
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install frontend dependencies
+        # See the frontend job: fetch from npmjs.org instead of the npmmirror
+        # resolved URLs baked into package-lock.json.
+        run: npm ci --registry=https://registry.npmjs.org/ --replace-registry-host=registry.npmmirror.com
+
+      # Must match channel in rust-toolchain.toml (see backend job).
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build & publish release (tauri-action)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Clipboard ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          releaseBody: "请描述本次版本变更。"
+
+      - name: Upload portable exe
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: src-tauri/target/release/clipboard.exe

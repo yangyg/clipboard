@@ -323,7 +323,7 @@ const SEARCH_MODES = [
 .theme-nord-light { background: linear-gradient(135deg, #f0f4f8, #e8edf3); }
 .theme-sunset-light { background: linear-gradient(135deg, #fdf7ee, #f7efe4); }
 .theme-handdrawn {
-  background-color: #2e2a26;
+  background-color: #211e1b;
   background-image: radial-gradient(ellipse at 20% 10%, rgba(255, 246, 224, 0.08), transparent 46%),
     radial-gradient(ellipse at 80% 75%, rgba(255, 246, 224, 0.08), transparent 42%),
     radial-gradient(rgba(255, 246, 224, 0.12) 0.8px, transparent 1.2px),

@@ -10,12 +10,14 @@
    type colors. Sketch extras: sticker shadow ink + paper texture. */
 body.handdrawn-theme,
 .handdrawn-theme {
-  --bg-base: #262320;
-  --bg-surface: #2e2a26;
-  --bg-elevated: #37322c;
-  --bg-hover: #403a33;
-  --bg-active: #4a433a;
-  --bg-input: #211e1b;
+  /* Background ladder darkened ~35% (warm charcoal hue preserved) so the
+     sketch theme reads as a deep ink-on-charcoal board, not grey paper. */
+  --bg-base: #1a1815;
+  --bg-surface: #211e1b;
+  --bg-elevated: #282521;
+  --bg-hover: #302c27;
+  --bg-active: #38332d;
+  --bg-input: #171512;
   --border-subtle: rgba(255, 240, 214, 0.07);
   --border-default: rgba(255, 240, 214, 0.11);
   --border-focus: #f27059;
@@ -49,7 +51,7 @@ body.handdrawn-theme,
      stay clearly distinct from the accent in dark mode. */
   --danger: #ef5f7a;
   --danger-soft: rgba(239, 95, 122, 0.15);
-  --code-bg: #221f1c;
+  --code-bg: #1c1917;
   --sensitive: #f2a25b;
   --sensitive-soft: rgba(242, 162, 91, 0.14);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);

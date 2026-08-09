@@ -393,6 +393,9 @@ export default {
     },
     history: {
       title: 'History',
+      importSystemHistory: 'Import system clipboard history on startup',
+      importSystemHistoryDesc: 'When enabled, imports content copied while the app was not running from the Windows clipboard history (Win+V) on each launch (first main-window show); text and images supported, duplicates are skipped',
+      importDone: 'Imported {count} record(s) from the system clipboard history',
       maxRecords: 'Max Records',
       maxRecordsDesc: 'Old records are automatically cleaned when exceeded',
       retentionDays: 'Trash Retention Days',

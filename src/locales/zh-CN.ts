@@ -393,6 +393,9 @@ export default {
     },
     history: {
       title: '历史记录',
+      importSystemHistory: '启动时读取系统剪贴板历史',
+      importSystemHistoryDesc: '开启后，应用每次启动（主窗口首次显示）时从 Windows 剪贴板历史（Win+V）导入此前未运行期间复制的内容；支持文本与图片，重复内容自动跳过',
+      importDone: '已从系统剪贴板历史导入 {count} 条记录',
       maxRecords: '最大记录数',
       maxRecordsDesc: '超出后自动清理旧记录',
       retentionDays: '回收站保留天数',

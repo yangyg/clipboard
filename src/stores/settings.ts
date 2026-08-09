@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS: Settings = {
   auto_close_on_paste: true,
   enable_sensitive_detection: true,
   sensitive_auto_expire_seconds: 600,
+  import_system_history_on_start: false,
   auto_start: false,
   minimize_to_tray: true,
   ignored_apps: [

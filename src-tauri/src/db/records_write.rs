@@ -136,6 +136,27 @@ impl ClipboardDb {
         Ok((id, true, record))
     }
 
+    /// Cheap existence probe used by startup history import to skip records
+    /// that already exist (active **or** trashed). Deliberately distinct from
+    /// `insert_record`'s dedup-update path: importing an existing item must NOT
+    /// bump `updated_at` or reset `source_*` to empty (re-ranking the list every
+    /// session). Any-row matching mirrors the `UNIQUE(hash)` index — a hash that
+    /// only exists in the trash would otherwise slip the probe and make the
+    /// subsequent `insert_record` fail with a UNIQUE constraint violation.
+    pub fn record_hash_exists(&self, hash: &str) -> SqlResult<bool> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT 1 FROM records WHERE hash = ? LIMIT 1",
+            [hash],
+            |_| Ok(()),
+        )
+        .map(|_| true)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(false),
+            other => Err(other),
+        })
+    }
+
     /// Evict oldest non-favorite / non-pinned active rows when `max_records` is
     /// exceeded. Returns the media pairs of evicted rows; callers must release
     /// the write lock before passing them to `purge_media_pairs` (which takes a
@@ -636,5 +657,80 @@ impl ClipboardDb {
         drop(conn);
         self.purge_media_pairs(&media);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClipboardDb;
+    use crate::db::ContentType;
+    use crate::detect::{sha256_hash, sha256_hash_bytes};
+    use std::path::PathBuf;
+
+    fn temp_db() -> (ClipboardDb, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_records_write_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+        (db, dir)
+    }
+
+    fn cleanup(dir: PathBuf) {
+        for name in ["test.db", "test.db-wal", "test.db-shm"] {
+            let _ = std::fs::remove_file(dir.join(name));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn insert(db: &ClipboardDb, content: &str) -> (i64, bool, crate::ClipboardRecord) {
+        // Mirror the capture pipeline's double-hash text format.
+        let hash = sha256_hash(&sha256_hash(content));
+        db.insert_record(
+            content,
+            &ContentType::Text,
+            &hash,
+            false,
+            1000,
+            600,
+            "app.exe",
+            "win",
+            "",
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn record_hash_exists_matches_active_and_trashed_rows() {
+        let (db, dir) = temp_db();
+        let (id, is_new, _) = insert(&db, "hello world");
+        assert!(is_new);
+        let text_hash = sha256_hash(&sha256_hash("hello world"));
+        assert!(db.record_hash_exists(&text_hash).unwrap());
+        assert!(!db
+            .record_hash_exists(&sha256_hash(&sha256_hash("absent")))
+            .unwrap());
+
+        // Trashed rows still hold the UNIQUE(hash) slot, so a history re-import
+        // must treat them as "already exists" — inserting again would trip the
+        // UNIQUE constraint even though `is_trashed` is set.
+        db.trash_record(id).unwrap();
+        assert!(db.record_hash_exists(&text_hash).unwrap());
+        cleanup(dir);
+    }
+
+    #[test]
+    fn record_hash_exists_false_for_image_hash_and_empty_db() {
+        let (db, dir) = temp_db();
+        let image_hash = sha256_hash_bytes(&[1u8, 2, 3, 4]);
+        assert!(!db.record_hash_exists(&image_hash).unwrap());
+        cleanup(dir);
     }
 }

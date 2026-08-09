@@ -94,6 +94,8 @@ export interface Settings {
   // Privacy
   enable_sensitive_detection: boolean;
   sensitive_auto_expire_seconds: number;
+  /** Import the OS clipboard history (Win+V) once on startup (default off). */
+  import_system_history_on_start: boolean;
   // System
   auto_start: boolean;
   minimize_to_tray: boolean;

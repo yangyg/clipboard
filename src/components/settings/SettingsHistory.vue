@@ -3,6 +3,17 @@
     <div class="settings-section-title">{{ $t('settings.history.title') }}</div>
     <div class="setting-row">
       <div>
+        <div class="setting-label">{{ $t('settings.history.importSystemHistory') }}</div>
+        <div class="setting-desc">{{ $t('settings.history.importSystemHistoryDesc') }}</div>
+      </div>
+      <ToggleSwitch
+        :model-value="settings.import_system_history_on_start"
+        :aria-label="$t('settings.history.importSystemHistory')"
+        @update:model-value="(v: boolean) => update('import_system_history_on_start', v)"
+      />
+    </div>
+    <div class="setting-row">
+      <div>
         <div class="setting-label">{{ $t('settings.history.maxRecords') }}</div>
         <div class="setting-desc">{{ $t('settings.history.maxRecordsDesc') }}</div>
       </div>
@@ -39,6 +50,7 @@ import { useClipboardStore } from "../../stores/clipboard";
 import { useConfirm } from "../../composables/useConfirm";
 import { useToast } from "../../composables/useToast";
 import AppIcon from "../icons/AppIcon.vue";
+import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, update } = useSettings();
 const clipboardStore = useClipboardStore();

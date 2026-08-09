@@ -3,6 +3,7 @@
 //! `invoke_handler` in lib.rs unchanged.
 
 mod fonts;
+mod history;
 mod import_export;
 mod paste;
 mod records;
@@ -13,6 +14,7 @@ mod tray;
 mod webdav;
 
 pub use fonts::*;
+pub use history::*;
 pub use import_export::*;
 pub use paste::*;
 pub use records::*;

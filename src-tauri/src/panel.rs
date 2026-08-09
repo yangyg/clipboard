@@ -25,6 +25,11 @@ pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
         }
         let _ = app.emit("toggle-panel", true);
     }
+    // Fallback trigger for the startup history import (also fires via
+    // WindowEvent::Focused): the panel is about to be foreground now, so WinRT
+    // clipboard-history access will succeed.
+    #[cfg(windows)]
+    crate::win_history::maybe_start_once(app);
 }
 
 /// Toggle main panel. Minimized windows count as "hidden" — restore + focus

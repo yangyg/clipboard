@@ -197,6 +197,11 @@ pub struct Settings {
     pub enable_sensitive_detection: bool,
     #[serde(rename = "sensitive_auto_expire_seconds")]
     pub sensitive_auto_expire_seconds: i32,
+    /// On startup (first window show of the session), import the OS clipboard
+    /// history items captured while the app was not running. Default off.
+    /// See `win_history.rs` (Windows 11 clipboard history via WinRT).
+    #[serde(default, rename = "import_system_history_on_start")]
+    pub import_system_history_on_start: bool,
     #[serde(rename = "auto_start")]
     pub auto_start: bool,
     #[serde(rename = "minimize_to_tray")]
@@ -266,6 +271,7 @@ impl Default for Settings {
             auto_close_on_paste: true,
             enable_sensitive_detection: true,
             sensitive_auto_expire_seconds: 600,
+            import_system_history_on_start: false,
             auto_start: false,
             minimize_to_tray: true,
             ignored_apps: vec![

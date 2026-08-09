@@ -12,6 +12,8 @@ mod setup;
 mod tray;
 mod types;
 mod webdav;
+#[cfg(windows)]
+mod win_history;
 mod window;
 
 pub use features::{require_feature, FeatureFlags, FeatureId};
@@ -104,6 +106,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_records,
             commands::search_records,
+            commands::get_pending_history_import,
             commands::get_search_history,
             commands::record_search_history,
             commands::remove_search_history,
@@ -184,6 +187,14 @@ pub fn run() {
                     // Remember user-adjusted size (debounced); skip maximized.
                     if matches!(event, tauri::WindowEvent::Resized(_)) {
                         window::schedule_persist_window_size(app);
+                    }
+                }
+                // Startup history import needs the app foreground (WinRT), so it
+                // is armed on the first time the main window gains focus.
+                tauri::WindowEvent::Focused(focused) => {
+                    if *focused && window.label() == "main" {
+                        #[cfg(windows)]
+                        win_history::maybe_start_once(window.app_handle());
                     }
                 }
                 _ => {}

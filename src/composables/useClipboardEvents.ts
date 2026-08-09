@@ -11,6 +11,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
 import type { ClipboardRecord } from "../types";
 import { isPasteFocusLock, setPasteFocusLock } from "./pasteFocusLock";
+import { useToast } from "./useToast";
+import { i18n } from "../locales";
+
+const { toast } = useToast();
 
 export interface ClipboardEventsCtx {
   appWindow: Window;
@@ -25,6 +29,17 @@ export interface ClipboardEventsCtx {
 export function useClipboardEvents(ctx: ClipboardEventsCtx) {
   const clipboardStore = useClipboardStore();
   const unlisteners: Array<() => void> = [];
+  let historyImportApplied = false;
+
+  // Exactly-once handling shared by the live event and the boot catch-up:
+  // whichever path delivers the count first applies it (reload + stats + toast).
+  const applyHistoryImport = (inserted: number) => {
+    if (historyImportApplied || inserted <= 0) return;
+    historyImportApplied = true;
+    void clipboardStore.reloadList();
+    clipboardStore.scheduleLoadStats();
+    toast(i18n.global.t("settings.history.importDone", { count: inserted }), "success");
+  };
 
   onMounted(async () => {
     // Register all event listeners concurrently. A single rejected listen
@@ -38,10 +53,15 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
         }
       }),
 
-      // Sensitive auto-expire deleted in Rust (periodic cleanup thread) → sync list
+// Sensitive auto-expire deleted in Rust (periodic cleanup thread) → sync list
       listen<number[]>("records-expired", (event) => {
         clipboardStore.removeExpiredFromList(event.payload ?? []);
         clipboardStore.scheduleLoadStats();
+      }),
+
+      // Startup import of the OS clipboard history finished → refresh once
+      listen<{ inserted: number }>("clipboard-history-imported", (event) => {
+        applyHistoryImport(event.payload?.inserted ?? 0);
       }),
 
       // Listen for toggle-panel from Rust (Rust shows/hides window, we sync panelVisible)
@@ -101,13 +121,22 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
       }),
     ];
     const settled = await Promise.allSettled(registrations);
-    for (const result of settled) {
+for (const result of settled) {
       if (result.status === "fulfilled") {
         unlisteners.push(result.value);
       } else {
         console.error("[App] failed to register Tauri event listener:", result.reason);
       }
     }
+
+    // Catch-up for the startup import: it is triggered by the first `Focused`
+    // event, which can complete before these listeners were registered. Read
+    // the pending result once; `applyHistoryImport` dedups against the live event.
+    invoke<number | null>("get_pending_history_import")
+      .then((inserted) => applyHistoryImport(inserted ?? 0))
+      .catch(() => {
+        /* non-critical catch-up */
+      });
   });
 
   onUnmounted(() => {

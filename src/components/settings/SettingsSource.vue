@@ -13,9 +13,9 @@
       </div>
     </div>
     <div class="source-add-row">
-      <TextInput class="source-input" :aria-label="$t('settings.source.exeLabel')" :placeholder="$t('settings.source.exePlaceholder')" v-model="newExe" @keydown.enter="addOverride" />
+      <TextInput ref="exeInput" class="source-input" :aria-label="$t('settings.source.exeLabel')" :placeholder="$t('settings.source.exePlaceholder')" v-model="newExe" @keydown.enter="addOverride" />
       <TextInput class="source-input" :aria-label="$t('settings.source.nameLabel')" :placeholder="$t('settings.source.namePlaceholder')" v-model="newName" @keydown.enter="addOverride" />
-      <button type="button" class="source-add-btn" @click="addOverride">
+      <button type="button" class="btn btn-primary btn-lg source-add-btn" :disabled="addDisabled" @click="addOverride">
         <AppIcon name="plus" :size="13" /> {{ $t('settings.source.add') }}
       </button>
     </div>
@@ -23,7 +23,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettings } from "../../composables/useSettings";
 import { useToast } from "../../composables/useToast";
@@ -36,11 +36,18 @@ const { t } = useI18n();
 
 const newExe = ref("");
 const newName = ref("");
+const exeInput = ref<InstanceType<typeof TextInput> | null>(null);
+
+/** Both fields required — the disabled button shows it. */
+const addDisabled = computed(
+  () => newExe.value.trim() === "" || newName.value.trim() === "",
+);
 
 function addOverride() {
   const exe = newExe.value.trim();
   const name = newName.value.trim();
   if (!exe || !name) {
+    // Keyboard path (Enter) — button clicks are blocked by :disabled.
     toast(t('settings.source.empty'), "warning");
     return;
   }
@@ -58,6 +65,8 @@ function addOverride() {
   settingsStore.updateSetting("source_name_overrides", updated);
   newExe.value = "";
   newName.value = "";
+  // Keep the flow going: focus returns to the first box for the next entry.
+  exeInput.value?.focus();
 }
 
 function removeOverride(exe: string) {
@@ -145,23 +154,8 @@ function removeOverride(exe: string) {
   border-color: var(--border-focus);
 }
 
+/* Keep the CTA out of the flex squeeze when the two inputs share the row. */
 .source-add-btn {
-  height: var(--btn-height-lg);
-  padding: 0 var(--space-4);
-  background: var(--accent);
-  color: white;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   flex-shrink: 0;
-}
-
-.source-add-btn:hover {
-  background: var(--accent-hover);
 }
 </style>

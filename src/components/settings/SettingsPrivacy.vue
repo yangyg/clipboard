@@ -33,14 +33,14 @@
       </div>
     </div>
     <div class="ignore-add-row">
-      <TextInput class="ignore-input" :aria-label="$t('settings.privacy.ignoreTitle')" :placeholder="$t('settings.privacy.ignorePlaceholder')" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
-      <button type="button" class="ignore-add-btn" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> {{ $t('settings.privacy.ignoreAdd') }}</button>
+      <TextInput ref="ignoreInput" class="ignore-input" :aria-label="$t('settings.privacy.ignoreTitle')" :placeholder="$t('settings.privacy.ignorePlaceholder')" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
+      <button type="button" class="btn btn-primary btn-lg" :disabled="addDisabled" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> {{ $t('settings.privacy.ignoreAdd') }}</button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettings } from "../../composables/useSettings";
 import { useToast } from "../../composables/useToast";
@@ -53,20 +53,42 @@ const { toast } = useToast();
 const { t } = useI18n();
 
 const newIgnoredApp = ref("");
+const ignoreInput = ref<InstanceType<typeof TextInput> | null>(null);
+
+/** Empty (after trim) blocks adding — the disabled button says so. */
+const addDisabled = computed(() => newIgnoredApp.value.trim() === "");
+
+/** Mirror backend `is_ignored_app`: lowercase, exe-extensionless basename
+ *  is equivalent to the full string. */
+function ignoredAppKey(entry: string): string {
+  const base = entry.trim().toLowerCase().split(/[\\/]/).pop() ?? "";
+  return base.endsWith(".exe") ? base.slice(0, -4) : base;
+}
+
+function isDuplicateIgnoredApp(name: string): boolean {
+  const key = ignoredAppKey(name);
+  const full = name.trim().toLowerCase();
+  return settings.ignored_apps.some(
+    (app) => ignoredAppKey(app) === key || app.trim().toLowerCase() === full,
+  );
+}
 
 function addIgnoredApp() {
   const name = newIgnoredApp.value.trim();
   if (!name) {
+    // Keyboard path (Enter) — button clicks are blocked by :disabled.
     toast(t('settings.privacy.ignoreEmpty'), "warning");
     return;
   }
-  if (settings.ignored_apps.includes(name)) {
+  if (isDuplicateIgnoredApp(name)) {
     toast(t('settings.privacy.ignoreDuplicate'), "warning");
     return;
   }
   const updated = [...settings.ignored_apps, name];
   settingsStore.updateSetting("ignored_apps", updated);
   newIgnoredApp.value = "";
+  // Keep the flow going: focus stays on the box for the next entry.
+  ignoreInput.value?.focus();
 }
 
 function removeIgnoredApp(app: string) {
@@ -141,24 +163,5 @@ function removeIgnoredApp(app: string) {
 
 :deep(.ignore-input:focus) {
   border-color: var(--border-focus);
-}
-
-.ignore-add-btn {
-  height: var(--btn-height-lg);
-  padding: 0 var(--space-4);
-  background: var(--accent);
-  color: white;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--transition-fast);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.ignore-add-btn:hover {
-  background: var(--accent-hover);
 }
 </style>

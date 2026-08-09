@@ -77,7 +77,7 @@ const resolvedTitle = computed(() => {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   display: inline-flex;
   align-items: center;
   justify-content: center;

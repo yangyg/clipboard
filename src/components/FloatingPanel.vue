@@ -235,7 +235,7 @@ async function onEmptyTrash() {
   font-size: var(--text-xs);
   background: var(--bg-active);
   padding: 1px var(--space-1);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: var(--text-tertiary);
 }
 

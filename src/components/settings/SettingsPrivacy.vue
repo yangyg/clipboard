@@ -111,7 +111,7 @@ function removeIgnoredApp(app: string) {
   color: var(--text-tertiary);
   cursor: pointer;
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   transition: background var(--transition-fast), color var(--transition-fast);
 }
 

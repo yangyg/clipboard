@@ -134,7 +134,7 @@ const emit = defineEmits<{
 .link-url { color: var(--accent-text); font-size: var(--text-md); word-break: break-all; text-decoration: none; }
 .link-url:hover { text-decoration: underline; }
 button.link-url-btn { display: inline; margin: 0; padding: 0; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
-button.link-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+button.link-url-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-xs); }
 .file-card { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md, 10px); border: none; background: var(--bg-elevated); }
 .file-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--type-file) 15%, transparent); color: var(--type-file); }
 .file-path { font-family: var(--font-mono); font-size: var(--text-md); color: var(--text-secondary); word-break: break-all; }

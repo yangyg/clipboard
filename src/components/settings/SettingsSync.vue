@@ -397,16 +397,16 @@ onMounted(() => {
 .sync-history-action {
   font-weight: 600;
   padding: 1px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--bg-hover, rgba(128, 128, 128, 0.15));
 }
 
 .sync-history-status.ok {
-  color: var(--success, #34d399);
+  color: var(--success);
 }
 
 .sync-history-status.err {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
 }
 
 .sync-history-content,
@@ -419,6 +419,6 @@ onMounted(() => {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--danger, #ef4444);
+  color: var(--danger);
 }
 </style>

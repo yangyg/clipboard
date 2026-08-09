@@ -117,8 +117,8 @@ const { t } = useI18n();
 .record-item.is-new::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: color-mix(in srgb, var(--accent) 18%, transparent); pointer-events: none; animation: row-flash var(--animation-flash) forwards; }
 .record-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .record-item.batch-mode { padding-left: 32px; }
-.record-checkbox { position: absolute; left: 10px; top: 16px; width: 14px; height: 14px; border: 1.5px solid var(--text-tertiary); border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: transparent; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast); flex-shrink: 0; }
-.record-checkbox.checked { background: var(--accent); border-color: var(--accent); color: white; }
+.record-checkbox { position: absolute; left: 10px; top: 16px; width: 14px; height: 14px; border: 1.5px solid var(--text-tertiary); border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); color: transparent; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast); flex-shrink: 0; }
+.record-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 .record-type-icon { width: 32px; height: 32px; border-radius: var(--radius-sm, 6px); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
 .record-color-swatch { width: 32px; height: 32px; border-radius: var(--radius-sm, 6px); flex-shrink: 0; margin-top: 1px; border: 1px solid var(--border-default); box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 10%, transparent); }
 .record-image-tile { width: 64px; height: 48px; border-radius: var(--radius-sm, 6px); overflow: hidden; border: 1px solid var(--border-subtle); background: var(--bg-elevated); }
@@ -155,7 +155,7 @@ const { t } = useI18n();
 .view-grid .record-item.is-image { height: calc(140px * var(--ui-font-scale, 1)); max-height: calc(140px * var(--ui-font-scale, 1)); }
 .view-grid .record-item.batch-mode { padding: 10px; }
 .view-grid .record-checkbox { left: auto; right: var(--space-2); top: var(--space-2); z-index: 3; width: 18px; height: 18px; border-radius: var(--radius-sm); background: var(--bg-elevated); border-color: var(--border-default); box-shadow: var(--shadow-sm); }
-.view-grid .record-checkbox.checked { background: var(--accent); border-color: var(--accent); color: #fff; }
+.view-grid .record-checkbox.checked { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 .view-grid .record-item.batch-mode .record-type-icon { margin-left: 0; }
 .view-grid .record-item.batch-checked { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--bg-surface)); box-shadow: none; }
 .view-grid .record-item.batch-mode .record-actions { display: none; }

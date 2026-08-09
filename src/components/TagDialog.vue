@@ -51,7 +51,7 @@
       <div class="dialog-body assign-body">
         <div v-if="availableTags.length === 0" class="assign-empty">
           <p>{{ $t('tagDialog.noTags') }}</p>
-          <button type="button" class="btn btn-primary btn-create-inline" @click="$emit('switchToCreate')">{{ $t('tagDialog.createTag') }}</button>
+          <button type="button" class="btn btn-primary" @click="$emit('switchToCreate')">{{ $t('tagDialog.createTag') }}</button>
         </div>
         <label
           v-for="tag in availableTags"
@@ -317,7 +317,7 @@ async function confirmAssign() {
 .assign-check {
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   border: 1.5px solid var(--border-default, var(--text-tertiary));
   display: flex;
   align-items: center;
@@ -331,7 +331,7 @@ async function confirmAssign() {
 .assign-item.checked .assign-check {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 .assign-empty {
@@ -343,23 +343,5 @@ async function confirmAssign() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-}
-
-.btn-create-inline {
-  /* styled via .btn.btn-primary in template if present; keep compact fallback */
-  height: var(--btn-height-md);
-  padding: 0 14px;
-  border-radius: var(--radius-sm);
-  font-size: var(--text-md);
-  font-weight: 500;
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-  border: none;
-  font-family: inherit;
-}
-
-.btn-create-inline:hover {
-  background: var(--accent-pressed);
 }
 </style>

@@ -426,6 +426,31 @@ body.handdrawn-light-theme {
   transform: rotate(-5deg) scale(0.88);
 }
 
+/* Batch bar action buttons + empty-trash buttons: sketchy chip outline,
+   hand-stamped tilt and a sticker shadow on hover, matching the rest of
+   the sketch chrome. :not(:disabled) keeps empty-selection buttons still. */
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.batch-btn, .empty-trash-btn, .empty-trash-link) {
+  border-radius: var(--sketch-radius-sm);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.batch-btn, .empty-trash-btn):hover:not(:disabled) {
+  transform: rotate(-1.5deg);
+  box-shadow: 2px 2px 0 var(--sketch-ink);
+}
+:is(body.handdrawn-theme, body.handdrawn-light-theme)
+  :is(.batch-btn, .empty-trash-btn):active:not(:disabled) {
+  transform: rotate(-1.5deg) scale(0.94);
+}
+
+/* Trash-banner empty link: wavy danger underline instead of a flat hover */
+:is(body.handdrawn-theme, body.handdrawn-light-theme) .empty-trash-link {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-thickness: 1.2px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
+
 /* Preview bottom action bar: sketchy chips; primary paste = sticker */
 :is(body.handdrawn-theme, body.handdrawn-light-theme) .action-btn {
   border-radius: var(--sketch-radius-sm);

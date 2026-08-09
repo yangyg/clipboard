@@ -49,7 +49,19 @@
 
     <!-- Tags Section -->
     <div v-if="tagsEnabled" class="sidebar-section sidebar-tags-section">
-      <div class="sidebar-label">{{ $t('sidebar.tagManagement') }}</div>
+      <div class="sidebar-tags-header">
+        <div class="sidebar-label">{{ $t('sidebar.tagManagement') }}</div>
+        <button
+          type="button"
+          class="tag-add"
+          :data-tooltip="isNarrow ? $t('sidebar.newTag') : undefined"
+          :title="$t('sidebar.newTag')"
+          :aria-label="$t('sidebar.newTag')"
+          @click="$emit('addTag')"
+        >
+          <AppIcon name="plus" :size="11" />
+        </button>
+      </div>
       <div class="tags-list" role="list">
         <button
           v-for="tag in primaryTags"
@@ -111,9 +123,6 @@
           </template>
         </template>
       </div>
-        <button type="button" class="tag-add" :title="$t('sidebar.newTag')" :aria-label="$t('sidebar.newTag')" @click="$emit('addTag')">
-        <AppIcon name="plus" :size="13" /> <span class="tag-add-label">{{ $t('sidebar.newTag') }}</span>
-      </button>
     </div>
 
     <!-- Bottom Actions: quick-menu (left) + settings (right) -->
@@ -312,6 +321,22 @@ const {
   overflow: hidden;
 }
 
+.sidebar-tags-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  margin-bottom: var(--space-2);
+}
+
+/* The label's bottom padding serves as spacing below the title; inside the
+   header it would offset the title from the add button, so drop it there.
+   Keep the left padding so the title aligns with the other section labels. */
+.sidebar-tags-header .sidebar-label {
+  padding: 0 0 0 var(--space-2);
+}
+
 .sidebar-label {
   font-size: var(--text-xs);
   font-weight: 600;
@@ -492,16 +517,13 @@ const {
 .tag-add {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  padding: var(--space-2);
-  margin-top: var(--space-1);
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border: none;
   background: transparent;
-  font: inherit;
-  text-align: left;
   border-radius: var(--radius-sm);
-  font-size: var(--text-md);
   color: var(--text-tertiary);
   cursor: pointer;
   transition: background var(--transition-fast), color var(--transition-fast);
@@ -582,13 +604,8 @@ const {
     padding: var(--space-2);
   }
 
-  .tag-add {
+  .sidebar-tags-header {
     justify-content: center;
-    padding: var(--space-2);
-  }
-
-  .tag-add-label {
-    display: none;
   }
 
   .sidebar-bottom {

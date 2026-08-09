@@ -13,8 +13,8 @@
       </div>
     </div>
     <div class="source-add-row">
-      <input class="source-input" :aria-label="$t('settings.source.exeLabel')" :placeholder="$t('settings.source.exePlaceholder')" v-model="newExe" @keydown.enter="addOverride" />
-      <input class="source-input" :aria-label="$t('settings.source.nameLabel')" :placeholder="$t('settings.source.namePlaceholder')" v-model="newName" @keydown.enter="addOverride" />
+      <TextInput class="source-input" :aria-label="$t('settings.source.exeLabel')" :placeholder="$t('settings.source.exePlaceholder')" v-model="newExe" @keydown.enter="addOverride" />
+      <TextInput class="source-input" :aria-label="$t('settings.source.nameLabel')" :placeholder="$t('settings.source.namePlaceholder')" v-model="newName" @keydown.enter="addOverride" />
       <button type="button" class="source-add-btn" @click="addOverride">
         <AppIcon name="plus" :size="13" /> {{ $t('settings.source.add') }}
       </button>
@@ -28,6 +28,7 @@ import { useI18n } from "vue-i18n";
 import { useSettings } from "../../composables/useSettings";
 import { useToast } from "../../composables/useToast";
 import AppIcon from "../icons/AppIcon.vue";
+import TextInput from "../TextInput.vue";
 
 const { settings, settingsStore } = useSettings();
 const { toast } = useToast();
@@ -126,7 +127,8 @@ function removeOverride(exe: string) {
   gap: var(--space-2);
 }
 
-.source-input {
+/* :deep — the input now lives inside the TextInput shell component. */
+:deep(.source-input) {
   flex: 1;
   min-width: 0;
   height: var(--btn-height-lg);
@@ -139,7 +141,7 @@ function removeOverride(exe: string) {
   transition: border-color var(--transition-fast), background var(--transition-smooth);
 }
 
-.source-input:focus {
+:deep(.source-input:focus) {
   border-color: var(--border-focus);
 }
 

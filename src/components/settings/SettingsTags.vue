@@ -50,11 +50,11 @@
 
           <label class="auto-tag-field">
             <span class="auto-tag-field-label">{{ $t('settings.tags.tagName') }}</span>
-            <input
+            <TextInput
               class="auto-tag-input"
-              :value="rule.tag_name"
+              :model-value="rule.tag_name"
               :placeholder="$t('settings.tags.tagNamePlaceholder')"
-              @input="updateRuleField(index, 'tag_name', (($event.target as HTMLInputElement).value))"
+              @update:model-value="(v) => updateRuleField(index, 'tag_name', v)"
             />
           </label>
 
@@ -115,6 +115,7 @@ import { useClipboardStore } from "../../stores/clipboard";
 import { DEFAULT_AUTO_TAG_RULES, type AutoTagRule } from "../../types";
 import { resolveKnownTagColors, resolveTagPalette } from "../../utils/themeColors";
 import AppIcon, { type AppIconName } from "../icons/AppIcon.vue";
+import TextInput from "../TextInput.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, update } = useSettings();

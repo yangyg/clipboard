@@ -76,6 +76,8 @@ App.vue                          # Events; FloatingPanel v-show; WelcomeDialog; 
 ├── WelcomeDialog.vue            # First-run welcome (BaseDialog); onboarding_completed
 ├── BatchBar.vue                 # Shared batch actions (floating + window)
 ├── ToggleSwitch.vue             # Shared switch primitive (settings sections)
+├── TextInput.vue                # Shared single-line text input + trailing clear button (hidden when empty/disabled/readonly; clears + refocuses)
+├── PasswordInput.vue            # Shared password input + show/hide toggle (keeps value/focus/caret; aria-label swaps 显示/隐藏密码)
 ├── SourceBadge.vue              # Source-app letter avatar + short name
 ├── BaseDialog.vue               # Teleport + Esc + focus trap; shared dialog chrome
 ├── ConfirmDialog.vue / TagDialog.vue / AliasDialog.vue  # Content slots on BaseDialog

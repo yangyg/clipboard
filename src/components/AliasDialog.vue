@@ -8,7 +8,7 @@
     </div>
     <div class="dialog-body">
       <label class="field-label" for="alias-input">{{ $t('alias.label') }}</label>
-      <input
+      <TextInput
         id="alias-input"
         ref="aliasInput"
         v-model="draft"
@@ -33,6 +33,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "../composables/useToast";
 import AppIcon from "./icons/AppIcon.vue";
 import BaseDialog from "./BaseDialog.vue";
+import TextInput from "./TextInput.vue";
 import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
@@ -51,7 +52,7 @@ const { toast } = useToast();
 const { t } = useI18n();
 
 const draft = ref("");
-const aliasInput = ref<HTMLInputElement | null>(null);
+const aliasInput = ref<InstanceType<typeof TextInput> | null>(null);
 
 const hasAlias = computed(() => !!(props.initialAlias?.trim()));
 
@@ -123,7 +124,8 @@ async function confirm() {
   color: var(--text-secondary);
 }
 
-.field-input {
+/* :deep — the input now lives inside the TextInput shell component. */
+:deep(.field-input) {
   width: 100%;
   box-sizing: border-box;
   height: 36px;
@@ -136,7 +138,7 @@ async function confirm() {
   font-size: var(--text-base);
 }
 
-.field-input:focus {
+:deep(.field-input:focus) {
   outline: none;
   border-color: var(--border-focus);
 }

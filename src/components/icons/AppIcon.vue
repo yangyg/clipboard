@@ -54,6 +54,8 @@ import {
   Zap,
   ArrowUp,
   Component,
+  Eye,
+  EyeOff,
 } from "lucide-vue-next";
 // Hand-drawn icons (derived from Lucide, same names) — hand-drawn theme only.
 import {
@@ -107,6 +109,8 @@ import {
   Zap as SketchyZap,
   ArrowUp as SketchyArrowUp,
   Component as SketchyComponent,
+  Eye as SketchyEye,
+  EyeOff as SketchyEyeOff,
 } from "@sketchyicons/vue";
 
 const LUCIDE_ICONS = {
@@ -160,6 +164,8 @@ const LUCIDE_ICONS = {
   zap: Zap,
   arrowUp: ArrowUp,
   component: Component,
+  eye: Eye,
+  eyeOff: EyeOff,
 } as const;
 
 const SKETCHY_ICONS = {
@@ -213,6 +219,8 @@ const SKETCHY_ICONS = {
   zap: SketchyZap,
   arrowUp: SketchyArrowUp,
   component: SketchyComponent,
+  eye: SketchyEye,
+  eyeOff: SketchyEyeOff,
 } as const;
 
 export type AppIconName = keyof typeof LUCIDE_ICONS;

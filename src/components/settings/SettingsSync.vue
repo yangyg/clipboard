@@ -6,42 +6,41 @@
     </p>
     <label class="webdav-field">
       <span class="setting-label">{{ $t('settings.sync.webdavUrl') }}</span>
-      <input
+      <TextInput
         class="auto-tag-input"
         type="url"
         placeholder="https://dav.jianguoyun.com/dav/"
-        :value="settings.webdav_url"
-        @input="update('webdav_url', ($event.target as HTMLInputElement).value)"
+        :model-value="settings.webdav_url"
+        @update:model-value="(v) => update('webdav_url', v)"
       />
     </label>
     <label class="webdav-field">
       <span class="setting-label">{{ $t('settings.sync.webdavUsername') }}</span>
-      <input
+      <TextInput
         class="auto-tag-input"
         type="text"
         autocomplete="username"
-        :value="settings.webdav_username"
-        @input="update('webdav_username', ($event.target as HTMLInputElement).value)"
+        :model-value="settings.webdav_username"
+        @update:model-value="(v) => update('webdav_username', v)"
       />
     </label>
     <label class="webdav-field">
       <span class="setting-label">{{ $t('settings.sync.webdavPassword') }}</span>
-      <input
+      <PasswordInput
         class="auto-tag-input"
-        type="password"
         autocomplete="current-password"
-        :value="settings.webdav_password"
-        @input="update('webdav_password', ($event.target as HTMLInputElement).value)"
+        :model-value="settings.webdav_password"
+        @update:model-value="(v) => update('webdav_password', v)"
       />
     </label>
     <label class="webdav-field">
       <span class="setting-label">{{ $t('settings.sync.webdavRemotePath') }}</span>
-      <input
+      <TextInput
         class="auto-tag-input"
         type="text"
         placeholder="ClipVaultSync"
-        :value="settings.webdav_remote_path"
-        @input="update('webdav_remote_path', ($event.target as HTMLInputElement).value)"
+        :model-value="settings.webdav_remote_path"
+        @update:model-value="(v) => update('webdav_remote_path', v)"
       />
     </label>
     <div class="setting-row">
@@ -141,6 +140,8 @@ import { useClipboardStore } from "../../stores/clipboard";
 import type { SyncHistoryEntry, WebDavSyncResult } from "../../types";
 import { formatWebDavResult } from "../../utils/webdavResult";
 import AppIcon from "../icons/AppIcon.vue";
+import PasswordInput from "../PasswordInput.vue";
+import TextInput from "../TextInput.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, settingsStore, update } = useSettings();

@@ -10,7 +10,7 @@
     <template v-if="mode === 'create' || mode === 'edit'">
       <div class="dialog-body">
         <label class="field-label" for="tag-name-input">{{ $t('tagDialog.nameLabel') }}</label>
-        <input
+        <TextInput
           id="tag-name-input"
           ref="nameInput"
           v-model="tagName"
@@ -91,6 +91,7 @@ import { useToast } from "../composables/useToast";
 import { resolveTagPalette } from "../utils/themeColors";
 import AppIcon from "./icons/AppIcon.vue";
 import BaseDialog from "./BaseDialog.vue";
+import TextInput from "./TextInput.vue";
 import type { Tag } from "../types";
 import { useI18n } from "vue-i18n";
 
@@ -117,7 +118,7 @@ const presetColors = ref(resolveTagPalette());
 const tagName = ref("");
 const selectedColor = ref(presetColors.value[0] ?? "#0078d4");
 const assignedIds = ref<Set<number>>(new Set());
-const nameInput = ref<HTMLInputElement | null>(null);
+const nameInput = ref<InstanceType<typeof TextInput> | null>(null);
 
 const availableTags = computed(() => clipboardStore.tags);
 const trimmedName = computed(() => tagName.value.trim());
@@ -240,7 +241,8 @@ async function confirmAssign() {
   margin-top: 0;
 }
 
-.field-input {
+/* :deep — the input now lives inside the TextInput shell component. */
+:deep(.field-input) {
   width: 100%;
   height: 36px;
   padding: 0 12px;
@@ -254,15 +256,15 @@ async function confirmAssign() {
   transition: border-color var(--transition-fast);
 }
 
-.field-input:focus {
+:deep(.field-input:focus) {
   border-color: var(--accent);
 }
 
-.field-input-error {
+:deep(.field-input-error) {
   border-color: var(--danger);
 }
 
-.field-input-error:focus {
+:deep(.field-input-error:focus) {
   border-color: var(--danger);
 }
 

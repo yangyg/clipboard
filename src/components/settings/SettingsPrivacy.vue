@@ -33,7 +33,7 @@
       </div>
     </div>
     <div class="ignore-add-row">
-      <input class="ignore-input" :aria-label="$t('settings.privacy.ignoreTitle')" :placeholder="$t('settings.privacy.ignorePlaceholder')" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
+      <TextInput class="ignore-input" :aria-label="$t('settings.privacy.ignoreTitle')" :placeholder="$t('settings.privacy.ignorePlaceholder')" v-model="newIgnoredApp" @keydown.enter="addIgnoredApp" />
       <button type="button" class="ignore-add-btn" @click="addIgnoredApp"><AppIcon name="plus" :size="13" /> {{ $t('settings.privacy.ignoreAdd') }}</button>
     </div>
   </div>
@@ -45,6 +45,7 @@ import { useI18n } from "vue-i18n";
 import { useSettings } from "../../composables/useSettings";
 import { useToast } from "../../composables/useToast";
 import AppIcon from "../icons/AppIcon.vue";
+import TextInput from "../TextInput.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, settingsStore, update } = useSettings();
@@ -125,7 +126,8 @@ function removeIgnoredApp(app: string) {
   gap: var(--space-2);
 }
 
-.ignore-input {
+/* :deep — the input now lives inside the TextInput shell component. */
+:deep(.ignore-input) {
   flex: 1;
   height: var(--btn-height-lg);
   background: var(--bg-input);
@@ -137,7 +139,7 @@ function removeIgnoredApp(app: string) {
   transition: border-color var(--transition-fast), background var(--transition-smooth);
 }
 
-.ignore-input:focus {
+:deep(.ignore-input:focus) {
   border-color: var(--border-focus);
 }
 

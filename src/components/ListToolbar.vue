@@ -201,12 +201,27 @@ async function onEmptyTrash() {
   color: var(--danger);
   border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
   cursor: pointer;
-  transition: background var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
   font-family: inherit;
 }
 
 .empty-trash-btn:hover {
   background: color-mix(in srgb, var(--danger) 20%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.empty-trash-btn:active {
+  background: color-mix(in srgb, var(--danger) 24%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+  transform: scale(0.97);
+}
+
+.empty-trash-btn:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
 }
 
 .list-sort {
@@ -241,7 +256,11 @@ async function onEmptyTrash() {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .list-tool-btn:hover,
@@ -249,6 +268,10 @@ async function onEmptyTrash() {
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
   color: var(--accent-text);
+}
+
+.list-tool-btn:active {
+  transform: scale(0.92);
 }
 
 .view-toggle {
@@ -279,6 +302,10 @@ async function onEmptyTrash() {
 .view-toggle-btn:hover {
   color: var(--accent-text);
   background: var(--accent-softer);
+}
+
+.view-toggle-btn:active {
+  background: var(--accent-soft);
 }
 
 .view-toggle-btn.active {

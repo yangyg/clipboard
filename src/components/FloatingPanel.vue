@@ -210,7 +210,7 @@ async function onEmptyTrash() {
   font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-secondary);
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -220,6 +220,10 @@ async function onEmptyTrash() {
 .filter-tab:hover {
   background: var(--accent-softer);
   color: var(--accent-text);
+}
+
+.filter-tab:active {
+  transform: scale(0.97);
 }
 
 .filter-tab.active {
@@ -256,10 +260,20 @@ async function onEmptyTrash() {
   cursor: pointer;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
 }
 
 .empty-trash-link:hover {
   background: var(--danger-soft);
+}
+
+.empty-trash-link:active {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+.empty-trash-link:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
 }
 
 .panel-body {

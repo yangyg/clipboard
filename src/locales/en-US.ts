@@ -261,6 +261,7 @@ export default {
     colorLabel: 'Color',
     noTags: 'No tags available',
     createTag: 'Create tag',
+    nameDuplicate: 'Tag name already exists',
     saveFailed: 'Failed to save tag',
     createFailed: 'Failed to create tag',
     assignFailed: 'Failed to assign tags',

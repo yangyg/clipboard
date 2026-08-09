@@ -15,11 +15,14 @@
           ref="nameInput"
           v-model="tagName"
           class="field-input"
+          :class="{ 'field-input-error': nameDuplicate }"
           type="text"
           :placeholder="$t('tagDialog.namePlaceholder')"
           maxlength="20"
+          :aria-invalid="nameDuplicate"
           @keydown.enter="confirmForm"
         />
+        <p v-if="nameDuplicate" class="field-error" role="alert">{{ $t('tagDialog.nameDuplicate') }}</p>
         <label class="field-label">{{ $t('tagDialog.colorLabel') }}</label>
         <div class="color-grid">
           <button
@@ -41,7 +44,7 @@
         <button
           type="button"
           class="btn btn-primary btn-lg"
-          :disabled="!tagName.trim()"
+          :disabled="!canSubmit"
           @click="confirmForm"
         >{{ mode === 'edit' ? $t('common.save') : $t('common.create') }}</button>
       </div>
@@ -117,6 +120,16 @@ const assignedIds = ref<Set<number>>(new Set());
 const nameInput = ref<HTMLInputElement | null>(null);
 
 const availableTags = computed(() => clipboardStore.tags);
+const trimmedName = computed(() => tagName.value.trim());
+// Create mode only: mirror the DB UNIQUE(name) constraint (exact, case-sensitive)
+// so duplicates are flagged while typing instead of failing at submit.
+const nameDuplicate = computed(
+  () =>
+    props.mode === "create" &&
+    trimmedName.value !== "" &&
+    availableTags.value.some((tag) => tag.name === trimmedName.value),
+);
+const canSubmit = computed(() => trimmedName.value !== "" && !nameDuplicate.value);
 const dialogTitle = computed(() => {
   if (props.mode === "edit") return t('tagDialog.editTitle');
   if (props.mode === "create") return t('tagDialog.createTitle');
@@ -161,8 +174,10 @@ function toggleTag(tagId: number) {
 }
 
 async function confirmForm() {
-  const name = tagName.value.trim();
+  const name = trimmedName.value;
   if (!name) return;
+  // Inline duplicate guard for create mode; submit-time backend check stays as fallback.
+  if (nameDuplicate.value) return;
   try {
     if (props.mode === "edit") {
       if (!props.editTag) return;
@@ -176,7 +191,14 @@ async function confirmForm() {
     if (props.recordId != null) return;
     emit("close");
   } catch (e) {
-    toast(props.mode === "edit" ? t('tagDialog.saveFailed') : t('tagDialog.createFailed'), "error");
+    if (props.mode === "create" && String(e).includes("TAG_NAME_EXISTS")) {
+      // Fallback: name raced past the inline check — refresh the tag list so
+      // the inline hint catches it, and tell the user the exact reason.
+      await clipboardStore.loadTags();
+      toast(t('tagDialog.nameDuplicate'), "error");
+    } else {
+      toast(props.mode === "edit" ? t('tagDialog.saveFailed') : t('tagDialog.createFailed'), "error");
+    }
     console.error("Tag form failed:", e);
   }
 }
@@ -234,6 +256,20 @@ async function confirmAssign() {
 
 .field-input:focus {
   border-color: var(--accent);
+}
+
+.field-input-error {
+  border-color: var(--danger);
+}
+
+.field-input-error:focus {
+  border-color: var(--danger);
+}
+
+.field-error {
+  margin: 6px 0 0;
+  font-size: var(--text-sm);
+  color: var(--danger);
 }
 
 .color-grid {

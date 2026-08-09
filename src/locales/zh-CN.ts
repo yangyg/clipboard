@@ -261,6 +261,7 @@ export default {
     colorLabel: '颜色',
     noTags: '暂无可用标签',
     createTag: '新建标签',
+    nameDuplicate: '标签名已存在',
     saveFailed: '保存标签失败',
     createFailed: '创建标签失败',
     assignFailed: '设置标签失败',

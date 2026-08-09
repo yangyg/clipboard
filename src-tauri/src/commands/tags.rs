@@ -35,10 +35,17 @@ pub async fn create_tag(
     // Snap arbitrary input onto the fixed 12-color wheel at the IPC boundary so
     // the DB never stores a string that could be injected into CSS color-mix.
     let color = nearest_palette_color(&color).to_string();
-    let id = state
-        .db
-        .create_tag(&name, &color)
-        .map_err(|e| e.to_string())?;
+    let id = state.db.create_tag(&name, &color).map_err(|e| {
+        // Surface name collisions as a stable marker so the UI can show a
+        // localized "tag name already exists" message instead of the raw
+        // SQLite constraint error.
+        let msg = e.to_string();
+        if msg.contains("UNIQUE constraint failed: tags.name") {
+            "TAG_NAME_EXISTS".to_string()
+        } else {
+            msg
+        }
+    })?;
     Ok(TagInfo {
         id,
         name,

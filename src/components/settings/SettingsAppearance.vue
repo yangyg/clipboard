@@ -379,13 +379,13 @@ const SEARCH_MODES = [
 }
 .theme-pencil {
   background-color: #272220;
-  background-image: linear-gradient(115deg, transparent 0 36%, #ee8777 36% 44%, transparent 44% 100%),
+  background-image: linear-gradient(115deg, transparent 0 36%, #45c2a4 36% 44%, transparent 44% 100%),
     linear-gradient(115deg, transparent 0 62%, #8fd0f0 62% 70%, transparent 70% 100%),
     linear-gradient(115deg, transparent 0 88%, #eec980 88% 96%, transparent 96% 100%);
 }
 .theme-pencil-light {
   background-color: #faf4eb;
-  background-image: linear-gradient(115deg, transparent 0 36%, #c24a2d 36% 44%, transparent 44% 100%),
+  background-image: linear-gradient(115deg, transparent 0 36%, #0f7a63 36% 44%, transparent 44% 100%),
     linear-gradient(115deg, transparent 0 62%, #1f7ab9 62% 70%, transparent 70% 100%),
     linear-gradient(115deg, transparent 0 88%, #a26a0e 88% 96%, transparent 96% 100%);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));

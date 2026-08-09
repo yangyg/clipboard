@@ -7,7 +7,8 @@
    ============================================================ */
 
 /* Colored Pencil Theme (彩铅) — dark-leaning preset.
-   Warm charcoal drawing paper, soft colored-pencil accent. */
+   Warm charcoal drawing paper with a viridian colored-pencil accent,
+   distinct from the coral hand-drawn family. */
 body.pencil-theme,
 .pencil-theme {
   --bg-base: #211c1a;
@@ -18,20 +19,20 @@ body.pencil-theme,
   --bg-input: #1f1c1a;
   --border-subtle: rgba(255, 240, 230, 0.08);
   --border-default: rgba(255, 240, 230, 0.13);
-  --border-focus: #ff988b;
+  --border-focus: #45c2a4;
   --text-primary: #f3efe8;
   --text-secondary: #b8afa3;
   --text-tertiary: #8d8376;
   --text-inverse: #211c19;
-  --accent: #ee8777;
-  --text-on-accent: #24140f;
-  --accent-hover: #ff9a89;
-  --accent-light: #ffc3b6;
-  --accent-pressed: #d96858;
-  --accent-text: #ff9d8f;
-  --accent-soft: rgba(238, 135, 119, 0.16);
-  --accent-softer: rgba(238, 135, 119, 0.08);
-  --bg-selected: rgba(238, 135, 119, 0.18);
+  --accent: #45c2a4;
+  --text-on-accent: #10251e;
+  --accent-hover: #5cd2b5;
+  --accent-light: #8fe2cc;
+  --accent-pressed: #2fa588;
+  --accent-text: #79d9c2;
+  --accent-soft: rgba(69, 194, 164, 0.16);
+  --accent-softer: rgba(69, 194, 164, 0.08);
+  --bg-selected: rgba(69, 194, 164, 0.18);
   --border-light: rgba(255, 240, 230, 0.09);
   --text-muted: var(--text-tertiary);
   --type-text: #8fd0f0;
@@ -53,7 +54,7 @@ body.pencil-theme,
   --shadow-sm: 0 1px 2px rgba(15, 8, 4, 0.5);
   --shadow-md: 0 4px 16px rgba(15, 8, 4, 0.6);
   --shadow-lg: 0 12px 48px rgba(15, 8, 4, 0.75);
-  --shadow-glow: 0 0 20px rgba(238, 135, 119, 0.18);
+  --shadow-glow: 0 0 20px rgba(69, 194, 164, 0.18);
   --win-close-hover: #e81123;
   /* Pencil extras */
   --pencil-ink: rgba(22, 10, 6, 0.38);
@@ -99,7 +100,7 @@ body.pencil-theme,
 }
 
 /* Colored Pencil Light (彩铅·浅) — light counterpart.
-   White drawing paper, saturated colored pencils, ink accent. */
+   White drawing paper, saturated colored pencils, peacock-green accent. */
 body.pencil-light-theme,
 .pencil-light-theme {
   --bg-base: #efe8da;
@@ -110,20 +111,20 @@ body.pencil-light-theme,
   --bg-input: #f5eee1;
   --border-subtle: rgba(74, 52, 32, 0.09);
   --border-default: rgba(74, 52, 32, 0.15);
-  --border-focus: #c24a2d;
+  --border-focus: #0f7a63;
   --text-primary: #2d261f;
   --text-secondary: #6b5f50;
   --text-tertiary: #887c6c;
   --text-inverse: #fdf7ef;
-  --accent: #c24a2d;
-  --text-on-accent: #fdf4ea;
-  --accent-hover: #ab3c20;
-  --accent-light: #f08a67;
-  --accent-pressed: #983a20;
-  --accent-text: #9a3f22;
-  --accent-soft: rgba(194, 74, 45, 0.12);
-  --accent-softer: rgba(194, 74, 45, 0.06);
-  --bg-selected: rgba(194, 74, 45, 0.14);
+  --accent: #0f7a63;
+  --text-on-accent: #f2fbf6;
+  --accent-hover: #0a614d;
+  --accent-light: #3ba48a;
+  --accent-pressed: #085442;
+  --accent-text: #0a5b49;
+  --accent-soft: rgba(15, 122, 99, 0.12);
+  --accent-softer: rgba(15, 122, 99, 0.06);
+  --bg-selected: rgba(15, 122, 99, 0.14);
   --border-light: rgba(66, 58, 32, 0.08);
   --text-muted: var(--text-tertiary);
   --type-text: #1f7ab9;
@@ -145,7 +146,7 @@ body.pencil-light-theme,
   --shadow-sm: 0 1px 2px rgba(70, 48, 20, 0.12);
   --shadow-md: 0 4px 16px rgba(70, 48, 20, 0.15);
   --shadow-lg: 0 12px 48px rgba(70, 48, 20, 0.18);
-  --shadow-glow: 0 0 20px rgba(194, 74, 45, 0.14);
+  --shadow-glow: 0 0 20px rgba(15, 122, 99, 0.14);
   --win-close-hover: #e81123;
   --pencil-ink: rgba(64, 40, 16, 0.32);
   --pencil-shadow: rgba(64, 40, 16, 0.24);

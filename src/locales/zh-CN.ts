@@ -577,7 +577,7 @@ export default {
       fontFamilyText: '在"外观 → 界面字体"中选择界面正文所用的字体：内置「默认 / 微软雅黑 / 黑体 / 宋体 / 楷体 / Segoe UI」六个预设，也可选「系统字体…」从本机已安装的中文字体中挑选（首次加载约一秒）。字体缺字时自动回退到系统中文字体；字号仍由"字体大小"控制。',
     },
     about: {
-      version: '版本 0.1.0',
+      version: '版本 0.2.0',
       desc: 'Windows 剪贴板管理工具 · Tauri + Vue 3 + Rust',
       repoLink: 'GitHub 仓库',
       openRepoFailed: '打开仓库链接失败',

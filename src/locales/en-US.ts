@@ -577,7 +577,7 @@ export default {
       fontFamilyText: 'In "Appearance → UI Font" choose the font for the interface text: six built-in presets (Default / Microsoft YaHei / SimHei / SimSun / KaiTi / Segoe UI), or pick "System font…" to choose from Chinese-capable fonts installed on this machine (first load ~1s). Missing glyphs automatically fall back to a Chinese system font; size is still controlled by "Font Size".',
     },
     about: {
-      version: 'Version 0.1.0',
+      version: 'Version 0.2.0',
       desc: 'Windows Clipboard Manager · Tauri + Vue 3 + Rust',
       repoLink: 'GitHub Repository',
       openRepoFailed: 'Failed to open repository link',

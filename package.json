@@ -1,7 +1,7 @@
 {
   "name": "clipboard",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -17,6 +17,8 @@
     "cargo-test": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "check:ipc-contract": "node scripts/check-ipc-contract.mjs",
     "check:schema": "node scripts/check-schema.mjs",
+    "version": "node scripts/bump-version.mjs && git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock src/locales/zh-CN.ts src/locales/en-US.ts",
+    "version:sync": "node scripts/bump-version.mjs",
     "validate": "npm run lint && npm run typecheck && npm run check:ipc-contract && npm run check:schema && npm run test && npm run fmt:check && npm run clippy && npm run cargo-test"
   },
   "dependencies": {

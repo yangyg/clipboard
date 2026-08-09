@@ -5,23 +5,35 @@ use rusqlite::{Connection, Result as SqlResult};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+mod records_export;
+mod records_flags;
 mod records_import;
 mod records_media;
 mod records_query;
 mod records_search;
+mod records_trash;
 mod records_write;
 mod schema;
+
+// Tests for the insert/dedup path live in their own file (mirroring
+// schema_tests.rs) to keep records_write.rs under the 500-line cap.
+#[cfg(test)]
+mod records_write_tests;
+// Same split-out pattern keeps records_import.rs / tags.rs under the cap.
+#[cfg(test)]
+mod records_import_tests;
 mod search_history;
 mod settings;
 mod stats;
 mod sync_history;
 mod tags;
+#[cfg(test)]
+mod tags_tests;
 mod tombstones;
 mod types;
 
-pub use records_import::{
-    validate_import_records, ExportCursor, ImportSanitize, MAX_IMPORT_TOTAL_BYTES,
-};
+pub use records_export::ExportCursor;
+pub use records_import::{validate_import_records, ImportSanitize, MAX_IMPORT_TOTAL_BYTES};
 pub use tags::nearest_palette_color;
 
 // Schema compatibility tests live in `schema_tests.rs` (test-only module) to
@@ -29,7 +41,10 @@ pub use tags::nearest_palette_color;
 #[cfg(test)]
 mod schema_tests;
 
-pub use types::{ContentType, ImageMeta, ALIAS_MAX_CHARS, RECORD_COLS, RECORD_COLS_LIST};
+pub use types::{
+    clamp_page_limit, ContentType, ImageMeta, ALIAS_MAX_CHARS, MAX_PAGE_SIZE, RECORD_COLS,
+    RECORD_COLS_LIST,
+};
 
 pub struct ClipboardDb {
     /// Writer connection (schema, inserts, updates, deletes).

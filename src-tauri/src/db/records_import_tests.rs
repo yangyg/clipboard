@@ -1,0 +1,244 @@
+//! Tests for import/merge + export paging. Lives in its own file (mirroring
+//! `schema_tests.rs`) to keep `records_import.rs` under the 500-line cap.
+use super::records_import::MAX_IMPORT_CONTENT_BYTES;
+use crate::db::{validate_import_records, ClipboardDb, ExportCursor, ImportSanitize};
+use crate::ClipboardRecord;
+use std::path::PathBuf;
+
+fn temp_db() -> (ClipboardDb, PathBuf) {
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_import_tag_test_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+    (db, dir)
+}
+
+fn cleanup(dir: PathBuf) {
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+fn make_record(content: &str, hash: &str, tags: &[&str]) -> ClipboardRecord {
+    let now = chrono::Utc::now().to_rfc3339();
+    ClipboardRecord {
+        id: 0,
+        content: content.to_string(),
+        content_type: "text".into(),
+        source_app: String::new(),
+        source_window: String::new(),
+        source_name: String::new(),
+        hash: hash.to_string(),
+        copy_count: 0,
+        is_favorite: false,
+        is_pinned: false,
+        is_sensitive: false,
+        is_trashed: false,
+        auto_expire_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+        tags: tags.iter().map(|s| s.to_string()).collect(),
+        content_html: None,
+        media_path: None,
+        thumb_path: None,
+        width: None,
+        height: None,
+        media_abs: None,
+        thumb_abs: None,
+        content_len: None,
+        alias: String::new(),
+    }
+}
+
+#[test]
+fn import_creates_tags_and_links() {
+    let (db, dir) = temp_db();
+    db.import_records_with_merge(
+        &[make_record("hello", "hash-1", &["重要", "链接"])],
+        100,
+        None,
+    )
+    .unwrap();
+    let exported = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(exported.len(), 1);
+    let mut tags = exported[0].tags.clone();
+    tags.sort();
+    let mut want = vec!["链接".to_string(), "重要".to_string()];
+    want.sort();
+    assert_eq!(tags, want);
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_replaces_tags_when_incoming_has_tags() {
+    let (db, dir) = temp_db();
+    db.import_records_with_merge(&[make_record("same", "hash-x", &["重要"])], 100, None)
+        .unwrap();
+    db.import_records_with_merge(&[make_record("same", "hash-x", &["链接"])], 100, None)
+        .unwrap();
+    let exported = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(exported.len(), 1);
+    assert_eq!(exported[0].tags, ["链接"]);
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_preserves_local_tags_for_tagless_snapshot() {
+    let (db, dir) = temp_db();
+    db.import_records_with_merge(&[make_record("same", "hash-y", &["重要"])], 100, None)
+        .unwrap();
+    db.import_records_with_merge(&[make_record("same", "hash-y", &[])], 100, None)
+        .unwrap();
+    let exported = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(exported[0].tags, ["重要"]);
+    cleanup(dir);
+}
+
+#[test]
+fn tags_changed_counts_only_real_changes() {
+    let (db, dir) = temp_db();
+    // New record with tags → counts 1.
+    let (_, _, tc) = db
+        .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100, None)
+        .unwrap();
+    assert_eq!(tc, 1);
+    // Merge with identical tags → 0 (no spurious count).
+    let (_, _, tc) = db
+        .import_records_with_merge(&[make_record("a", "hash-tc", &["重要"])], 100, None)
+        .unwrap();
+    assert_eq!(tc, 0);
+    // Merge with a changed tag set → 1.
+    let (_, _, tc) = db
+        .import_records_with_merge(&[make_record("a", "hash-tc", &["链接"])], 100, None)
+        .unwrap();
+    assert_eq!(tc, 1);
+    // Merge with empty tags → 0 (preserves local, counts nothing).
+    let (_, _, tc) = db
+        .import_records_with_merge(&[make_record("a", "hash-tc", &[])], 100, None)
+        .unwrap();
+    assert_eq!(tc, 0);
+    cleanup(dir);
+}
+
+#[test]
+fn import_deduplicates_repeated_hashes_in_one_batch() {
+    let (db, dir) = temp_db();
+    let records = [
+        make_record("same", "batch-duplicate", &[]),
+        make_record("same", "batch-duplicate", &[]),
+    ];
+
+    let (imported, merged, _) = db.import_records_with_merge(&records, 100, None).unwrap();
+
+    assert_eq!((imported, merged), (1, 1));
+    assert_eq!(db.get_records_for_export(10, 0).unwrap().len(), 1);
+    cleanup(dir);
+}
+
+#[test]
+fn import_rejects_oversized_content() {
+    let record = make_record(
+        &"x".repeat(MAX_IMPORT_CONTENT_BYTES + 1),
+        "oversized-content",
+        &[],
+    );
+
+    let error = validate_import_records(&[record]).unwrap_err();
+
+    assert!(error.contains("正文过大"));
+}
+
+#[test]
+fn export_cursor_pages_without_offset() {
+    let (db, dir) = temp_db();
+    let records = [
+        make_record("first", "cursor-1", &[]),
+        make_record("second", "cursor-2", &[]),
+    ];
+    db.import_records_with_merge(&records, 100, None).unwrap();
+
+    let first = db.get_records_for_export_page(1, None).unwrap();
+    let cursor = ExportCursor {
+        is_pinned: first[0].is_pinned,
+        updated_at: first[0].updated_at.clone(),
+        id: first[0].id,
+    };
+    let second = db.get_records_for_export_page(1, Some(&cursor)).unwrap();
+
+    assert_eq!(first.len(), 1);
+    assert_eq!(second.len(), 1);
+    assert_ne!(first[0].id, second[0].id);
+    cleanup(dir);
+}
+
+#[test]
+fn import_sanitize_recomputes_expiry_and_rechecks_sensitive() {
+    let (db, dir) = temp_db();
+    let mut rec = make_record("Your verification code: 123456", "sanitize-1", &[]);
+    // Hostile/stale bundle: marks content non-sensitive and carries a past
+    // expiry. With sanitization enabled neither may survive the import.
+    rec.is_sensitive = false;
+    rec.auto_expire_at = Some("2020-01-01T00:00:00Z".into());
+    let policy = ImportSanitize {
+        recheck_sensitive: true,
+        sensitive_auto_expire_seconds: 600,
+    };
+
+    db.import_records_with_merge(&[rec], 100, Some(policy))
+        .unwrap();
+
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].is_sensitive, "detection must re-flag the record");
+    let expiry = rows[0].auto_expire_at.as_deref().expect("expiry set");
+    assert!(
+        expiry > "2026-01-01T00:00:00Z",
+        "expiry must be recomputed from now, got {expiry}"
+    );
+    cleanup(dir);
+}
+
+#[test]
+fn import_sanitize_never_downgrades_sensitive_flag() {
+    let (db, dir) = temp_db();
+    let mut rec = make_record("plain text", "sanitize-2", &[]);
+    rec.is_sensitive = true; // remote says sensitive even though text is plain
+    let policy = ImportSanitize {
+        recheck_sensitive: true,
+        sensitive_auto_expire_seconds: 600,
+    };
+
+    db.import_records_with_merge(&[rec], 100, Some(policy))
+        .unwrap();
+
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].is_sensitive);
+    assert!(rows[0].auto_expire_at.is_some());
+    cleanup(dir);
+}
+
+#[test]
+fn import_sanitize_preserves_past_expiry_when_disabled() {
+    let (db, dir) = temp_db();
+    let mut rec = make_record("plain text", "sanitize-3", &[]);
+    rec.is_sensitive = true;
+    rec.auto_expire_at = Some("2020-01-01T00:00:00Z".into());
+
+    // Legacy callers (no policy) keep the previous passthrough behaviour.
+    db.import_records_with_merge(&[rec], 100, None).unwrap();
+
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(
+        rows[0].auto_expire_at.as_deref(),
+        Some("2020-01-01T00:00:00Z")
+    );
+    cleanup(dir);
+}

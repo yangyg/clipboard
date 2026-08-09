@@ -20,7 +20,7 @@ impl ClipboardDb {
              ORDER BY last_searched_at DESC
              LIMIT ?",
         )?;
-        let rows = stmt.query_map([limit.max(0)], |row| {
+        let rows = stmt.query_map([limit.clamp(0, i64::from(super::MAX_PAGE_SIZE))], |row| {
             Ok(SearchHistoryEntry {
                 query: row.get(0)?,
                 search_count: row.get(1)?,

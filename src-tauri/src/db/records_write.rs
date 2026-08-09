@@ -1,9 +1,14 @@
-//! Record inserts, soft-delete/trash, restore, favorites, pin, alias.
-use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
+//! Record inserts, dedup, capacity eviction, and the hash-v2 migration.
+//! Trash/restore live in `records_trash.rs`; favorite/pin/alias in `records_flags.rs`.
+use rusqlite::{params, Connection, Result as SqlResult};
 
-use super::{ClipboardDb, ContentType, ImageMeta, ALIAS_MAX_CHARS};
+use super::{ClipboardDb, ContentType, ImageMeta};
 use crate::detect::sha256_hash;
 use crate::ClipboardRecord;
+
+/// Legacy text row snapshot for the hash-v2 migration:
+/// (id, is_favorite, is_pinned, copy_count, alias, is_trashed, updated_at)
+type LegacyHashRow = (i64, i32, i32, i32, String, i32, String);
 
 impl ClipboardDb {
     // === Insert ===
@@ -23,59 +28,111 @@ impl ClipboardDb {
         content_html: Option<&str>,
     ) -> SqlResult<(i64, bool, ClipboardRecord)> {
         let conn = self.conn.lock();
+        if let Some(id) = Self::find_active_duplicate(&conn, hash)? {
+            let record =
+                self.refresh_duplicate_source(&conn, id, source_app, source_window, source_name)?;
+            return Ok((id, false, record));
+        }
+        let now = chrono::Utc::now().to_rfc3339();
+        let id = Self::insert_new_row(
+            &conn,
+            content,
+            content_type,
+            hash,
+            is_sensitive,
+            Self::sensitive_expiry(is_sensitive, sensitive_auto_expire_seconds),
+            source_app,
+            source_window,
+            source_name,
+            image,
+            content_html,
+            &now,
+        )?;
+        if !Self::is_over_capacity(&conn, max_records)? {
+            return self.read_back_inserted(&conn, id);
+        }
+        let overflow_media = self.evict_over_limit(&conn, max_records)?;
+        let result = self.read_back_inserted(&conn, id);
+        drop(conn);
+        self.purge_media_pairs(&overflow_media);
+        result
+    }
 
-        // Hash check + insert/update under the same write lock (no TOCTOU between
-        // workers; single writer Mutex serializes capture + UI mutations). A real
-        // read error here must not be mistaken for "no match" — that would insert
-        // a duplicate row instead of deduping.
-        let existing: Option<i64> = match conn.query_row(
+    /// Hash probe for the dedup path. Must run under the same write lock as
+    /// the insert (no TOCTOU between capture workers). A real read error must
+    /// not be mistaken for "no match" — that would insert a duplicate row
+    /// instead of deduping. Trashed rows are excluded to mirror the partial
+    /// unique index `uq_records_hash_active`: re-copying a trashed item
+    /// inserts a fresh record instead of reviving the trash row.
+    fn find_active_duplicate(conn: &Connection, hash: &str) -> SqlResult<Option<i64>> {
+        match conn.query_row(
             "SELECT id FROM records WHERE hash = ? AND is_trashed = 0
              ORDER BY updated_at DESC LIMIT 1",
             [hash],
             |row| row.get(0),
         ) {
-            Ok(id) => Some(id),
-            Err(rusqlite::Error::QueryReturnedNoRows) => None,
-            Err(e) => return Err(e),
-        };
-
-        if let Some(id) = existing {
-            let now = chrono::Utc::now().to_rfc3339();
-            // FTS indexes source_app/source_window, but the content-only
-            // trigger (`AFTER UPDATE OF content`) never fires on a dedup
-            // re-copy — refresh the FTS row only when the source actually
-            // changed, so searching by the new source still matches.
-            let source_changed: bool = conn.query_row(
-                "SELECT source_app != ?1 OR source_window != ?2 OR source_name != ?3
-                 FROM records WHERE id = ?4",
-                params![source_app, source_window, source_name, id],
-                |row| row.get(0),
-            )?;
-            // Re-copy only refreshes source/timestamp — paste count is separate.
-            conn.execute(
-                "UPDATE records SET updated_at = ?, source_app = ?, source_window = ?, source_name = ? WHERE id = ?",
-                params![now, source_app, source_window, source_name, id],
-            )?;
-            if source_changed {
-                Self::refresh_record_fts(&conn, id)?;
-            }
-            let record = self
-                .get_record_list_locked(&conn, id)?
-                .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
-            return Ok((id, false, record));
+            Ok(id) => Ok(Some(id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
         }
+    }
 
-        let now = chrono::Utc::now().to_rfc3339();
-        let auto_expire_at = if is_sensitive && sensitive_auto_expire_seconds > 0 {
-            Some(
-                (chrono::Utc::now()
-                    + chrono::Duration::seconds(sensitive_auto_expire_seconds as i64))
+    /// Re-copy of an existing record: refresh source/timestamp only (paste
+    /// count is a separate action). FTS indexes source_app/source_window, but
+    /// the content-only trigger never fires here — refresh the FTS row only
+    /// when the source actually changed, so searching by the new source still
+    /// matches.
+    fn refresh_duplicate_source(
+        &self,
+        conn: &Connection,
+        id: i64,
+        source_app: &str,
+        source_window: &str,
+        source_name: &str,
+    ) -> SqlResult<ClipboardRecord> {
+        let source_changed: bool = conn.query_row(
+            "SELECT source_app != ?1 OR source_window != ?2 OR source_name != ?3
+             FROM records WHERE id = ?4",
+            params![source_app, source_window, source_name, id],
+            |row| row.get(0),
+        )?;
+        conn.execute(
+            "UPDATE records SET updated_at = ?, source_app = ?, source_window = ?, source_name = ? WHERE id = ?",
+            params![chrono::Utc::now().to_rfc3339(), source_app, source_window, source_name, id],
+        )?;
+        if source_changed {
+            Self::refresh_record_fts(conn, id)?;
+        }
+        let (_, _, record) = self.read_back_inserted(conn, id)?;
+        Ok(record)
+    }
+
+    /// Expiry timestamp for sensitive captures; `None` when the feature is off.
+    fn sensitive_expiry(is_sensitive: bool, auto_expire_seconds: i32) -> Option<String> {
+        if !is_sensitive || auto_expire_seconds <= 0 {
+            return None;
+        }
+        Some(
+            (chrono::Utc::now() + chrono::Duration::seconds(auto_expire_seconds as i64))
                 .to_rfc3339(),
-            )
-        } else {
-            None
-        };
+        )
+    }
 
+    #[allow(clippy::too_many_arguments)]
+    fn insert_new_row(
+        conn: &Connection,
+        content: &str,
+        content_type: &ContentType,
+        hash: &str,
+        is_sensitive: bool,
+        auto_expire_at: Option<String>,
+        source_app: &str,
+        source_window: &str,
+        source_name: &str,
+        image: Option<&ImageMeta>,
+        content_html: Option<&str>,
+        now: &str,
+    ) -> SqlResult<i64> {
         let (media_path, thumb_path, width, height) = match image {
             Some(img) => (
                 Some(img.media_path.as_str()),
@@ -85,7 +142,6 @@ impl ClipboardDb {
             ),
             None => (None, None, None, None),
         };
-
         conn.execute(
             "INSERT INTO records (content, content_type, source_app, source_window, source_name, hash, copy_count, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
              VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -108,31 +164,32 @@ impl ClipboardDb {
                 content.chars().count() as i64,
             ],
         )?;
+        Ok(conn.last_insert_rowid())
+    }
 
-        let id = conn.last_insert_rowid();
-
-        // Cheap over-cap probe (scan ≤ max+1 rows). Only then pay for a full COUNT.
+    /// Cheap over-cap probe (scan ≤ max+1 rows); the caller only pays for a
+    /// full eviction when this says yes.
+    fn is_over_capacity(conn: &Connection, max_records: i32) -> SqlResult<bool> {
         let max = max_records.max(1) as i64;
-        let over_cap: bool = conn.query_row(
+        let probe: i64 = conn.query_row(
             "SELECT COUNT(*) FROM (
                 SELECT 1 FROM records WHERE is_trashed = 0 LIMIT ?
              )",
             [max + 1],
             |row| row.get::<_, i64>(0),
-        )? > max;
-        if over_cap {
-            let overflow_media = self.evict_over_limit(&conn, max_records)?;
-            let record = self
-                .get_record_list_locked(&conn, id)?
-                .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
-            drop(conn);
-            self.purge_media_pairs(&overflow_media);
-            return Ok((id, true, record));
-        }
+        )?;
+        Ok(probe > max)
+    }
 
+    /// Read back the just-written row as the list-shape payload.
+    fn read_back_inserted(
+        &self,
+        conn: &Connection,
+        id: i64,
+    ) -> SqlResult<(i64, bool, ClipboardRecord)> {
         let record = self
-            .get_record_list_locked(&conn, id)?
-            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+            .get_record_list_locked(conn, id)?
+            .ok_or(rusqlite::Error::QueryReturnedNoRows)?;
         Ok((id, true, record))
     }
 
@@ -222,103 +279,13 @@ impl ClipboardDb {
             return Ok(());
         }
 
-        // 1) Group candidate rows by the re-derived hash BEFORE writing
-        // anything. Image rows hash pixels, not content — skip them. Updating
-        // hashes row-by-row would trip UNIQUE(hash) mid-way: two legacy rows
-        // with identical content re-derive to the same hash, so the second
-        // UPDATE collides before any merge could run.
-        // (id, is_favorite, is_pinned, copy_count, alias, is_trashed, updated_at)
-        type LegacyRow = (i64, i32, i32, i32, String, i32, String);
-        let mut groups: std::collections::HashMap<String, Vec<LegacyRow>> =
-            std::collections::HashMap::new();
-        {
-            let mut stmt = conn.prepare(
-                "SELECT id, content, is_favorite, is_pinned, copy_count, alias, is_trashed, updated_at
-                 FROM records
-                 WHERE content_type != 'image' AND media_path IS NULL",
-            )?;
-            let mapped = stmt.query_map([], |row| {
-                let content: String = row.get(1)?;
-                Ok((
-                    sha256_hash(&sha256_hash(&content)),
-                    (
-                        row.get(0)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        row.get(4)?,
-                        row.get(5)?,
-                        row.get(6)?,
-                        row.get(7)?,
-                    ),
-                ))
-            })?;
-            for item in mapped {
-                let (hash, entry) = item?;
-                groups.entry(hash).or_default().push(entry);
-            }
-        }
-
-        // 2) Per group: merge active duplicates into one survivor, delete the
-        // rest, and apply the new hash last — with losers already gone the
-        // UNIQUE(hash) constraint can never fire.
-        for (new_hash, mut group) in groups {
-            if group.len() == 1 {
-                conn.execute(
-                    "UPDATE records SET hash = ? WHERE id = ?",
-                    params![new_hash, group[0].0],
-                )?;
-                continue;
-            }
-            // Winner: prefer active rows, then most recently updated.
-            group.sort_by(|a, b| {
-                a.5.cmp(&b.5) // is_trashed ASC (active first)
-                    .then(b.6.cmp(&a.6)) // updated_at DESC
-                    .then(b.0.cmp(&a.0)) // id DESC
-            });
-            let (winner_id, fav, pin, count, mut alias, _, _) = group.remove(0);
-            let mut fav = fav != 0;
-            let mut pin = pin != 0;
-            let mut count = count;
-            let mut loser_ids: Vec<i64> = Vec::new();
-            for (id, f, p, c, a, trashed, _) in &group {
-                loser_ids.push(*id);
-                if *trashed == 0 {
-                    // Only active rows contribute state; trashed dupes just vanish.
-                    fav |= *f != 0;
-                    pin |= *p != 0;
-                    count += c;
-                    if alias.is_empty() && !a.is_empty() {
-                        alias = a.clone();
-                    }
-                }
-            }
-            conn.execute(
-                "UPDATE records SET is_favorite = ?, is_pinned = ?, copy_count = ?, alias = ?
-                 WHERE id = ?",
-                params![fav as i32, pin as i32, count, alias, winner_id],
-            )?;
-            for loser in &loser_ids {
-                conn.execute(
-                    "INSERT OR IGNORE INTO record_tags (record_id, tag_id)
-                     SELECT ?, tag_id FROM record_tags WHERE record_id = ?",
-                    params![winner_id, loser],
-                )?;
-            }
-            Self::refresh_record_fts(conn, winner_id)?;
-            // FTS row + record_tags links of losers cascade on delete.
-            let placeholders = Self::id_placeholders(loser_ids.len());
-            let params: Vec<&dyn rusqlite::types::ToSql> = loser_ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::types::ToSql)
-                .collect();
-            conn.execute(
-                &format!("DELETE FROM records WHERE id IN ({placeholders})"),
-                params.as_slice(),
-            )?;
-            conn.execute(
-                "UPDATE records SET hash = ? WHERE id = ?",
-                params![new_hash, winner_id],
-            )?;
+        // Group candidate rows by the re-derived hash BEFORE writing anything:
+        // updating hashes row-by-row would trip the unique-hash constraint
+        // mid-way, because two legacy rows with identical content re-derive to
+        // the same hash and the second UPDATE collides before any merge runs.
+        let groups = Self::group_text_rows_by_rederived_hash(conn)?;
+        for (new_hash, group) in groups {
+            Self::apply_rederived_hash_group(conn, &new_hash, group)?;
         }
 
         conn.execute(
@@ -328,409 +295,117 @@ impl ClipboardDb {
         Ok(())
     }
 
-    // === Delete / Trash ===
+    /// Scan text rows and bucket them by sha256(sha256(content)). Image rows
+    /// hash pixels, not content — they are skipped.
+    fn group_text_rows_by_rederived_hash(
+        conn: &Connection,
+    ) -> SqlResult<std::collections::HashMap<String, Vec<LegacyHashRow>>> {
+        let mut groups: std::collections::HashMap<String, Vec<LegacyHashRow>> =
+            std::collections::HashMap::new();
+        let mut stmt = conn.prepare(
+            "SELECT id, content, is_favorite, is_pinned, copy_count, alias, is_trashed, updated_at
+             FROM records
+             WHERE content_type != 'image' AND media_path IS NULL",
+        )?;
+        let mapped = stmt.query_map([], |row| {
+            let content: String = row.get(1)?;
+            Ok((
+                sha256_hash(&sha256_hash(&content)),
+                (
+                    row.get(0)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                    row.get(7)?,
+                ),
+            ))
+        })?;
+        for item in mapped {
+            let (hash, entry) = item?;
+            groups.entry(hash).or_default().push(entry);
+        }
+        Ok(groups)
+    }
 
-    pub fn trash_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        // Bump `updated_at` so the trash-retention window (measured from
-        // `updated_at`) starts at the moment of trashing — otherwise a record
-        // copied weeks ago and trashed today is purged immediately.
-        // Clear the sensitive auto-expiry too: the record now belongs to the
-        // trash lifecycle, not the capture-expiry one.
-        // Record a deletion tombstone so WebDAV can propagate the delete.
-        let Some((hash, is_sensitive)) = conn
-            .query_row(
-                "SELECT hash, is_sensitive FROM records WHERE id = ?",
-                [id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0)),
-            )
-            .optional()?
-        else {
+    /// Merge one re-derived-hash group into a single survivor and stamp the
+    /// new hash last — with losers already deleted the unique-hash constraint
+    /// can never fire.
+    fn apply_rederived_hash_group(
+        conn: &Connection,
+        new_hash: &str,
+        mut group: Vec<LegacyHashRow>,
+    ) -> SqlResult<()> {
+        if group.len() == 1 {
+            conn.execute(
+                "UPDATE records SET hash = ? WHERE id = ?",
+                params![new_hash, group[0].0],
+            )?;
             return Ok(());
-        };
-        let now = chrono::Utc::now().to_rfc3339();
+        }
+        let (winner_id, fav, pin, count, alias, loser_ids) =
+            Self::fold_group_into_winner(&mut group);
         conn.execute(
-            "UPDATE records SET is_trashed = 1, is_pinned = 0, auto_expire_at = NULL, updated_at = ? WHERE id = ?",
-            params![now, id],
+            "UPDATE records SET is_favorite = ?, is_pinned = ?, copy_count = ?, alias = ?
+             WHERE id = ?",
+            params![fav as i32, pin as i32, count, alias, winner_id],
         )?;
-        Self::upsert_tombstone_conn(&conn, &hash, &now, is_sensitive)?;
-        Ok(())
-    }
-
-    pub fn trash_records_batch(&self, ids: &[i64]) -> SqlResult<usize> {
-        if ids.is_empty() {
-            return Ok(0);
+        for loser in &loser_ids {
+            conn.execute(
+                "INSERT OR IGNORE INTO record_tags (record_id, tag_id)
+                 SELECT ?, tag_id FROM record_tags WHERE record_id = ?",
+                params![winner_id, loser],
+            )?;
         }
-        let conn = self.conn.lock();
-        let placeholders = Self::id_placeholders(ids.len());
-        let sql = format!(
-            "UPDATE records SET is_trashed = 1, is_pinned = 0, auto_expire_at = NULL, updated_at = ? WHERE id IN ({})",
-            placeholders
-        );
-        let now = chrono::Utc::now().to_rfc3339();
-        let rows: Vec<(String, bool)> = {
-            let mut stmt = conn.prepare(&format!(
-                "SELECT hash, is_sensitive FROM records WHERE id IN ({placeholders})"
-            ))?;
-            let params: Vec<&dyn rusqlite::types::ToSql> = ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::types::ToSql)
-                .collect();
-            let rows = stmt
-                .query_map(params.as_slice(), |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
-                })?
-                .collect::<SqlResult<Vec<_>>>()?;
-            rows
-        };
-        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() + 1);
-        params.push(&now);
-        params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
-        let count = conn.execute(&sql, params.as_slice())?;
-        for (hash, is_sensitive) in rows {
-            Self::upsert_tombstone_conn(&conn, &hash, &now, is_sensitive)?;
-        }
-        Ok(count)
-    }
-
-    pub fn restore_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        let hash: Option<String> = conn
-            .query_row("SELECT hash FROM records WHERE id = ?", [id], |row| {
-                row.get(0)
-            })
-            .optional()?;
-        // Bump `updated_at` so a restore is "newer than the deletion" and beats
-        // any remote tombstone on the next push (un-delete propagation).
-        conn.execute(
-            "UPDATE records SET is_trashed = 0, updated_at = ? WHERE id = ?",
-            params![chrono::Utc::now().to_rfc3339(), id],
-        )?;
-        if let Some(hash) = hash {
-            conn.execute("DELETE FROM sync_tombstones WHERE hash = ?", [hash])?;
-        }
-        Ok(())
-    }
-
-    pub fn restore_records_batch(&self, ids: &[i64]) -> SqlResult<usize> {
-        if ids.is_empty() {
-            return Ok(0);
-        }
-        let conn = self.conn.lock();
-        let placeholders = Self::id_placeholders(ids.len());
-        let sql = format!(
-            "UPDATE records SET is_trashed = 0, updated_at = ? WHERE id IN ({})",
-            placeholders
-        );
-        let now = chrono::Utc::now().to_rfc3339();
-        let hashes: Vec<String> = {
-            let mut stmt = conn.prepare(&format!(
-                "SELECT hash FROM records WHERE id IN ({placeholders})"
-            ))?;
-            let params: Vec<&dyn rusqlite::types::ToSql> = ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::types::ToSql)
-                .collect();
-            let rows = stmt
-                .query_map(params.as_slice(), |row| row.get::<_, String>(0))?
-                .collect::<SqlResult<Vec<_>>>()?;
-            rows
-        };
-        let mut params: Vec<&dyn rusqlite::types::ToSql> = Vec::with_capacity(ids.len() + 1);
-        params.push(&now);
-        params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
-        let count = conn.execute(&sql, params.as_slice())?;
-        for hash in hashes {
-            conn.execute("DELETE FROM sync_tombstones WHERE hash = ?", [hash])?;
-        }
-        Ok(count)
-    }
-
-    pub fn permanently_delete_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        let media = self.fetch_media_paths_by_ids(&conn, &[id])?;
-        // Only trashed rows can be permanently deleted; keep their tombstone
-        // (already written on trash) and fill gaps for legacy pre-tombstone rows.
-        let info: Option<(String, bool)> = conn
-            .query_row(
-                "SELECT hash, is_sensitive FROM records WHERE id = ? AND is_trashed = 1",
-                [id],
-                |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0)),
-            )
-            .optional()?;
-        let n = conn.execute("DELETE FROM records WHERE id = ? AND is_trashed = 1", [id])?;
-        drop(conn);
-        if n > 0 {
-            if let Some((hash, is_sensitive)) = info {
-                let now = chrono::Utc::now().to_rfc3339();
-                let _ = self.upsert_tombstone(&hash, &now, is_sensitive);
-            }
-            self.purge_media_pairs(&media);
-        }
-        Ok(())
-    }
-
-    pub fn permanently_delete_records_batch(&self, ids: &[i64]) -> SqlResult<usize> {
-        if ids.is_empty() {
-            return Ok(0);
-        }
-        let conn = self.conn.lock();
-        let media = self.fetch_media_paths_by_ids(&conn, ids)?;
-        let rows: Vec<(String, bool)> = {
-            let placeholders = Self::id_placeholders(ids.len());
-            let mut stmt = conn.prepare(&format!(
-                "SELECT hash, is_sensitive FROM records
-                 WHERE is_trashed = 1 AND id IN ({placeholders})"
-            ))?;
-            let params: Vec<&dyn rusqlite::types::ToSql> = ids
-                .iter()
-                .map(|id| id as &dyn rusqlite::types::ToSql)
-                .collect();
-            let rows = stmt
-                .query_map(params.as_slice(), |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
-                })?
-                .collect::<SqlResult<Vec<_>>>()?;
-            rows
-        };
-        let placeholders = Self::id_placeholders(ids.len());
-        let sql = format!(
-            "DELETE FROM records WHERE is_trashed = 1 AND id IN ({})",
-            placeholders
-        );
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+        Self::refresh_record_fts(conn, winner_id)?;
+        // FTS row + record_tags links of losers cascade on delete.
+        let placeholders = Self::id_placeholders(loser_ids.len());
+        let params: Vec<&dyn rusqlite::types::ToSql> = loser_ids
             .iter()
             .map(|id| id as &dyn rusqlite::types::ToSql)
             .collect();
-        let count = conn.execute(&sql, params.as_slice())?;
-        drop(conn);
-        if count > 0 {
-            let now = chrono::Utc::now().to_rfc3339();
-            for (hash, is_sensitive) in rows {
-                let _ = self.upsert_tombstone(&hash, &now, is_sensitive);
-            }
-            self.purge_media_pairs(&media);
-        }
-        Ok(count)
-    }
-
-    pub fn empty_trash(&self) -> SqlResult<usize> {
-        let conn = self.conn.lock();
-        let rows: Vec<(i64, String, bool)> = {
-            let mut stmt =
-                conn.prepare("SELECT id, hash, is_sensitive FROM records WHERE is_trashed = 1")?;
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, i32>(2)? != 0,
-                    ))
-                })?
-                .collect::<SqlResult<Vec<_>>>()?;
-            rows
-        };
-        let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
-        let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
-        let now = chrono::Utc::now().to_rfc3339();
-        for (_, hash, is_sensitive) in &rows {
-            Self::upsert_tombstone_conn(&conn, hash, &now, *is_sensitive)?;
-        }
-        let count = conn.execute("DELETE FROM records WHERE is_trashed = 1", [])?;
-        drop(conn);
-        self.purge_media_pairs(&media);
-        Ok(count)
-    }
-
-    pub fn get_trash_count(&self) -> SqlResult<i64> {
-        let conn = self.lock_read();
-        conn.query_row(
-            "SELECT COUNT(*) FROM records WHERE is_trashed = 1",
-            [],
-            |row| row.get(0),
-        )
-    }
-
-    // === Favorites / Pin / Alias ===
-
-    pub fn toggle_favorite(&self, id: i64) -> SqlResult<bool> {
-        let conn = self.conn.lock();
-        let current: i32 = conn.query_row(
-            "SELECT is_favorite FROM records WHERE id = ?",
-            [id],
-            |row| row.get(0),
-        )?;
-        let new_val = if current == 0 { 1 } else { 0 };
         conn.execute(
-            "UPDATE records SET is_favorite = ? WHERE id = ?",
-            params![new_val, id],
+            &format!("DELETE FROM records WHERE id IN ({placeholders})"),
+            params.as_slice(),
         )?;
-        Ok(new_val == 1)
-    }
-
-    pub fn batch_set_favorite(&self, ids: &[i64], favorite: bool) -> SqlResult<usize> {
-        if ids.is_empty() {
-            return Ok(0);
-        }
-        let conn = self.conn.lock();
-        let placeholders = Self::id_placeholders(ids.len());
-        let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
-            vec![Box::new(if favorite { 1i32 } else { 0i32 })];
-        for id in ids {
-            params.push(Box::new(*id));
-        }
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
-            params.iter().map(|p| p.as_ref()).collect();
-        let n = conn.execute(
-            &format!("UPDATE records SET is_favorite = ? WHERE id IN ({placeholders})"),
-            param_refs.as_slice(),
-        )?;
-        Ok(n)
-    }
-
-    pub fn toggle_pin(&self, id: i64) -> SqlResult<bool> {
-        let conn = self.conn.lock();
-        let current: i32 =
-            conn.query_row("SELECT is_pinned FROM records WHERE id = ?", [id], |row| {
-                row.get(0)
-            })?;
-        let new_val = if current == 0 { 1 } else { 0 };
         conn.execute(
-            "UPDATE records SET is_pinned = ? WHERE id = ?",
-            params![new_val, id],
+            "UPDATE records SET hash = ? WHERE id = ?",
+            params![new_hash, winner_id],
         )?;
-        Ok(new_val == 1)
-    }
-
-    /// Set short display alias (trim + max 80 chars). Empty clears. Does not touch content/hash.
-    pub fn set_record_alias(&self, id: i64, alias: &str) -> SqlResult<String> {
-        let mut alias = alias.trim().to_string();
-        if alias.chars().count() > ALIAS_MAX_CHARS {
-            alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
-        }
-        let conn = self.conn.lock();
-        // UPDATE + FTS refresh in one transaction: a crash between the two
-        // would otherwise drop the FTS row permanently (search misses).
-        let tx = conn.unchecked_transaction()?;
-        let n = tx.execute(
-            "UPDATE records SET alias = ? WHERE id = ?",
-            params![alias, id],
-        )?;
-        if n == 0 {
-            return Err(rusqlite::Error::QueryReturnedNoRows);
-        }
-        Self::refresh_record_fts(&tx, id)?;
-        tx.commit()?;
-        Ok(alias)
-    }
-
-    // === Bulk cleanup ===
-
-    pub fn clear_non_favorite(&self) -> SqlResult<()> {
-        let conn = self.conn.lock();
-        let rows: Vec<(i64, String, bool)> = {
-            let mut stmt = conn.prepare(
-                "SELECT id, hash, is_sensitive FROM records
-                     WHERE is_favorite = 0 AND is_trashed = 0",
-            )?;
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, i32>(2)? != 0,
-                    ))
-                })?
-                .collect::<SqlResult<Vec<_>>>()?;
-            rows
-        };
-        let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
-        let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
-        let now = chrono::Utc::now().to_rfc3339();
-        for (_, hash, is_sensitive) in &rows {
-            Self::upsert_tombstone_conn(&conn, hash, &now, *is_sensitive)?;
-        }
-        conn.execute(
-            "DELETE FROM records WHERE is_favorite = 0 AND is_trashed = 0",
-            [],
-        )?;
-        drop(conn);
-        self.purge_media_pairs(&media);
         Ok(())
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::ClipboardDb;
-    use crate::db::ContentType;
-    use crate::detect::{sha256_hash, sha256_hash_bytes};
-    use std::path::PathBuf;
-
-    fn temp_db() -> (ClipboardDb, PathBuf) {
-        let dir = std::env::temp_dir().join(format!(
-            "clipvault_records_write_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
-        (db, dir)
-    }
-
-    fn cleanup(dir: PathBuf) {
-        for name in ["test.db", "test.db-wal", "test.db-shm"] {
-            let _ = std::fs::remove_file(dir.join(name));
+    /// Pick the survivor (active first, then most recently updated) and fold
+    /// loser state into it: favorite/pin OR'd, copy_count summed, alias
+    /// back-filled. Trashed losers contribute nothing — they just vanish.
+    fn fold_group_into_winner(
+        group: &mut Vec<LegacyHashRow>,
+    ) -> (i64, bool, bool, i32, String, Vec<i64>) {
+        group.sort_by(|a, b| {
+            a.5.cmp(&b.5) // is_trashed ASC (active first)
+                .then(b.6.cmp(&a.6)) // updated_at DESC
+                .then(b.0.cmp(&a.0)) // id DESC
+        });
+        let (winner_id, fav, pin, mut count, mut alias, _, _) = group.remove(0);
+        let mut fav = fav != 0;
+        let mut pin = pin != 0;
+        let mut loser_ids: Vec<i64> = Vec::new();
+        for (id, f, p, c, a, trashed, _) in group.iter() {
+            loser_ids.push(*id);
+            if *trashed == 0 {
+                fav |= *f != 0;
+                pin |= *p != 0;
+                count += c;
+                if alias.is_empty() && !a.is_empty() {
+                    alias = a.clone();
+                }
+            }
         }
-        let _ = std::fs::remove_dir_all(dir);
+        (winner_id, fav, pin, count, alias, loser_ids)
     }
 
-    fn insert(db: &ClipboardDb, content: &str) -> (i64, bool, crate::ClipboardRecord) {
-        // Mirror the capture pipeline's double-hash text format.
-        let hash = sha256_hash(&sha256_hash(content));
-        db.insert_record(
-            content,
-            &ContentType::Text,
-            &hash,
-            false,
-            1000,
-            600,
-            "app.exe",
-            "win",
-            "",
-            None,
-            None,
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn record_hash_exists_matches_active_and_trashed_rows() {
-        let (db, dir) = temp_db();
-        let (id, is_new, _) = insert(&db, "hello world");
-        assert!(is_new);
-        let text_hash = sha256_hash(&sha256_hash("hello world"));
-        assert!(db.record_hash_exists(&text_hash).unwrap());
-        assert!(!db
-            .record_hash_exists(&sha256_hash(&sha256_hash("absent")))
-            .unwrap());
-
-        // Trashed rows still hold the UNIQUE(hash) slot, so a history re-import
-        // must treat them as "already exists" — inserting again would trip the
-        // UNIQUE constraint even though `is_trashed` is set.
-        db.trash_record(id).unwrap();
-        assert!(db.record_hash_exists(&text_hash).unwrap());
-        cleanup(dir);
-    }
-
-    #[test]
-    fn record_hash_exists_false_for_image_hash_and_empty_db() {
-        let (db, dir) = temp_db();
-        let image_hash = sha256_hash_bytes(&[1u8, 2, 3, 4]);
-        assert!(!db.record_hash_exists(&image_hash).unwrap());
-        cleanup(dir);
-    }
+    // === Delete / Trash / Favorites / Pin / Alias ===
+    // Moved to `records_trash.rs` and `records_flags.rs` to keep each file
+    // under the size cap; all remain `impl ClipboardDb` methods.
 }

@@ -6,7 +6,7 @@ use super::ClipboardDb;
 /// Increment when adding tables, columns, or indexes that older DBs must migrate.
 /// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
 /// the on-disk schema matches what this binary expects.
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 impl ClipboardDb {
     pub(super) fn initialize_schema(conn: &Connection) -> SqlResult<()> {
@@ -109,6 +109,22 @@ impl ClipboardDb {
                 ('重要', '#ef4444', 0),
                 ('设计', '#a855f7', 0);
             "#,
+        )?;
+        // Runs AFTER the `settings` table exists (its one-shot gate lives there).
+        Self::enforce_active_hash_uniqueness(conn)?;
+        Ok(())
+    }
+
+    /// Move the active-hash dedup invariant from application logic into the
+    /// database: clean pre-existing duplicate active rows, then install a
+    /// partial unique index. Partial (active-only) uniqueness: trashed rows
+    /// must NOT hold the hash slot, otherwise re-copying a trashed item
+    /// violates the constraint instead of inserting a fresh record.
+    fn enforce_active_hash_uniqueness(conn: &Connection) -> SqlResult<()> {
+        Self::dedupe_active_hashes(conn)?;
+        conn.execute_batch(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_records_hash_active
+             ON records(hash) WHERE is_trashed = 0;",
         )?;
         Ok(())
     }
@@ -329,6 +345,44 @@ impl ClipboardDb {
              ON records(is_trashed, is_pinned, updated_at DESC);
              CREATE INDEX IF NOT EXISTS idx_records_hash_active
              ON records(hash, is_trashed);",
+        )?;
+        Ok(())
+    }
+
+    /// One-shot: drop duplicate **active** hash rows (keep the most recently
+    /// updated) so `uq_records_hash_active` can be created. Capture-side dedup
+    /// is application logic and has historically raced; this migration moves
+    /// the invariant into the database itself. Trashed duplicates are left
+    /// alone — they sit outside the partial index and a trash sweep deletes
+    /// them eventually.
+    fn dedupe_active_hashes(conn: &Connection) -> SqlResult<()> {
+        let done: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'hash_unique_v1'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if done.as_deref() == Some("1") {
+            return Ok(());
+        }
+        conn.execute(
+            "DELETE FROM records WHERE is_trashed = 0 AND id NOT IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY hash
+                        ORDER BY updated_at DESC, id DESC
+                    ) AS rn
+                    FROM records
+                    WHERE is_trashed = 0
+                )
+                WHERE rn = 1
+             )",
+            [],
+        )?;
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('hash_unique_v1', '1')",
+            [],
         )?;
         Ok(())
     }

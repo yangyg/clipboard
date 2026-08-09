@@ -71,3 +71,12 @@ pub const RECORD_COLS_LIST: &str =
                content_len, alias, source_name";
 
 pub const ALIAS_MAX_CHARS: usize = 80;
+
+/// Upper bound for caller-supplied page sizes (IPC / sync). Guards against a
+/// malformed or hostile limit pulling the entire table in a single query.
+pub const MAX_PAGE_SIZE: i32 = 500;
+
+/// Clamp a page size into `[1, MAX_PAGE_SIZE]`.
+pub fn clamp_page_limit(limit: i32) -> i32 {
+    limit.clamp(1, MAX_PAGE_SIZE)
+}

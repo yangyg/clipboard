@@ -2,7 +2,7 @@
 //! (Part of the records-module split: query / write / search / import-export / media.)
 use rusqlite::{params, Connection, Result as SqlResult, Row};
 
-use super::{ClipboardDb, RECORD_COLS, RECORD_COLS_LIST};
+use super::{clamp_page_limit, ClipboardDb, RECORD_COLS, RECORD_COLS_LIST};
 use crate::ClipboardRecord;
 
 impl ClipboardDb {
@@ -223,12 +223,12 @@ impl ClipboardDb {
             params.push(Box::new(ts));
             params.push(Box::new(id));
             sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
-            params.push(Box::new(limit.max(1)));
+            params.push(Box::new(clamp_page_limit(limit)));
         } else {
             sql.push_str(" ORDER BY ");
             sql.push_str(Self::order_by_clause(trashed, sort));
             sql.push_str(" LIMIT ? OFFSET ?");
-            params.push(Box::new(limit.max(1)));
+            params.push(Box::new(clamp_page_limit(limit)));
             params.push(Box::new(offset.max(0)));
         }
 

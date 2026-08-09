@@ -69,7 +69,7 @@ impl ClipboardDb {
              ORDER BY synced_at DESC, id DESC
              LIMIT ?",
         )?;
-        let rows = stmt.query_map([limit.max(0)], |row| {
+        let rows = stmt.query_map([limit.clamp(0, i64::from(super::MAX_PAGE_SIZE))], |row| {
             Ok(SyncHistoryEntry {
                 id: row.get(0)?,
                 synced_at: row.get(1)?,

@@ -17,6 +17,8 @@ export interface ClipboardRecord {
   source_window: string;
   /** Friendly source name from the exe's FileDescription (display only; empty = fall back). */
   source_name?: string;
+  /** Device that first captured this record (empty = legacy/unknown origin). */
+  source_device_id?: string;
   hash: string;
   copy_count: number;
   is_favorite: boolean;
@@ -125,6 +127,10 @@ export interface Settings {
   webdav_remote_path: string;
   webdav_sync_sensitive: boolean;
   webdav_device_id: string;
+  /** Display name for this device, published in the sync manifest. */
+  webdav_device_name: string;
+  /** device_id → display name learned from sync manifests (local cache). */
+  webdav_device_names: Record<string, string>;
   webdav_last_sync_at: string | null;
   /** AI enrichment (OpenAI-compatible chat completions). */
   enable_ai: boolean;

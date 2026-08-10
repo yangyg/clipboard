@@ -48,6 +48,10 @@ pub struct SyncManifest {
     /// Used to garbage-collect tombstones only once every device has seen them.
     #[serde(default)]
     pub device_acks: std::collections::HashMap<String, String>,
+    /// device_id → display name, so recipients can label record origins.
+    /// Additive field: older clients ignore it and keep syncing normally.
+    #[serde(default)]
+    pub device_names: std::collections::HashMap<String, String>,
 }
 
 impl SyncManifest {
@@ -60,6 +64,7 @@ impl SyncManifest {
             entries: vec![],
             tombstones: vec![],
             device_acks: std::collections::HashMap::new(),
+            device_names: std::collections::HashMap::new(),
         }
     }
 }
@@ -251,6 +256,7 @@ mod tests {
             entries: vec![],
             tombstones: vec![tomb("h1", "2026-01-30T00:00:00Z")],
             device_acks: acks.clone(),
+            device_names: HashMap::new(),
         };
         let json = serde_json::to_string(&manifest).unwrap();
         let parsed: SyncManifest = serde_json::from_str(&json).unwrap();
@@ -333,5 +339,55 @@ mod tests {
             ("b".to_string(), "2025-12-01T00:00:00Z".to_string()),
         ]);
         assert_eq!(gc_tombstones(ts, &lagging).len(), 2);
+    }
+
+    #[test]
+    fn bundle_round_trips_record_device_origin() {
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut rec = crate::ClipboardRecord {
+            id: 1,
+            content: "origin payload".to_string(),
+            content_type: "text".to_string(),
+            source_app: "app.exe".to_string(),
+            source_window: "win".to_string(),
+            source_name: String::new(),
+            source_device_id: "dev-remote".to_string(),
+            hash: "h-origin".to_string(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive: false,
+            is_trashed: false,
+            auto_expire_at: None,
+            created_at: now.clone(),
+            updated_at: now,
+            tags: vec![],
+            content_html: None,
+            media_path: None,
+            thumb_path: None,
+            width: None,
+            height: None,
+            media_abs: None,
+            thumb_abs: None,
+            content_len: None,
+            alias: String::new(),
+        };
+        rec.media_abs = Some("C:\\secret".to_string());
+
+        let bytes = super::serialize_bundle(&[rec]).unwrap();
+        let parsed = super::parse_bundle(&bytes).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].source_device_id, "dev-remote");
+        assert!(
+            parsed[0].media_abs.is_none(),
+            "absolute paths must not leak"
+        );
+    }
+
+    #[test]
+    fn bundle_legacy_line_without_origin_parses_to_empty() {
+        let json = r#"{"id":0,"content":"legacy","content_type":"text","source_app":"","source_window":"","hash":"h-legacy","copy_count":0,"is_favorite":false,"is_pinned":false,"is_sensitive":false,"is_trashed":false,"auto_expire_at":null,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#;
+        let parsed: crate::ClipboardRecord = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.source_device_id, "");
     }
 }

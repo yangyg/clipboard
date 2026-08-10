@@ -121,6 +121,7 @@ const EXPECTED_RECORD_COLS: &[&str] = &[
     "content_len",
     "alias",
     "source_name",
+    "source_device_id",
 ];
 
 /// Expected indexes (name → must exist in sqlite_master).
@@ -384,6 +385,7 @@ fn map_record_row_binds_column_order_for_both_column_lists() {
         source_app: "app.exe".into(),
         source_window: "Window".into(),
         source_name: "Friendly".into(),
+        source_device_id: "dev-origin".into(),
         hash: "map-row-hash".into(),
         copy_count: 3,
         is_favorite: true,
@@ -419,6 +421,7 @@ fn map_record_row_binds_column_order_for_both_column_lists() {
         assert_eq!(mapped.source_app, "app.exe");
         assert_eq!(mapped.source_window, "Window");
         assert_eq!(mapped.source_name, "Friendly");
+        assert_eq!(mapped.source_device_id, "dev-origin");
         // Import re-derives text hashes (sha256(sha256(content))), matching the
         // capture identity scheme — assert the stored value, not the input.
         let expected_hash =

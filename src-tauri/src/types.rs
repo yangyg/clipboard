@@ -30,6 +30,10 @@ pub struct ClipboardRecord {
     /// Friendly source name from the exe's FileDescription (display only; empty = fall back).
     #[serde(default, rename = "source_name")]
     pub source_name: String,
+    /// Device that first captured this record (empty = legacy/unknown origin).
+    /// Never overwritten by merges/re-copies so synced content keeps its origin.
+    #[serde(default, rename = "source_device_id")]
+    pub source_device_id: String,
     pub hash: String,
     #[serde(rename = "copy_count")]
     pub copy_count: i32,
@@ -298,6 +302,13 @@ pub struct Settings {
     pub webdav_sync_sensitive: bool,
     #[serde(default, rename = "webdav_device_id")]
     pub webdav_device_id: String,
+    /// Display name for this device, published in the sync manifest so other
+    /// devices can label records that originated here.
+    #[serde(default, rename = "webdav_device_name")]
+    pub webdav_device_name: String,
+    /// device_id → display name learned from sync manifests (local cache).
+    #[serde(default, rename = "webdav_device_names")]
+    pub webdav_device_names: std::collections::HashMap<String, String>,
     #[serde(default, rename = "webdav_last_sync_at")]
     pub webdav_last_sync_at: Option<String>,
     // --- AI enrichment (OpenAI-compatible chat completions) ---
@@ -372,6 +383,8 @@ impl Default for Settings {
             webdav_remote_path: default_webdav_remote_path(),
             webdav_sync_sensitive: false,
             webdav_device_id: String::new(),
+            webdav_device_name: String::new(),
+            webdav_device_names: std::collections::HashMap::new(),
             webdav_last_sync_at: None,
             enable_ai: false,
             ai_base_url: default_ai_base_url(),

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildSourceOverrides,
+  resolveDeviceLabel,
   resolveSourceLabel,
   sourceShortName,
   type TranslateFn,
@@ -8,10 +9,16 @@ import {
 
 const translations: Record<string, string> = {
   "record.systemClipboard": "系统剪贴板",
+  "record.fromDevice": "来自 {name}",
+  "record.otherDevice": "其他设备",
   "sourceNames.notepad": "记事本",
   "sourceNames.paint": "画图",
 };
-const t: TranslateFn = (key: string) => translations[key] ?? key;
+const t: TranslateFn = (key: string, named?: Record<string, unknown>) => {
+  const template = translations[key] ?? key;
+  if (!named) return template;
+  return template.replace(/\{(\w+)\}/g, (_, name: string) => String(named[name] ?? ""));
+};
 
 describe("sourceBadge", () => {
   it("maps empty source to 系统剪贴板", () => {
@@ -66,5 +73,28 @@ describe("sourceBadge", () => {
     expect(map).toEqual({ "myapp.exe": "我的应用" });
     expect(buildSourceOverrides(undefined)).toEqual({});
     expect(buildSourceOverrides([])).toEqual({});
+  });
+
+  it("hides the device badge for local records or missing origins", () => {
+    expect(resolveDeviceLabel({ source_device_id: "" }, {}, "dev-local", t)).toBe("");
+    expect(resolveDeviceLabel({ source_device_id: "dev-local" }, {}, "dev-local", t)).toBe("");
+    expect(resolveDeviceLabel({}, { "dev-other": "办公电脑" }, "dev-local", t)).toBe("");
+  });
+
+  it("renders the known device name", () => {
+    expect(
+      resolveDeviceLabel(
+        { source_device_id: "dev-other" },
+        { "dev-other": "办公电脑" },
+        "dev-local",
+        t,
+      ),
+    ).toBe("来自 办公电脑");
+  });
+
+  it("falls back to the generic label for unknown devices", () => {
+    expect(resolveDeviceLabel({ source_device_id: "dev-unknown" }, {}, "dev-local", t)).toBe(
+      "其他设备",
+    );
   });
 });

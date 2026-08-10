@@ -44,6 +44,29 @@ fn ensure_device_id(settings: &mut Settings) -> String {
     settings.webdav_device_id.clone()
 }
 
+/// Pick the non-empty device origin of the earlier-created candidate.
+/// Deterministic: equal `created_at` keeps `existing`; an empty incoming value
+/// never overrides a known origin.
+fn pick_origin(
+    existing_id: &str,
+    existing_created: &str,
+    incoming_id: &str,
+    incoming_created: &str,
+) -> String {
+    match (existing_id.is_empty(), incoming_id.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => existing_id.to_string(),
+        (true, false) => incoming_id.to_string(),
+        (false, false) => {
+            if incoming_created < existing_created {
+                incoming_id.to_string()
+            } else {
+                existing_id.to_string()
+            }
+        }
+    }
+}
+
 /// Persist settings with a fresh `webdav_last_sync_at` stamp, off the async worker.
 async fn persist_last_sync(db: &Arc<ClipboardDb>, settings: &mut Settings) -> Result<(), String> {
     let db = Arc::clone(db);
@@ -143,7 +166,20 @@ pub async fn webdav_pull(
     media::ensure_dirs(&media_root).map_err(|e| e.to_string())?;
 
     let state = fetch_remote_state(&client, &root, &device_id).await?;
+    // Learn device display names published by peers so record-origin badges can
+    // resolve ids → names. Merged into settings and persisted with the sync
+    // stamp below (pull is additive: local names are never removed).
+    let remote_device_names = state.manifest.device_names.clone();
     let manifest = state.manifest;
+    if !remote_device_names.is_empty() {
+        let mut known = settings.webdav_device_names.clone();
+        for (id, name) in &remote_device_names {
+            if !name.trim().is_empty() {
+                known.insert(id.clone(), name.clone());
+            }
+        }
+        settings.webdav_device_names = known;
+    }
     let remote_tombstones: Vec<(String, String)> = manifest
         .tombstones
         .iter()
@@ -270,14 +306,30 @@ pub async fn webdav_push(
             catalog.insert(r.hash.clone(), strip_abs_paths(r));
         }
     }
+    // Same-hash candidates: newer `updated_at` wins content, but the device
+    // origin follows the earlier `created_at` — a re-copy on another device
+    // must never re-label where the record came from.
     for r in local {
         let r = strip_abs_paths(r);
-        let regress = catalog
-            .get(&r.hash)
-            .map(|existing| existing.updated_at.as_str() >= r.updated_at.as_str())
-            .unwrap_or(false);
-        if !regress {
-            catalog.insert(r.hash.clone(), r);
+        match catalog.get_mut(&r.hash) {
+            None => {
+                catalog.insert(r.hash.clone(), r);
+            }
+            Some(existing) => {
+                let origin = pick_origin(
+                    &existing.source_device_id,
+                    &existing.created_at,
+                    &r.source_device_id,
+                    &r.created_at,
+                );
+                if existing.updated_at.as_str() >= r.updated_at.as_str() {
+                    existing.source_device_id = origin;
+                } else {
+                    let mut next = r;
+                    next.source_device_id = origin;
+                    *existing = next;
+                }
+            }
         }
     }
 
@@ -388,6 +440,11 @@ pub async fn webdav_push(
     let bundle_payload = tokio::task::spawn_blocking(move || serialize_bundle(&records))
         .await
         .map_err(|e| format!("WebDAV 打包 bundle 任务失败: {e}"))??;
+    let mut device_names = settings.webdav_device_names.clone();
+    let device_name = settings.webdav_device_name.trim();
+    if !device_name.is_empty() {
+        device_names.insert(device_id.clone(), device_name.to_string());
+    }
     let manifest = SyncManifest {
         version: 2,
         protocol: PROTOCOL.to_string(),
@@ -396,6 +453,7 @@ pub async fn webdav_push(
         entries,
         tombstones,
         device_acks,
+        device_names,
     };
     let manifest_bytes = serde_json::to_vec_pretty(&manifest).map_err(|e| e.to_string())?;
     let expected_manifest_etag = if manifest_exists {
@@ -506,4 +564,57 @@ pub struct WebDavSyncResult {
     pub media_downloaded: i32,
     pub media_uploaded: i32,
     pub media_skipped: i32,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pick_origin;
+
+    #[test]
+    fn origin_follows_earlier_creator() {
+        assert_eq!(
+            pick_origin(
+                "dev-new",
+                "2026-06-01T00:00:00Z",
+                "dev-old",
+                "2026-01-01T00:00:00Z"
+            ),
+            "dev-old"
+        );
+        assert_eq!(
+            pick_origin(
+                "dev-old",
+                "2026-01-01T00:00:00Z",
+                "dev-new",
+                "2026-06-01T00:00:00Z"
+            ),
+            "dev-old"
+        );
+        // Equal created_at keeps the first-seen candidate deterministically.
+        assert_eq!(
+            pick_origin(
+                "dev-a",
+                "2026-01-01T00:00:00Z",
+                "dev-b",
+                "2026-01-01T00:00:00Z"
+            ),
+            "dev-a"
+        );
+    }
+
+    #[test]
+    fn empty_origin_never_erases_known_origin() {
+        assert_eq!(
+            pick_origin("dev-a", "2026-01-01T00:00:00Z", "", "2025-01-01T00:00:00Z"),
+            "dev-a"
+        );
+        assert_eq!(
+            pick_origin("", "2026-01-01T00:00:00Z", "dev-b", "2025-01-01T00:00:00Z"),
+            "dev-b"
+        );
+        assert_eq!(
+            pick_origin("", "2026-01-01T00:00:00Z", "", "2025-01-01T00:00:00Z"),
+            ""
+        );
+    }
 }

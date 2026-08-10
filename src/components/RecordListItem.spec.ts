@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import { nextTick } from "vue";
 import { mountWithPlugins } from "../test/mount";
 import type { ClipboardRecord } from "../types";
+import { useSettingsStore } from "../stores/settings";
 import RecordListItem from "./RecordListItem.vue";
 
 const record: ClipboardRecord = {
@@ -70,5 +72,28 @@ describe("RecordListItem", () => {
 
     expect(wrapper.find(".alias-mark").exists()).toBe(false);
     expect(wrapper.find(".record-title").attributes("title")).toBeUndefined();
+  });
+
+  it("hides the device badge for local records", () => {
+    const wrapper = mountWithPlugins(RecordListItem, { props });
+    expect(wrapper.find(".record-device").exists()).toBe(false);
+  });
+
+  it("shows the device-origin badge for records from another device", () => {
+    const wrapper = mountWithPlugins(RecordListItem, {
+      props: { ...props, record: { ...record, source_device_id: "dev-remote" } },
+    });
+    expect(wrapper.find(".record-device").text()).toBe("其他设备");
+  });
+
+  it("shows the known device name in the badge", async () => {
+    const wrapper = mountWithPlugins(RecordListItem, {
+      props: { ...props, record: { ...record, source_device_id: "dev-remote" } },
+    });
+    const settingsStore = useSettingsStore();
+    settingsStore.settings.webdav_device_id = "dev-local";
+    settingsStore.settings.webdav_device_names = { "dev-remote": "办公电脑" };
+    await nextTick();
+    expect(wrapper.find(".record-device").text()).toBe("来自 办公电脑");
   });
 });

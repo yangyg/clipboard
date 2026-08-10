@@ -6,7 +6,7 @@ use super::ClipboardDb;
 /// Increment when adding tables, columns, or indexes that older DBs must migrate.
 /// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
 /// the on-disk schema matches what this binary expects.
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 impl ClipboardDb {
     pub(super) fn initialize_schema(conn: &Connection) -> SqlResult<()> {
@@ -34,7 +34,8 @@ impl ClipboardDb {
                 content_html TEXT,
                 content_len INTEGER NOT NULL DEFAULT 0,
                 alias TEXT NOT NULL DEFAULT '',
-                source_name TEXT NOT NULL DEFAULT ''
+                source_name TEXT NOT NULL DEFAULT '',
+                source_device_id TEXT NOT NULL DEFAULT ''
             );
 
             CREATE INDEX IF NOT EXISTS idx_records_updated_at ON records(updated_at DESC);
@@ -340,6 +341,7 @@ impl ClipboardDb {
             ("content_len", "INTEGER NOT NULL DEFAULT 0"),
             ("alias", "TEXT NOT NULL DEFAULT ''"),
             ("source_name", "TEXT NOT NULL DEFAULT ''"),
+            ("source_device_id", "TEXT NOT NULL DEFAULT ''"),
         ];
         for (name, ddl) in MIGRATE_COLUMNS {
             if !existing_cols.contains(*name) {

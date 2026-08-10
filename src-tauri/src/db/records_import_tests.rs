@@ -35,6 +35,7 @@ fn make_record(content: &str, hash: &str, tags: &[&str]) -> ClipboardRecord {
         source_app: String::new(),
         source_window: String::new(),
         source_name: String::new(),
+        source_device_id: String::new(),
         hash: hash.to_string(),
         copy_count: 0,
         is_favorite: false,
@@ -240,5 +241,81 @@ fn import_sanitize_preserves_past_expiry_when_disabled() {
         rows[0].auto_expire_at.as_deref(),
         Some("2020-01-01T00:00:00Z")
     );
+    cleanup(dir);
+}
+
+#[test]
+fn import_preserves_remote_device_origin() {
+    let (db, dir) = temp_db();
+    let mut rec = make_record("remote origin", "origin-remote", &[]);
+    rec.source_device_id = "dev-remote".to_string();
+    db.import_records_with_merge(&[rec], 100, None).unwrap();
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(rows[0].source_device_id, "dev-remote");
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_keeps_earlier_creator_as_origin() {
+    let (db, dir) = temp_db();
+    // Local record created later with a local origin.
+    let mut local = make_record("same", "origin-merge", &[]);
+    local.source_device_id = "dev-local".to_string();
+    local.created_at = "2026-06-01T00:00:00Z".to_string();
+    local.updated_at = "2026-06-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[local], 100, None).unwrap();
+
+    // Same hash from another device, created earlier → origin flips to it.
+    let mut remote = make_record("same", "origin-merge", &[]);
+    remote.source_device_id = "dev-remote".to_string();
+    remote.created_at = "2026-01-01T00:00:00Z".to_string();
+    remote.updated_at = "2026-07-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[remote], 100, None).unwrap();
+
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(rows[0].source_device_id, "dev-remote");
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_never_overwrites_known_origin() {
+    let (db, dir) = temp_db();
+    let mut local = make_record("same", "origin-keep", &[]);
+    local.source_device_id = "dev-local".to_string();
+    local.created_at = "2026-01-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[local], 100, None).unwrap();
+
+    // Legacy incoming (empty origin) must not erase the known origin.
+    let mut legacy = make_record("same", "origin-keep", &[]);
+    legacy.created_at = "2025-01-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[legacy], 100, None).unwrap();
+
+    // Newer incoming with a different origin must not overwrite the first one.
+    let mut other = make_record("same", "origin-keep", &[]);
+    other.source_device_id = "dev-other".to_string();
+    other.created_at = "2026-06-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[other], 100, None).unwrap();
+
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(rows[0].source_device_id, "dev-local");
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_fills_empty_origin_from_incoming() {
+    let (db, dir) = temp_db();
+    // Legacy local row (no origin).
+    let mut local = make_record("same", "origin-fill", &[]);
+    local.created_at = "2026-06-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[local], 100, None).unwrap();
+
+    // Incoming with a known origin → the empty local slot is filled.
+    let mut remote = make_record("same", "origin-fill", &[]);
+    remote.source_device_id = "dev-remote".to_string();
+    remote.created_at = "2026-01-01T00:00:00Z".to_string();
+    db.import_records_with_merge(&[remote], 100, None).unwrap();
+
+    let rows = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(rows[0].source_device_id, "dev-remote");
     cleanup(dir);
 }

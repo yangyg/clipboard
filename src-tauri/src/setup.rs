@@ -16,6 +16,34 @@ use crate::db::ClipboardDb;
 use crate::panel::apply_global_shortcut;
 use crate::{tray, window};
 
+/// Ensure the device identity (sync id + display name) exists before any
+/// capture can stamp records with it. Runs before the capture pipeline starts;
+/// failures are logged and degrade to empty stamps, never fatal at startup.
+fn ensure_device_identity(db: &ClipboardDb) {
+    let Ok(current) = db.get_settings().map(|s| (*s).clone()) else {
+        error!("Failed to load settings while ensuring device identity");
+        return;
+    };
+    let mut next = current;
+    let mut changed = false;
+    if next.webdav_device_id.trim().is_empty() {
+        next.webdav_device_id = uuid::Uuid::new_v4().to_string();
+        changed = true;
+    }
+    if next.webdav_device_name.trim().is_empty() {
+        next.webdav_device_name =
+            std::env::var("COMPUTERNAME").unwrap_or_else(|_| "My Device".to_string());
+        changed = true;
+    }
+    if changed {
+        if let Err(e) = db.save_settings(&next) {
+            error!("Failed to persist device identity: {}", e);
+        } else {
+            info!("Device identity ensured (id={})", next.webdav_device_id);
+        }
+    }
+}
+
 pub(crate) fn setup(
     app: &mut App,
     db: Arc<ClipboardDb>,
@@ -23,6 +51,10 @@ pub(crate) fn setup(
     capture_paused: Arc<RwLock<bool>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
+
+    // Device identity must exist before captures start so every new record can
+    // be stamped with its origin.
+    ensure_device_identity(&db);
 
     // ── AI enrichment worker (off the capture hot path) ──
     let ai_tx = ai::start_ai_worker(app_handle.clone(), db.clone());

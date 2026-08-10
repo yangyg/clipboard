@@ -43,6 +43,16 @@
         @update:model-value="(v) => update('webdav_remote_path', v)"
       />
     </label>
+    <label class="webdav-field">
+      <span class="setting-label">{{ $t('settings.sync.webdavDeviceName') }}</span>
+      <div class="setting-desc">{{ $t('settings.sync.webdavDeviceNameDesc') }}</div>
+      <TextInput
+        class="auto-tag-input"
+        type="text"
+        :model-value="settings.webdav_device_name"
+        @update:model-value="(v) => update('webdav_device_name', v)"
+      />
+    </label>
     <div class="setting-row">
       <div>
         <div class="setting-label">{{ $t('settings.sync.webdavSyncSensitive') }}</div>

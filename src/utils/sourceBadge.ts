@@ -1,5 +1,5 @@
 /** Source-app display label resolution (list + preview plain-text labels). */
-import type { SourceNameOverride } from "../types";
+import type { ClipboardRecord, SourceNameOverride } from "../types";
 
 /** vue-i18n translate signature (kept local so this module stays dependency-free). */
 export type TranslateFn = (key: string, named?: Record<string, unknown>) => string;
@@ -119,4 +119,22 @@ export function buildSourceOverrides(
     if (key && name) map[key] = name;
   }
   return map;
+}
+
+/**
+ * Resolve the device-origin label for a record. Returns "" when the record was
+ * captured on this device (or carries no origin) so callers hide the badge.
+ * A known device id renders "来自 {name}"; an unknown one falls back to the
+ * generic "其他设备" label rather than exposing the raw UUID.
+ */
+export function resolveDeviceLabel(
+  record: Pick<ClipboardRecord, "source_device_id">,
+  deviceNames: Record<string, string> | undefined,
+  localDeviceId: string | undefined,
+  t: TranslateFn,
+): string {
+  const deviceId = (record.source_device_id ?? "").trim();
+  if (!deviceId || deviceId === (localDeviceId ?? "").trim()) return "";
+  const name = (deviceNames?.[deviceId] ?? "").trim();
+  return name ? t("record.fromDevice", { name }) : t("record.otherDevice");
 }

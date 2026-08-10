@@ -245,6 +245,7 @@ mod tests {
             source_app: String::new(),
             source_window: String::new(),
             source_name: String::new(),
+            source_device_id: String::new(),
             hash: hash.to_string(),
             copy_count: 0,
             is_favorite: false,

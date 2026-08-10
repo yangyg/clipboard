@@ -27,6 +27,13 @@ impl ClipboardDb {
         image: Option<&ImageMeta>,
         content_html: Option<&str>,
     ) -> SqlResult<(i64, bool, ClipboardRecord)> {
+        // Stamp the originating device on every fresh capture. The identity is
+        // generated at startup; an empty value (settings load failure / tests)
+        // degrades to an unknown-origin row rather than failing the insert.
+        let source_device_id = self
+            .get_settings()
+            .map(|s| s.webdav_device_id.clone())
+            .unwrap_or_default();
         let conn = self.conn.lock();
         if let Some(id) = Self::find_active_duplicate(&conn, hash)? {
             let record =
@@ -44,6 +51,7 @@ impl ClipboardDb {
             source_app,
             source_window,
             source_name,
+            &source_device_id,
             image,
             content_html,
             &now,
@@ -129,6 +137,7 @@ impl ClipboardDb {
         source_app: &str,
         source_window: &str,
         source_name: &str,
+        source_device_id: &str,
         image: Option<&ImageMeta>,
         content_html: Option<&str>,
         now: &str,
@@ -143,14 +152,15 @@ impl ClipboardDb {
             None => (None, None, None, None),
         };
         conn.execute(
-            "INSERT INTO records (content, content_type, source_app, source_window, source_name, hash, copy_count, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO records (content, content_type, source_app, source_window, source_name, source_device_id, hash, copy_count, is_sensitive, auto_expire_at, created_at, updated_at, media_path, thumb_path, width, height, content_html, content_len)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             params![
                 content,
                 content_type.as_str(),
                 source_app,
                 source_window,
                 source_name,
+                source_device_id,
                 hash,
                 is_sensitive as i32,
                 auto_expire_at,

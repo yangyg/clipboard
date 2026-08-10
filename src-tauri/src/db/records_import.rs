@@ -198,7 +198,14 @@ impl ClipboardDb {
                             WHEN (is_sensitive = 1 OR ? = 1)
                                  AND (auto_expire_at IS NULL OR auto_expire_at = '')
                                  AND ? IS NOT NULL
-                            THEN ? ELSE auto_expire_at END
+                            THEN ? ELSE auto_expire_at END,
+                        -- First-origin semantics: adopt the incoming device only
+                        -- when it is non-empty AND the earlier creator (or the
+                        -- local row has no origin yet). A non-empty origin is
+                        -- never overwritten or erased.
+                        source_device_id = CASE
+                            WHEN ? != '' AND (source_device_id = '' OR ? < created_at)
+                            THEN ? ELSE source_device_id END
                      WHERE hash = ? AND is_trashed = 0",
                     params![
                         record.is_favorite as i32,
@@ -217,6 +224,9 @@ impl ClipboardDb {
                         auto_expire_at,
                         auto_expire_at,
                         auto_expire_at,
+                        record.source_device_id,
+                        record.created_at,
+                        record.source_device_id,
                         hash,
                     ],
                 )?;
@@ -250,16 +260,17 @@ impl ClipboardDb {
 
             tx.execute(
                 "INSERT INTO records (
-                    content, content_type, source_app, source_window, source_name, hash, copy_count,
+                    content, content_type, source_app, source_window, source_name, source_device_id, hash, copy_count,
                     is_favorite, is_pinned, is_sensitive, is_trashed, auto_expire_at, created_at, updated_at,
                     media_path, thumb_path, width, height, content_html, alias, content_len
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 params![
                     record.content,
                     content_type,
                     record.source_app,
                     record.source_window,
                     record.source_name,
+                    record.source_device_id,
                     hash,
                     record.copy_count,
                     record.is_favorite as i32,

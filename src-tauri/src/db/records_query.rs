@@ -161,6 +161,7 @@ impl ClipboardDb {
             content_len: Some(row.get(19)?),
             alias: row.get(20)?,
             source_name: row.get(21)?,
+            source_device_id: row.get(22)?,
         })
     }
 

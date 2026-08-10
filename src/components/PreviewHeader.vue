@@ -14,6 +14,7 @@
         <div class="preview-meta-line">
           <div class="preview-meta-row">
             <span class="preview-meta-item" :title="sourceTitle">{{ $t('preview.source', { name: sourceLabel }) }}</span>
+            <span v-if="deviceOrigin" class="preview-meta-item preview-device">{{ deviceOrigin }}</span>
             <span class="preview-meta-item">{{ $t('preview.createdAt', { time: formatDateTime(record.created_at) }) }}</span>
           </div>
           <div class="preview-meta-more">
@@ -40,7 +41,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord } from "../types";
 import { useSettingsStore } from "../stores/settings";
-import { buildSourceOverrides, resolveSourceLabel } from "../utils/sourceBadge";
+import { buildSourceOverrides, resolveDeviceLabel, resolveSourceLabel } from "../utils/sourceBadge";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 
@@ -71,6 +72,15 @@ const sourceTitle = computed(() => {
     : t("record.sourceTooltip", { app: `${sourceLabel.value} (${raw})` });
 });
 
+const deviceOrigin = computed(() =>
+  resolveDeviceLabel(
+    props.record,
+    settingsStore.settings.webdav_device_names,
+    settingsStore.settings.webdav_device_id,
+    t,
+  ),
+);
+
 const emit = defineEmits<{
   "edit-alias": [];
 }>();
@@ -89,6 +99,7 @@ const emit = defineEmits<{
 .preview-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 14px; min-width: 0; }
 .preview-meta-row > span,
 .preview-meta-more > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-device { padding: 0 6px; border: 1px solid var(--border-subtle, var(--border-default)); border-radius: 999px; line-height: 1.35; }
 .preview-meta-more { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 14px; min-width: 0; opacity: 0; visibility: hidden; max-height: 0; overflow: hidden; transition: opacity var(--transition-fast), max-height var(--transition-smooth), visibility var(--transition-fast); }
 .preview-heading:hover .preview-meta-more,
 .preview-heading:focus-within .preview-meta-more { opacity: 1; visibility: visible; max-height: 3.5rem; }

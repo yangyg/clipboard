@@ -20,6 +20,8 @@ describe("settingsStore (smoke)", () => {
     expect(store.settings.max_records).toBe(1000);
     expect(store.settings.search_mode).toBe("full");
     expect(store.settings.onboarding_completed).toBe(false);
+    expect(store.settings.webdav_device_name).toBe("");
+    expect(store.settings.webdav_device_names).toEqual({});
     expect(store.isLoaded).toBe(false);
   });
 

@@ -43,6 +43,7 @@
       <div class="record-meta">
         <span class="record-time">{{ formatTime(record.created_at, t) }}</span>
         <span class="record-source" v-html="sourceLabelHtml(record, searchQuery, t, sourceOverrides) ?? escapeHtml(resolveSourceLabel(record.source_app, record.source_name, t, sourceOverrides))"></span>
+        <span v-if="deviceOrigin" class="record-device">{{ deviceOrigin }}</span>
         <span v-if="record.content_type === 'image' && record.width && record.height" class="record-dims">{{ record.width }}×{{ record.height }}</span>
         <span v-if="record.is_sensitive" class="record-sensitive">{{ $t('record.sensitive') }}</span>
       </div>
@@ -69,7 +70,8 @@ import { useI18n } from "vue-i18n";
 import type { ClipboardRecord } from "../types";
 import { escapeHtml } from "../utils/highlightSearch";
 import { formatTime, previewHtml, recordAlias, recordTitleAttr, rowColor, sourceLabelHtml } from "../utils/recordFormatting";
-import { resolveSourceLabel } from "../utils/sourceBadge";
+import { resolveDeviceLabel, resolveSourceLabel } from "../utils/sourceBadge";
+import { useSettingsStore } from "../stores/settings";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 
@@ -89,6 +91,15 @@ const props = defineProps<{
 }>();
 
 const hasAlias = computed(() => recordAlias(props.record).length > 0);
+const settingsStore = useSettingsStore();
+const deviceOrigin = computed(() =>
+  resolveDeviceLabel(
+    props.record,
+    settingsStore.settings.webdav_device_names,
+    settingsStore.settings.webdav_device_id,
+    t,
+  ),
+);
 
 const emit = defineEmits<{
   click: [id: number];
@@ -133,6 +144,7 @@ const { t } = useI18n();
 .record-meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-top: 6px; font-size: var(--text-sm, 0.6875rem); color: var(--text-tertiary); }
 .record-time { white-space: nowrap; }
 .record-source { display: inline-flex; align-items: center; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-device { display: inline-flex; align-items: center; padding: 0 6px; border: 1px solid var(--border-subtle, var(--border-default)); border-radius: 999px; line-height: 1.35; white-space: nowrap; opacity: 0.9; }
 .record-dims { white-space: nowrap; opacity: 0.85; }
 .record-sensitive { font-size: var(--text-xs, 0.625rem); font-weight: 600; color: var(--sensitive); background: var(--sensitive-soft); padding: 1px 6px; border-radius: 4px; }
 .record-actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); margin-top: -2px; }

@@ -59,6 +59,8 @@ const DEFAULT_SETTINGS: Settings = {
   webdav_remote_path: "ClipVaultSync",
   webdav_sync_sensitive: false,
   webdav_device_id: "",
+  webdav_device_name: "",
+  webdav_device_names: {},
   webdav_last_sync_at: null,
   enable_ai: false,
   ai_base_url: "https://api.openai.com/v1",

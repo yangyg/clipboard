@@ -115,3 +115,24 @@ fn recopy_after_trash_inserts_fresh_and_restore_prefers_active() {
     assert!(db.get_record(second_id).unwrap().is_some());
     cleanup(dir);
 }
+
+#[test]
+fn insert_stamps_device_origin_and_recopy_keeps_it() {
+    let (db, dir) = temp_db();
+    let settings = crate::Settings {
+        webdav_device_id: "dev-1".to_string(),
+        webdav_device_name: "办公电脑".to_string(),
+        ..crate::Settings::default()
+    };
+    db.save_settings(&settings).unwrap();
+
+    let (_, is_new, rec) = insert(&db, "origin text");
+    assert!(is_new);
+    assert_eq!(rec.source_device_id, "dev-1");
+
+    // Re-copying the same content (dedup refresh) must not re-label the origin.
+    let (_, is_new2, rec2) = insert(&db, "origin text");
+    assert!(!is_new2);
+    assert_eq!(rec2.source_device_id, "dev-1");
+    cleanup(dir);
+}

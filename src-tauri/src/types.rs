@@ -116,6 +116,43 @@ fn default_language() -> String {
     "system".to_string()
 }
 
+/// AI model access is opt-in (off until the user fills the settings form).
+fn default_enable_ai() -> bool {
+    false
+}
+
+fn default_ai_base_url() -> String {
+    "https://api.openai.com/v1".to_string()
+}
+
+fn default_ai_model() -> String {
+    "gpt-4o-mini".to_string()
+}
+
+/// Cap the snippet sent to the model — deep code / long emails don't need
+/// full round-trips for a summary + tags.
+fn default_ai_max_chars() -> i32 {
+    4000
+}
+
+fn default_ai_summary_alias() -> bool {
+    true
+}
+
+fn default_ai_auto_tag() -> bool {
+    true
+}
+
+/// Annotation the model must return for a record: a short display alias plus
+/// a handful of tags. `summary` may be empty (nothing worth summarizing).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AiResult {
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
 /// Missing `font_family` in saved JSON (upgrade) → the "default" preset.
 /// Keep in sync with `FONT_PRESETS[0].key` in src/utils/fontPresets.ts.
 fn default_font_family() -> String {
@@ -257,6 +294,23 @@ pub struct Settings {
     pub webdav_device_id: String,
     #[serde(default, rename = "webdav_last_sync_at")]
     pub webdav_last_sync_at: Option<String>,
+    // --- AI enrichment (OpenAI-compatible chat completions) ---
+    #[serde(default = "default_enable_ai", rename = "enable_ai")]
+    pub enable_ai: bool,
+    #[serde(default = "default_ai_base_url", rename = "ai_base_url")]
+    pub ai_base_url: String,
+    /// DPAPI-encrypted at rest (mirrors `webdav_password`); kept plaintext in memory.
+    #[serde(default, rename = "ai_api_key")]
+    pub ai_api_key: String,
+    #[serde(default = "default_ai_model", rename = "ai_model")]
+    pub ai_model: String,
+    #[serde(default = "default_ai_summary_alias", rename = "ai_summary_alias")]
+    pub ai_summary_alias: bool,
+    #[serde(default = "default_ai_auto_tag", rename = "ai_auto_tag")]
+    pub ai_auto_tag: bool,
+    /// Content truncation before it leaves the machine (chars).
+    #[serde(default = "default_ai_max_chars", rename = "ai_max_chars")]
+    pub ai_max_chars: i32,
     /// Optional product capabilities (tags / batch / sync / stats). Missing → all on.
     #[serde(default, rename = "features")]
     pub features: FeatureFlags,
@@ -310,6 +364,13 @@ impl Default for Settings {
             webdav_sync_sensitive: false,
             webdav_device_id: String::new(),
             webdav_last_sync_at: None,
+            enable_ai: false,
+            ai_base_url: default_ai_base_url(),
+            ai_api_key: String::new(),
+            ai_model: default_ai_model(),
+            ai_summary_alias: true,
+            ai_auto_tag: true,
+            ai_max_chars: default_ai_max_chars(),
             features: FeatureFlags::default(),
         }
     }
@@ -402,6 +463,25 @@ mod settings_onboarding_tests {
     #[test]
     fn default_settings_needs_onboarding() {
         assert!(!Settings::default().onboarding_completed);
+    }
+
+    #[test]
+    fn ai_enrichment_off_by_default() {
+        let s = Settings::default();
+        assert!(!s.enable_ai);
+        assert!(s.ai_summary_alias);
+        assert!(s.ai_auto_tag);
+        assert_eq!(s.ai_max_chars, 4000);
+        assert!(!s.ai_base_url.is_empty());
+    }
+
+    #[test]
+    fn missing_ai_fields_survive_upgrade_json() {
+        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
+        let s: Settings = serde_json::from_str(json).expect("parse");
+        assert!(!s.enable_ai, "upgrades must keep AI off");
+        assert_eq!(s.ai_max_chars, 4000);
+        assert!(s.ai_summary_alias && s.ai_auto_tag);
     }
 
     #[test]

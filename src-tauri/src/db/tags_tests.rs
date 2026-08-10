@@ -121,6 +121,96 @@ fn tag_mutations_bump_record_updated_at() {
 }
 
 #[test]
+fn add_auto_tags_by_name_merges_and_is_idempotent() {
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_ai_tag_merge_test_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let rec = ClipboardRecord {
+        id: 0,
+        content: "ai-tag content".into(),
+        content_type: "text".into(),
+        source_app: String::new(),
+        source_window: String::new(),
+        source_name: String::new(),
+        hash: "hash-ai-tag".into(),
+        copy_count: 0,
+        is_favorite: false,
+        is_pinned: false,
+        is_sensitive: false,
+        is_trashed: false,
+        auto_expire_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+        tags: vec![],
+        content_html: None,
+        media_path: None,
+        thumb_path: None,
+        width: None,
+        height: None,
+        media_abs: None,
+        thumb_abs: None,
+        content_len: None,
+        alias: String::new(),
+    };
+    db.import_records_with_merge(&[rec], 100, None).unwrap();
+    let record_id = db.get_records_for_export(10, 0).unwrap()[0].id;
+
+    // Pre-exists with a manual tag; AI must not remove it.
+    let manual = db.create_tag("manual-keep", "#ef4444").unwrap();
+    db.add_tag_to_record(record_id, manual).unwrap();
+
+    let names = |s: &[&str]| s.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+
+    // First call adds new auto tags; blanks are skipped. Name dedup inside the
+    // DB method is case-sensitive (consistent with import), so the two case
+    // variants both land.
+    let added = db
+        .add_auto_tags_by_name(
+            record_id,
+            &names(&["  AI-go   ", "ai-go", "", "代码", "代码"]),
+        )
+        .unwrap();
+    assert_eq!(added, 3, "distinct non-empty trimmed names count");
+
+    let tags = db.get_record_tag_names(record_id).unwrap();
+    assert!(tags.contains(&"manual-keep".to_string()), "manual kept");
+    assert!(tags.contains(&"AI-go".to_string()) || tags.contains(&"AI-go".to_string()));
+    assert!(tags.contains(&"ai-go".to_string()) || tags.contains(&"ai-go".to_string()));
+    assert!(tags.contains(&"代码".to_string()));
+
+    // New auto tags are created as is_auto.
+    let conn = db.conn.lock();
+    let is_auto: bool = conn
+        .query_row("SELECT is_auto FROM tags WHERE name = '代码'", [], |r| {
+            r.get::<_, i32>(0)
+        })
+        .map(|v| v != 0)
+        .unwrap();
+    drop(conn);
+    assert!(is_auto, "AI tags must be created as auto tags");
+
+    // Re-adding the same names reports 0 new (no FTS/watermark churn).
+    let again = db
+        .add_auto_tags_by_name(record_id, &names(&["AI-go", "代码"]))
+        .unwrap();
+    assert_eq!(again, 0);
+
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn deleting_tag_removes_it_from_full_text_search() {
     let dir = std::env::temp_dir().join(format!(
         "clipvault_tag_fts_delete_test_{}_{}",

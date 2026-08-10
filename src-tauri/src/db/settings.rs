@@ -57,6 +57,20 @@ impl ClipboardDb {
                                 }
                             }
                         }
+                        // AI API key gets the same secret-at-rest treatment.
+                        if s.ai_api_key.starts_with(crate::security::DPAPI_PREFIX) {
+                            match crate::security::decrypt_secret(&s.ai_api_key) {
+                                Ok(key) => s.ai_api_key = key,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to decrypt stored AI API key; keeping the stored \
+                                         value (a later save would otherwise overwrite it with an \
+                                         empty string): {}",
+                                        e
+                                    );
+                                }
+                            }
+                        }
                         settings = s;
                     }
                     Err(e) => {
@@ -95,6 +109,14 @@ impl ClipboardDb {
                 .starts_with(crate::security::DPAPI_PREFIX)
         {
             for_json.webdav_password = crate::security::encrypt_secret(&for_json.webdav_password)
+                .map_err(SettingsError::Encryption)?;
+        }
+        if !for_json.ai_api_key.is_empty()
+            && !for_json
+                .ai_api_key
+                .starts_with(crate::security::DPAPI_PREFIX)
+        {
+            for_json.ai_api_key = crate::security::encrypt_secret(&for_json.ai_api_key)
                 .map_err(SettingsError::Encryption)?;
         }
         let json = serde_json::to_string(&for_json)?;

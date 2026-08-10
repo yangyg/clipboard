@@ -55,6 +55,7 @@
             <SettingsHistory v-else-if="activeSection === 'history'" />
             <SettingsSource v-else-if="activeSection === 'source'" />
             <SettingsTags v-else-if="activeSection === 'tags'" />
+            <SettingsAi v-else-if="activeSection === 'ai'" />
             <SettingsPrivacy v-else-if="activeSection === 'privacy'" />
             <SettingsFeatures v-else-if="activeSection === 'features'" />
             <SettingsStats v-else-if="activeSection === 'stats'" />
@@ -83,6 +84,7 @@ import SettingsAppearance from "./settings/SettingsAppearance.vue";
 import SettingsHistory from "./settings/SettingsHistory.vue";
 import SettingsSource from "./settings/SettingsSource.vue";
 import SettingsTags from "./settings/SettingsTags.vue";
+import SettingsAi from "./settings/SettingsAi.vue";
 import SettingsPrivacy from "./settings/SettingsPrivacy.vue";
 import SettingsFeatures from "./settings/SettingsFeatures.vue";
 import SettingsStats from "./settings/SettingsStats.vue";
@@ -130,6 +132,7 @@ const ALL_SECTIONS: {
   { key: "features", icon: "component", labelKey: "settings.nav.features", group: "general" },
   // 内容
   { key: "tags", icon: "tag", labelKey: "settings.nav.tags", group: "content", feature: "tags" },
+  { key: "ai", icon: "sparkles", labelKey: "settings.nav.ai", group: "content", feature: "ai" },
   { key: "history", icon: "history", labelKey: "settings.nav.history", group: "content" },
   { key: "source", icon: "monitor", labelKey: "settings.nav.source", group: "content" },
   // 隐私与系统

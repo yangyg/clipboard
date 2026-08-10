@@ -10,6 +10,7 @@ pub enum FeatureId {
     Batch,
     Sync,
     Stats,
+    Ai,
 }
 
 impl FeatureId {
@@ -19,6 +20,7 @@ impl FeatureId {
             FeatureId::Batch => "batch",
             FeatureId::Sync => "sync",
             FeatureId::Stats => "stats",
+            FeatureId::Ai => "ai",
         }
     }
 }
@@ -34,6 +36,8 @@ pub struct FeatureFlags {
     pub sync: bool,
     #[serde(default = "default_true")]
     pub stats: bool,
+    #[serde(default = "default_true")]
+    pub ai: bool,
 }
 
 fn default_true() -> bool {
@@ -47,6 +51,7 @@ impl Default for FeatureFlags {
             batch: true,
             sync: true,
             stats: true,
+            ai: true,
         }
     }
 }
@@ -58,6 +63,7 @@ impl FeatureFlags {
             FeatureId::Batch => self.batch,
             FeatureId::Sync => self.sync,
             FeatureId::Stats => self.stats,
+            FeatureId::Ai => self.ai,
         }
     }
 }
@@ -78,7 +84,7 @@ mod tests {
     #[test]
     fn default_all_enabled() {
         let f = FeatureFlags::default();
-        assert!(f.tags && f.batch && f.sync && f.stats);
+        assert!(f.tags && f.batch && f.sync && f.stats && f.ai);
     }
 
     #[test]
@@ -87,5 +93,9 @@ mod tests {
         s.features.tags = false;
         assert!(require_feature(&s, FeatureId::Tags).is_err());
         assert!(require_feature(&s, FeatureId::Batch).is_ok());
+
+        let mut s = Settings::default();
+        s.features.ai = false;
+        assert!(require_feature(&s, FeatureId::Ai).is_err());
     }
 }

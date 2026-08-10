@@ -8,6 +8,7 @@ export const FEATURE_DEFINITIONS = [
   { id: "batch", labelKey: "settings.features.batch", descKey: "settings.features.batchDesc" },
   { id: "sync", labelKey: "settings.features.sync", descKey: "settings.features.syncDesc" },
   { id: "stats", labelKey: "settings.features.stats", descKey: "settings.features.statsDesc" },
+  { id: "ai", labelKey: "settings.features.ai", descKey: "settings.features.aiDesc" },
 ] as const satisfies ReadonlyArray<{
   id: FeatureId;
   labelKey: string;
@@ -19,6 +20,7 @@ export const DEFAULT_FEATURES: FeatureFlags = {
   batch: true,
   sync: true,
   stats: true,
+  ai: true,
 };
 
 export function mergeFeatures(partial?: Partial<FeatureFlags> | null): FeatureFlags {

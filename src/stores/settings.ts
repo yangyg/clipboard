@@ -60,6 +60,13 @@ const DEFAULT_SETTINGS: Settings = {
   webdav_sync_sensitive: false,
   webdav_device_id: "",
   webdav_last_sync_at: null,
+  enable_ai: false,
+  ai_base_url: "https://api.openai.com/v1",
+  ai_api_key: "",
+  ai_model: "gpt-4o-mini",
+  ai_summary_alias: true,
+  ai_auto_tag: true,
+  ai_max_chars: 4000,
   features: { ...DEFAULT_FEATURES },
 };
 

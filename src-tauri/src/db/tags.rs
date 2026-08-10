@@ -417,4 +417,41 @@ impl ClipboardDb {
         }
         Ok(())
     }
+
+    /// Add auto-tags by name from AI enrichment, merging with any tags already
+    /// linked to the record (never removes user/manual tags). Each name is
+    /// trimmed + deduped; empty/invalid names are skipped; already-present tags
+    /// are no-ops. One transaction for all links + a single FTS refresh, and
+    /// `updated_at` is bumped so AI tag changes propagate through the WebDAV
+    /// LWW watermark. Returns the number of tags actually added.
+    pub fn add_auto_tags_by_name(&self, record_id: i64, names: &[String]) -> SqlResult<usize> {
+        let mut seen: Vec<&str> = Vec::new();
+        for name in names {
+            let n = name.trim();
+            if n.is_empty() || seen.contains(&n) {
+                continue;
+            }
+            seen.push(n);
+        }
+        if seen.is_empty() {
+            return Ok(0);
+        }
+
+        let conn = self.conn.lock();
+        let tx = conn.unchecked_transaction()?;
+        let mut added = 0usize;
+        for name in seen {
+            let tag_id = Self::ensure_auto_tag_conn(&tx, name)?;
+            added += tx.execute(
+                "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
+                params![record_id, tag_id],
+            )?;
+        }
+        if added > 0 {
+            Self::touch_record_updated_at(&tx, record_id)?;
+        }
+        Self::refresh_record_fts(&tx, record_id)?;
+        tx.commit()?;
+        Ok(added)
+    }
 }

@@ -69,6 +69,7 @@ export interface FeatureFlags {
   batch: boolean;
   sync: boolean;
   stats: boolean;
+  ai: boolean;
 }
 
 export interface Settings {
@@ -125,6 +126,18 @@ export interface Settings {
   webdav_sync_sensitive: boolean;
   webdav_device_id: string;
   webdav_last_sync_at: string | null;
+  /** AI enrichment (OpenAI-compatible chat completions). */
+  enable_ai: boolean;
+  ai_base_url: string;
+  /** DPAPI-encrypted at rest; kept as-is in the running settings object. */
+  ai_api_key: string;
+  ai_model: string;
+  /** Write the AI summary into the record alias (default true). */
+  ai_summary_alias: boolean;
+  /** Let the AI append auto-tags to records (default true). */
+  ai_auto_tag: boolean;
+  /** Content truncation before it leaves the machine (chars). */
+  ai_max_chars: number;
   /** Optional modules; missing keys default true on load. */
   features: FeatureFlags;
 }

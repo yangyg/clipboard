@@ -89,6 +89,9 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   webdav_sync: { params: [] },
   get_sync_history: { params: ["limit"] },
   clear_sync_history: { params: [] },
+
+  // ── AI (SettingsAi.vue) ──
+  ai_test_connection: { params: [] },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -118,7 +121,9 @@ const MOCK_SETTINGS: Settings = {
   webdav_url: "", webdav_username: "", webdav_password: "",
   webdav_remote_path: "ClipVaultSync", webdav_sync_sensitive: false,
   webdav_device_id: "", webdav_last_sync_at: null,
-  features: { tags: true, batch: true, sync: true, stats: true },
+  enable_ai: false, ai_base_url: "", ai_api_key: "", ai_model: "",
+  ai_summary_alias: true, ai_auto_tag: true, ai_max_chars: 4000,
+  features: { tags: true, batch: true, sync: true, stats: true, ai: true },
 };
 
 const MOCK_STATS: StatsData = {

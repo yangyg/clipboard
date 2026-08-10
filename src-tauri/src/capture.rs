@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tauri::Emitter;
 use tracing::{info, warn};
 
+use crate::ai::{ai_eligible_type, AiConfig, AiEnrichJob, AiJobSender};
 use crate::clipboard::{
     get_foreground_window_info, CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor,
 };
@@ -39,12 +40,15 @@ struct ImageCaptureJob {
 }
 
 /// Spawn the capture pipeline (text worker + image worker + monitor) at
-/// startup, first, to minimise the startup blind spot.
+/// startup, first, to minimise the startup blind spot. `ai_tx` is the handle to
+/// the AI enrichment worker (started by `setup`); new text records are enqueued
+/// for summary + auto-tagging when AI is enabled.
 pub(crate) fn start_capture(
     app: &tauri::AppHandle,
     db: Arc<ClipboardDb>,
     monitor: Arc<RwLock<ClipboardMonitor>>,
     capture_paused: Arc<RwLock<bool>>,
+    ai_tx: AiJobSender,
 ) {
     let media_root = db.media_root().to_path_buf();
 
@@ -52,12 +56,13 @@ pub(crate) fn start_capture(
     let (text_tx, text_rx) = mpsc::sync_channel::<TextCaptureJob>(4);
     let db_text = db.clone();
     let app_text = app.clone();
+    let ai_tx_text = ai_tx.clone();
     std::thread::spawn(move || {
         while let Ok(job) = text_rx.recv() {
             // A panic here (DB error, malformed data) must not kill capture:
             // recover, log, and keep draining the queue.
             if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                process_text_job(job, &db_text, &app_text);
+                process_text_job(job, &db_text, &app_text, &ai_tx_text);
             }))
             .is_err()
             {
@@ -135,7 +140,12 @@ pub(crate) fn start_capture(
 }
 
 /// Text worker: detect content type, hash, dedup, insert (<5ms per job).
-fn process_text_job(job: TextCaptureJob, db: &ClipboardDb, app: &tauri::AppHandle) {
+fn process_text_job(
+    job: TextCaptureJob,
+    db: &ClipboardDb,
+    app: &tauri::AppHandle,
+    ai_tx: &AiJobSender,
+) {
     let TextCaptureJob {
         captured,
         source_app,
@@ -186,6 +196,33 @@ fn process_text_job(job: TextCaptureJob, db: &ClipboardDb, app: &tauri::AppHandl
                 is_new
             );
             app.emit("clipboard-changed", list_ipc_payload(record)).ok();
+
+            // AI enrichment (summary → alias + auto tags). Only for fresh
+            // inserts of text-ish, non-sensitive records, and only when at
+            // least one of the two AI toggles is on — never block capture; a
+            // full queue simply drops the job. Runs after the emit so no extra
+            // clone of the (possibly large) content is needed here.
+            if is_new
+                && settings.features.ai
+                && settings.enable_ai
+                && ai_eligible_type(content_type.as_str())
+                && !is_sensitive
+                && (settings.ai_summary_alias || settings.ai_auto_tag)
+            {
+                let ai_config = AiConfig::from_settings(&settings);
+                if ai_config.is_configured() {
+                    let ai_job = AiEnrichJob {
+                        record_id: id,
+                        content: captured.text,
+                        config: ai_config,
+                    };
+                    if let Err(e) = ai_tx.try_send(ai_job) {
+                        if !matches!(e, std::sync::mpsc::TrySendError::Disconnected(_)) {
+                            warn!("AI queue full; dropping enrichment for record {}", id);
+                        }
+                    }
+                }
+            }
         }
         Err(e) => warn!("Failed to insert text record: {}", e),
     }

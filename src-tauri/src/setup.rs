@@ -8,6 +8,7 @@ use tauri::{App, Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tracing::{error, info, warn};
 
+use crate::ai;
 use crate::capture::{run_periodic_cleanup, start_capture, CLEANUP_INTERVAL_SECS};
 use crate::clipboard::ClipboardMonitor;
 use crate::commands;
@@ -23,12 +24,16 @@ pub(crate) fn setup(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle = app.handle().clone();
 
+    // ── AI enrichment worker (off the capture hot path) ──
+    let ai_tx = ai::start_ai_worker(app_handle.clone(), db.clone());
+
     // ── Capture pipeline (start first to minimise the startup blind spot) ──
     start_capture(
         &app_handle,
         db.clone(),
         monitor.clone(),
         capture_paused.clone(),
+        ai_tx,
     );
 
     // ── Non-critical setup (autostart, shortcut, tray, theme, window) ──

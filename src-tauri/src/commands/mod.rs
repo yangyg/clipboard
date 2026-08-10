@@ -2,6 +2,7 @@
 //! `pub use …::*` re-exports keep the `commands::*` paths used by
 //! `invoke_handler` in lib.rs unchanged.
 
+mod ai;
 mod fonts;
 mod history;
 mod import_export;
@@ -13,6 +14,7 @@ mod tags;
 mod tray;
 mod webdav;
 
+pub use ai::*;
 pub use fonts::*;
 pub use history::*;
 pub use import_export::*;

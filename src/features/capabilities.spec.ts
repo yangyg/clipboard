@@ -12,6 +12,7 @@ describe("capabilities", () => {
       batch: true,
       sync: true,
       stats: true,
+      ai: true,
     });
   });
 
@@ -21,6 +22,7 @@ describe("capabilities", () => {
       batch: true,
       sync: true,
       stats: true,
+      ai: true,
     });
     expect(mergeFeatures(undefined)).toEqual(DEFAULT_FEATURES);
   });

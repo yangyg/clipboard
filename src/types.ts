@@ -99,6 +99,8 @@ export interface Settings {
   // Privacy
   enable_sensitive_detection: boolean;
   sensitive_auto_expire_seconds: number;
+  /** Skip text captures larger than this (bytes); 0 = unlimited. */
+  max_text_bytes: number;
   /** Import the OS clipboard history (Win+V) once on startup (default off). */
   import_system_history_on_start: boolean;
   // System

@@ -211,6 +211,17 @@ fn import_text(db: &ClipboardDb, text: &str, s: &Settings) -> bool {
     if text.trim().is_empty() {
         return false;
     }
+    // Mirror the live-capture cap: oversized history items are skipped so an
+    // accidental huge copy does not bloat the DB / FTS index.
+    let cap = s.max_text_bytes.max(0) as usize;
+    if cap > 0 && text.len() > cap {
+        info!(
+            "Skipping oversized history text item: {} bytes (cap {} bytes)",
+            text.len(),
+            cap
+        );
+        return false;
+    }
     let content_type = detect::detect_content_type(text);
     let is_sensitive = s.enable_sensitive_detection && detect::detect_sensitive(text);
     // Historical double-hash text format (see records_write text_hash_v2).

@@ -145,6 +145,13 @@ fn default_ai_min_chars() -> i32 {
     32
 }
 
+/// Skip captures whose text exceeds this byte limit (0 = unlimited). Oversized
+/// single copies otherwise bloat the DB *and* the FTS trigram index, and stall
+/// the write lock while the index builds.
+fn default_max_text_bytes() -> i32 {
+    10 * 1024 * 1024
+}
+
 fn default_ai_summary_alias() -> bool {
     true
 }
@@ -254,6 +261,10 @@ pub struct Settings {
     pub enable_sensitive_detection: bool,
     #[serde(rename = "sensitive_auto_expire_seconds")]
     pub sensitive_auto_expire_seconds: i32,
+    /// Max captured text size in bytes (0 = unlimited); larger copies are
+    /// skipped entirely instead of being stored.
+    #[serde(default = "default_max_text_bytes", rename = "max_text_bytes")]
+    pub max_text_bytes: i32,
     /// On startup (first window show of the session), import the OS clipboard
     /// history items captured while the app was not running. Default off.
     /// See `win_history.rs` (Windows 11 clipboard history via WinRT).
@@ -356,6 +367,7 @@ impl Default for Settings {
             auto_close_on_paste: true,
             enable_sensitive_detection: true,
             sensitive_auto_expire_seconds: 600,
+            max_text_bytes: default_max_text_bytes(),
             import_system_history_on_start: false,
             auto_start: false,
             minimize_to_tray: true,

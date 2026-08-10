@@ -114,6 +114,7 @@ const MOCK_SETTINGS: Settings = {
   blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", search_mode: "full", app_mode: "floating",
   default_paste_mode: "original", auto_close_on_paste: true,
   enable_sensitive_detection: true, sensitive_auto_expire_seconds: 600,
+  max_text_bytes: 10 * 1024 * 1024,
   import_system_history_on_start: false, auto_start: false, minimize_to_tray: true,
   ignored_apps: [], source_name_overrides: [], floating_width: 0, floating_height: 0,
   window_width: 0, window_height: 0, enable_auto_tag: true,

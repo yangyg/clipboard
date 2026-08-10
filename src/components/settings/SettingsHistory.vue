@@ -34,6 +34,24 @@
     </div>
     <div class="setting-row">
       <div>
+        <div class="setting-label">{{ $t('settings.history.maxTextSize') }}</div>
+        <div class="setting-desc">{{ $t('settings.history.maxTextSizeDesc') }}</div>
+      </div>
+      <div class="slider-row">
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          :aria-label="$t('settings.history.maxTextSize')"
+          :value="Math.round((settings.max_text_bytes / (1024 * 1024)))"
+          @input="(e) => update('max_text_bytes', Math.round(Number((e.target as HTMLInputElement).value)) * 1024 * 1024)"
+        />
+        <span class="slider-value">{{ settings.max_text_bytes > 0 ? `${Math.round(settings.max_text_bytes / (1024 * 1024))} MB` : $t('settings.history.maxTextSizeUnlimited') }}</span>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
         <div class="setting-label">{{ $t('settings.history.clearHistory') }}</div>
         <div class="setting-desc">{{ $t('settings.history.clearHistoryDesc') }}</div>
       </div>

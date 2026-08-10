@@ -157,6 +157,20 @@ fn process_text_job(
         return;
     }
 
+    // Oversized single copies are dropped entirely: storing them would bloat
+    // the DB + FTS trigram index and stall the write lock while the index
+    // builds. The OS clipboard itself is untouched, so the user still has the
+    // original — it just never enters the history.
+    let cap = settings.max_text_bytes.max(0) as usize;
+    if cap > 0 && captured.text.len() > cap {
+        info!(
+            "Skipping oversized text capture: {} bytes (cap {} bytes)",
+            captured.text.len(),
+            cap
+        );
+        return;
+    }
+
     let content_type = detect_content_type(&captured.text);
     let is_sensitive = settings.enable_sensitive_detection && detect_sensitive(&captured.text);
     // fingerprint is already sha256(text); the extra wrap keeps the stored

@@ -121,6 +121,14 @@ impl ClipboardDb {
     /// must NOT hold the hash slot, otherwise re-copying a trashed item
     /// violates the constraint instead of inserting a fresh record.
     fn enforce_active_hash_uniqueness(conn: &Connection) -> SqlResult<()> {
+        // Legacy DBs (older/dev builds) may still carry a full
+        // `UNIQUE(hash)` index (`idx_records_hash_unique`). A full unique
+        // index forbids the active+trashed coexistence the partial index is
+        // designed to allow — re-copying a trashed item and WebDAV re-insert
+        // after a tombstone pull both fail with
+        // "UNIQUE constraint failed: records.hash". Drop it; lookups keep
+        // using the non-unique `idx_records_hash`.
+        conn.execute_batch("DROP INDEX IF EXISTS idx_records_hash_unique;")?;
         Self::dedupe_active_hashes(conn)?;
         conn.execute_batch(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_records_hash_active

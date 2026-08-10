@@ -443,6 +443,78 @@ fn map_record_row_binds_column_order_for_both_column_lists() {
 }
 
 #[test]
+fn startup_drops_legacy_full_unique_hash_index() {
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_legacy_hash_unique_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Simulate a DB from a build that carried the historical FULL unique
+    // `records(hash)` index alongside the current partial one (found in the
+    // wild): the full index keeps holding the slot of a record after it is
+    // trashed, so a fresh active insert with the same hash — local re-copy or
+    // WebDAV pull re-insert — fails with
+    // "UNIQUE constraint failed: records.hash". The fixture row is typed
+    // `image` so the startup text-hash migration does not rewrite its hash.
+    let conn = rusqlite::Connection::open(dir.join("test.db")).unwrap();
+    conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
+        .unwrap();
+    ClipboardDb::initialize_schema(&conn).unwrap();
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX idx_records_hash_unique ON records(hash);
+         INSERT INTO records (content, content_type, hash, is_trashed, created_at, updated_at)
+         VALUES ('legacy', 'image', 'h', 0, '2099-08-01T00:00:00Z', '2099-08-01T00:00:00Z');
+         UPDATE records SET is_trashed = 1 WHERE id = 1;",
+    )
+    .unwrap();
+    drop(conn);
+
+    // Startup must drop the stale full-unique index (keeping the partial one).
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+    let conn = db.conn.lock();
+    let (legacy_gone, partial_kept): (i64, i64) = conn
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_records_hash_unique'),
+                (SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='uq_records_hash_active')",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(legacy_gone, 0, "legacy full-unique index must be dropped");
+    assert_eq!(partial_kept, 1, "partial active-unique index must survive");
+    // The trashed row still holds the hash; a fresh active row with the same
+    // hash must now be allowed (the WebDAV pull / re-copy path).
+    conn.execute(
+        "INSERT INTO records (content, content_type, hash, is_trashed, created_at, updated_at)
+         VALUES ('fresh', 'image', 'h', 0, '2099-08-02T00:00:00Z', '2099-08-02T00:00:00Z')",
+        [],
+    )
+    .unwrap();
+    let (active, trashed): (i64, i64) = conn
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM records WHERE hash = 'h' AND is_trashed = 0),
+                (SELECT COUNT(*) FROM records WHERE hash = 'h' AND is_trashed = 1)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!((active, trashed), (1, 1));
+    drop(conn);
+
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn new_succeeds_when_legacy_db_has_no_fts() {
     let dir = std::env::temp_dir().join(format!(
         "clipvault_legacy_no_fts_{}_{}",

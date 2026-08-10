@@ -135,6 +135,12 @@ fn default_ai_max_chars() -> i32 {
     4000
 }
 
+/// Skip enrichment for short content — a one-liner needs no summary. `0`
+/// disables the floor.
+fn default_ai_min_chars() -> i32 {
+    32
+}
+
 fn default_ai_summary_alias() -> bool {
     true
 }
@@ -311,6 +317,9 @@ pub struct Settings {
     /// Content truncation before it leaves the machine (chars).
     #[serde(default = "default_ai_max_chars", rename = "ai_max_chars")]
     pub ai_max_chars: i32,
+    /// Skip enrichment for shorter content (chars); 0 = no floor.
+    #[serde(default = "default_ai_min_chars", rename = "ai_min_chars")]
+    pub ai_min_chars: i32,
     /// Optional product capabilities (tags / batch / sync / stats). Missing → all on.
     #[serde(default, rename = "features")]
     pub features: FeatureFlags,
@@ -371,6 +380,7 @@ impl Default for Settings {
             ai_summary_alias: true,
             ai_auto_tag: true,
             ai_max_chars: default_ai_max_chars(),
+            ai_min_chars: default_ai_min_chars(),
             features: FeatureFlags::default(),
         }
     }
@@ -472,6 +482,7 @@ mod settings_onboarding_tests {
         assert!(s.ai_summary_alias);
         assert!(s.ai_auto_tag);
         assert_eq!(s.ai_max_chars, 4000);
+        assert_eq!(s.ai_min_chars, 32);
         assert!(!s.ai_base_url.is_empty());
     }
 
@@ -481,6 +492,7 @@ mod settings_onboarding_tests {
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(!s.enable_ai, "upgrades must keep AI off");
         assert_eq!(s.ai_max_chars, 4000);
+        assert_eq!(s.ai_min_chars, 32);
         assert!(s.ai_summary_alias && s.ai_auto_tag);
     }
 

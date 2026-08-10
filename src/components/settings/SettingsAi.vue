@@ -94,13 +94,30 @@
 
       <div class="setting-row">
         <div>
+          <div class="setting-label">{{ $t('settings.ai.minChars') }}</div>
+          <div class="setting-desc">{{ $t('settings.ai.minCharsDesc') }}</div>
+        </div>
+        <input
+          class="ai-chars-input"
+          type="number"
+          min="0"
+          :max="settings.ai_max_chars"
+          step="10"
+          :value="settings.ai_min_chars"
+          :aria-label="$t('settings.ai.minChars')"
+          @change="updateAiMinChars(($event.target as HTMLInputElement).value)"
+        />
+      </div>
+
+      <div class="setting-row">
+        <div>
           <div class="setting-label">{{ $t('settings.ai.maxChars') }}</div>
           <div class="setting-desc">{{ $t('settings.ai.maxCharsDesc') }}</div>
         </div>
         <input
           class="ai-chars-input"
           type="number"
-          min="64"
+          :min="settings.ai_min_chars"
           max="20000"
           step="100"
           :value="settings.ai_max_chars"
@@ -187,10 +204,16 @@ function applyPreset(preset: (typeof PRESETS)[number]) {
   update("ai_model", preset.model);
 }
 
+function updateAiMinChars(value: string) {
+  const n = Number.parseInt(value, 10);
+  if (Number.isNaN(n)) return;
+  update("ai_min_chars", Math.max(0, Math.min(settings.ai_max_chars, n)));
+}
+
 function updateAiMaxChars(value: string) {
   const n = Number.parseInt(value, 10);
   if (Number.isNaN(n)) return;
-  update("ai_max_chars", Math.min(20000, Math.max(64, n)));
+  update("ai_max_chars", Math.min(20000, Math.max(settings.ai_min_chars, n)));
 }
 
 async function aiTest() {

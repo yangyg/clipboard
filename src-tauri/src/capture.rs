@@ -208,6 +208,7 @@ fn process_text_job(
                 && ai_eligible_type(content_type.as_str())
                 && !is_sensitive
                 && (settings.ai_summary_alias || settings.ai_auto_tag)
+                && captured.text.chars().count() >= settings.ai_min_chars.max(0) as usize
             {
                 let ai_config = AiConfig::from_settings(&settings);
                 if ai_config.is_configured() {

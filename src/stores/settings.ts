@@ -67,6 +67,7 @@ const DEFAULT_SETTINGS: Settings = {
   ai_summary_alias: true,
   ai_auto_tag: true,
   ai_max_chars: 4000,
+  ai_min_chars: 32,
   features: { ...DEFAULT_FEATURES },
 };
 

@@ -461,6 +461,8 @@ export default {
       autoTagDesc: 'Attach the model’s tags to the record (never removes tags you set manually)',
       maxChars: 'Max content length',
       maxCharsDesc: 'Content beyond this many characters is truncated before being sent — controls cost and privacy exposure',
+      minChars: 'Min content length',
+      minCharsDesc: 'Content shorter than this many characters is not sent to the AI — trivial text needs no summary (0 disables)',
       test: 'Test connection',
       testing: 'Testing…',
       connected: 'Connected.',

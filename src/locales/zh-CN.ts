@@ -461,6 +461,8 @@ export default {
       autoTagDesc: '把模型归纳出的标签附加到记录（不会移除你手动设置的标签）',
       maxChars: '发送内容上限',
       maxCharsDesc: '超过该字符数的内容截断后才会发送给模型，控制成本与隐私暴露面',
+      minChars: '最小发送字数',
+      minCharsDesc: '内容不足该字符数时不发送给 AI，太短的文本无需摘要（0 表示不限制）',
       test: '测试连接',
       testing: '测试中…',
       connected: '连接成功。',

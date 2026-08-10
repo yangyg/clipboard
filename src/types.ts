@@ -138,6 +138,7 @@ export interface Settings {
   ai_auto_tag: boolean;
   /** Content truncation before it leaves the machine (chars). */
   ai_max_chars: number;
+  ai_min_chars: number;
   /** Optional modules; missing keys default true on load. */
   features: FeatureFlags;
 }

@@ -15,9 +15,9 @@
           <div class="preview-meta-row">
             <span class="preview-meta-item" :title="sourceTitle">{{ $t('preview.source', { name: sourceLabel }) }}</span>
             <span class="preview-meta-item">{{ $t('preview.createdAt', { time: formatDateTime(record.created_at) }) }}</span>
-            <span class="preview-meta-item">{{ $t('preview.updatedAt', { time: formatDateTime(record.updated_at) }) }}</span>
           </div>
-          <div class="preview-meta-row">
+          <div class="preview-meta-more">
+            <span class="preview-meta-item">{{ $t('preview.updatedAt', { time: formatDateTime(record.updated_at) }) }}</span>
             <template v-if="record.content_type === 'image' && record.width && record.height">
               <span class="preview-meta-item">{{ $t('preview.dimensions', { w: record.width, h: record.height }) }}</span>
             </template>
@@ -85,9 +85,11 @@ const emit = defineEmits<{
 .preview-alias-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 0; border: none; background: none; font-family: inherit; font-size: var(--text-lg); font-weight: 600; color: var(--text-primary); cursor: pointer; text-align: left; }
 .preview-alias-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-alias-btn:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
-.preview-meta-line { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); color: var(--text-muted, var(--text-tertiary)); line-height: 1.35; overflow: hidden; opacity: 0; visibility: hidden; max-height: 0; transition: opacity var(--transition-fast), max-height var(--transition-smooth), visibility var(--transition-fast); }
-.preview-heading:hover .preview-meta-line,
-.preview-heading:focus-within .preview-meta-line { opacity: 1; visibility: visible; max-height: 3.5rem; }
+.preview-meta-line { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); color: var(--text-muted, var(--text-tertiary)); line-height: 1.35; overflow: hidden; }
 .preview-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 14px; min-width: 0; }
-.preview-meta-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-meta-row > span,
+.preview-meta-more > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-meta-more { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 14px; min-width: 0; opacity: 0; visibility: hidden; max-height: 0; overflow: hidden; transition: opacity var(--transition-fast), max-height var(--transition-smooth), visibility var(--transition-fast); }
+.preview-heading:hover .preview-meta-more,
+.preview-heading:focus-within .preview-meta-more { opacity: 1; visibility: visible; max-height: 3.5rem; }
 </style>

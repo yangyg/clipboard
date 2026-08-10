@@ -17,7 +17,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Floating panel** | Always-on-top compact overlay. Hides on blur. Kept mounted via `v-show`. |
 | **Window mode** | Full window with SideBar + RecordList + PreviewPane. Min width 760px. |
 | **Paste target** | The foreground HWND at the moment the panel opened. Paste writes clipboard → focuses target → sends Ctrl+V. |
-| **Source app** | The executable name of the process that owned the clipboard content at capture time. Shown as a letter avatar + short name via `SourceBadge`. |
+| **Source app** | The executable name of the process that owned the clipboard content at capture time. Shown as a plain-text label via `resolveSourceLabel` (friendly name, empty →「系统剪贴板」); the preview meta line's tooltip shows the raw exe path. |
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
 | **Soft cap** | In-memory list pages are soft-capped (`PAGE_SIZE × 2`). When dirty, the next `loadMore` reloads from DB. |
 | **WebDAV sync** | Cloud sync via WebDAV protocol `clipvault-webdav-v1`. Manifest + JSONL bundle; media files synced alongside. Default remote dir `ClipVaultSync`. |

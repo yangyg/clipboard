@@ -243,3 +243,130 @@ describe("clipboardStore — setTrashFilter side effects", () => {
     expect(store.selectedId).toBeNull();
   });
 });
+
+describe("clipboardStore — reorderForUpdate / reorderForUpdates (tag-edit re-rank)", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it("moves a non-pinned mid-list record to the front of the unpinned section", () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 10, is_pinned: true }),
+      makeRecord({ id: 1 }),
+      makeRecord({ id: 2 }),
+      makeRecord({ id: 3 }),
+    ];
+    store.reorderForUpdate(2);
+    expect(store.records.map((r) => r.id)).toEqual([10, 2, 1, 3]);
+  });
+
+  it("moves a pinned record to the top of the pinned block", () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 2, is_pinned: true }),
+      makeRecord({ id: 1, is_pinned: true }),
+      makeRecord({ id: 3 }),
+    ];
+    store.reorderForUpdate(1);
+    expect(store.records.map((r) => r.id)).toEqual([1, 2, 3]);
+  });
+
+  it("is a no-op for ids not in the current window", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 }), makeRecord({ id: 2 })];
+    store.reorderForUpdates([99, 42]);
+    expect(store.records.map((r) => r.id)).toEqual([1, 2]);
+  });
+
+  it("leaves rows untouched for non-updated_desc sorts (reload is deferred)", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 }), makeRecord({ id: 2 }), makeRecord({ id: 3 })];
+    store.listSort = "created_desc";
+    store.reorderForUpdate(2);
+    expect(store.records.map((r) => r.id)).toEqual([1, 2, 3]);
+  });
+
+  it("skips re-rank while a tag filter the record no longer matches is active", () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 1, tags: ["vue"] }),
+      makeRecord({ id: 2, tags: ["react"] }),
+    ];
+    store.activeTag = "vue";
+    store.reorderForUpdate(2);
+    expect(store.records.map((r) => r.id)).toEqual([1, 2]);
+  });
+
+  it("skips re-rank while trash filter is active", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 }), makeRecord({ id: 2 })];
+    store.setTrashFilter(true);
+    store.reorderForUpdate(2);
+    expect(store.records.map((r) => r.id)).toEqual([1, 2]);
+  });
+
+  it("reorders a batch the way the server tie-breaks equal timestamps (id DESC)", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 }), makeRecord({ id: 2 }), makeRecord({ id: 3 })];
+    store.reorderForUpdates([1, 2]);
+    expect(store.records.map((r) => r.id)).toEqual([2, 1, 3]);
+  });
+
+  it("addTagToRecord re-ranks a record to the front after a real change", async () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 1, tags: ["a"] }),
+      makeRecord({ id: 2, tags: [] }),
+      makeRecord({ id: 3, tags: [] }),
+    ];
+    await store.addTagToRecord(2, 7, "b");
+    expect(store.records.map((r) => r.id)).toEqual([2, 1, 3]);
+    expect(store.records[0].tags).toContain("b");
+  });
+
+  it("addTagToRecord does not re-rank when the tag was already present", async () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 1, tags: [] }),
+      makeRecord({ id: 2, tags: ["b"] }),
+    ];
+    await store.addTagToRecord(2, 7, "b");
+    expect(store.records.map((r) => r.id)).toEqual([1, 2]);
+  });
+
+  it("setRecordTags re-ranks when the tag set changed", async () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 1, tags: ["a"] }),
+      makeRecord({ id: 2, tags: ["keep"] }),
+    ];
+    await store.setRecordTags(2, [7, 8], ["b", "c"]);
+    expect(store.records.map((r) => r.id)).toEqual([2, 1]);
+    expect(store.records[0].tags).toEqual(["b", "c"]);
+  });
+
+  it("setRecordTags does not re-rank when the tag set is unchanged", async () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 1, tags: ["b"] }),
+      makeRecord({ id: 2, tags: [] }),
+    ];
+    await store.setRecordTags(1, [7], ["b"]);
+    expect(store.records.map((r) => r.id)).toEqual([1, 2]);
+  });
+
+  it("updateTag rename re-ranks every affected row", async () => {
+    const store = useClipboardStore();
+    store.tags = [{ id: 1, name: "old", color: "#fff", is_auto: false, count: 2 }];
+    store.records = [
+      makeRecord({ id: 1, tags: ["old"] }),
+      makeRecord({ id: 2, tags: ["old"] }),
+      makeRecord({ id: 3, tags: ["other"] }),
+    ];
+    await store.updateTag(1, "new", "#eee");
+    // Both re-ranked; equal bump timestamps → server orders them id DESC.
+    expect(store.records.map((r) => r.id)).toEqual([2, 1, 3]);
+    expect(store.records[0].tags).toEqual(["new"]);
+  });
+});

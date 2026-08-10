@@ -475,6 +475,56 @@ export function createListActions(ctx: ListActionsCtx) {
     flashIncoming(record.id);
   }
 
+  /**
+   * Re-rank records to the top of their pinned section under the default
+   * `updated_desc` sort. Used by tag mutations (`add/remove/set/rename`) whose
+   * Rust side bumps `updated_at` (sync watermark) but emits no event — the
+   * visible list must mirror that server order immediately instead of waiting
+   * for the next reload.
+   *
+   * Guards mirror `onNewRecord`: skip entirely while trash/search is active,
+   * and skip when the active tag filter no longer applies to the record. Any
+   * non-`updated_desc` sort falls back to the debounced reload.
+   */
+  function reorderForUpdates(ids: number[]) {
+    if (ctx.trashFilter.value || ctx.searchQuery.value) return;
+    if (ctx.listSort.value !== "updated_desc") {
+      scheduleReloadList();
+      return;
+    }
+    const present = ids
+      .filter((id) => id != null)
+      .filter((id) => ctx.records.value.some((r) => r.id === id))
+      .sort((a, b) => a - b);
+    if (present.length === 0) return;
+    const tag = ctx.activeTag.value;
+    if (tag && present.some((id) => !ctx.records.value.find((r) => r.id === id)?.tags.includes(tag))) {
+      return;
+    }
+    // Process ids ascending: a batch bump (tag rename) gives every row the
+    // same timestamp, and the server tie-breaks those by id DESC — moving the
+    // smallest id last reproduces that order at the top of each pin group.
+    const next = ctx.records.value.slice();
+    for (const id of present) {
+      const idx = next.findIndex((r) => r.id === id);
+      if (idx === -1) continue;
+      const record = next[idx];
+      let pinCount = 0;
+      for (let i = 0; i < next.length; i++) {
+        const r = next[i];
+        if (r.id === id) continue;
+        if (r.is_pinned) pinCount += 1;
+      }
+      next.splice(idx, 1);
+      next.splice(record.is_pinned ? 0 : pinCount, 0, record);
+    }
+    ctx.records.value = next;
+  }
+
+  function reorderForUpdate(id: number) {
+    reorderForUpdates([id]);
+  }
+
   function setListSort(sort: ListSort) {
     if (ctx.listSort.value === sort) return;
     ctx.listSort.value = sort;
@@ -500,6 +550,8 @@ export function createListActions(ctx: ListActionsCtx) {
     setListSort,
     ensureRecordDetail,
     onNewRecord,
+    reorderForUpdates,
+    reorderForUpdate,
     patchRecord,
     patchRecordsBatch,
     invalidateLoads,

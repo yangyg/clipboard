@@ -138,8 +138,17 @@ export const useClipboardStore = defineStore("clipboard", () => {
     loadTrashCount,
     scheduleLoadTags: () => tagReload.fn(),
   });
-  const { loadRecords, loadMore, search, reloadList, setListSort, ensureRecordDetail, onNewRecord } =
-    list;
+  const {
+    loadRecords,
+    loadMore,
+    search,
+    reloadList,
+    setListSort,
+    ensureRecordDetail,
+    onNewRecord,
+    reorderForUpdates,
+    reorderForUpdate,
+  } = list;
 
   // === Record mutations ===
   const record = createRecordActions({
@@ -184,6 +193,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     patchRecord: list.patchRecord,
     patchRecordsBatch: list.patchRecordsBatch,
     reloadList,
+    reorderForUpdates,
   });
   tagReload.fn = tagActions.scheduleLoadTags;
   const {
@@ -366,6 +376,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     togglePauseCapture,
     ensureRecordDetail,
     onNewRecord,
+    reorderForUpdates,
+    reorderForUpdate,
     loadStats,
     scheduleLoadStats,
     importRecords,

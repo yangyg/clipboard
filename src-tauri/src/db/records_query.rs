@@ -286,6 +286,12 @@ impl ClipboardDb {
     }
 
     /// Full record + bump copy_count in one write lock (paste hot path).
+    ///
+    /// Paste is a *use* action, not a content update: it increments
+    /// `copy_count` but deliberately does **not** bump `updated_at`. Keeping
+    /// `updated_at` as content-freshness only (capture / re-copy / tag edits)
+    /// means pasting never re-ranks the `updated_desc` list, never protects a
+    /// record from capacity eviction, and never raises the WebDAV LWW watermark.
     pub fn take_record_for_paste(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
         let conn = self.conn.lock();
         let mut record = {
@@ -301,10 +307,9 @@ impl ClipboardDb {
         };
         record.tags = self.get_record_tags_locked(&conn, record.id)?;
 
-        let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
-            "UPDATE records SET copy_count = copy_count + 1, updated_at = ? WHERE id = ?",
-            params![now, id],
+            "UPDATE records SET copy_count = copy_count + 1 WHERE id = ?",
+            params![id],
         )?;
         record.copy_count = record.copy_count.saturating_add(1);
         Ok(Some(record))

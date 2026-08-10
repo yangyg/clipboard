@@ -19,6 +19,9 @@ export interface TagActionsCtx {
   patchRecord: (id: number, patch: Partial<ClipboardRecord>) => void;
   patchRecordsBatch: (patches: Map<number, Partial<ClipboardRecord>>) => void;
   reloadList: () => void;
+  /** Re-rank records whose `updated_at` the backend bumped (tag edits) so the
+   * visible `updated_desc` list matches the DB immediately. */
+  reorderForUpdates: (ids: number[]) => void;
 }
 
 const TAGS_DEBOUNCE_MS = 350;
@@ -96,9 +99,11 @@ export function createTagActions(ctx: TagActionsCtx) {
       await invoke("update_tag", { id, name, color });
       if (oldName && oldName !== name) {
         const patches = new Map<number, Partial<ClipboardRecord>>();
+        const affectedIds: number[] = [];
         for (const record of ctx.records.value) {
           const idx = record.tags.indexOf(oldName);
           if (idx !== -1) {
+            affectedIds.push(record.id);
             const nextTags = [...record.tags];
             nextTags[idx] = name;
             patches.set(record.id, { tags: nextTags });
@@ -108,6 +113,9 @@ export function createTagActions(ctx: TagActionsCtx) {
         if (ctx.activeTag.value === oldName) {
           ctx.activeTag.value = name;
         }
+        // Every tagged row's updated_at was bumped (sync watermark); re-rank
+        // them all so the list matches the DB without waiting for a reload.
+        ctx.reorderForUpdates(affectedIds);
       }
       scheduleLoadTags();
     } catch (e) {
@@ -122,6 +130,8 @@ export function createTagActions(ctx: TagActionsCtx) {
       const record = ctx.records.value.find((r) => r.id === recordId);
       if (record && !record.tags.includes(tagName)) {
         ctx.patchRecord(recordId, { tags: [...record.tags, tagName] });
+        // Rust bumped updated_at only when the link was newly inserted.
+        ctx.reorderForUpdates([recordId]);
       }
       scheduleLoadTags();
     } catch (e) {
@@ -135,9 +145,12 @@ export function createTagActions(ctx: TagActionsCtx) {
       await invoke("remove_tag_from_record", { record_id: recordId, tag_id: tagId });
       const record = ctx.records.value.find((r) => r.id === recordId);
       if (record) {
+        const hadTag = record.tags.includes(tagName);
         ctx.patchRecord(recordId, {
           tags: record.tags.filter((t) => t !== tagName),
         });
+        // Rust bumped updated_at only when a link was deleted.
+        if (hadTag) ctx.reorderForUpdates([recordId]);
       }
       scheduleLoadTags();
     } catch (e) {
@@ -151,9 +164,15 @@ export function createTagActions(ctx: TagActionsCtx) {
     try {
       await invoke("set_record_tags", { record_id: recordId, tag_ids: tagIds });
       const record = ctx.records.value.find((r) => r.id === recordId);
+      // Rust bumps updated_at only when the tag set actually changed.
+      const changed =
+        !record ||
+        record.tags.length !== tagNames.length ||
+        record.tags.some((t) => !tagNames.includes(t));
       if (record) {
         ctx.patchRecord(recordId, { tags: [...tagNames] });
       }
+      if (changed) ctx.reorderForUpdates([recordId]);
       detailUpsert(ctx.recordDetails, recordId, { tags: [...tagNames] });
       scheduleLoadTags();
     } catch (e) {

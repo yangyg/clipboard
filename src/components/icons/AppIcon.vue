@@ -2,7 +2,9 @@
 import { computed } from "vue";
 import type { Component as VueComponent } from "vue";
 import { useHanddrawnTheme } from "../../composables/useHanddrawnTheme";
-// Clean line icons — every theme except hand-drawn.
+import { usePixelTheme } from "../../composables/usePixelTheme";
+import { PIXEL_ICONS } from "./pixelIcons";
+// Clean line icons — every theme except hand-drawn / pixel.
 import {
   ClipboardList,
   Search,
@@ -241,10 +243,19 @@ const props = withDefaults(
 );
 
 const isHanddrawn = useHanddrawnTheme();
+const isPixel = usePixelTheme();
 
 const icon = computed<VueComponent>(() => {
-  const set = isHanddrawn.value ? SKETCHY_ICONS : LUCIDE_ICONS;
-  return set[props.name];
+  // Hand-drawn wins outright — theme classes are mutually exclusive, so the
+  // pixel branch only ever applies outside hand-drawn themes. The pixel set is
+  // partial; any unmapped name falls back to the clean Lucide icon.
+  if (isHanddrawn.value) {
+    return SKETCHY_ICONS[props.name];
+  }
+  if (isPixel.value) {
+    return PIXEL_ICONS[props.name] ?? LUCIDE_ICONS[props.name];
+  }
+  return LUCIDE_ICONS[props.name];
 });
 </script>
 

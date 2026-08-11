@@ -367,6 +367,21 @@ const SEARCH_MODES = [
     linear-gradient(115deg, transparent 0 88%, #a26a0e 88% 96%, transparent 96% 100%);
   border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
 }
+.theme-pixel {
+  background-color: #1b1a3a;
+  background-image: linear-gradient(90deg, #262352 0 25%, #1b1a3a 25% 50%, #191838 50% 50%, #191838 50% 75%, #262352 75%),
+    linear-gradient(135deg, transparent 0 70%, #ffc83d 70% 84%, transparent 84%),
+    radial-gradient(#ffc83d 3px 3px, transparent 4px) 70% 15% / 9px 9px,
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 4px);
+}
+.theme-pixel-light {
+  background-color: #f6f4ff;
+  background-image: linear-gradient(90deg, #e4def6 0 25%, #f6f4ff 25% 50%, #efeafd 50% 50%, #efeafd 50% 75%, #e4def6 75%),
+    linear-gradient(135deg, transparent 0 70%, #b07d00 70% 84%, transparent 84%),
+    radial-gradient(#b07d00 3px 3px, transparent 4px) 70% 15% / 9px 9px,
+    repeating-linear-gradient(0deg, rgba(42, 36, 80, 0.05) 0 1px, transparent 1px 4px);
+  border: 1px solid var(--border-light, rgba(0, 0, 0, 0.06));
+}
 
 .theme-name {
   font-size: var(--text-sm);

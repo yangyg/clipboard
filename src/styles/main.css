@@ -13,6 +13,7 @@
 @import "./themes/sticker.css";
 @import "./themes/flat.css";
 @import "./themes/pencil.css";
+@import "./themes/pixel.css";
 
 :root {
   /* Dark Theme (default) */

@@ -1,0 +1,727 @@
+/* ============================================================
+   Pixel family (像素 / 像素·浅)
+   Retro 8-bit game chrome: deep indigo base, golden accent,
+   square corners, hard offset shadows, blocky dither texture
+   and stepped dividers. The interaction pass below mirrors the
+   flat/pencil families' coverage so every interactive control
+   reads as a chunky console button.
+   ============================================================ */
+
+/* Pixel Theme (像素) — dark-leaning preset.
+   Deep indigo "console shell" with a golden-yellow accent and
+   NES-style semantic colors. All shadows are hard offset pixels
+   (no blur), focus/selection are solid gold blocks. */
+body.pixel-theme,
+.pixel-theme {
+  --bg-base: #131230;
+  --bg-surface: #1b1a3a;
+  --bg-elevated: #25234d;
+  --bg-hover: #2f2c60;
+  --bg-active: #39356f;
+  --bg-input: #100f2a;
+  --border-subtle: rgba(246, 244, 255, 0.08);
+  --border-default: rgba(246, 244, 255, 0.14);
+  --border-focus: #ffc83d;
+  --text-primary: #f4f3ff;
+  --text-secondary: #b8b5e8;
+  --text-tertiary: #8d89bd;
+  --text-inverse: #131230;
+  --accent: #ffc83d;
+  --text-on-accent: #1d1730;
+  --accent-hover: #ffd45e;
+  --accent-light: #ffe084;
+  --accent-text: #ffd45e;
+  --accent-soft: rgba(255, 200, 61, 0.16);
+  --accent-softer: rgba(255, 200, 61, 0.08);
+  --accent-pressed: #e0a92a;
+  --bg-selected: rgba(255, 200, 61, 0.18);
+  --border-light: rgba(246, 244, 255, 0.09);
+  --text-muted: var(--text-tertiary);
+  --type-text: #5ddbff;
+  --type-code: #96ff5a;
+  --type-link: #8ea2ff;
+  --type-image: #5affc4;
+  --type-file: #ffbb5c;
+  --success: #6bff8a;
+  --success-soft: rgba(107, 255, 138, 0.14);
+  --warning: #ffd43d;
+  --warning-soft: rgba(255, 212, 61, 0.15);
+  --pin: #ff8ae8;
+  --pin-soft: rgba(255, 138, 232, 0.16);
+  --danger: #ff5d6c;
+  --danger-soft: rgba(255, 93, 108, 0.16);
+  --code-bg: #181736;
+  --sensitive: #ff9d5c;
+  --sensitive-soft: rgba(255, 157, 92, 0.15);
+  /* Hard offset shadows — the "pixel" signature */
+  --shadow-sm: 2px 2px 0 rgba(8, 6, 28, 0.5);
+  --shadow-md: 4px 4px 0 rgba(8, 6, 28, 0.5);
+  --shadow-lg: 6px 6px 0 rgba(8, 6, 28, 0.5);
+  --shadow-glow: 0 0 0 transparent;
+  --win-close-hover: #ff5d6c;
+  /* Pixel extras */
+  --pixel-ink: rgba(8, 6, 28, 0.55);
+  --pixel-bevel: inset 3px 3px 0 rgba(8, 6, 28, 0.2),
+    inset -2px -2px 0 rgba(255, 255, 255, 0.14);
+  --pixel-select: #ffd43d;
+  --pixel-select-text: #1d1730;
+  --pixel-dot: rgba(255, 200, 61, 0.06);
+  --pixel-dither: radial-gradient(var(--pixel-dot) 1.1px, transparent 1.6px) 0 0 / 5px 5px,
+    repeating-linear-gradient(0deg, rgba(246, 244, 255, 0.02) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(90deg, rgba(246, 244, 255, 0.02) 0 1px, transparent 1px 8px);
+  /* CRT scanline band — faint dark lines every 4px on content surfaces */
+  --pixel-scan: repeating-linear-gradient(
+    0deg,
+    transparent 0 3px,
+    rgba(8, 6, 28, 0.09) 3px 4px
+  );
+  --pixel-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Crect x='0' y='0' width='4' height='4' fill='%23ffc83d' fill-opacity='0.6'/%3E%3Crect x='10' y='0' width='4' height='4' fill='%23f4f3ff' fill-opacity='0.45'/%3E%3Crect x='20' y='0' width='4' height='4' fill='%23ffc83d' fill-opacity='0.3'/%3E%3C/svg%3E");
+}
+
+/* Pixel Light (像素·浅) — light counterpart.
+   Cream-indigo paper with a deeper gold accent for AA. Same
+   square/hard-shadow language, softer ink shadows. */
+body.pixel-light-theme,
+.pixel-light-theme {
+  --bg-base: #e9e6f8;
+  --bg-surface: #f6f4ff;
+  --bg-elevated: #fdfbff;
+  --bg-hover: #dfdaf4;
+  --bg-active: #cfc8ed;
+  --bg-input: #f0edfc;
+  --border-subtle: rgba(38, 30, 80, 0.1);
+  --border-default: rgba(38, 30, 80, 0.16);
+  --border-focus: #b07d00;
+  --text-primary: #2a2450;
+  --text-secondary: #5f5889;
+  --text-tertiary: #837cae;
+  --text-inverse: #f6f4ff;
+  --accent: #b07d00;
+  --text-on-accent: #fff9ec;
+  --accent-hover: #966a00;
+  --accent-light: #cc9a2e;
+  --accent-text: #875f00;
+  --accent-soft: rgba(176, 125, 0, 0.12);
+  --accent-softer: rgba(176, 125, 0, 0.06);
+  --accent-pressed: #7f5b00;
+  --bg-selected: rgba(176, 125, 0, 0.14);
+  --border-light: rgba(38, 30, 80, 0.08);
+  --text-muted: var(--text-tertiary);
+  --type-text: #0b6fa8;
+  --type-code: #2f7d3f;
+  --type-link: #4b5fd6;
+  --type-image: #0e7a6f;
+  --type-file: #a06b0e;
+  --success: #2e9147;
+  --success-soft: rgba(46, 145, 71, 0.11);
+  --warning: #a8730e;
+  --warning-soft: rgba(168, 115, 14, 0.12);
+  --pin: #b04fb0;
+  --pin-soft: rgba(176, 79, 176, 0.11);
+  --danger: #d83247;
+  --danger-soft: rgba(216, 50, 71, 0.1);
+  --code-bg: #f0edfc;
+  --sensitive: #c0551c;
+  --sensitive-soft: rgba(192, 85, 28, 0.1);
+  --shadow-sm: 2px 2px 0 rgba(38, 30, 80, 0.16);
+  --shadow-md: 4px 4px 0 rgba(38, 30, 80, 0.16);
+  --shadow-lg: 6px 6px 0 rgba(38, 30, 80, 0.16);
+  --shadow-glow: 0 0 0 transparent;
+  --win-close-hover: #e81123;
+  --pixel-ink: rgba(38, 30, 80, 0.22);
+  --pixel-bevel: inset 3px 3px 0 rgba(38, 30, 80, 0.14),
+    inset -2px -2px 0 rgba(255, 255, 255, 0.4);
+  --pixel-select: #ffd43d;
+  --pixel-select-text: #3a2c08;
+  --pixel-dot: rgba(176, 125, 0, 0.09);
+  --pixel-dither: radial-gradient(var(--pixel-dot) 1.1px, transparent 1.6px) 0 0 / 5px 5px,
+    repeating-linear-gradient(0deg, rgba(42, 36, 80, 0.02) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(90deg, rgba(42, 36, 80, 0.02) 0 1px, transparent 1px 8px);
+  --pixel-scan: repeating-linear-gradient(
+    0deg,
+    transparent 0 3px,
+    rgba(38, 30, 80, 0.06) 3px 4px
+  );
+  --pixel-divider-line: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='4' viewBox='0 0 24 4'%3E%3Crect x='0' y='0' width='4' height='4' fill='%23b07d00' fill-opacity='0.55'/%3E%3Crect x='10' y='0' width='4' height='4' fill='%232a2450' fill-opacity='0.4'/%3E%3Crect x='20' y='0' width='4' height='4' fill='%23b07d00' fill-opacity='0.28'/%3E%3C/svg%3E");
+}
+
+/* ============================================================
+   Pixel visual styling (both variants)
+   Square everywhere, hard edges, blocky feedback.
+   `--panel-radius` stays untouched (user-controlled, HWND clip).
+   ============================================================ */
+
+/* Square corner radius across the whole surface */
+:is(body.pixel-theme, body.pixel-light-theme) {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+}
+
+/* Solid gold text selection + search highlight */
+:is(body.pixel-theme, body.pixel-light-theme) ::selection {
+  background: var(--pixel-select);
+  color: var(--pixel-select-text);
+}
+:is(body.pixel-theme, body.pixel-light-theme) mark.search-hit {
+  background: var(--pixel-select);
+  color: var(--pixel-select-text);
+  border-radius: 0;
+}
+
+/* Blocky focus ring — crisp solid accent boundary */
+:is(body.pixel-theme, body.pixel-light-theme) :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Chunky dither + scanline texture on the panel + content surfaces */
+:is(body.pixel-theme, body.pixel-light-theme) .panel-surface,
+:is(body.pixel-theme, body.pixel-light-theme) .tray-menu {
+  background-image: var(--pixel-dither), var(--pixel-scan);
+}
+:is(body.pixel-theme.blur-enabled, body.pixel-light-theme.blur-enabled) .panel-surface,
+:is(body.pixel-theme.blur-enabled, body.pixel-light-theme.blur-enabled) .tray-menu {
+  background-image: var(--pixel-dither), var(--pixel-scan);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.sidebar, .list-column, .preview-pane, .settings-nav, .settings-body, .app-tooltip) {
+  background-image: var(--pixel-dither), var(--pixel-scan);
+}
+
+/* ============================================================
+   Padded dividers: crisp hairlines replaced by chunky pixel
+   blocks, like a brick line in an 8-bit level.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(
+    .titlebar,
+    .panel-header,
+    .list-toolbar,
+    .settings-header,
+    .preview-header,
+    .dialog-header,
+    .batch-bar
+  ) {
+  border-bottom: none;
+  background-image: var(--pixel-divider-line);
+  background-repeat: repeat-x;
+  background-position: bottom;
+  background-size: 24px 4px;
+}
+
+:is(body.pixel-theme, body.pixel-light-theme) .list-footer {
+  border-top: none;
+  background-image: var(--pixel-divider-line);
+  background-repeat: repeat-x;
+  background-position: top;
+  background-size: 24px 4px;
+}
+
+:is(body.pixel-theme, body.pixel-light-theme) .pin-section-divider::after {
+  height: 4px;
+  background-color: transparent;
+  background-image: var(--pixel-divider-line);
+  background-repeat: repeat-x;
+  background-position: center;
+  background-size: 24px 4px;
+}
+
+:is(body.pixel-theme, body.pixel-light-theme) .setting-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--border-default) 60%, transparent);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .setting-row:last-child {
+  border-bottom: none;
+}
+
+/* Section titles + sidebar captions: gold block chips */
+:is(body.pixel-theme, body.pixel-light-theme) .settings-section-title {
+  width: fit-content;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: 3px 3px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .sidebar-label {
+  width: fit-content;
+  padding: 1px 6px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-text);
+}
+
+/* ============================================================
+   Pixel interaction pass (both variants)
+   "Pressed into the console": hover = hard shadow + lift,
+   active = translate down + shadow removed, selected =
+   gold solid fill with a retro bevel.
+   ============================================================ */
+
+/* Navigation, filters & toolbar buttons: gold wash hover */
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(
+    .nav-item:not(.has-cat-color):hover,
+    .tag-item:hover,
+    .tag-add:hover,
+    .filter-tab:hover,
+    .list-tool-btn:hover,
+    .view-toggle-btn:hover,
+    .batch-btn:not(.danger):hover:not(:disabled)
+  ) {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+  border-color: var(--border-focus);
+}
+
+/* Active states: gold solid fill + bevel (classic NES "on") */
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(
+    .nav-item:not(.has-cat-color).active,
+    .tag-item.active,
+    .filter-tab.active,
+    .list-tool-btn.active,
+    .view-toggle-btn.active,
+    .icon-btn.active
+  ) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+  box-shadow: var(--pixel-bevel);
+}
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.filter-tab.active .filter-count, .nav-item:not(.has-cat-color).active .nav-count) {
+  background: transparent;
+  color: var(--text-on-accent);
+  opacity: 0.85;
+}
+
+/* Category nav rows: solid pixel fill in the category's own hue, with the
+   retro bevel — same "pressed on" treatment as the plain categories, while
+   text/image/... keep their color coding. */
+:is(body.pixel-theme, body.pixel-light-theme) .nav-item.has-cat-color.active {
+  background-color: var(--cat-color);
+  color: var(--text-inverse);
+  box-shadow: var(--pixel-bevel);
+}
+
+/* While active the icon inherits the on-fill ink instead of the category
+   color (which is now the fill itself). */
+:is(body.pixel-theme, body.pixel-light-theme) .nav-item.has-cat-color.active .nav-icon {
+  color: inherit;
+}
+
+/* Segmented control: gold solid selected segment */
+:is(body.pixel-theme, body.pixel-light-theme) .segmented {
+  border: 1px solid var(--border-default);
+  background: var(--bg-input);
+  padding: 1px;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .segment-btn:hover {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .segment-btn.selected {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  box-shadow: var(--pixel-bevel);
+}
+
+/* Icon buttons & search clear: chunky press */
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.icon-btn, .clear-btn) {
+  transition: background var(--transition-fast), color var(--transition-fast),
+    transform var(--transition-instant), box-shadow var(--transition-instant);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.icon-btn, .clear-btn):hover {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.icon-btn, .clear-btn):active {
+  background: var(--accent-soft);
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* List-row action buttons: square chips, semantic tints kept */
+:is(body.pixel-theme, body.pixel-light-theme) .record-action-btn {
+  transition: background var(--transition-fast), color var(--transition-fast),
+    transform var(--transition-instant), box-shadow var(--transition-instant);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .record-action-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-text);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .record-action-btn.action-fav:hover {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .record-action-btn.action-pin:hover {
+  background: var(--pin-soft);
+  color: var(--pin);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .record-action-btn.danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .record-action-btn:active {
+  background: var(--bg-active);
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* Preview action bar: chunky chips with hard shadows */
+:is(body.pixel-theme, body.pixel-light-theme) .action-btn {
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast), transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .action-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--border-focus);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .action-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* Primary CTA: gold block with bevel; press = sent into the console */
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary) {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0 var(--pixel-ink), var(--pixel-bevel);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.btn-primary:not(.danger), .action-btn.action-primary):active:not(:disabled) {
+  background: var(--accent-pressed);
+  border-color: var(--accent-pressed);
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .btn-primary.danger {
+  background: var(--danger);
+  color: var(--text-on-accent);
+  border-color: var(--danger);
+  box-shadow: 3px 3px 0 var(--pixel-ink);
+}
+
+/* Secondary / danger / batch / misc buttons: chunky square press */
+:is(body.pixel-theme, body.pixel-light-theme) .btn-secondary {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .btn-secondary:hover:not(:disabled) {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+  border-color: var(--border-focus);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .btn-danger,
+:is(body.pixel-theme, body.pixel-light-theme) .empty-trash-btn {
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 38%, transparent);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .btn-danger:hover:not(:disabled),
+:is(body.pixel-theme, body.pixel-light-theme) .empty-trash-btn:hover {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.btn, .batch-btn, .empty-trash-btn):active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.batch-btn, .empty-trash-btn):hover:not(:disabled) {
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+
+/* Capture pause/resume + back-to-top + shortcut chips */
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.capture-toggle, .back-to-top-btn, .shortcut-btn) {
+  transition: background var(--transition-fast), color var(--transition-fast),
+    border-color var(--transition-fast), transform var(--transition-instant),
+    box-shadow var(--transition-instant);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .capture-toggle:hover {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  border-color: color-mix(in srgb, var(--success) 36%, transparent);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .capture-toggle.paused:hover {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .back-to-top-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.capture-toggle, .back-to-top-btn, .shortcut-btn):active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+/* Toggle switch: square track + square knob, gold on-state */
+:is(body.pixel-theme, body.pixel-light-theme) .toggle {
+  border-radius: 0;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .toggle::after {
+  border-radius: 0;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .toggle.on::after {
+  background: var(--text-inverse);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .toggle:active::after {
+  transform: scale(0.9);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .toggle.on:active::after {
+  transform: translateX(16px) scale(0.9);
+}
+
+/* ============================================================
+   Inputs & fields — blocky 2px borders, no pill.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(
+    .search-box,
+    .auto-tag-input,
+    .font-select,
+    .list-sort,
+    .shortcut-btn,
+    .ignore-input,
+    .source-input,
+    .field-input,
+    input[type="text"],
+    input[type="password"],
+    input[type="url"],
+    input[type="number"],
+    select,
+    textarea
+  ) {
+  border: 1px solid var(--border-default);
+  border-radius: 0;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .search-box {
+  background: var(--bg-input);
+  border: 2px solid var(--border-default);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .search-box:hover,
+:is(body.pixel-theme, body.pixel-light-theme) .search-box:focus {
+  background: var(--bg-surface);
+  border-color: var(--border-focus);
+}
+
+/* Square slider thumb with a hard pixel shadow */
+:is(body.pixel-theme, body.pixel-light-theme)
+  .settings-body input[type="range"]::-webkit-slider-thumb {
+  border-radius: 0;
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+
+/* Thin square scrollbar thumb + square tag palette dot */
+:is(body.pixel-theme, body.pixel-light-theme) ::-webkit-scrollbar-thumb {
+  border-radius: 0;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .tag-badge-dot {
+  border-radius: 0;
+}
+
+/* ============================================================
+   Chips & badges — square blocks.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(
+    .badge,
+    .type-chip,
+    .tag-badge,
+    .tag-chip,
+    .record-sensitive,
+    .kbd,
+    .kbd-display,
+    .record-type-icon,
+    .preview-type-icon,
+    .record-color-swatch,
+    .color-swatch-lg
+  ) {
+  border-radius: 0;
+}
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.badge, .type-chip, .tag-badge, .record-sensitive, .kbd, .kbd-display) {
+  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .tag-chip {
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+
+/* ============================================================
+   List rows & preview — block cursor selection, blocky frames.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme) .record-item.selected {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: var(--bg-selected);
+  /* NES-style gold block cursor: a chunky 8px cursor bar on the leading edge */
+  box-shadow: inset 8px 0 0 var(--accent), inset 9px 0 0 var(--pixel-ink);
+}
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.code-box, .link-card, .file-card, .image-placeholder, .empty-icon, .color-preview-card) {
+  border: 1px solid var(--border-default);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .image-card img,
+:is(body.pixel-theme, body.pixel-light-theme) .image-thumb,
+:is(body.pixel-theme, body.pixel-light-theme) .record-image-tile {
+  border: 1px solid var(--border-default);
+}
+
+/* ============================================================
+   Cards & stats — flat square chrome.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(.theme-card, .mode-card, .data-card, .stats-card, .storage-card, .guide-block) {
+  border: 1px solid var(--border-default);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .theme-card,
+:is(body.pixel-theme, body.pixel-light-theme) .mode-card {
+  transition: border-color var(--transition-fast), background var(--transition-fast),
+    transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .theme-card:hover,
+:is(body.pixel-theme, body.pixel-light-theme) .mode-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 3px 3px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .theme-card.selected,
+:is(body.pixel-theme, body.pixel-light-theme) .mode-card.selected {
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Grid cards (window mode) */
+:is(body.pixel-theme, body.pixel-light-theme) .view-grid .record-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0 var(--pixel-ink);
+}
+
+/* ============================================================
+   Stepped pixel corners on board cards — the "sprite tile"
+   notch carved at each corner. clip-path is restricted to cards
+   that don't carry an offset hard shadow (a shadow would be
+   clipped away too); buttons/menus keep their crisp shadows.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme)
+  :is(
+    .data-card,
+    .stats-card,
+    .storage-card,
+    .guide-block,
+    .code-box,
+    .link-card,
+    .file-card,
+    .image-placeholder,
+    .segmented
+  ) {
+  clip-path: polygon(
+    0 4px, 2px 4px, 2px 2px, 4px 2px, 4px 0,
+    calc(100% - 4px) 0, calc(100% - 4px) 2px, calc(100% - 2px) 2px, calc(100% - 2px) 4px, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 2px) calc(100% - 4px), calc(100% - 2px) calc(100% - 2px), calc(100% - 4px) calc(100% - 2px), calc(100% - 4px) 100%,
+    4px 100%, 4px calc(100% - 2px), 2px calc(100% - 2px), 2px calc(100% - 4px), 0 calc(100% - 4px)
+  );
+}
+
+/* Preview tag chips */
+:is(body.pixel-theme, body.pixel-light-theme) .preview-tags .tag-chip {
+  transition: transform var(--transition-fast), border-color var(--transition-fast),
+    background var(--transition-fast), box-shadow var(--transition-fast);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .preview-tags .tag-chip:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, currentColor 46%, transparent);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: 2px 2px 0 var(--pixel-ink);
+}
+
+/* ============================================================
+   Floating chrome — menus, dialogs, toasts: hard pixel shadows.
+   ============================================================ */
+
+:is(body.pixel-theme, body.pixel-light-theme) .context-menu,
+:is(body.pixel-theme, body.pixel-light-theme) .dialog-card {
+  border: 1px solid var(--border-default);
+  box-shadow: 4px 4px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .toast-item {
+  border: 1px solid var(--border-default);
+  box-shadow: 4px 4px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .batch-bar {
+  box-shadow: 4px 4px 0 var(--pixel-ink);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .app-tooltip {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+  border-radius: 0;
+  box-shadow: 3px 3px 0 var(--pixel-ink);
+}
+
+/* Status banners: hard-edged dashes */
+:is(body.pixel-theme, body.pixel-light-theme) .status-line {
+  border: 1px dashed color-mix(in srgb, currentColor 26%, transparent);
+}
+:is(body.pixel-theme, body.pixel-light-theme) .sensitive-warning {
+  border-bottom-color: color-mix(in srgb, var(--danger) 32%, transparent);
+}
+
+/* Live capture dot: square outline */
+:is(body.pixel-theme, body.pixel-light-theme) .live-dot {
+  box-shadow: none;
+  outline: 2px solid var(--success-soft);
+  border-radius: 0;
+}
+:is(body.pixel-theme, body.pixel-light-theme) .live-dot.paused {
+  outline-color: var(--warning-soft);
+}
+
+/* New-record flash frame stays square */
+:is(body.pixel-theme, body.pixel-light-theme) .record-item.is-new::before {
+  border-radius: 0;
+}
+
+/* Window control glyphs: snap thin lines to the pixel grid */
+:is(body.pixel-theme, body.pixel-light-theme) .win-btn svg {
+  shape-rendering: crispEdges;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(body.pixel-theme, body.pixel-light-theme) .theme-card,
+  :is(body.pixel-theme, body.pixel-light-theme) .mode-card {
+    transform: none;
+  }
+}

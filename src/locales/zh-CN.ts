@@ -370,6 +370,8 @@ export default {
       themeFlatLight: '扁平·浅',
       themePencil: '彩铅',
       themePencilLight: '彩铅·浅',
+      themePixel: '像素',
+      themePixelLight: '像素·浅',
       alwaysOnTop: '窗口始终置顶',
       alwaysOnTopDesc: '开启后面板会保持在其它窗口之上',
       panelAppearance: '面板外观',

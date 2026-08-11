@@ -370,6 +370,8 @@ export default {
       themeFlatLight: 'Flat Light',
       themePencil: 'Colored Pencil',
       themePencilLight: 'Colored Pencil Light',
+      themePixel: 'Pixel',
+      themePixelLight: 'Pixel Light',
       alwaysOnTop: 'Always on Top',
       alwaysOnTopDesc: 'Keep the window above other apps',
       panelAppearance: 'Panel Appearance',

@@ -11,6 +11,8 @@ describe("theme registry", () => {
         "sticker-light",
         "flat",
         "flat-light",
+        "pixel",
+        "pixel-light",
       ]),
     );
   });
@@ -20,6 +22,8 @@ describe("theme registry", () => {
     expect(isThemeKey("sticker-light")).toBe(true);
     expect(isThemeKey("flat")).toBe(true);
     expect(isThemeKey("flat-light")).toBe(true);
+    expect(isThemeKey("pixel")).toBe(true);
+    expect(isThemeKey("pixel-light")).toBe(true);
     expect(isThemeKey("not-a-theme")).toBe(false);
   });
 });

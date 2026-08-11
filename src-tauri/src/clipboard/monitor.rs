@@ -1,17 +1,23 @@
-//! Clipboard polling monitor (arboard) + captured-text/image types.
+//! Clipboard monitor (arboard) + captured-text/image types.
 //!
-//! The poll loop is cheap: `GetClipboardSequenceNumber` skips all reads when
-//! the OS clipboard is unchanged, and a bounded worker queue (set up in
-//! lib.rs) absorbs the actual persistence. `image.rs` provides the cheap
+//! Windows: event-driven via `AddClipboardFormatListener` (a message-only
+//! window receives `WM_CLIPBOARDUPDATE` the moment the OS clipboard changes),
+//! with a 1s sequence-number watchdog as the reliability net:
+//! - sleep/wake catch-up (clipboard changed while the machine was asleep),
+//! - retry after transient `ClipboardOccupied` reads,
+//! - fallback if `AddClipboardFormatListener` fails.
+//!
+//! Non-Windows builds keep the original 250ms poll loop; both paths share one
+//! `handle_clipboard_tick` read/dedup routine. The bounded worker queue (set
+//! up in lib.rs) absorbs the actual persistence; `image.rs` provides the cheap
 //! fingerprint + downscale helpers; `paste.rs` owns the foreground-window
-//! tracking this loop keeps fresh.
+//! tracking this thread keeps fresh.
 
 use super::image::{downscale_captured_rgba_if_large, image_quick_fingerprint};
 use super::paste::track_last_foreign_foreground;
 use arboard::Clipboard;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
@@ -107,172 +113,361 @@ impl ClipboardMonitor {
         let last_text_fp = self.last_text_fp.clone();
         let last_image_hash = self.last_image_hash.clone();
         let suppress_until = self.suppress_until.clone();
+        let on_change: Box<dyn Fn(ClipboardEvent) + Send + 'static> = Box::new(on_change);
 
-        // Baseline fingerprint so pre-existing clipboard content is not re-captured.
-        // A transient busy clipboard here just means "no baseline" — the first poll
-        // handles that case normally.
-        if let Ok(mut clipboard) = Clipboard::new() {
-            if let Ok(Some(captured)) = read_clipboard_text(&mut clipboard) {
-                *last_text_fp.lock() = Some(captured.fingerprint());
-            }
-        }
-        let last_seq = AtomicU32::new(clipboard_sequence_number());
-
-        thread::spawn(move || {
-            let poll_interval = Duration::from_millis(250);
-            // Reuse handle across polls; recreate only after open failure
-            let mut clipboard_slot: Option<Clipboard> = Clipboard::new().ok();
-            info!(
-                "Clipboard monitor started (poll every {}ms)",
-                poll_interval.as_millis()
-            );
-            // Log a busy clipboard once per episode, not every 250ms tick.
-            let mut busy_logged = false;
-
-            while running.load(Ordering::SeqCst) {
-                // Always refresh paste destination while user works in other apps.
-                track_last_foreign_foreground();
-
-                let seq = clipboard_sequence_number();
-                // Sequence unchanged → skip all clipboard reads (esp. get_image RGBA copy)
-                if seq != 0 && seq == last_seq.load(Ordering::Relaxed) {
-                    thread::sleep(poll_interval);
-                    continue;
-                }
-                // Do NOT advance `last_seq` yet. The watermark is committed only
-                // after the clipboard is successfully opened below; otherwise a
-                // transient `ClipboardOccupied` failure would consume this sequence
-                // transition and the copy would be lost forever (the next poll sees
-                // an unchanged sequence and skips).
-
-                // Paste-suppression window: the clipboard holds our own paste.
-                // Skip ALL reads AND the sequence watermark — if a real copy lands
-                // in this window, the first poll after it expires sees a fresh
-                // sequence and captures it instead of skipping it forever. Our own
-                // paste is re-read once then and absorbed by DB hash-dedup.
-                if is_capture_suppressed(&suppress_until) {
-                    thread::sleep(poll_interval);
-                    continue;
-                }
-
-                if clipboard_slot.is_none() {
-                    clipboard_slot = Clipboard::new().ok();
-                }
-                let Some(clipboard) = clipboard_slot.as_mut() else {
-                    thread::sleep(poll_interval);
-                    continue;
-                };
-
-                // First open of this tick. If another process holds the clipboard
-                // (common right after login/startup), leave the watermark untouched
-                // so the next poll retries this same sequence transition.
-                let text = match read_clipboard_text(clipboard) {
-                    Ok(text) => text,
-                    Err(e) => {
-                        if !busy_logged {
-                            warn!("Clipboard busy, deferring capture: {e}");
-                            busy_logged = true;
-                        }
-                        thread::sleep(poll_interval);
-                        continue;
+        std::thread::Builder::new()
+            .name("clipvault-clipboard-watch".into())
+            .spawn(move || {
+                // Baseline fingerprint so pre-existing clipboard content is not
+                // re-captured. A transient busy clipboard here just means "no
+                // baseline" — the first tick handles that case normally. Runs
+                // on this thread so all arboard access stays single-threaded.
+                if let Ok(mut clipboard) = Clipboard::new() {
+                    if let Ok(Some(captured)) = read_clipboard_text(&mut clipboard) {
+                        *last_text_fp.lock() = Some(captured.fingerprint());
                     }
-                };
-                // The sequence watermark is committed only after ALL clipboard
-                // reads for this tick succeed. If any read hits ClipboardOccupied
-                // we leave the watermark untouched so the next poll retries this
-                // same sequence transition.
-
-                // Text was read first (above). Skip get_image() (full RGBA copy) when:
-                // - meaningful share text wins over a co-existing thumb, or
-                // - the clipboard has no bitmap/DIB formats at all.
-                let prefer_text = text
-                    .as_ref()
-                    .map(|t| is_meaningful_share_text(&t.text))
-                    .unwrap_or(false);
-
-                if prefer_text {
-                    if let Some(captured) = text {
-                        maybe_emit_text(&last_text_fp, captured, &on_change);
-                    }
-                    busy_logged = false;
-                    last_seq.store(seq, Ordering::Relaxed);
-                    thread::sleep(poll_interval);
-                    continue;
                 }
+                let last_seq = AtomicU32::new(clipboard_sequence_number());
 
-                if clipboard_has_bitmap_format() {
-                    // Windows often keeps BOTH a bitmap and text:
-                    // - Screenshots: image + empty/stub text → keep image
-                    // - Browser "Copy image": image + URL-only text → keep image
-                    let image = match clipboard.get_image() {
-                        Err(e @ arboard::Error::ClipboardOccupied) => {
-                            if !busy_logged {
-                                warn!("Clipboard busy during image read, deferring: {e}");
-                                busy_logged = true;
-                            }
-                            thread::sleep(poll_interval);
-                            continue;
-                        }
-                        Err(_) => None,
-                        Ok(img) => Some(img),
-                    };
-                    if let Some(img) = image {
-                        // Cheap fingerprint first — avoid full SHA-256 when bitmap unchanged
-                        let quick = image_quick_fingerprint(&img);
-                        let unchanged = {
-                            let last = last_image_hash.lock();
-                            matches!(&*last, Some(prev) if prev == &quick)
-                        };
-
-                        if unchanged {
-                            // Stale bitmap + new text (common on Windows) → still emit text.
-                            if let Some(captured) = text {
-                                maybe_emit_text(&last_text_fp, captured, &on_change);
-                            }
-                        } else {
-                            let width = img.width as u32;
-                            let height = img.height as u32;
-                            // Prefer moving owned buffer; only copy when Cow is borrowed
-                            let raw = match img.bytes {
-                                std::borrow::Cow::Owned(v) => v,
-                                std::borrow::Cow::Borrowed(b) => b.to_vec(),
-                            };
-                            // SHA-256 of full RGBA is done on the capture worker —
-                            // poll only needs the cheap quick fingerprint for change detection.
-                            *last_image_hash.lock() = Some(quick);
-                            // Cap very large bitmaps BEFORE they enter the bounded channel:
-                            // raw RGBA at 8K ≈ 660MB. We only need a 2560px-max edge for
-                            // preview + paste; store_clipboard_image() also targets MAX_EDGE.
-                            let (rgba, width, height) =
-                                downscale_captured_rgba_if_large(raw, width, height);
-                            debug!("Clipboard changed (image): {}x{}", width, height);
-                            on_change(ClipboardEvent::Image(CapturedImage {
-                                rgba,
-                                width,
-                                height,
-                                hash: String::new(),
-                            }));
-                        }
-                    } else if let Some(captured) = text {
-                        maybe_emit_text(&last_text_fp, captured, &on_change);
-                    }
-                } else if let Some(captured) = text {
-                    maybe_emit_text(&last_text_fp, captured, &on_change);
-                }
-
-                // All reads for this tick succeeded — commit the watermark.
-                busy_logged = false;
-                last_seq.store(seq, Ordering::Relaxed);
-                thread::sleep(poll_interval);
-            }
-
-            debug!("Clipboard monitor stopped");
-        });
+                #[cfg(windows)]
+                run_event_loop(
+                    running,
+                    last_text_fp,
+                    last_image_hash,
+                    suppress_until,
+                    last_seq,
+                    on_change,
+                );
+                #[cfg(not(windows))]
+                run_poll_loop(
+                    running,
+                    last_text_fp,
+                    last_image_hash,
+                    suppress_until,
+                    last_seq,
+                    on_change,
+                );
+            })
+            .expect("failed to spawn clipboard monitor thread");
     }
 
     pub fn stop(&mut self) {
         self.running.store(false, Ordering::SeqCst);
     }
+}
+
+/// Windows event loop: a message-only window registered with
+/// `AddClipboardFormatListener` receives `WM_CLIPBOARDUPDATE` on every OS
+/// clipboard change, plus two timers:
+/// - `TIMER_DEBOUNCE` (150ms): folds the multiple notifications one logical
+///   copy emits (apps set text/HTML/bitmap formats separately) into a single
+///   read, so a copy never triggers repeated `get_image()` RGBA copies.
+/// - `TIMER_WATCHDOG` (1s, 250ms while a read is deferred): sequence-number
+///   catch-up after sleep/resume, retry after `ClipboardOccupied`, and the
+///   fallback path if the listener registration failed. This makes the
+///   monitor degrade gracefully instead of silently missing captures.
+#[cfg(windows)]
+fn run_event_loop(
+    running: Arc<AtomicBool>,
+    last_text_fp: Arc<parking_lot::Mutex<Option<String>>>,
+    last_image_hash: Arc<parking_lot::Mutex<Option<String>>>,
+    suppress_until: Arc<parking_lot::Mutex<Option<Instant>>>,
+    last_seq: AtomicU32,
+    on_change: Box<dyn Fn(ClipboardEvent) + Send + 'static>,
+) {
+    use windows_sys::Win32::Foundation::HWND;
+    use windows_sys::Win32::System::DataExchange::AddClipboardFormatListener;
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, KillTimer,
+        RegisterClassW, SetTimer, TranslateMessage, CW_USEDEFAULT, MSG, WM_CLIPBOARDUPDATE,
+        WM_QUIT, WM_TIMER, WNDCLASSW,
+    };
+
+    const TIMER_DEBOUNCE: usize = 1;
+    const TIMER_WATCHDOG: usize = 2;
+    const DEBOUNCE_MS: u32 = 150;
+    const WATCHDOG_IDLE_MS: u32 = 1000;
+    const WATCHDOG_BUSY_MS: u32 = 250;
+
+    unsafe {
+        let class_name: Vec<u16> = "ClipVaultClipboardWatch\0".encode_utf16().collect();
+        let hinstance = GetModuleHandleW(std::ptr::null());
+        let wc = WNDCLASSW {
+            style: 0,
+            lpfnWndProc: Some(DefWindowProcW),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: hinstance,
+            hIcon: std::ptr::null_mut(),
+            hCursor: std::ptr::null_mut(),
+            hbrBackground: std::ptr::null_mut(),
+            lpszMenuName: std::ptr::null(),
+            lpszClassName: class_name.as_ptr(),
+        };
+        // Returns 0 when the class already exists — harmless on re-registration.
+        RegisterClassW(&wc);
+
+        const HWND_MESSAGE: HWND = -3isize as HWND;
+        let hwnd = CreateWindowExW(
+            0,
+            class_name.as_ptr(),
+            class_name.as_ptr(),
+            0,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            HWND_MESSAGE,
+            std::ptr::null_mut(),
+            hinstance,
+            std::ptr::null(),
+        );
+        if hwnd.is_null() {
+            warn!("Failed to create clipboard-watch message window");
+            running.store(false, Ordering::SeqCst);
+            return;
+        }
+
+        if AddClipboardFormatListener(hwnd) == 0 {
+            // Rare failure: the 1s watchdog below still captures every change
+            // (up to 1s latency) — the monitor degrades, never goes silent.
+            warn!("AddClipboardFormatListener failed; falling back to timer-driven polling");
+        }
+        SetTimer(hwnd, TIMER_WATCHDOG, WATCHDOG_IDLE_MS, None);
+
+        let mut clipboard_slot: Option<Clipboard> = Clipboard::new().ok();
+        let mut busy_logged = false;
+        info!("Clipboard monitor started (event-driven + 1s watchdog)");
+
+        let mut msg = std::mem::zeroed::<MSG>();
+        while running.load(Ordering::SeqCst) {
+            // Retrieves messages for this thread (the message-only window
+            // above); WM_TIMER wakes the loop at least once per second so a
+            // stop() is honoured within ~1s even with no clipboard activity.
+            let ret = GetMessageW(&mut msg, std::ptr::null_mut(), 0, 0);
+            if ret == -1 || ret == 0 {
+                break;
+            }
+            match msg.message {
+                WM_CLIPBOARDUPDATE => {
+                    // Restarting the same timer id extends the debounce window,
+                    // coalescing burst notifications from one logical copy.
+                    SetTimer(hwnd, TIMER_DEBOUNCE, DEBOUNCE_MS, None);
+                }
+                WM_TIMER => {
+                    let timer_id = msg.wParam as usize;
+                    if timer_id == TIMER_DEBOUNCE || timer_id == TIMER_WATCHDOG {
+                        if timer_id == TIMER_DEBOUNCE {
+                            KillTimer(hwnd, TIMER_DEBOUNCE);
+                        }
+                        // Refresh the paste destination while the user works in
+                        // other apps (foreground changes are not clipboard
+                        // events, so this rides the watchdog cadence).
+                        track_last_foreign_foreground();
+                        let busy = handle_clipboard_tick(
+                            &mut clipboard_slot,
+                            &last_seq,
+                            &last_text_fp,
+                            &last_image_hash,
+                            &suppress_until,
+                            &mut busy_logged,
+                            &*on_change,
+                        );
+                        SetTimer(
+                            hwnd,
+                            TIMER_WATCHDOG,
+                            if busy {
+                                WATCHDOG_BUSY_MS
+                            } else {
+                                WATCHDOG_IDLE_MS
+                            },
+                            None,
+                        );
+                    }
+                }
+                WM_QUIT => break,
+                _ => {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+        }
+
+        DestroyWindow(hwnd);
+        debug!("Clipboard monitor stopped");
+    }
+}
+
+/// Non-Windows fallback: the original fixed-cadence poll loop, driven by the
+/// same `handle_clipboard_tick` routine.
+#[cfg(not(windows))]
+fn run_poll_loop(
+    running: Arc<AtomicBool>,
+    last_text_fp: Arc<parking_lot::Mutex<Option<String>>>,
+    last_image_hash: Arc<parking_lot::Mutex<Option<String>>>,
+    suppress_until: Arc<parking_lot::Mutex<Option<Instant>>>,
+    last_seq: AtomicU32,
+    on_change: Box<dyn Fn(ClipboardEvent) + Send + 'static>,
+) {
+    let poll_interval = Duration::from_millis(250);
+    let mut clipboard_slot: Option<Clipboard> = Clipboard::new().ok();
+    info!(
+        "Clipboard monitor started (poll every {}ms)",
+        poll_interval.as_millis()
+    );
+    let mut busy_logged = false;
+
+    while running.load(Ordering::SeqCst) {
+        track_last_foreign_foreground();
+        handle_clipboard_tick(
+            &mut clipboard_slot,
+            &last_seq,
+            &last_text_fp,
+            &last_image_hash,
+            &suppress_until,
+            &mut busy_logged,
+            &*on_change,
+        );
+        thread::sleep(poll_interval);
+    }
+
+    debug!("Clipboard monitor stopped");
+}
+
+/// One read/dedup pass shared by the event loop and the poll fallback.
+///
+/// Returns `true` when the clipboard was busy and this sequence transition
+/// must be retried (the caller should re-arm quickly); `false` when nothing
+/// was read or the pass completed. The sequence watermark (`last_seq`) is
+/// committed only after every read in the pass succeeds — a transient
+/// `ClipboardOccupied` never consumes a transition. The paste-suppression
+/// window skips all reads and leaves the watermark untouched, so the
+/// post-window re-read absorbs our own paste via hash dedup.
+fn handle_clipboard_tick(
+    clipboard_slot: &mut Option<Clipboard>,
+    last_seq: &AtomicU32,
+    last_text_fp: &parking_lot::Mutex<Option<String>>,
+    last_image_hash: &parking_lot::Mutex<Option<String>>,
+    suppress_until: &parking_lot::Mutex<Option<Instant>>,
+    busy_logged: &mut bool,
+    on_change: &dyn Fn(ClipboardEvent),
+) -> bool {
+    // Paste-suppression window: the clipboard holds our own paste. Skip ALL
+    // reads AND the sequence watermark — if a real copy lands in this window,
+    // the first pass after it expires sees a fresh sequence and captures it
+    // instead of skipping it forever.
+    if is_capture_suppressed(suppress_until) {
+        return false;
+    }
+
+    let seq = clipboard_sequence_number();
+    // Sequence unchanged → skip all clipboard reads (esp. get_image RGBA copy).
+    if seq != 0 && seq == last_seq.load(Ordering::Relaxed) {
+        return false;
+    }
+    // Do NOT advance `last_seq` yet — see the function doc.
+
+    if clipboard_slot.is_none() {
+        *clipboard_slot = Clipboard::new().ok();
+    }
+    let Some(clipboard) = clipboard_slot.as_mut() else {
+        return false;
+    };
+
+    let text = match read_clipboard_text(clipboard) {
+        Ok(text) => text,
+        Err(e) => {
+            if !*busy_logged {
+                warn!("Clipboard busy, deferring capture: {e}");
+                *busy_logged = true;
+            }
+            return true;
+        }
+    };
+    // The sequence watermark is committed only after ALL clipboard reads for
+    // this pass succeed. If any read hits ClipboardOccupied we leave the
+    // watermark untouched so the next pass retries this same transition.
+
+    // Text was read first (above). Skip get_image() (full RGBA copy) when:
+    // - meaningful share text wins over a co-existing thumb, or
+    // - the clipboard has no bitmap/DIB formats at all.
+    let prefer_text = text
+        .as_ref()
+        .map(|t| is_meaningful_share_text(&t.text))
+        .unwrap_or(false);
+
+    if prefer_text {
+        if let Some(captured) = text {
+            maybe_emit_text(last_text_fp, captured, on_change);
+        }
+        *busy_logged = false;
+        last_seq.store(seq, Ordering::Relaxed);
+        return false;
+    }
+
+    if clipboard_has_bitmap_format() {
+        // Windows often keeps BOTH a bitmap and text:
+        // - Screenshots: image + empty/stub text → keep image
+        // - Browser "Copy image": image + URL-only text → keep image
+        let image = match clipboard.get_image() {
+            Err(e @ arboard::Error::ClipboardOccupied) => {
+                if !*busy_logged {
+                    warn!("Clipboard busy during image read, deferring: {e}");
+                    *busy_logged = true;
+                }
+                return true;
+            }
+            Err(_) => None,
+            Ok(img) => Some(img),
+        };
+        if let Some(img) = image {
+            // Cheap fingerprint first — avoid full SHA-256 when bitmap unchanged
+            let quick = image_quick_fingerprint(&img);
+            let unchanged = {
+                let last = last_image_hash.lock();
+                matches!(&*last, Some(prev) if prev == &quick)
+            };
+
+            if unchanged {
+                // Stale bitmap + new text (common on Windows) → still emit text.
+                if let Some(captured) = text {
+                    maybe_emit_text(last_text_fp, captured, on_change);
+                }
+            } else {
+                let width = img.width as u32;
+                let height = img.height as u32;
+                // Prefer moving owned buffer; only copy when Cow is borrowed
+                let raw = match img.bytes {
+                    std::borrow::Cow::Owned(v) => v,
+                    std::borrow::Cow::Borrowed(b) => b.to_vec(),
+                };
+                // SHA-256 of full RGBA is done on the capture worker — the
+                // monitor only needs the cheap quick fingerprint for dedup.
+                *last_image_hash.lock() = Some(quick);
+                // Cap very large bitmaps BEFORE they enter the bounded channel:
+                // raw RGBA at 8K ≈ 660MB. We only need a 2560px-max edge for
+                // preview + paste; store_clipboard_image() also targets MAX_EDGE.
+                let (rgba, width, height) = downscale_captured_rgba_if_large(raw, width, height);
+                debug!("Clipboard changed (image): {}x{}", width, height);
+                on_change(ClipboardEvent::Image(CapturedImage {
+                    rgba,
+                    width,
+                    height,
+                    hash: String::new(),
+                }));
+            }
+        } else if let Some(captured) = text {
+            maybe_emit_text(last_text_fp, captured, on_change);
+        }
+    } else if let Some(captured) = text {
+        maybe_emit_text(last_text_fp, captured, on_change);
+    }
+
+    // All reads for this pass succeeded — commit the watermark.
+    *busy_logged = false;
+    last_seq.store(seq, Ordering::Relaxed);
+    false
 }
 
 fn is_capture_suppressed(suppress_until: &parking_lot::Mutex<Option<Instant>>) -> bool {
@@ -328,7 +523,7 @@ fn clipboard_has_bitmap_format() -> bool {
 ///
 /// Returns `Err` only for a *transient* failure — the clipboard is held by
 /// another process (`ClipboardOccupied`) — so the caller can keep the sequence
-/// watermark and retry on the next tick. A clipboard that opened fine but holds
+/// watermark and retry on the next pass. A clipboard that opened fine but holds
 /// no usable text (image-only, empty, …) is `Ok(None)`, not an error.
 fn read_clipboard_text(clipboard: &mut Clipboard) -> Result<Option<CapturedText>, arboard::Error> {
     match clipboard.get_text() {
@@ -396,7 +591,7 @@ fn is_primarily_url(t: &str) -> bool {
 fn maybe_emit_text(
     last_text_fp: &parking_lot::Mutex<Option<String>>,
     captured: CapturedText,
-    on_change: &impl Fn(ClipboardEvent),
+    on_change: &dyn Fn(ClipboardEvent),
 ) {
     let fp = captured.fingerprint();
     let should_notify = {

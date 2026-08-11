@@ -157,7 +157,7 @@ const { t } = useI18n();
 .record-action-btn.action-pin:hover { background: var(--pin-soft); color: var(--pin); }
 .record-action-btn.danger:hover { background: var(--danger-soft); color: var(--danger); }
 .record-action-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
-.record-action-btn.active { color: var(--pin); }
+.record-action-btn.action-pin.active { color: var(--pin); transform: rotate(-20deg); }
 .record-action-btn.starred { color: var(--warning); }
 .record-action-btn.active, .record-action-btn.starred { opacity: 1; }
 

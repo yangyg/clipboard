@@ -5,9 +5,8 @@
  */
 import { onMounted, onUnmounted, type Ref } from "vue";
 import { listen } from "@tauri-apps/api/event";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-import type { Window } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import type { Window } from "@tauri-apps/api/window";
 import { useClipboardStore } from "../stores/clipboard";
 import type { ClipboardRecord } from "../types";
 import { isPasteFocusLock, setPasteFocusLock } from "./pasteFocusLock";
@@ -18,11 +17,10 @@ const { toast } = useToast();
 
 export interface ClipboardEventsCtx {
   appWindow: Window;
-  isWindowMode: () => boolean;
   panelVisible: Ref<boolean>;
   settingsVisible: Ref<boolean>;
   showPanel: () => Promise<void>;
-  hidePanel: () => Promise<void>;
+  hidePanel: () => void;
   openSettings: (section?: string) => Promise<void>;
 }
 
@@ -85,29 +83,8 @@ export function useClipboardEvents(ctx: ClipboardEventsCtx) {
         }
       }),
 
-      listen<boolean>("paste-focus-lock", (event) => {
+listen<boolean>("paste-focus-lock", (event) => {
         setPasteFocusLock(!!event.payload);
-      }),
-
-      // Auto-close panel when window loses focus (click outside).
-      // When we lose focus the other app is already FG — snapshot it for paste.
-      // Skip when custom tray-menu took focus (right-click tray while panel open).
-      ctx.appWindow.onFocusChanged(({ payload: focused }) => {
-        if (isPasteFocusLock()) return;
-        if (!focused && !ctx.isWindowMode()) {
-          void (async () => {
-            try {
-              const tray = await WebviewWindow.getByLabel("tray-menu");
-              if (tray && (await tray.isFocused())) return;
-            } catch {
-              /* ignore */
-            }
-            void invoke("capture_paste_target").catch((e) =>
-              console.debug("[App] capture_paste_target (non-blocking):", e)
-            );
-            void ctx.hidePanel();
-          })();
-        }
       }),
 
       // Listen for open-settings from Rust tray menu

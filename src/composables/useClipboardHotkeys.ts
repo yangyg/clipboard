@@ -6,16 +6,8 @@ import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
 
 export interface ClipboardHotkeyOptions {
-  /** Called when Escape should close the floating panel (not window mode). */
+  /** Optional close callback (unused in the single window mode). */
   onClose?: () => void;
-  /** Allow Escape to close the panel after clearing selection. Default true. */
-  allowCloseOnEscape?: boolean;
-  /**
-   * When provided and returning false, all hotkeys are ignored. Needed in
-   * floating mode where the panel stays mounted (v-show) behind the settings
-   * window — otherwise Enter/Delete would paste/delete into the hidden list.
-   */
-  enabled?: () => boolean;
 }
 
 function isTypingTarget(el: EventTarget | null): boolean {
@@ -25,9 +17,9 @@ function isTypingTarget(el: EventTarget | null): boolean {
 }
 
 /**
- * Shared keyboard navigation for FloatingPanel and WindowApp.
+ * Shared keyboard navigation for the window app.
  * Escape layering: search focus is handled by SearchBar (stopPropagation);
- * here we clear batch → clear selection → optionally close.
+ * here we clear batch → clear selection.
  */
 export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
   const clipboardStore = useClipboardStore();
@@ -45,7 +37,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
     try {
       await clipboardStore.pasteRecord(id, pasteMode);
       toast(pasteMode === "plain" ? t("record.pastedPlain") : t("record.pasted"), "success");
-      // Floating hide is handled in Rust (focus restore). Don't double-hide here.
+      // Window minimize on paste is handled in Rust (focus restore). Don't double-hide here.
     } catch {
       toast(t("record.pasteFailed"), "error");
     }
@@ -79,7 +71,6 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
   }
 
   function onKeyDown(e: KeyboardEvent) {
-    if (options.enabled && !options.enabled()) return;
     if (confirmOpen.value) return;
 
     // Let SearchBar / inputs own Escape and typing shortcuts
@@ -96,7 +87,7 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
         clipboardStore.clearSelection();
         return;
       }
-      if (options.allowCloseOnEscape !== false && options.onClose) {
+      if (options.onClose) {
         e.preventDefault();
         options.onClose();
       }

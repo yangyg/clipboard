@@ -26,25 +26,6 @@
     </div>
   </div>
   <div class="settings-section">
-    <div class="settings-section-title">{{ $t('settings.appearance.appMode') }}</div>
-    <div class="mode-grid" role="radiogroup" :aria-label="$t('settings.appearance.appMode')">
-      <button
-        v-for="mode in APP_MODES"
-        :key="mode.key"
-        type="button"
-        class="mode-card"
-        role="radio"
-        :aria-checked="settings.app_mode === mode.key"
-        :class="{ selected: settings.app_mode === mode.key }"
-        @click="update('app_mode', mode.key)"
-      >
-        <span class="mode-icon"><AppIcon :name="mode.icon" :size="18" /></span>
-        <span class="mode-title">{{ $t(mode.labelKey) }}</span>
-        <span class="mode-desc">{{ $t(mode.descKey) }}</span>
-      </button>
-    </div>
-  </div>
-  <div class="settings-section">
     <div class="settings-section-title">{{ $t('settings.appearance.searchBar') }}</div>
     <div class="setting-row">
       <div>
@@ -112,6 +93,17 @@
       </div>
     </div>
     <div class="setting-row">
+      <div>
+        <div class="setting-label">{{ $t('settings.appearance.alwaysOnTop') }}</div>
+        <div class="setting-desc">{{ $t('settings.appearance.alwaysOnTopDesc') }}</div>
+      </div>
+      <ToggleSwitch
+        :model-value="settings.always_on_top"
+        :aria-label="$t('settings.appearance.alwaysOnTop')"
+        @update:model-value="(v: boolean) => update('always_on_top', v)"
+      />
+    </div>
+    <div class="setting-row">
       <div class="setting-label">{{ $t('settings.appearance.animation') }}</div>
       <ToggleSwitch
         :model-value="settings.enable_animation"
@@ -175,7 +167,7 @@ import {
 import { useToast } from "../../composables/useToast";
 import { i18n } from "../../locales";
 import { THEME_DEFINITIONS } from "../../utils/themeRegistry";
-import AppIcon, { type AppIconName } from "../icons/AppIcon.vue";
+import AppIcon from "../icons/AppIcon.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, update } = useSettings();
@@ -246,21 +238,6 @@ function focusTheme(items: readonly ThemeOption[], index: number) {
     el?.focus();
   });
 }
-
-const APP_MODES = [
-  {
-    key: "floating",
-    icon: "panel" as AppIconName,
-    labelKey: "settings.appearance.modeFloating",
-    descKey: "settings.appearance.modeFloatingDesc",
-  },
-  {
-    key: "window",
-    icon: "window" as AppIconName,
-    labelKey: "settings.appearance.modeWindow",
-    descKey: "settings.appearance.modeWindowDesc",
-  },
-] as const;
 
 /** Search bar display modes — keep in sync with `settings.search_mode`. */
 const SEARCH_MODES = [
@@ -398,54 +375,6 @@ const SEARCH_MODES = [
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-
-/* Mode cards */
-.mode-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.mode-card {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color var(--transition-fast);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-}
-
-.mode-card:hover {
-  border-color: var(--accent);
-}
-
-.mode-card.selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.mode-icon {
-  display: flex;
-  color: var(--accent-text);
-  line-height: 1;
-}
-
-.mode-title {
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.mode-desc {
-  font-size: var(--text-sm);
-  color: var(--text-tertiary);
-  line-height: 1.4;
 }
 
 /* Font family select + live preview */

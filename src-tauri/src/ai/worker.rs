@@ -186,8 +186,10 @@ mod tests {
 
     #[test]
     fn config_requires_url_and_model() {
-        let mut s = Settings::default();
-        s.enable_ai = true;
+        let mut s = Settings {
+            enable_ai: true,
+            ..Settings::default()
+        };
         s.ai_base_url = "https://ok.example/v1".into();
         s.ai_model = "m".into();
         let cfg = AiConfig::from_settings(&s);

@@ -147,7 +147,6 @@ pub fn run() {
             commands::clear_sync_history,
             commands::clear_history,
             commands::get_stats,
-            commands::switch_app_mode,
             commands::set_window_corner_radius,
             commands::set_window_backdrop,
             commands::get_all_tags,
@@ -193,11 +192,9 @@ pub fn run() {
                 }
                 // Startup history import needs the app foreground (WinRT), so it
                 // is armed on the first time the main window gains focus.
-                tauri::WindowEvent::Focused(focused) => {
-                    if *focused && window.label() == "main" {
-                        #[cfg(windows)]
-                        win_history::maybe_start_once(window.app_handle());
-                    }
+                tauri::WindowEvent::Focused(focused) if *focused && window.label() == "main" => {
+                    #[cfg(windows)]
+                    win_history::maybe_start_once(window.app_handle());
                 }
                 _ => {}
             }

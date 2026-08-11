@@ -11,17 +11,15 @@
       "
     >
       <!-- Middle-column chrome (window mode): matches design list toolbar -->
-      <template v-if="showListChrome">
-        <div class="list-chrome">
-          <ListToolbar :list-layout="listLayout" @set-layout="setListLayout" />
+      <div class="list-chrome">
+        <ListToolbar :list-layout="listLayout" @set-layout="setListLayout" />
 
-          <Transition name="batch-bar">
-            <div v-if="clipboardStore.batchMode" ref="batchBarRef" class="batch-bar-holder">
-              <BatchBar />
-            </div>
-          </Transition>
-        </div>
-      </template>
+        <Transition name="batch-bar">
+          <div v-if="clipboardStore.batchMode" ref="batchBarRef" class="batch-bar-holder">
+            <BatchBar />
+          </div>
+        </Transition>
+      </div>
 
       <!-- Loading / Empty → Record List.
            NOTE: deliberately NOT wrapped in a JS <Transition mode="out-in">: WebView2
@@ -242,9 +240,6 @@ function setListLayout(mode: ListLayout) {
   }
   void nextTick(() => fillViewportIfNeeded());
 }
-
-/** Window mode: toolbar lives in the list column (not spanning the preview). */
-const showListChrome = computed(() => settingsStore.settings.app_mode === "window");
 
 /** Show the loading / empty-state panel instead of the virtualized list. */
 const isEmptyOrLoading = computed(

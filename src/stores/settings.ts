@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS: Settings = {
   font_size: 16,
   font_family: "default",
   search_mode: "full",
-  app_mode: "floating",
+  always_on_top: false,
   default_paste_mode: "original",
   auto_close_on_paste: true,
   enable_sensitive_detection: true,
@@ -42,8 +42,6 @@ const DEFAULT_SETTINGS: Settings = {
     "ICBCNetBank.exe",
   ],
   source_name_overrides: [],
-  floating_width: 0,
-  floating_height: 0,
   window_width: 0,
   window_height: 0,
   enable_auto_tag: true,
@@ -206,11 +204,7 @@ export const useSettingsStore = defineStore("settings", () => {
     // more blurred desktop shows through when 毛玻璃 is enabled.
     root.style.setProperty("--panel-blur-opacity", String((100 - s.blur_strength) / 100));
 
-    // App mode class (used for blur / layout performance gates)
-    document.body.classList.toggle("mode-window", s.app_mode === "window");
-    document.body.classList.toggle("mode-floating", s.app_mode !== "window");
-
-    // Blur: applies to .panel-surface chrome in both floating and window mode
+    // Blur: applies to .panel-surface chrome
     if (s.enable_blur) {
       document.body.classList.add("blur-enabled");
     } else {
@@ -232,7 +226,7 @@ export const useSettingsStore = defineStore("settings", () => {
     }
     // Apply appearance changes immediately for real-time preview
     if (
-      ["font_size", "font_family", "panel_radius", "panel_opacity", "enable_blur", "blur_strength", "enable_animation", "app_mode"].includes(
+      ["font_size", "font_family", "panel_radius", "panel_opacity", "enable_blur", "blur_strength", "enable_animation"].includes(
         key as string,
       )
     ) {

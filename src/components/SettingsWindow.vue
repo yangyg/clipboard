@@ -2,9 +2,9 @@
   <div class="settings-overlay" tabindex="-1" @keydown.esc="onOverlayEsc">
     <div class="settings-window panel-surface">
       <!-- Header -->
-      <div class="settings-header" :class="{ 'with-chrome': isWindowMode }" data-tauri-drag-region>
+      <div class="settings-header with-chrome" data-tauri-drag-region>
         <span class="settings-title"><AppIcon name="settings" :size="15" /> {{ $t('settings.title') }}</span>
-        <div v-if="isWindowMode" class="settings-header-right">
+        <div class="settings-header-right">
           <WindowControls />
         </div>
       </div>
@@ -101,7 +101,6 @@ const props = defineProps<{
 const settingsStore = useSettingsStore();
 const clipboardStore = useClipboardStore();
 const settings = settingsStore.settings;
-const isWindowMode = computed(() => settings.app_mode === "window");
 
 const activeSection = ref(props.initialSection ?? "appearance");
 const isRecordingShortcut = ref(false);

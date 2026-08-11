@@ -14,7 +14,7 @@ describe("settingsStore (smoke)", () => {
   it("initializes with sensible defaults", () => {
     const store = useSettingsStore();
     expect(store.settings.theme).toBe("dark");
-    expect(store.settings.app_mode).toBe("floating");
+    expect(store.settings.always_on_top).toBe(false);
     expect(store.settings.font_size).toBe(16);
     expect(store.settings.font_family).toBe("default");
     expect(store.settings.max_records).toBe(1000);

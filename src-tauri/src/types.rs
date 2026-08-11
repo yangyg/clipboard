@@ -248,11 +248,12 @@ pub struct Settings {
     #[serde(default = "default_font_family", rename = "font_family")]
     pub font_family: String,
     /// Search bar display mode (`full` | `icon` | `hidden`), shared by the
-    /// floating panel and the window title bar.
+    /// title bar and the list.
     #[serde(default = "default_search_mode", rename = "search_mode")]
     pub search_mode: String,
-    #[serde(rename = "app_mode")]
-    pub app_mode: String,
+    /// Keep the window on top of other apps (single window mode).
+    #[serde(default, rename = "always_on_top")]
+    pub always_on_top: bool,
     #[serde(rename = "default_paste_mode")]
     pub default_paste_mode: String,
     #[serde(rename = "auto_close_on_paste")]
@@ -279,11 +280,7 @@ pub struct Settings {
     /// User-defined exe → display-name overrides (frontend-only resolution).
     #[serde(default, rename = "source_name_overrides")]
     pub source_name_overrides: Vec<SourceNameOverride>,
-    /// Remembered logical size (0 = use adaptive default). Per app mode.
-    #[serde(default, rename = "floating_width")]
-    pub floating_width: i32,
-    #[serde(default, rename = "floating_height")]
-    pub floating_height: i32,
+    /// Remembered logical size (0 = use adaptive default).
     #[serde(default, rename = "window_width")]
     pub window_width: i32,
     #[serde(default, rename = "window_height")]
@@ -362,7 +359,7 @@ impl Default for Settings {
             font_size: 16,
             font_family: default_font_family(),
             search_mode: default_search_mode(),
-            app_mode: "floating".to_string(),
+            always_on_top: false,
             default_paste_mode: "original".to_string(),
             auto_close_on_paste: true,
             enable_sensitive_detection: true,
@@ -381,8 +378,6 @@ impl Default for Settings {
                 "ICBCNetBank.exe".to_string(),
             ],
             source_name_overrides: vec![],
-            floating_width: 0,
-            floating_height: 0,
             window_width: 0,
             window_height: 0,
             enable_auto_tag: true,
@@ -513,7 +508,7 @@ mod settings_onboarding_tests {
 
     #[test]
     fn missing_ai_fields_survive_upgrade_json() {
-        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
+        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(!s.enable_ai, "upgrades must keep AI off");
         assert_eq!(s.ai_max_chars, 4000);
@@ -523,7 +518,7 @@ mod settings_onboarding_tests {
 
     #[test]
     fn missing_json_field_skips_onboarding_for_upgrades() {
-        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"app_mode":"floating","default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
+        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(s.onboarding_completed);
         assert_eq!(s.search_mode, "full");

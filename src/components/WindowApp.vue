@@ -88,7 +88,7 @@ defineEmits<{
   (e: "openSettings", section?: string): void;
 }>();
 
-useClipboardHotkeys({ allowCloseOnEscape: false });
+useClipboardHotkeys();
 
 // --- Sidebar column resize ---
 const narrowMq = window.matchMedia("(max-width: 720px)");

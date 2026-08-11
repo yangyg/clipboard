@@ -4,7 +4,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
 
-/** Shared batch bar actions for FloatingPanel and WindowApp. */
+/** Shared batch bar actions for the window app. */
 export function useBatchActions() {
   const clipboardStore = useClipboardStore();
   const { toast } = useToast();

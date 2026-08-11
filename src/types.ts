@@ -90,10 +90,10 @@ export interface Settings {
   font_size: number;
   /** UI font-family preset key, or `system:<name>` for an OS-installed font. */
   font_family: string;
-  /** Search bar display mode (floating + window share this setting). */
+  /** Search bar display mode. */
   search_mode: 'full' | 'icon' | 'hidden';
   // Behavior
-  app_mode: 'floating' | 'window';
+  always_on_top: boolean;
   default_paste_mode: 'original' | 'plain';
   auto_close_on_paste: boolean;
   // Privacy
@@ -111,8 +111,6 @@ export interface Settings {
   /** User-defined exe → display-name overrides (frontend resolution). */
   source_name_overrides: SourceNameOverride[];
   /** Remembered logical window size (0 = adaptive). */
-  floating_width: number;
-  floating_height: number;
   window_width: number;
   window_height: number;
   /** Auto-tag new records from rules (default on). */

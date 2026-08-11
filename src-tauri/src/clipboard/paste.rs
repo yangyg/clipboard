@@ -314,21 +314,6 @@ pub fn is_foreground_hwnd(_hwnd_id: isize) -> bool {
     false
 }
 
-/// Hide via Win32 so focus can leave us even if Tauri hide is delayed.
-#[cfg(windows)]
-pub fn hide_hwnd(hwnd_id: isize) {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{ShowWindow, SW_HIDE};
-    unsafe {
-        let hwnd = hwnd_id as windows_sys::Win32::Foundation::HWND;
-        if !hwnd.is_null() {
-            ShowWindow(hwnd, SW_HIDE);
-        }
-    }
-}
-
-#[cfg(not(windows))]
-pub fn hide_hwnd(_hwnd_id: isize) {}
-
 /// Prefer the tracked foreign window. Fall back to current FG if foreign.
 #[cfg(windows)]
 pub fn resolve_paste_target(our_hwnd: Option<isize>) -> Option<isize> {

@@ -1,15 +1,7 @@
 <template>
   <div class="app-root">
-    <!-- Floating mode: keep panel mounted (v-show) to avoid full remount cost -->
-    <template v-if="!isWindowMode">
-      <FloatingPanel v-show="panelVisible && !settingsVisible" :settings-visible="settingsVisible" @close="hidePanel" @openSettings="openSettings" />
-      <SettingsWindow v-if="settingsVisible" :initial-section="settingsInitialSection" @close="closeSettings" />
-    </template>
-    <!-- Window mode: panel always visible, settings replaces panel -->
-    <template v-else>
-      <SettingsWindow v-if="settingsVisible" :initial-section="settingsInitialSection" @close="closeSettings" />
-      <WindowApp v-else-if="panelVisible" @openSettings="openSettings" />
-    </template>
+    <SettingsWindow v-if="settingsVisible" :initial-section="settingsInitialSection" @close="closeSettings" />
+    <WindowApp v-else-if="panelVisible" @openSettings="openSettings" />
     <ToastHost />
     <ConfirmDialog />
     <WelcomeDialog
@@ -21,10 +13,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, onMounted, watch } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import FloatingPanel from "./components/FloatingPanel.vue";
 import WindowApp from "./components/WindowApp.vue";
 import SettingsWindow from "./components/SettingsWindow.vue";
 import ToastHost from "./components/ToastHost.vue";
@@ -51,21 +42,6 @@ let lastPanelReloadAt = 0;
 const PANEL_RELOAD_TTL_MS = 30_000;
 
 const appWindow = getCurrentWindow();
-const isWindowMode = computed(() => settings.value.app_mode === "window");
-
-async function applyAppMode() {
-  const mode = isWindowMode.value ? "window" : "floating";
-  try {
-    await invoke("switch_app_mode", { mode });
-  } catch (e) {
-    console.error("[App] switch_app_mode failed:", e);
-  }
-  // Sync state after Rust command completes to avoid window flash
-  if (isWindowMode.value) {
-    panelVisible.value = true;
-    settingsVisible.value = false;
-  }
-}
 
 async function reloadPanelIfNeeded(force = false) {
   const now = Date.now();
@@ -85,28 +61,22 @@ async function showPanel() {
   } catch (e) {
     console.warn("[App] capture_paste_target failed:", e);
   }
-  // Show the window BEFORE loading records: the list's <Transition mode="out-in">
-  // relies on requestAnimationFrame, which never fires in a hidden WebView2
-  // window — starting a transition while hidden leaves the list permanently
-  // unmounted (blank list on cold start).
+  // Show the window BEFORE loading records: the list's CSS animations rely on
+  // requestAnimationFrame, which never fires in a hidden WebView2 window —
+  // starting a transition while hidden leaves the list permanently unmounted
+  // (blank list on cold start).
   await appWindow.show();
   await appWindow.setFocus();
   await reloadPanelIfNeeded(false);
 }
 
-async function hidePanel() {
-  if (isWindowMode.value) {
-    // Window mode: Rust already hid/minimized the window on the toggle-panel
-    // false event. Re-showing it here would undo the tray "hide" immediately.
-    panelVisible.value = true;
-    settingsVisible.value = false;
-    return;
-  }
+function hidePanel() {
+  // Window mode: Rust already hid/minimized the window on the toggle-panel
+  // false event. Re-showing it here would undo the tray "hide" immediately.
   // Settle any open confirm so its promise does not hang across hide/show.
   if (confirmOpen.value) settleConfirm(false);
-  panelVisible.value = false;
+  panelVisible.value = true;
   settingsVisible.value = false;
-  await appWindow.hide();
 }
 
 function closeSettings() {
@@ -123,14 +93,8 @@ function completeOnboarding() {
 
 async function openSettings(section?: string) {
   settingsInitialSection.value = section;
-  if (isWindowMode.value) {
-    panelVisible.value = true;
-    settingsVisible.value = true;
-  } else {
-    // Keep FloatingPanel mounted (v-show); only swap visibility with settings.
-    panelVisible.value = true;
-    settingsVisible.value = true;
-  }
+  panelVisible.value = true;
+  settingsVisible.value = true;
   await appWindow.show();
   await appWindow.setFocus();
 }
@@ -139,7 +103,6 @@ async function openSettings(section?: string) {
 // lifecycle, so dev HMR cannot leak duplicate listeners).
 useClipboardEvents({
   appWindow,
-  isWindowMode: () => isWindowMode.value,
   panelVisible,
   settingsVisible,
   showPanel,
@@ -151,7 +114,6 @@ onMounted(async () => {
   // Load settings
   await settingsStore.loadSettings();
   setLocale(resolveLocale(settings.value.language));
-  await applyAppMode();
 
   // showPanel() loads records once (avoid a duplicate get_records on cold start)
   await clipboardStore.loadTags();
@@ -161,15 +123,6 @@ onMounted(async () => {
   if (!settings.value.onboarding_completed) {
     welcomeOpen.value = true;
   }
-
-  watch(
-    () => settings.value.app_mode,
-    async () => {
-      await applyAppMode();
-      await appWindow.show();
-      await appWindow.setFocus();
-    }
-  );
 
   watch(
     () => settings.value.language,
@@ -185,7 +138,7 @@ onMounted(async () => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  /* Stack floating panel + settings so swaps don't reflow layout. */
+  /* Stack panel + settings so swaps don't reflow layout. */
   display: grid;
 }
 .app-root > * {

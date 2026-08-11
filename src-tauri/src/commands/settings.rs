@@ -1,6 +1,4 @@
-//! Settings persistence, autostart, capture-pause, and window mode commands.
-use std::sync::atomic::Ordering as AtomicOrdering;
-
+//! Settings persistence, autostart, capture-pause, and window commands.
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tracing::{info, warn};
@@ -26,8 +24,6 @@ pub async fn save_settings(
 
     // Window sizes are only written by resize persistence — never let frontend
     // autosave (stale/zero defaults) wipe remembered dimensions.
-    settings.floating_width = previous.floating_width;
-    settings.floating_height = previous.floating_height;
     settings.window_width = previous.window_width;
     settings.window_height = previous.window_height;
 
@@ -64,6 +60,12 @@ pub async fn save_settings(
     if settings.panel_radius != previous.panel_radius {
         if let Some(window) = app.get_webview_window("main") {
             let _ = window::apply_window_round_corners(&window, settings.panel_radius);
+        }
+    }
+
+    if settings.always_on_top != previous.always_on_top {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_always_on_top(settings.always_on_top);
         }
     }
     let _ = app.emit("settings-updated", ());
@@ -121,46 +123,7 @@ pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Res
     Ok(())
 }
 
-// === App Mode / Window Commands ===
-
-#[tauri::command]
-pub async fn switch_app_mode(app: AppHandle, mode: String) -> Result<(), String> {
-    let window = app.get_webview_window("main").ok_or("window not found")?;
-    let is_window = mode == "window";
-    let settings = match app
-        .try_state::<AppState>()
-        .and_then(|s| s.db.get_settings().ok())
-    {
-        Some(s) => (*s).clone(),
-        None => {
-            warn!("Failed to load settings for mode switch; using defaults");
-            Settings::default()
-        }
-    };
-    let (w, h) = window::resolve_panel_size(&window, &settings, is_window);
-    let (min_w, min_h, _, _) = window::mode_size_bounds(is_window);
-    window.set_decorations(false).map_err(|e| e.to_string())?;
-    let _ = window.set_shadow(false);
-    window
-        .set_always_on_top(!is_window)
-        .map_err(|e| e.to_string())?;
-    window
-        .set_skip_taskbar(!is_window)
-        .map_err(|e| e.to_string())?;
-    // Both modes resizable so remembered size can be adjusted
-    window.set_resizable(true).map_err(|e| e.to_string())?;
-    let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
-        min_w, min_h,
-    ))));
-    // Cancel pending resize-save so programmatic set_size doesn't overwrite
-    // the other mode's remembered size while app_mode is mid-switch.
-    window::SIZE_SAVE_GEN.fetch_add(1, AtomicOrdering::Relaxed);
-    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
-    // Re-apply rounded region after size change
-    let _ = window::apply_window_round_corners(&window, settings.panel_radius);
-    info!("App mode switched to: {} (size {}x{})", mode, w, h);
-    Ok(())
-}
+// === Window Commands ===
 
 #[tauri::command]
 pub async fn set_window_corner_radius(app: AppHandle, radius: i32) -> Result<(), String> {

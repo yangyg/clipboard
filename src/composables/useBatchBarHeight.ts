@@ -1,7 +1,7 @@
 import { ref, watch, onUnmounted, type Ref } from "vue";
 
 /**
- * Tracks the rendered height of the floating batch bar so hosts can reserve
+ * Tracks the rendered height of the batch bar so hosts can reserve
  * space (top padding) without the bar participating in document flow.
  * Handles font scaling / i18n wrapping via ResizeObserver.
  */

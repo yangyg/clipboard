@@ -47,11 +47,6 @@ pub async fn paste_record(
         }
     };
     let auto_close = settings.auto_close_on_paste;
-    // Prefer live chrome over DB — matches what the user actually sees.
-    let is_floating = app
-        .get_webview_window("main")
-        .and_then(|w| w.is_always_on_top().ok())
-        .unwrap_or(settings.app_mode != "window");
 
     let our_hwnd = app
         .get_webview_window("main")
@@ -150,16 +145,8 @@ pub async fn paste_record(
     }
 
     // 3) Yield foreground — do NOT leave FG before focus (that drops FG rights).
-    // Floating: hide to tray. Window: minimize to taskbar (hide feels like "closed").
-    if is_floating {
-        if let Some(hwnd) = our_hwnd {
-            clipboard::hide_hwnd(hwnd);
-        }
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.hide();
-        }
-        let _ = app.emit("toggle-panel", false);
-    } else if let Some(window) = app.get_webview_window("main") {
+    // Window mode: minimize to taskbar (hide feels like "closed").
+    if let Some(window) = app.get_webview_window("main") {
         let _ = window.minimize();
     }
 
@@ -196,15 +183,12 @@ pub async fn paste_record(
     }
 
     // 5) Re-show only when keep-open; never steal focus back after a successful paste.
-    // auto_close + floating → stay hidden; auto_close + window → stay minimized.
+    // auto_close → stay minimized.
     if !auto_close {
         if let Some(window) = app.get_webview_window("main") {
             let _ = window.unminimize();
             let _ = window.show();
             // Deliberately no set_focus — leave the target app active.
-        }
-        if is_floating {
-            let _ = app.emit("toggle-panel", true);
         }
     }
 

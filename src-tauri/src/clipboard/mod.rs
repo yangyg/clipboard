@@ -20,7 +20,7 @@ pub use fgwin::get_foreground_window_info;
 pub use image::image_quick_fingerprint_rgba;
 pub use monitor::{CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor};
 pub use paste::{
-    focus_window, foreground_is_pasteable, hide_hwnd, is_foreground_hwnd, remember_paste_target,
+    focus_window, foreground_is_pasteable, is_foreground_hwnd, remember_paste_target,
     resolve_paste_target, set_our_main_hwnd, simulate_paste_keys, track_last_foreign_foreground,
 };
 pub use write::{

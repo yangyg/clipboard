@@ -202,7 +202,7 @@ input {
    Appearance Classes (applied via settings)
    ============================================================ */
 
-/* Shared panel chrome (floating + window + settings).
+/* Shared panel chrome (window + settings).
    Opacity is applied at the element level so every surface (titlebar, sidebar,
    nav, list/preview band, cards) fades together uniformly — inner elements keep
    their own solid backgrounds and composite as one translucent layer. */

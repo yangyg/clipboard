@@ -25,15 +25,9 @@ fn monitor_work_area_logical(window: &tauri::WebviewWindow) -> (f64, f64) {
 }
 
 /// Logical panel size from the current (or primary) monitor work area.
-/// Floating ≈ 40%×65% of screen; window ≈ 55%×72%; clamped so small laptops
-/// stay usable and large 4K screens don't open a huge panel.
-fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (f64, f64) {
-    let (frac_w, frac_h, min_w, min_h, max_w, max_h) = if is_window_mode {
-        // Window mode needs ≥780 so SideBar(200)+List(280)+Preview(280)+resizers fit.
-        (0.55, 0.72, 780.0, 520.0, 1280.0, 900.0)
-    } else {
-        (0.40, 0.65, 480.0, 480.0, 800.0, 780.0)
-    };
+/// Window needs ≥780 so SideBar(200)+List(280)+Preview(280)+resizers fit.
+fn adaptive_panel_size(window: &tauri::WebviewWindow) -> (f64, f64) {
+    let (frac_w, frac_h, min_w, min_h, max_w, max_h) = (0.55, 0.72, 780.0, 520.0, 1280.0, 900.0);
 
     let (screen_w, screen_h) = monitor_work_area_logical(window);
 
@@ -46,26 +40,14 @@ fn adaptive_panel_size(window: &tauri::WebviewWindow, is_window_mode: bool) -> (
     (w.round(), h.round())
 }
 
-pub(crate) fn mode_size_bounds(is_window_mode: bool) -> (f64, f64, f64, f64) {
-    if is_window_mode {
-        (780.0, 400.0, 1600.0, 1200.0)
-    } else {
-        (400.0, 400.0, 1000.0, 900.0)
-    }
+pub(crate) fn mode_size_bounds() -> (f64, f64, f64, f64) {
+    (780.0, 400.0, 1600.0, 1200.0)
 }
 
 /// Prefer remembered size when valid; otherwise adaptive. Always clamp to work area.
-pub(crate) fn resolve_panel_size(
-    window: &tauri::WebviewWindow,
-    settings: &Settings,
-    is_window_mode: bool,
-) -> (f64, f64) {
-    let (saved_w, saved_h) = if is_window_mode {
-        (settings.window_width, settings.window_height)
-    } else {
-        (settings.floating_width, settings.floating_height)
-    };
-    let (min_w, min_h, max_w, max_h) = mode_size_bounds(is_window_mode);
+pub(crate) fn resolve_panel_size(window: &tauri::WebviewWindow, settings: &Settings) -> (f64, f64) {
+    let (saved_w, saved_h) = (settings.window_width, settings.window_height);
+    let (min_w, min_h, max_w, max_h) = mode_size_bounds();
     let (screen_w, screen_h) = monitor_work_area_logical(window);
 
     if saved_w >= min_w as i32 && saved_h >= min_h as i32 {
@@ -77,7 +59,7 @@ pub(crate) fn resolve_panel_size(
             .min((screen_h - 32.0).max(min_h));
         return (w.round(), h.round());
     }
-    adaptive_panel_size(window, is_window_mode)
+    adaptive_panel_size(window)
 }
 
 fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
@@ -103,33 +85,20 @@ fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWi
     };
     // Cold path (debounced resize): clone inner Settings for mutation.
     let mut settings = (*settings_arc).clone();
-    // Prefer live window chrome over DB app_mode (mode switch may not be saved yet).
-    let is_window = !window
-        .is_always_on_top()
-        .unwrap_or(settings.app_mode == "window");
-    let (min_w, min_h, _, _) = mode_size_bounds(is_window);
+    let (min_w, min_h, _, _) = mode_size_bounds();
     if (w as f64) < min_w || (h as f64) < min_h {
         return;
     }
 
-    if is_window {
-        if settings.window_width == w && settings.window_height == h {
-            return;
-        }
-        settings.window_width = w;
-        settings.window_height = h;
-    } else {
-        if settings.floating_width == w && settings.floating_height == h {
-            return;
-        }
-        settings.floating_width = w;
-        settings.floating_height = h;
+    if settings.window_width == w && settings.window_height == h {
+        return;
     }
+    settings.window_width = w;
+    settings.window_height = h;
     if let Err(e) = state.db.save_settings(&settings) {
         warn!("Failed to persist window size: {}", e);
     } else {
-        let mode = if is_window { "window" } else { "floating" };
-        info!("Remembered {} size {}x{}", mode, w, h);
+        info!("Remembered window size {}x{}", w, h);
     }
 }
 

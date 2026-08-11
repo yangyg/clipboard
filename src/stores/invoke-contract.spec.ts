@@ -77,7 +77,6 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   // ── Components / App.vue ──
   open_url: { params: ["url"] },
   capture_paste_target: { params: [] },
-  switch_app_mode: { params: ["mode"] },
   get_tray_menu_state: { params: [] },
   tray_menu_action: { params: ["action"] },
   export_data: { params: ["path"] },
@@ -111,12 +110,12 @@ function makeRecord(overrides: Partial<ClipboardRecord> = {}): ClipboardRecord {
 const MOCK_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V", max_records: 1000, retention_days: 30,
   theme: "dark", panel_opacity: 94, panel_radius: 20, enable_blur: false,
-  blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", search_mode: "full", app_mode: "floating",
+  blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", search_mode: "full", always_on_top: false,
   default_paste_mode: "original", auto_close_on_paste: true,
   enable_sensitive_detection: true, sensitive_auto_expire_seconds: 600,
   max_text_bytes: 10 * 1024 * 1024,
   import_system_history_on_start: false, auto_start: false, minimize_to_tray: true,
-  ignored_apps: [], source_name_overrides: [], floating_width: 0, floating_height: 0,
+  ignored_apps: [], source_name_overrides: [],
   window_width: 0, window_height: 0, enable_auto_tag: true,
   auto_tag_rules: [], onboarding_completed: false, language: "zh-CN",
   webdav_url: "", webdav_username: "", webdav_password: "",

@@ -109,11 +109,28 @@ pub(crate) fn setup(
     }
 
     // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
+    // and apply single-window-mode chrome (always-on-top flag + remembered size).
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_shadow(false);
-        let radius = db.get_settings().map(|s| s.panel_radius).unwrap_or(20);
-        if let Err(e) = window::apply_window_round_corners(&window, radius) {
-            warn!("Failed to apply window round corners: {}", e);
+        match db.get_settings() {
+            Ok(settings) => {
+                let _ = window.set_always_on_top(settings.always_on_top);
+                let (min_w, min_h, _, _) = window::mode_size_bounds();
+                let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
+                    min_w, min_h,
+                ))));
+                let (w, h) = window::resolve_panel_size(&window, &settings);
+                window::SIZE_SAVE_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+                let _ = window::apply_window_round_corners(&window, settings.panel_radius);
+            }
+            Err(e) => {
+                error!("Failed to load settings for window chrome: {}", e);
+                let radius = db.get_settings().map(|s| s.panel_radius).unwrap_or(20);
+                if let Err(e) = window::apply_window_round_corners(&window, radius) {
+                    warn!("Failed to apply window round corners: {}", e);
+                }
+            }
         }
     }
 

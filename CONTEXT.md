@@ -1,6 +1,6 @@
 # CONTEXT.md — Clipboard
 
-Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors the OS clipboard, persists text and image records in a local SQLite database, and provides a floating panel or window UI for browsing, searching, tagging, pasting, and managing clipboard history.
+Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors the OS clipboard, persists text and image records in a local SQLite database, and provides a window UI for browsing, searching, tagging, pasting, and managing clipboard history.
 
 ## Domain Glossary
 

@@ -256,7 +256,7 @@ fn run_event_loop(
                     SetTimer(hwnd, TIMER_DEBOUNCE, DEBOUNCE_MS, None);
                 }
                 WM_TIMER => {
-                    let timer_id = msg.wParam as usize;
+                    let timer_id = msg.wParam;
                     if timer_id == TIMER_DEBOUNCE || timer_id == TIMER_WATCHDOG {
                         if timer_id == TIMER_DEBOUNCE {
                             KillTimer(hwnd, TIMER_DEBOUNCE);

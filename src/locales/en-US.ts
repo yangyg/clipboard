@@ -26,6 +26,8 @@ export default {
     minimize: 'Minimize',
     maximize: 'Maximize',
     restoreWindow: 'Restore',
+    pinWindow: 'Always on Top',
+    unpinWindow: 'Exit Always on Top',
     or: 'or',
     backToTop: 'Back to top',
     appName: 'Clipboard',

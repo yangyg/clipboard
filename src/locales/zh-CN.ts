@@ -26,6 +26,8 @@ export default {
     minimize: '最小化',
     maximize: '最大化',
     restoreWindow: '还原',
+    pinWindow: '窗口置顶',
+    unpinWindow: '取消窗口置顶',
     or: '或',
     backToTop: '回到顶部',
     appName: '剪贴板',

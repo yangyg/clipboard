@@ -1,5 +1,16 @@
 <template>
   <div class="window-controls">
+    <button
+      type="button"
+      class="win-btn"
+      :class="{ active: isAlwaysOnTop }"
+      :aria-label="isAlwaysOnTop ? $t('common.unpinWindow') : $t('common.pinWindow')"
+      :aria-pressed="isAlwaysOnTop"
+      :title="isAlwaysOnTop ? $t('common.unpinWindow') : $t('common.pinWindow')"
+      @click.stop="toggleAlwaysOnTop"
+    >
+      <AppIcon name="pin" :size="14" :fill="isAlwaysOnTop ? 'currentColor' : 'none'" />
+    </button>
     <button type="button" class="win-btn" :aria-label="$t('common.minimize')" :title="$t('common.minimize')" @click.stop="minimize">
       <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
         <path d="M1 5h8" stroke="currentColor" stroke-width="1.2" fill="none" />
@@ -35,12 +46,21 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import AppIcon from "./icons/AppIcon.vue";
+import { useSettingsStore } from "../stores/settings";
 
 const appWindow = getCurrentWindow();
 const maximized = ref(false);
 let unlistenResize: (() => void) | undefined;
+
+const settingsStore = useSettingsStore();
+const isAlwaysOnTop = computed(() => settingsStore.settings.always_on_top);
+
+function toggleAlwaysOnTop() {
+  settingsStore.updateSetting("always_on_top", !settingsStore.settings.always_on_top);
+}
 
 async function refreshMaximized() {
   try {
@@ -103,6 +123,23 @@ onUnmounted(() => {
 }
 
 .win-btn:hover {
+  background: var(--accent-softer);
+  color: var(--accent-text);
+}
+
+.win-btn :deep(.app-icon) {
+  transition: transform var(--transition-fast);
+}
+
+.win-btn.active {
+  color: var(--accent);
+}
+
+.win-btn.active :deep(.app-icon) {
+  transform: rotate(45deg);
+}
+
+.win-btn.active:hover {
   background: var(--accent-softer);
   color: var(--accent-text);
 }

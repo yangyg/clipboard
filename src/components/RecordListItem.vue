@@ -37,7 +37,7 @@
         <img class="record-thumb" :src="thumb" alt="" loading="lazy" decoding="async" />
       </div>
       <div v-else class="record-title" :title="recordTitleAttr(record, t)">
-        <AppIcon v-if="hasAlias" name="pencilOff" :size="12" class="alias-mark" aria-hidden="true" />
+        <AppIcon v-if="hasAlias" name="edit" :size="12" class="alias-mark" aria-hidden="true" />
         <span v-html="previewHtml(record, searchQuery, t)"></span>
       </div>
       <div class="record-meta">

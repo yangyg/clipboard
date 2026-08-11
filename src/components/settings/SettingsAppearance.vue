@@ -93,17 +93,6 @@
       </div>
     </div>
     <div class="setting-row">
-      <div>
-        <div class="setting-label">{{ $t('settings.appearance.alwaysOnTop') }}</div>
-        <div class="setting-desc">{{ $t('settings.appearance.alwaysOnTopDesc') }}</div>
-      </div>
-      <ToggleSwitch
-        :model-value="settings.always_on_top"
-        :aria-label="$t('settings.appearance.alwaysOnTop')"
-        @update:model-value="(v: boolean) => update('always_on_top', v)"
-      />
-    </div>
-    <div class="setting-row">
       <div class="setting-label">{{ $t('settings.appearance.animation') }}</div>
       <ToggleSwitch
         :model-value="settings.enable_animation"

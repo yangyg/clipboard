@@ -33,13 +33,15 @@ See `docs/adr/` for immutable decision records:
 - **ADR-0002** — Native OS-theme watcher (invisible HWND + `WM_SETTINGCHANGE`) as the primary source for follow-system theme, because WebView2 matchMedia events are unreliable while hidden. **Superseded by ADR-0004 (feature removed).**
 - **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor. Later appended: per-family token files under `src/styles/themes/`, the hand-drawn family (`handdrawn`/`handdrawn-light`, with sketch styling + `@sketchyicons/vue` icons) and the monochrome family (`mono`/`mono-light`).
 - **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 13 fixed cards in one radiogroup.
+- **ADR-0005** — Clipboard monitor is event-driven on Windows (`AddClipboardFormatListener` on a message-only window + 150ms event-debounce + 1s sequence watchdog for sleep catch-up / busy retry / listener-failure fallback). Non-Windows keeps the 250ms poll loop; both paths share `handle_clipboard_tick`.
 
 ## Key Design Constraints
 
 - **Single JS source of truth for grid columns** — `gridCols` from ResizeObserver, applied as inline `grid-template-columns`. Never CSS `auto-fill` (would drift from virtualizer row grouping).
 - **Text-first clipboard reading** — Meaningful share text skips `get_image()`. Only call it when bitmap/DIB is reported.
 - **Paste self-write suppression** — After paste, monitor skips reads for ~1.5s and does **not** advance sequence watermark or fingerprints, so the next real copy is not lost.
-- **FTS update is `OF content` only** — Hash-dedup source updates do not rebuild FTS. Tag/alias changes call `refresh_record_fts` explicitly.
+- **Event-driven clipboard monitor (Windows)** — `AddClipboardFormatListener` message window + 150ms debounce (one logical copy emits several `WM_CLIPBOARDUPDATE`); a 1s sequence watchdog covers sleep/resume catch-up, `ClipboardOccupied` retry (250ms) and listener-failure fallback. Foreground paste-target tracking rides the watchdog cadence (1s); paste still refreshes it explicitly.
+- **FTS update is `OF content` only** — Hash-dedup source updates do not rebuild FTS. Tag/alias changes call `refresh_record_fts` explicitly. FTS indexes only the **first 32K chars** of `content` to bound trigram index growth (FTS v5).
 - **Loading/empty ↔ list transition is pure CSS** — Not `<Transition mode="out-in">`, because WebView2 drops `requestAnimationFrame` while hidden.
 - **Media open uses `ShellExecuteW`** — Not `cmd /c start` or `shell.open`.
 - **Link schemes are a shared whitelist** — `security::is_openable_link` is the single source for detect / `open_url` / import keep-as-link. WebView `<a href>` stays http(s)-only; other openable schemes go through Rust.

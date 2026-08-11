@@ -6,7 +6,7 @@ Windows 桌面剪贴板管理器。自动记录复制历史，支持文本 / 富
 
 ## 功能
 
-- 后台监听剪贴板（约 500ms 轮询；OS 序列号未变则跳过读取），内容去重（SHA-256；粘贴回写不会重复建条）
+- 后台监听剪贴板（Windows 事件驱动：`AddClipboardFormatListener` 即时通知 + 150ms 事件合并；1s 序号 watchdog 兜底睡眠补采 / 占用重试），内容去重（SHA-256；粘贴回写不会重复建条）
 - 类型：文本、代码、链接、图片、文件路径（敏感是标记字段，不是独立类型）；链接含网页 URL 与下载协议（`magnet:` / `ed2k://` / `thunder://` / `ftp://`，整段识别），预览可点开系统默认程序；整段 CSS 色值仍属文本，列表/详情会显示色块预览
 - 图片落盘（PNG + 列表缩略图）；列表只带截断正文，富文本 HTML 预览按需拉取；导出为全文+HTML
 - 富文本：保留 HTML；预览经消毒后渲染；可「原格式」或「纯文本」粘贴
@@ -91,7 +91,7 @@ CI（`.github/workflows/ci.yml`）在 push / PR 时自动运行前端 lint、类
 | 后端 | Rust、arboard、rusqlite |
 | 存储 | SQLite（WAL + FTS5 + 读写分离连接池）+ 本地 media 目录 |
 
-实现要点（供维护者）：捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。当前领域约束和术语以 [CONTEXT.md](./CONTEXT.md) 为准；历史架构决策见 [docs/adr/](./docs/adr/)；交互动效规范见 [docs/Clipboard-交互动效规范.md](./docs/Clipboard-交互动效规范.md)。
+实现要点（供维护者）：剪贴板监视在 Windows 上事件驱动（`AddClipboardFormatListener` + watchdog 兜底，见 ADR-0005），捕获与 PNG/SQLite 落库解耦；过期/保留清理在独立定时线程；列表 keyset 分页与虚拟滚动；粘贴写剪贴板后焦点还原 + Ctrl+V。当前领域约束和术语以 [CONTEXT.md](./CONTEXT.md) 为准；历史架构决策见 [docs/adr/](./docs/adr/)；交互动效规范见 [docs/Clipboard-交互动效规范.md](./docs/Clipboard-交互动效规范.md)。
 
 ## 许可
 

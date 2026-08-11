@@ -4,6 +4,12 @@ use rusqlite::Result as SqlResult;
 use super::{clamp_page_limit, ClipboardDb, RECORD_COLS_LIST};
 use crate::ClipboardRecord;
 
+/// Upper bound on FTS candidates materialized before the outer sort/keyset
+/// pass. A pathological query matching tens of thousands of rows should not
+/// force a full sort of every hit; beyond this the page is already deep enough
+/// that truncation is imperceptible (list UI soft-caps at ~120 rows).
+const FTS_CANDIDATE_LIMIT: i64 = 10_000;
+
 impl ClipboardDb {
     pub fn search_records(
         &self,
@@ -35,10 +41,21 @@ impl ClipboardDb {
 
         // ≥3 chars: FTS5 trigram. Shorter: single-pass instr (no LIKE '%…%').
         if let Some(fts_match) = Self::build_fts_match_expr(query, include_tags) {
-            sql.push_str("id IN (SELECT rowid FROM records_fts WHERE records_fts MATCH ?)");
+            sql.push_str(&format!(
+                "id IN (SELECT rowid FROM records_fts WHERE records_fts MATCH ?
+                        ORDER BY rank LIMIT {})",
+                FTS_CANDIDATE_LIMIT
+            ));
             params.push(Box::new(fts_match));
         } else {
-            Self::push_short_query_predicate(&mut sql, &mut params, query, include_tags);
+            let single_char = query.chars().count() == 1;
+            Self::push_short_query_predicate(
+                &mut sql,
+                &mut params,
+                query,
+                include_tags,
+                !single_char,
+            );
         }
         sql.push(')');
 

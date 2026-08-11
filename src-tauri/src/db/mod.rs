@@ -46,6 +46,57 @@ pub use types::{
     RECORD_COLS_LIST,
 };
 
+/// Precomputed lowercase auto-tag rules: `(tag_name, lower_keywords, content_types)`.
+/// Built once per `Arc<Settings>` identity so the capture hot path never
+/// re-lowercases keywords on every clipboard event.
+pub(super) struct AutoTagMatcher {
+    pub rules: Vec<(String, Vec<String>, Vec<String>)>,
+}
+
+impl AutoTagMatcher {
+    pub(super) fn from_settings(s: &Settings) -> Self {
+        Self {
+            rules: s
+                .auto_tag_rules
+                .iter()
+                .map(|r| {
+                    (
+                        r.tag_name.trim().to_string(),
+                        r.keywords.iter().map(|k| k.trim().to_lowercase()).collect(),
+                        r.content_types
+                            .iter()
+                            .map(|t| t.as_str().to_string())
+                            .collect(),
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Precomputed lowercase ignore-app patterns: `(full pattern lower, basename
+/// lower without .exe)`. Same shape as the panel matcher, cached per settings
+/// identity so captures skip repeated lowercase allocations.
+pub(super) struct IgnoredAppPatterns {
+    pub patterns: Vec<(String, String)>,
+}
+
+impl IgnoredAppPatterns {
+    pub(super) fn from_settings(s: &Settings) -> Self {
+        Self {
+            patterns: s
+                .ignored_apps
+                .iter()
+                .map(|p| {
+                    let lower = p.trim().to_lowercase();
+                    let noext = lower.strip_suffix(".exe").unwrap_or(&lower).to_string();
+                    (lower, noext)
+                })
+                .collect(),
+        }
+    }
+}
+
 pub struct ClipboardDb {
     /// Writer connection (schema, inserts, updates, deletes).
     conn: Mutex<Connection>,
@@ -61,6 +112,17 @@ pub struct ClipboardDb {
     /// settings JSON on every clipboard event (the monitor reads it 2-3x/event).
     /// Arc allows cheap clone on the capture hot path (atomic refcount bump only).
     settings_cache: RwLock<Option<Arc<Settings>>>,
+    /// Cached lowercase matchers, keyed by `Arc<Settings>` identity. Invalidation
+    /// is free: `save_settings` swaps in a fresh Arc, so `Arc::ptr_eq` is a
+    /// cheap generation check.
+    auto_tag_cache: RwLock<Option<(Arc<Settings>, Arc<AutoTagMatcher>)>>,
+    ignored_cache: RwLock<Option<(Arc<Settings>, Arc<IgnoredAppPatterns>)>>,
+    /// get_stats TTL cache — the stats page polls during copy bursts, and the
+    /// underlying aggregate is a full-table scan, so serve a 5s snapshot.
+    stats_cache: Mutex<Option<(std::time::Instant, crate::StatsData)>>,
+    /// Ciphertext cache for DPAPI-encrypted secrets so repeated settings saves
+    /// (debounced slider drags) do not re-encrypt unchanged secrets.
+    secrets_cache: Mutex<Option<(String, String, String, String)>>,
 }
 
 const READ_POOL_SIZE: usize = 3;
@@ -71,7 +133,9 @@ impl ClipboardDb {
             "PRAGMA journal_mode=WAL;
              PRAGMA synchronous=NORMAL;
              PRAGMA foreign_keys=ON;
-             PRAGMA busy_timeout=5000;",
+             PRAGMA busy_timeout=5000;
+             PRAGMA cache_size=-16384;
+             PRAGMA temp_store=MEMORY;",
         )?;
         if query_only {
             // Fail loudly if a "read" path accidentally tries to mutate.
@@ -156,6 +220,10 @@ impl ClipboardDb {
             media_root,
             media_root_prefix,
             settings_cache: RwLock::new(None),
+            auto_tag_cache: RwLock::new(None),
+            ignored_cache: RwLock::new(None),
+            stats_cache: Mutex::new(None),
+            secrets_cache: Mutex::new(None),
         })
     }
 
@@ -174,6 +242,57 @@ impl ClipboardDb {
         // L-5: All readers busy — log contention for diagnostics before blocking.
         tracing::debug!("DB read pool exhausted ({} conns); blocking on lock", n);
         self.read_conns[start].lock()
+    }
+
+    /// Return the lowercase auto-tag matcher for `settings`, rebuilding only
+    /// when the settings snapshot identity changes.
+    pub(super) fn auto_tag_matcher(&self, settings: &Arc<Settings>) -> Arc<AutoTagMatcher> {
+        {
+            let cache = self.auto_tag_cache.read();
+            if let Some((cached, matcher)) = cache.as_ref() {
+                if Arc::ptr_eq(cached, settings) {
+                    return matcher.clone();
+                }
+            }
+        }
+        let matcher = Arc::new(AutoTagMatcher::from_settings(settings));
+        *self.auto_tag_cache.write() = Some((Arc::clone(settings), matcher.clone()));
+        matcher
+    }
+
+    /// Ignore-app check with cached lowercase patterns (hot capture path).
+    /// Semantics mirror `crate::panel::is_ignored_app` (basename with optional
+    /// `.exe` suffix, or the full path, case-insensitive; no substring match).
+    pub fn is_ignored_app(&self, source_app: &str, settings: &Arc<Settings>) -> bool {
+        if source_app.is_empty() {
+            return false;
+        }
+        let patterns = {
+            let cache = self.ignored_cache.read();
+            match cache.as_ref() {
+                Some((cached, patterns)) if Arc::ptr_eq(cached, settings) => patterns.clone(),
+                _ => {
+                    drop(cache);
+                    let patterns = Arc::new(IgnoredAppPatterns::from_settings(settings));
+                    *self.ignored_cache.write() = Some((Arc::clone(settings), patterns.clone()));
+                    patterns
+                }
+            }
+        };
+        if patterns.patterns.is_empty() {
+            return false;
+        }
+        let app_lower = source_app.to_lowercase();
+        let basename = source_app
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or(source_app)
+            .to_lowercase();
+        let basename_noext = basename.strip_suffix(".exe").unwrap_or(&basename);
+        patterns
+            .patterns
+            .iter()
+            .any(|(full, noext)| basename_noext == noext || app_lower == *full)
     }
 
     pub fn media_root(&self) -> &Path {

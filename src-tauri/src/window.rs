@@ -2,6 +2,8 @@
 //! persistence. Extracted from `lib.rs`; behaviour unchanged.
 
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use tauri::Manager;
 use tracing::{info, warn};
@@ -105,18 +107,48 @@ fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWi
 /// Debounce resize → settings write (Resized fires continuously while dragging).
 pub(crate) static SIZE_SAVE_GEN: AtomicU64 = AtomicU64::new(0);
 
+/// Latest resize event (generation, arrival time) — one shared slot so the
+/// debounce worker below never spawns a thread per resize event.
+static SIZE_EVENT: Mutex<Option<(u64, Instant)>> = Mutex::new(None);
+static SIZE_WORKER: OnceLock<()> = OnceLock::new();
+
 pub(crate) fn schedule_persist_window_size(app: tauri::AppHandle) {
     let gen = SIZE_SAVE_GEN.fetch_add(1, AtomicOrdering::Relaxed) + 1;
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(400));
-        if SIZE_SAVE_GEN.load(AtomicOrdering::Relaxed) != gen {
-            return;
-        }
-        if let Some(window) = app.get_webview_window("main") {
-            persist_current_window_size(&app, &window);
-        }
+    *SIZE_EVENT.lock().unwrap() = Some((gen, Instant::now()));
+    // Single long-lived debounce worker: wakes every 120ms and persists only
+    // when no newer resize event arrived in the last 360ms.
+    SIZE_WORKER.get_or_init(|| {
+        std::thread::spawn(move || loop {
+            std::thread::sleep(Duration::from_millis(120));
+            let Some((gen, at)) = *SIZE_EVENT.lock().unwrap() else {
+                continue;
+            };
+            if at.elapsed() < Duration::from_millis(360) {
+                continue;
+            }
+            let claim = {
+                let mut guard = SIZE_EVENT.lock().unwrap();
+                match *guard {
+                    Some((g, t)) if g == gen && t == at => {
+                        *guard = None;
+                        true
+                    }
+                    _ => false,
+                }
+            };
+            if claim {
+                if let Some(window) = app.get_webview_window("main") {
+                    persist_current_window_size(&app, &window);
+                }
+            }
+        });
     });
 }
+
+/// Last applied (w, h, radius) — Resized fires repeatedly, sometimes with
+/// identical geometry; skipping redundant GDI region churn keeps drag-resize
+/// cheap while still tracking the live size.
+static LAST_ROUNDED: Mutex<Option<(i32, i32, i32)>> = Mutex::new(None);
 
 /// Clip the HWND to a rounded rect so corners are not rectangular (and not black).
 /// `radius` is logical CSS px from 面板外观 → 圆角大小; scaled to physical pixels.
@@ -136,6 +168,10 @@ pub(crate) fn apply_window_round_corners(
         let h = size.height as i32;
         let scale = window.scale_factor().unwrap_or(1.0);
         let radius = ((radius_logical.max(0) as f64) * scale).round() as i32;
+
+        if *LAST_ROUNDED.lock().unwrap() == Some((w, h, radius)) {
+            return Ok(());
+        }
 
         // GetWindowRgn returns a *copy* of the current region that we own.
         // Repeated SetWindowRgn calls (resize events, radius changes) would
@@ -159,6 +195,7 @@ pub(crate) fn apply_window_round_corners(
             if ok == 0 {
                 return Err("SetWindowRgn(null) failed".into());
             }
+            *LAST_ROUNDED.lock().unwrap() = Some((w, h, radius));
             return Ok(());
         }
 
@@ -182,6 +219,7 @@ pub(crate) fn apply_window_round_corners(
             }
             return Err("SetWindowRgn failed".into());
         }
+        *LAST_ROUNDED.lock().unwrap() = Some((w, h, radius));
         // Ownership of hrgn transferred to the system on success
         Ok(())
     }

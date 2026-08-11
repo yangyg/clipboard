@@ -39,14 +39,13 @@ pub async fn paste_record(
     mode: Option<String>,
 ) -> Result<(), String> {
     // H-5: Read-only preparation OUTSIDE the mutex — reduces lock hold time.
-    let settings = match state.db.get_settings() {
-        Ok(s) => (*s).clone(),
+    let auto_close = match state.db.get_settings() {
+        Ok(s) => s.auto_close_on_paste,
         Err(e) => {
             warn!("Failed to load settings for paste; using defaults: {}", e);
-            Settings::default()
+            Settings::default().auto_close_on_paste
         }
     };
-    let auto_close = settings.auto_close_on_paste;
 
     let our_hwnd = app
         .get_webview_window("main")

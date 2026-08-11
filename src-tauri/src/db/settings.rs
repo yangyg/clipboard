@@ -21,6 +21,24 @@ pub enum SettingsError {
     CorruptStoredBlob,
 }
 
+/// Resolve the at-rest representation for one secret. Reuses the previously
+/// stored ciphertext when the plaintext is unchanged (DPAPI-encrypted values
+/// only — legacy plaintext is re-encrypted, upgrading it to encryption). An
+/// empty plaintext clears the secret.
+fn resolve_stored_secret(
+    plaintext: &str,
+    cached_plain: &str,
+    cached_raw: &str,
+) -> Result<String, SettingsError> {
+    if plaintext.is_empty() {
+        return Ok(String::new());
+    }
+    if !cached_plain.is_empty() && cached_plain == plaintext && !cached_raw.is_empty() {
+        return Ok(cached_raw.to_string());
+    }
+    crate::security::encrypt_secret(plaintext).map_err(SettingsError::Encryption)
+}
+
 impl ClipboardDb {
     /// Returns a shared reference-counted Settings snapshot. Clone is cheap (Arc bump).
     /// Callers needing mutation (resize persist, webdav sync) should clone the inner Settings.
@@ -39,6 +57,10 @@ impl ClipboardDb {
             ) {
                 Ok(json) => match serde_json::from_str::<Settings>(&json) {
                     Ok(mut s) => {
+                        // Remember the raw stored forms so save_settings can
+                        // reuse unchanged ciphertext instead of re-encrypting.
+                        let stored_password = s.webdav_password.clone();
+                        let stored_api_key = s.ai_api_key.clone();
                         // WebDAV password is DPAPI-encrypted at rest; legacy
                         // plaintext values (no prefix) pass through unchanged.
                         if s.webdav_password.starts_with(crate::security::DPAPI_PREFIX) {
@@ -71,6 +93,20 @@ impl ClipboardDb {
                                 }
                             }
                         }
+                        let pw_pair = if stored_password.starts_with(crate::security::DPAPI_PREFIX)
+                        {
+                            (s.webdav_password.clone(), stored_password)
+                        } else {
+                            (String::new(), String::new())
+                        };
+                        let key_pair = if stored_api_key.starts_with(crate::security::DPAPI_PREFIX)
+                        {
+                            (s.ai_api_key.clone(), stored_api_key)
+                        } else {
+                            (String::new(), String::new())
+                        };
+                        *self.secrets_cache.lock() =
+                            Some((pw_pair.0, pw_pair.1, key_pair.0, key_pair.1));
                         settings = s;
                     }
                     Err(e) => {
@@ -103,21 +139,33 @@ impl ClipboardDb {
         // A serialize failure must not write "" — the next load would silently
         // reset every setting to defaults. Fail loud instead.
         let mut for_json = settings.clone();
-        if !for_json.webdav_password.is_empty()
-            && !for_json
-                .webdav_password
-                .starts_with(crate::security::DPAPI_PREFIX)
         {
-            for_json.webdav_password = crate::security::encrypt_secret(&for_json.webdav_password)
-                .map_err(SettingsError::Encryption)?;
-        }
-        if !for_json.ai_api_key.is_empty()
-            && !for_json
-                .ai_api_key
-                .starts_with(crate::security::DPAPI_PREFIX)
-        {
-            for_json.ai_api_key = crate::security::encrypt_secret(&for_json.ai_api_key)
-                .map_err(SettingsError::Encryption)?;
+            let (cached_pw_plain, cached_pw_raw, cached_key_plain, cached_key_raw) = self
+                .secrets_cache
+                .lock()
+                .as_ref()
+                .cloned()
+                .unwrap_or_default();
+            let new_password =
+                resolve_stored_secret(&for_json.webdav_password, &cached_pw_plain, &cached_pw_raw)?;
+            let new_api_key =
+                resolve_stored_secret(&for_json.ai_api_key, &cached_key_plain, &cached_key_raw)?;
+            *self.secrets_cache.lock() = Some((
+                if new_password.is_empty() {
+                    String::new()
+                } else {
+                    for_json.webdav_password.clone()
+                },
+                new_password.clone(),
+                if new_api_key.is_empty() {
+                    String::new()
+                } else {
+                    for_json.ai_api_key.clone()
+                },
+                new_api_key.clone(),
+            ));
+            for_json.webdav_password = new_password;
+            for_json.ai_api_key = new_api_key;
         }
         let json = serde_json::to_string(&for_json)?;
         // Refuse to overwrite a stored blob we never successfully loaded: a

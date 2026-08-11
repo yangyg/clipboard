@@ -96,6 +96,12 @@ impl ClipboardDb {
         let mut imported = 0;
         let mut merged = 0;
         let mut tags_changed = 0;
+        // Batch tag-id cache + deferred FTS rebuilds: per-record tag work drops
+        // from ~6-8 queries (ensure tag ×N + FTS refresh) to ~3, and FTS is
+        // rebuilt once for the whole batch.
+        let mut tag_id_cache: std::collections::HashMap<String, i64> =
+            std::collections::HashMap::new();
+        let mut fts_dirty: Vec<i64> = Vec::new();
 
         // Batch-load existing hashes in one query instead of per-record lookups.
         // Active rows only: importing a hash that exists *only in the trash* must
@@ -246,7 +252,13 @@ impl ClipboardDb {
                         [&hash],
                         |row| row.get(0),
                     )?;
-                    if super::ClipboardDb::set_record_tags_by_name_conn(&tx, id, &record.tags)? {
+                    if super::ClipboardDb::set_record_tags_by_name_conn_cached(
+                        &tx,
+                        id,
+                        &record.tags,
+                        &mut tag_id_cache,
+                        &mut fts_dirty,
+                    )? {
                         tags_changed += 1;
                     }
                 }
@@ -292,11 +304,53 @@ impl ClipboardDb {
             existing_hashes.insert(hash);
             if record.tags.iter().any(|t| !t.trim().is_empty()) {
                 let record_id = tx.last_insert_rowid();
-                if super::ClipboardDb::set_record_tags_by_name_conn(&tx, record_id, &record.tags)? {
+                if super::ClipboardDb::set_record_tags_by_name_conn_cached(
+                    &tx,
+                    record_id,
+                    &record.tags,
+                    &mut tag_id_cache,
+                    &mut fts_dirty,
+                )? {
                     tags_changed += 1;
                 }
             }
             imported += 1;
+        }
+
+        // One batched FTS rebuild for every record whose tags actually changed
+        // (replaces per-record refresh_record_fts).
+        if !fts_dirty.is_empty() {
+            fts_dirty.sort_unstable();
+            fts_dirty.dedup();
+            let placeholders = Self::id_placeholders(fts_dirty.len());
+            let params: Vec<&dyn rusqlite::types::ToSql> = fts_dirty
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect();
+            tx.execute(
+                &format!("DELETE FROM records_fts WHERE rowid IN ({placeholders})"),
+                params.as_slice(),
+            )?;
+            tx.execute(
+                &format!(
+                    "INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
+                     SELECT
+                        r.id,
+                        {},
+                        r.source_app,
+                        r.source_window,
+                        COALESCE((
+                            SELECT group_concat(t.name, ' ')
+                            FROM record_tags rt
+                            INNER JOIN tags t ON t.id = rt.tag_id
+                            WHERE rt.record_id = r.id
+                        ), ''),
+                        r.alias
+                     FROM records r WHERE r.id IN ({placeholders})",
+                    Self::fts_content_sql()
+                ),
+                params.as_slice(),
+            )?;
         }
 
         let overflow_media = self.evict_over_limit(&tx, max_records)?;

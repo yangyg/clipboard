@@ -100,6 +100,17 @@ pub async fn get_record(
     state.db.get_record(id).map_err(|e| e.to_string())
 }
 
+/// Batch full-row read in a single IN query — replaces N concurrent
+/// `get_record` IPC round-trips (batch copy reads full content for N rows).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn get_records_by_ids(
+    state: State<'_, AppState>,
+    ids: Vec<i64>,
+) -> Result<Vec<ClipboardRecord>, String> {
+    let ids = cap_ids(ids);
+    state.db.get_records_by_ids(&ids).map_err(|e| e.to_string())
+}
+
 /// Open a record's media file with the OS default app (Photos, etc.).
 #[tauri::command]
 pub async fn open_record_media(state: State<'_, AppState>, id: i64) -> Result<(), String> {

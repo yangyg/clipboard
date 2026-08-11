@@ -113,6 +113,7 @@ pub fn run() {
             commands::remove_search_history,
             commands::clear_search_history,
             commands::get_record,
+            commands::get_records_by_ids,
             commands::get_system_fonts,
             commands::open_record_media,
             commands::open_url,

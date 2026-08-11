@@ -77,23 +77,42 @@ export function sourceLabelHtml(
 // per row on every render (shared across all rows/components).
 let cachedNow = Date.now();
 let cachedNowTimer: ReturnType<typeof setTimeout> | null = null;
+/** Formatted-time cache: rows re-render on every scroll frame, but their
+ * relative label only changes once a minute. Keyed by iso + minute bucket;
+ * cleared on the 30s now-refresh and capped to bound memory. */
+const TIME_CACHE_MAX = 1024;
+const timeCache = new Map<string, string>();
 
 function getNow(): number {
   if (!cachedNowTimer) {
     cachedNowTimer = setTimeout(() => {
       cachedNow = Date.now();
       cachedNowTimer = null;
+      timeCache.clear();
     }, 30_000);
   }
   return cachedNow;
 }
 
 export function formatTime(iso: string, t: TranslateFn): string {
+  const bucket = Math.floor(getNow() / 60000);
+  const key = `${bucket}|${iso}`;
+  const cached = timeCache.get(key);
+  if (cached !== undefined) return cached;
+
   const d = new Date(iso);
   const diffMs = getNow() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return t('record.justNow');
-  if (diffMin < 60) return t('record.minutesAgo', { n: diffMin });
-  if (diffMin < 1440) return t('record.hoursAgo', { n: Math.floor(diffMin / 60) });
-  return d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+  let label: string;
+  if (diffMin < 1) label = t('record.justNow');
+  else if (diffMin < 60) label = t('record.minutesAgo', { n: diffMin });
+  else if (diffMin < 1440) label = t('record.hoursAgo', { n: Math.floor(diffMin / 60) });
+  else label = d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
+
+  if (timeCache.size >= TIME_CACHE_MAX) {
+    const oldest = timeCache.keys().next().value;
+    if (oldest !== undefined) timeCache.delete(oldest);
+  }
+  timeCache.set(key, label);
+  return label;
 }

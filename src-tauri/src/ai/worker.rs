@@ -93,7 +93,7 @@ fn process_ai_job(job: &AiEnrichJob, db: &ClipboardDb, app: &tauri::AppHandle) {
     // Live re-check: the user may have turned AI off / moved provider while the
     // job sat in the queue. Never call out in that state.
     let live = match db.get_settings() {
-        Ok(s) => (*s).clone(),
+        Ok(s) => s,
         Err(e) => {
             warn!("Failed to load settings in AI worker: {}", e);
             return;
@@ -104,7 +104,7 @@ fn process_ai_job(job: &AiEnrichJob, db: &ClipboardDb, app: &tauri::AppHandle) {
     }
 
     // The record may have been deleted / trashed since enqueue.
-    let Some(record) = db.get_record(job.record_id).ok().flatten() else {
+    let Some(record) = db.get_record_list(job.record_id).ok().flatten() else {
         return;
     };
     if record.is_sensitive || record.is_trashed {
@@ -134,7 +134,7 @@ fn process_ai_job(job: &AiEnrichJob, db: &ClipboardDb, app: &tauri::AppHandle) {
     if job.config.summary_enabled && !result.summary.is_empty() {
         // Ownership guard: only write the alias while it is still empty, so a
         // user-edited alias (or an earlier AI summary) is never overwritten.
-        if let Ok(Some(current)) = db.get_record(job.record_id) {
+        if let Ok(Some(current)) = db.get_record_list(job.record_id) {
             if current.alias.trim().is_empty() && !current.is_trashed {
                 match db.set_record_alias(job.record_id, &result.summary) {
                     Ok(written) => changed |= !written.is_empty(),
@@ -154,7 +154,7 @@ fn process_ai_job(job: &AiEnrichJob, db: &ClipboardDb, app: &tauri::AppHandle) {
     }
 
     if changed {
-        if let Ok(Some(rec)) = db.get_record(job.record_id) {
+        if let Ok(Some(rec)) = db.get_record_list(job.record_id) {
             let _ = app.emit("clipboard-changed", list_ipc_payload(rec));
         }
         info!("AI enrichment applied to record {}", job.record_id);

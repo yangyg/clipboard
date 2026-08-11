@@ -306,21 +306,49 @@ impl WebDavClient {
                 if status.is_success() {
                     return Ok(true);
                 }
-                if status == StatusCode::NOT_FOUND || status == StatusCode::METHOD_NOT_ALLOWED {
-                    // Fallback GET for servers without HEAD
-                    if status == StatusCode::METHOD_NOT_ALLOWED {
-                        return Ok(self.get_bytes(relative).await?.is_some());
-                    }
+                if status == StatusCode::NOT_FOUND {
                     return Ok(false);
                 }
                 if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
                     return Err(format!("WebDAV 鉴权失败 ({status})"));
                 }
-                // Some servers reject HEAD — try GET
-                Ok(self.get_bytes(relative).await?.is_some())
+                // Some servers reject HEAD (405/4xx) — fall back to a Depth:0
+                // PROPFIND instead of GET: GET would download the entire file
+                // just to check existence.
+                self.propfind_exists(relative).await
             }
-            Err(_) => Ok(self.get_bytes(relative).await?.is_some()),
+            Err(_) => self.propfind_exists(relative).await,
         }
+    }
+
+    /// WebDAV-native existence probe (Depth: 0 PROPFIND). Avoids downloading
+    /// file bodies on servers that reject HEAD.
+    async fn propfind_exists(&self, relative: &str) -> Result<bool, String> {
+        let url = self.url(relative)?;
+        let res = self
+            .client
+            .request(Method::from_bytes(b"PROPFIND").unwrap(), &url)
+            .header(AUTHORIZATION, self.auth_header())
+            .header("Depth", "0")
+            .header(CONTENT_TYPE, "application/xml")
+            .body(
+                r#"<?xml version="1.0" encoding="utf-8"?>
+<d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>"#,
+            )
+            .send()
+            .await
+            .map_err(|e| format!("PROPFIND {relative} 失败: {e}"))?;
+        let status = res.status();
+        if status.is_success() || status == StatusCode::MULTI_STATUS {
+            return Ok(true);
+        }
+        if status == StatusCode::NOT_FOUND {
+            return Ok(false);
+        }
+        if status == StatusCode::UNAUTHORIZED || status == StatusCode::FORBIDDEN {
+            return Err(format!("WebDAV 鉴权失败 ({status})"));
+        }
+        Ok(false)
     }
 
     /// Lightweight auth probe: PROPFIND Depth:0 on base URL (or GET root).

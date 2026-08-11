@@ -1,8 +1,9 @@
 //! Tag CRUD, auto-tag rules, and record↔tag links.
 use rusqlite::{params, Connection, Result as SqlResult};
+use std::sync::Arc;
 
 use super::{ClipboardDb, ContentType};
-use crate::TagInfo;
+use crate::{Settings, TagInfo};
 
 /// Fixed 12-color hue wheel (~30° steps). Must stay in sync with
 /// `TAG_PALETTE_HEX` in `src/utils/themeColors.ts`.
@@ -208,15 +209,22 @@ impl ClipboardDb {
     }
 
     /// Replace a record's tag links by name inside the caller's transaction.
-    /// Dedupes + trims names; missing tags are created via `ensure_tag_by_name_conn`.
-    /// Returns `Ok(false)` (leaving record_tags / FTS untouched) when `names` is
-    /// empty or identical to the record's current tags — callers rely on that to
-    /// avoid wiping local tags from tag-less snapshots and to count real changes.
-    /// Rebuilds the record's FTS row once after all links.
-    pub(super) fn set_record_tags_by_name_conn(
+    /// Dedupes + trims names; missing tags are created via
+    /// `ensure_tag_by_name_conn`. Returns `Ok(false)` (leaving record_tags /
+    /// FTS untouched) when `names` is empty or identical to the record's
+    /// current tags — callers rely on that to avoid wiping local tags from
+    /// tag-less snapshots and to count real changes.
+    ///
+    /// Batched for bulk import: tag ids come from a caller-owned cache (one
+    /// SELECT/INSERT per distinct tag across the whole batch instead of per
+    /// record) and the FTS rebuild is deferred via `fts_dirty` so the caller
+    /// rebuilds many rows in a single statement.
+    pub(super) fn set_record_tags_by_name_conn_cached(
         conn: &Connection,
         record_id: i64,
         names: &[String],
+        tag_id_cache: &mut std::collections::HashMap<String, i64>,
+        fts_dirty: &mut Vec<i64>,
     ) -> SqlResult<bool> {
         let mut seen: Vec<&str> = Vec::new();
         for name in names {
@@ -248,13 +256,20 @@ impl ClipboardDb {
         }
         conn.execute("DELETE FROM record_tags WHERE record_id = ?", [record_id])?;
         for name in seen {
-            let tag_id = Self::ensure_tag_by_name_conn(conn, name)?;
+            let tag_id = match tag_id_cache.get(name) {
+                Some(id) => *id,
+                None => {
+                    let id = Self::ensure_tag_by_name_conn(conn, name)?;
+                    tag_id_cache.insert(name.to_string(), id);
+                    id
+                }
+            };
             conn.execute(
                 "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
                 params![record_id, tag_id],
             )?;
         }
-        Self::refresh_record_fts(conn, record_id)?;
+        fts_dirty.push(record_id);
         Ok(true)
     }
 
@@ -275,23 +290,24 @@ impl ClipboardDb {
         record_id: i64,
         content: &str,
         content_type: &ContentType,
-        rules: &[crate::AutoTagRule],
+        settings: &Arc<Settings>,
     ) -> SqlResult<()> {
+        // Keywords are lowercased once per settings snapshot (cached), not per
+        // capture event.
+        let matcher = self.auto_tag_matcher(settings);
         let ct = content_type.as_str();
         let content_lower = content.to_lowercase();
 
         let mut matched: Vec<&str> = Vec::new();
-        for rule in rules {
-            let tag_name = rule.tag_name.trim();
+        for (tag_name, lower_keywords, content_types) in &matcher.rules {
             if tag_name.is_empty() {
                 continue;
             }
-            let type_hit = rule.content_types.iter().any(|t| t.as_str() == ct);
-            let keyword_hit = rule.keywords.iter().any(|kw| {
-                let k = kw.trim();
-                !k.is_empty() && content_lower.contains(&k.to_lowercase())
-            });
-            if (type_hit || keyword_hit) && !matched.contains(&tag_name) {
+            let type_hit = content_types.iter().any(|t| t == ct);
+            let keyword_hit = lower_keywords
+                .iter()
+                .any(|k| !k.is_empty() && content_lower.contains(k));
+            if (type_hit || keyword_hit) && !matched.contains(&tag_name.as_str()) {
                 matched.push(tag_name);
             }
         }
@@ -325,9 +341,8 @@ impl ClipboardDb {
             ids
         };
         tx.execute("DELETE FROM tags WHERE id = ?", [id])?;
-        for record_id in record_ids {
-            Self::refresh_record_fts(&tx, record_id)?;
-        }
+        // One batched FTS rebuild instead of N per-record refreshes.
+        Self::refresh_records_fts_batch(&tx, &record_ids)?;
         tx.commit()?;
         Ok(())
     }

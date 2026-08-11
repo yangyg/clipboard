@@ -10,19 +10,12 @@ const FLAG_ON: i32 = 1;
 impl ClipboardDb {
     pub fn toggle_favorite(&self, id: i64) -> SqlResult<bool> {
         let conn = self.conn.lock();
-        let current: i32 = conn.query_row(
-            "SELECT is_favorite FROM records WHERE id = ?",
+        // Single atomic flip (no read-then-write race), returning the new value.
+        let new_val: i32 = conn.query_row(
+            "UPDATE records SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
+             WHERE id = ? RETURNING is_favorite",
             [id],
             |row| row.get(0),
-        )?;
-        let new_val = if current == FLAG_OFF {
-            FLAG_ON
-        } else {
-            FLAG_OFF
-        };
-        conn.execute(
-            "UPDATE records SET is_favorite = ? WHERE id = ?",
-            params![new_val, id],
         )?;
         Ok(new_val == FLAG_ON)
     }
@@ -49,18 +42,11 @@ impl ClipboardDb {
 
     pub fn toggle_pin(&self, id: i64) -> SqlResult<bool> {
         let conn = self.conn.lock();
-        let current: i32 =
-            conn.query_row("SELECT is_pinned FROM records WHERE id = ?", [id], |row| {
-                row.get(0)
-            })?;
-        let new_val = if current == FLAG_OFF {
-            FLAG_ON
-        } else {
-            FLAG_OFF
-        };
-        conn.execute(
-            "UPDATE records SET is_pinned = ? WHERE id = ?",
-            params![new_val, id],
+        let new_val: i32 = conn.query_row(
+            "UPDATE records SET is_pinned = CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END
+             WHERE id = ? RETURNING is_pinned",
+            [id],
+            |row| row.get(0),
         )?;
         Ok(new_val == FLAG_ON)
     }

@@ -41,13 +41,14 @@ impl ClipboardDb {
             return Ok((id, false, record));
         }
         let now = chrono::Utc::now().to_rfc3339();
+        let auto_expire_at = Self::sensitive_expiry(is_sensitive, sensitive_auto_expire_seconds);
         let id = Self::insert_new_row(
             &conn,
             content,
             content_type,
             hash,
             is_sensitive,
-            Self::sensitive_expiry(is_sensitive, sensitive_auto_expire_seconds),
+            auto_expire_at.clone(),
             source_app,
             source_window,
             source_name,
@@ -56,14 +57,92 @@ impl ClipboardDb {
             content_html,
             &now,
         )?;
+        // Build the returned list-shape record in memory — every field is
+        // already known here, so the fresh-insert path skips the row read-back
+        // (2 extra queries per capture under the write lock). Tags are loaded
+        // separately by the auto-tag flow when enabled.
+        let record = self.build_inserted_record(
+            id,
+            content,
+            content_type,
+            hash,
+            is_sensitive,
+            auto_expire_at,
+            source_app,
+            source_window,
+            source_name,
+            &source_device_id,
+            image,
+            &now,
+        );
         if !Self::is_over_capacity(&conn, max_records)? {
-            return self.read_back_inserted(&conn, id);
+            return Ok((id, true, record));
         }
         let overflow_media = self.evict_over_limit(&conn, max_records)?;
-        let result = self.read_back_inserted(&conn, id);
         drop(conn);
         self.purge_media_pairs(&overflow_media);
-        result
+        Ok((id, true, record))
+    }
+
+    /// List-shape `ClipboardRecord` for a just-inserted row, built from the
+    /// values the insert already holds (no DB round-trip). `content` is
+    /// truncated to 400 chars to match `RECORD_COLS_LIST`; `content_len` keeps
+    /// the full character count.
+    fn build_inserted_record(
+        &self,
+        id: i64,
+        content: &str,
+        content_type: &ContentType,
+        hash: &str,
+        is_sensitive: bool,
+        auto_expire_at: Option<String>,
+        source_app: &str,
+        source_window: &str,
+        source_name: &str,
+        source_device_id: &str,
+        image: Option<&ImageMeta>,
+        now: &str,
+    ) -> ClipboardRecord {
+        let (media_path, thumb_path, width, height) = match image {
+            Some(img) => (
+                Some(img.media_path.as_str()),
+                Some(img.thumb_path.as_str()),
+                Some(img.width),
+                Some(img.height),
+            ),
+            None => (None, None, None, None),
+        };
+        let (media_abs, thumb_abs) = self.enrich_paths(media_path, thumb_path);
+        const LIST_CONTENT_MAX: usize = 400;
+        let list_content: String = content.chars().take(LIST_CONTENT_MAX).collect();
+        ClipboardRecord {
+            id,
+            content: list_content,
+            content_type: content_type.as_str().to_string(),
+            source_app: source_app.to_string(),
+            source_window: source_window.to_string(),
+            source_name: source_name.to_string(),
+            source_device_id: source_device_id.to_string(),
+            hash: hash.to_string(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive,
+            is_trashed: false,
+            auto_expire_at,
+            created_at: now.to_string(),
+            updated_at: now.to_string(),
+            tags: Vec::new(),
+            content_html: None,
+            media_path: media_path.map(str::to_string),
+            thumb_path: thumb_path.map(str::to_string),
+            width,
+            height,
+            media_abs,
+            thumb_abs,
+            content_len: Some(content.chars().count() as i32),
+            alias: String::new(),
+        }
     }
 
     /// Hash probe for the dedup path. Must run under the same write lock as

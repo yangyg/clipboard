@@ -6,7 +6,13 @@ use super::ClipboardDb;
 /// Increment when adding tables, columns, or indexes that older DBs must migrate.
 /// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
 /// the on-disk schema matches what this binary expects.
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
+
+/// FTS indexes only the first N chars of `content`. Trigram index size grows
+/// ~3-5x the source text, so a 10MB-cap record would otherwise build a ~30MB
+/// FTS entry and stall the capture write lock. Truncation keeps writes bounded;
+/// searches beyond the prefix fall back to the short-query `instr` path.
+const FTS_CONTENT_MAX_CHARS: i64 = 32 * 1024;
 
 impl ClipboardDb {
     pub(super) fn initialize_schema(conn: &Connection) -> SqlResult<()> {
@@ -42,10 +48,6 @@ impl ClipboardDb {
             CREATE INDEX IF NOT EXISTS idx_records_hash ON records(hash);
             CREATE INDEX IF NOT EXISTS idx_records_content_type ON records(content_type);
             CREATE INDEX IF NOT EXISTS idx_records_is_favorite ON records(is_favorite);
-            CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
-                ON records(is_trashed, updated_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
-                ON records(is_trashed, is_pinned, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_records_hash_active
                 ON records(hash, is_trashed);
             CREATE INDEX IF NOT EXISTS idx_records_auto_expire
@@ -111,8 +113,40 @@ impl ClipboardDb {
                 ('设计', '#a855f7', 0);
             "#,
         )?;
+        // v7: keyset pagination orders by (is_pinned, updated_at, id) with an id
+        // tiebreak, so the composite indexes must carry id as the last column.
+        // Runs here (after the `settings` table exists) so the one-shot flag has
+        // somewhere to live.
+        Self::migrate_keyset_indexes(conn)?;
         // Runs AFTER the `settings` table exists (its one-shot gate lives there).
         Self::enforce_active_hash_uniqueness(conn)?;
+        Ok(())
+    }
+
+    /// One-shot (settings flag `keyset_index_v2`): widen the two list indexes
+    /// with the `id` tiebreak column so keyset predicates
+    /// (`updated_at = ? AND id < ?`) and `ORDER BY … id DESC` can use the index
+    /// without a separate sort pass. Old shapes are dropped by name first.
+    fn migrate_keyset_indexes(conn: &Connection) -> SqlResult<()> {
+        let done: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'keyset_index_v2'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if done.as_deref() == Some("1") {
+            return Ok(());
+        }
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS idx_records_trashed_updated;
+             DROP INDEX IF EXISTS idx_records_trashed_pinned_updated;
+             CREATE INDEX idx_records_trashed_updated
+                 ON records(is_trashed, updated_at DESC, id DESC);
+             CREATE INDEX idx_records_trashed_pinned_updated
+                 ON records(is_trashed, is_pinned, updated_at DESC, id DESC);
+             INSERT OR REPLACE INTO settings (key, value) VALUES ('keyset_index_v2', '1');",
+        )?;
         Ok(())
     }
 
@@ -143,7 +177,7 @@ impl ClipboardDb {
         // builds (incl. Windows); use DELETE FROM fts WHERE rowid=... instead.
         // v3: FTS au only on content (dedup source updates must not rebuild FTS);
         //     tag→FTS refresh is application-driven (batch auto-tag once).
-        const FTS_VERSION: &str = "4";
+        const FTS_VERSION: &str = "5";
         let current: Option<String> = conn
             .query_row(
                 "SELECT value FROM settings WHERE key = 'fts_version'",
@@ -193,7 +227,7 @@ impl ClipboardDb {
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
                 VALUES (
                     new.id,
-                    new.content,
+                    substr(new.content, 1, 32768),
                     new.source_app,
                     new.source_window,
                     COALESCE((
@@ -218,7 +252,7 @@ impl ClipboardDb {
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
                 VALUES (
                     new.id,
-                    new.content,
+                    substr(new.content, 1, 32768),
                     new.source_app,
                     new.source_window,
                     COALESCE((
@@ -238,7 +272,7 @@ impl ClipboardDb {
                 INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
                 SELECT
                     r.id,
-                    r.content,
+                    substr(r.content, 1, 32768),
                     r.source_app,
                     r.source_window,
                     COALESCE((
@@ -259,7 +293,7 @@ impl ClipboardDb {
             INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
             SELECT
                 r.id,
-                r.content,
+                substr(r.content, 1, 32768),
                 r.source_app,
                 r.source_window,
                 COALESCE((
@@ -298,25 +332,76 @@ impl ClipboardDb {
     pub(super) fn refresh_record_fts(conn: &Connection, record_id: i64) -> SqlResult<()> {
         conn.execute("DELETE FROM records_fts WHERE rowid = ?", [record_id])?;
         conn.execute(
-            r#"
-            INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
-            SELECT
-                r.id,
-                r.content,
-                r.source_app,
-                r.source_window,
-                COALESCE((
-                    SELECT group_concat(t.name, ' ')
-                    FROM record_tags rt
-                    INNER JOIN tags t ON t.id = rt.tag_id
-                    WHERE rt.record_id = r.id
-                ), ''),
-                r.alias
-            FROM records r WHERE r.id = ?
-            "#,
+            &format!(
+                "INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
+                 SELECT
+                    r.id,
+                    {},
+                    r.source_app,
+                    r.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = r.id
+                    ), ''),
+                    r.alias
+                 FROM records r WHERE r.id = ?",
+                Self::fts_content_sql()
+            ),
             [record_id],
         )?;
         Ok(())
+    }
+
+    /// Rebuild FTS rows for many records in two statements (delete + insert),
+    /// replacing the per-record `refresh_record_fts` N+1 pattern on bulk paths
+    /// (tag deletion, import merges).
+    pub(super) fn refresh_records_fts_batch(
+        conn: &Connection,
+        record_ids: &[i64],
+    ) -> SqlResult<()> {
+        if record_ids.is_empty() {
+            return Ok(());
+        }
+        let placeholders = Self::id_placeholders(record_ids.len());
+        let params: Vec<&dyn rusqlite::types::ToSql> = record_ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        conn.execute(
+            &format!("DELETE FROM records_fts WHERE rowid IN ({placeholders})"),
+            params.as_slice(),
+        )?;
+        conn.execute(
+            &format!(
+                "INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
+                 SELECT
+                    r.id,
+                    {},
+                    r.source_app,
+                    r.source_window,
+                    COALESCE((
+                        SELECT group_concat(t.name, ' ')
+                        FROM record_tags rt
+                        INNER JOIN tags t ON t.id = rt.tag_id
+                        WHERE rt.record_id = r.id
+                    ), ''),
+                    r.alias
+                 FROM records r WHERE r.id IN ({placeholders})",
+                Self::fts_content_sql()
+            ),
+            params.as_slice(),
+        )?;
+        Ok(())
+    }
+
+    /// SQL expression for the FTS `content` column (truncated to keep the
+    /// trigram index bounded). Single source of truth for triggers / backfill /
+    /// manual rebuilds. Keep in sync with FTS_CONTENT_MAX_CHARS (raw trigger
+    /// SQL cannot interpolate the const, so the literal appears in the DDL too).
+    pub(super) fn fts_content_sql() -> String {
+        format!("substr(content, 1, {})", FTS_CONTENT_MAX_CHARS)
     }
 
     /// Idempotent migrations for databases created before later columns /
@@ -349,11 +434,7 @@ impl ClipboardDb {
             }
         }
         conn.execute_batch(
-            "CREATE INDEX IF NOT EXISTS idx_records_trashed_updated
-             ON records(is_trashed, updated_at DESC);
-             CREATE INDEX IF NOT EXISTS idx_records_trashed_pinned_updated
-             ON records(is_trashed, is_pinned, updated_at DESC);
-             CREATE INDEX IF NOT EXISTS idx_records_hash_active
+            "CREATE INDEX IF NOT EXISTS idx_records_hash_active
              ON records(hash, is_trashed);",
         )?;
         Ok(())

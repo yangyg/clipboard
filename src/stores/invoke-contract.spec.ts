@@ -41,6 +41,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   remove_search_history: { params: ["query"] },
   clear_search_history: { params: [] },
   get_record: { params: ["id"] },
+  get_records_by_ids: { params: ["ids"] },
   open_record_media: { params: ["id"] },
   paste_record: { params: ["id", "mode"] },
   delete_record: { params: ["id"] },

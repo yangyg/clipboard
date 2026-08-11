@@ -1,7 +1,7 @@
 //! Pull / merge / push orchestration for Clipboard WebDAV sync.
 //! Bundle (de)serialization lives in `bundle.rs`; media transfer in `media.rs`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -17,7 +17,12 @@ use super::bundle::{
     SyncManifest, BUNDLE_REL, MANIFEST_NAME, PROTOCOL,
 };
 use super::client::WebDavClient;
-use super::media::{download_media_if_needed, upload_media_if_needed};
+use super::media::{
+    download_media_if_needed, upload_media_paths_if_needed, MEDIA_TRANSFER_CONCURRENCY,
+};
+
+type UploadResult = Result<(bool, bool), String>;
+type UploadTask = (String, tokio::task::JoinHandle<UploadResult>);
 
 fn remote_root(settings: &Settings) -> String {
     let p = settings.webdav_remote_path.trim().trim_matches('/');
@@ -196,13 +201,27 @@ pub async fn webdav_pull(
         .map(|e| (e.hash.clone(), e))
         .collect();
 
-    let mut media_downloaded = 0;
+    // Concurrent, bounded media downloads: sequential GETs made sync wall time
+    // scale linearly with image count. Server-polite 6-way fan-out instead.
+    let download_semaphore = Arc::new(tokio::sync::Semaphore::new(MEDIA_TRANSFER_CONCURRENCY));
+    let mut download_tasks = Vec::new();
     for rec in &records {
         let owned = entry_by_hash
             .get(&rec.hash)
             .cloned()
             .unwrap_or_else(|| record_to_entry(rec));
-        if download_media_if_needed(&client, &root, &media_root, &owned).await? {
+        let client = client.clone();
+        let root = root.to_string();
+        let media_root = media_root.clone();
+        let permit = download_semaphore.clone();
+        download_tasks.push(tokio::spawn(async move {
+            let _guard = permit.acquire_owned().await.map_err(|e| e.to_string())?;
+            download_media_if_needed(&client, &root, &media_root, &owned).await
+        }));
+    }
+    let mut media_downloaded = 0;
+    for task in download_tasks {
+        if task.await.map_err(|e| format!("媒体下载任务失败: {e}"))?? {
             media_downloaded += 1;
         }
     }
@@ -293,8 +312,10 @@ pub async fn webdav_push(
             .map_err(|e| format!("WebDAV 加载本地记录任务失败: {e}"))??,
         settings.webdav_sync_sensitive,
     );
-    let local_by_hash: HashMap<String, crate::ClipboardRecord> =
-        local.iter().map(|r| (r.hash.clone(), r.clone())).collect();
+    // Only the hash set is needed for the upload fan-out below — keeping the
+    // full cloned record map here multiplied peak memory by the whole content
+    // set (H1: push held ~4-5x total content bytes in memory).
+    let local_hashes: HashSet<String> = local.iter().map(|r| r.hash.clone()).collect();
 
     // Add-only: keep remote-only records in the published catalog. On a hash
     // collision (same content) keep the NEWER updated_at — a push without a
@@ -382,22 +403,58 @@ pub async fn webdav_push(
     }
     tombstones = gc_tombstones(tombstones, &device_acks);
 
+    // Concurrent, bounded media uploads for records we hold locally. Tasks
+    // receive only the media paths (not the whole record) so fan-out does not
+    // clone content/HTML buffers.
+    let upload_semaphore = Arc::new(tokio::sync::Semaphore::new(MEDIA_TRANSFER_CONCURRENCY));
+    let mut upload_tasks: Vec<UploadTask> = Vec::new();
+    for rec in catalog.values() {
+        if !local_hashes.contains(&rec.hash) {
+            continue;
+        }
+        let Some(media_rel) = rec.media_path.as_deref().filter(|p| !p.is_empty()) else {
+            continue;
+        };
+        let client = client.clone();
+        let root = root.to_string();
+        let media_root = media_root.clone();
+        let media_rel = media_rel.to_string();
+        let thumb_rel = rec.thumb_path.clone();
+        let permit = upload_semaphore.clone();
+        upload_tasks.push((
+            rec.hash.clone(),
+            tokio::spawn(async move {
+                let _guard = permit.acquire_owned().await.map_err(|e| e.to_string())?;
+                upload_media_paths_if_needed(
+                    &client,
+                    &root,
+                    &media_root,
+                    &media_rel,
+                    thumb_rel.as_deref(),
+                )
+                .await
+            }),
+        ));
+    }
+    let mut upload_results: HashMap<String, (bool, bool)> = HashMap::new();
+    for (hash, task) in upload_tasks {
+        let result = task.await.map_err(|e| format!("媒体上传任务失败: {e}"))??;
+        upload_results.insert(hash, result);
+    }
+
     let mut media_uploaded = 0;
     let mut media_skipped = 0;
     let mut pushed = 0;
 
     for rec in catalog.values() {
-        // Only upload media for records we have locally on disk
-        if local_by_hash.contains_key(&rec.hash) {
-            let (up, skip) = upload_media_if_needed(&client, &root, &media_root, rec).await?;
-            if up {
+        if let Some((up, skip)) = upload_results.get(&rec.hash) {
+            if *up {
                 media_uploaded += 1;
             }
-            if skip {
+            if *skip {
                 media_skipped += 1;
             }
         }
-
         let remote_entry = remote_entry_map.get(&rec.hash);
         let needs_push = match remote_entry {
             None => true,

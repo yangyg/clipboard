@@ -6,7 +6,11 @@ use super::bundle::ManifestEntry;
 use super::client::WebDavClient;
 use super::sync::join_remote;
 use crate::media;
-use crate::ClipboardRecord;
+
+/// Bounded concurrency for media transfers (pull downloads / push uploads).
+/// Sequential HEAD/PUT per image made sync latency grow linearly with image
+/// count; 4-8 parallel transfers are polite to servers while cutting wall time.
+pub(super) const MEDIA_TRANSFER_CONCURRENCY: usize = 6;
 
 /// Server-supplied media rels must satisfy the same strict hash-path rule as
 /// imports (`security::is_allowed_media_rel`). `media::absolute` alone strips
@@ -79,16 +83,16 @@ pub(super) async fn download_media_if_needed(
     Ok(downloaded)
 }
 
-pub(super) async fn upload_media_if_needed(
+/// Upload a media pair (main file + optional thumb) when the remote copy is
+/// missing. Takes paths only, so callers can fan out concurrent uploads
+/// without cloning whole `ClipboardRecord`s (which carry full content/HTML).
+pub(super) async fn upload_media_paths_if_needed(
     client: &WebDavClient,
     root: &str,
     media_root: &Path,
-    rec: &ClipboardRecord,
+    media_rel: &str,
+    thumb_rel: Option<&str>,
 ) -> Result<(bool, bool), String> {
-    // returns (uploaded, skipped)
-    let Some(media_rel) = rec.media_path.as_deref().filter(|p| !p.is_empty()) else {
-        return Ok((false, false));
-    };
     // Rels can be server-supplied (remote records flow through the catalog) —
     // enforce the strict hash-path rule before any fs::read to block
     // remote-directed file exfiltration.
@@ -104,7 +108,7 @@ pub(super) async fn upload_media_if_needed(
         // still ensure thumb if missing remotely
         let mut skipped = true;
         let mut uploaded = false;
-        if let Some(thumb_rel) = rec.thumb_path.as_deref().filter(|p| !p.is_empty()) {
+        if let Some(thumb_rel) = thumb_rel.filter(|p| !p.is_empty()) {
             if safe_media_rel(thumb_rel) {
                 let thumb_abs = media::absolute(media_root, thumb_rel);
                 let thumb_remote = join_remote(root, thumb_rel);
@@ -127,7 +131,7 @@ pub(super) async fn upload_media_if_needed(
         "application/octet-stream"
     };
     client.put_bytes(&remote, bytes, ct).await?;
-    if let Some(thumb_rel) = rec.thumb_path.as_deref().filter(|p| !p.is_empty()) {
+    if let Some(thumb_rel) = thumb_rel.filter(|p| !p.is_empty()) {
         if safe_media_rel(thumb_rel) {
             let thumb_abs = media::absolute(media_root, thumb_rel);
             if thumb_abs.exists() {

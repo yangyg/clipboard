@@ -15,7 +15,7 @@ use crate::clipboard::{
 use crate::db::{ClipboardDb, ContentType, ImageMeta};
 use crate::detect::{detect_content_type, detect_sensitive, sha256_hash, sha256_hash_bytes};
 use crate::media;
-use crate::panel::{is_ignored_app, list_ipc_payload};
+use crate::panel::list_ipc_payload;
 use crate::Settings;
 
 // ============================================================
@@ -153,7 +153,7 @@ fn process_text_job(
         source_name,
     } = job;
     let settings = capture_settings(db);
-    if is_ignored_app(&source_app, &settings.ignored_apps) {
+    if db.is_ignored_app(&source_app, &settings) {
         return;
     }
 
@@ -194,9 +194,7 @@ fn process_text_job(
     ) {
         Ok((id, is_new, mut record)) => {
             if is_new && settings.features.tags && settings.enable_auto_tag {
-                if let Err(e) =
-                    db.apply_auto_tags(id, &captured.text, &content_type, &settings.auto_tag_rules)
-                {
+                if let Err(e) = db.apply_auto_tags(id, &captured.text, &content_type, &settings) {
                     warn!("Failed to apply auto tags: {}", e);
                 } else if let Ok(tags) = db.get_record_tag_names(id) {
                     record.tags = tags;
@@ -258,7 +256,7 @@ fn process_image_job(
         source_name,
     } = job;
     let settings = capture_settings(db);
-    if is_ignored_app(&source_app, &settings.ignored_apps) {
+    if db.is_ignored_app(&source_app, &settings) {
         return;
     }
 
@@ -306,12 +304,9 @@ fn process_image_job(
             ) {
                 Ok((id, is_new, mut record)) => {
                     if is_new && settings.features.tags && settings.enable_auto_tag {
-                        if let Err(e) = db.apply_auto_tags(
-                            id,
-                            &label,
-                            &ContentType::Image,
-                            &settings.auto_tag_rules,
-                        ) {
+                        if let Err(e) =
+                            db.apply_auto_tags(id, &label, &ContentType::Image, &settings)
+                        {
                             warn!("Failed to apply auto tags: {}", e);
                         } else if let Ok(tags) = db.get_record_tag_names(id) {
                             record.tags = tags;
@@ -348,12 +343,14 @@ pub(crate) const CLEANUP_INTERVAL_SECS: u64 = 60;
 /// Load settings for a capture worker, logging (not silently defaulting) on
 /// failure. Defaults are a deliberate degrade so a transient DB read error
 /// does not drop a clipboard event entirely, but the failure stays visible.
-fn capture_settings(db: &ClipboardDb) -> Settings {
+fn capture_settings(db: &ClipboardDb) -> std::sync::Arc<Settings> {
     match db.get_settings() {
-        Ok(s) => (*s).clone(),
+        // Arc clone (refcount bump) — the capture hot path must not deep-copy
+        // the whole Settings (rules, ignore lists, device map) per event.
+        Ok(s) => s,
         Err(e) => {
             warn!("Failed to load settings for capture; using defaults: {}", e);
-            Settings::default()
+            std::sync::Arc::new(Settings::default())
         }
     }
 }

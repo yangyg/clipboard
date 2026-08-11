@@ -82,15 +82,11 @@ pub(crate) fn apply_global_shortcut(app: &tauri::AppHandle, shortcut: &str) -> R
     Ok(())
 }
 
-/// Match an ignore pattern against the captured source app.
-///
-/// `source_app` is the foreground process exe path (from
-/// `QueryFullProcessImageNameW`). Patterns are usually exe names
-/// (`1Password.exe`), so we compare against the basename, tolerating a missing
-/// or extra `.exe` suffix. An explicit full path (case-insensitive) is also
-/// honoured. Deliberately NO substring matching — `contains` made a pattern
-/// like `git` silently ignore unrelated apps whose path merely contains it.
-pub(crate) fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {
+/// Reference matcher implementation (kept for unit tests). The production
+/// capture path uses `ClipboardDb::is_ignored_app`, which caches the
+/// lowercase pattern set per settings snapshot and applies identical rules.
+#[cfg(test)]
+fn is_ignored_app(source_app: &str, ignored: &[String]) -> bool {
     if source_app.is_empty() || ignored.is_empty() {
         return false;
     }

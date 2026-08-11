@@ -31,20 +31,23 @@ impl ClipboardDb {
         }
 
         let conn = self.lock_read();
+        // Single batched reference probe instead of one query per file (the
+        // old path ran N SELECTs twice per bulk delete). A file is referenced
+        // when any row points at it as media_path OR thumb_path.
+        let referenced = match Self::referenced_media_set(&conn, &files) {
+            Ok(set) => set,
+            Err(e) => {
+                // Conservative: on a probe error, delete nothing. A stray file
+                // is safer than breaking a surviving record's preview/paste.
+                tracing::warn!("Failed to probe media references; skipping purge: {}", e);
+                return;
+            }
+        };
+        drop(conn);
         let unreferenced: Vec<String> = files
             .into_iter()
-            .filter(|p| {
-                matches!(
-                    conn.query_row(
-                        "SELECT 1 FROM records WHERE media_path = ?1 OR thumb_path = ?1 LIMIT 1",
-                        [p.as_str()],
-                        |row| row.get::<_, i64>(0),
-                    ),
-                    Err(rusqlite::Error::QueryReturnedNoRows)
-                )
-            })
+            .filter(|p| !referenced.contains(p))
             .collect();
-        drop(conn);
 
         // Quarantine each unreferenced file, then re-check references before
         // finishing the delete. A concurrent capture of the same image content
@@ -62,15 +65,26 @@ impl ClipboardDb {
 
         let conn = self.lock_read();
         let mut removed: u64 = 0;
+        let quarantined_rels: Vec<String> =
+            quarantined.iter().map(|(rel, _)| rel.clone()).collect();
+        let still_referenced = match Self::referenced_media_set(&conn, &quarantined_rels) {
+            Ok(set) => set,
+            Err(e) => {
+                // Restore every quarantined file so nothing is lost when the
+                // re-check cannot run.
+                tracing::warn!(
+                    "Failed to re-check media references; restoring quarantine: {}",
+                    e
+                );
+                for (rel, pending) in quarantined {
+                    media::restore_media_file(&self.media_root, &rel, &pending);
+                }
+                drop(conn);
+                return;
+            }
+        };
         for (rel, pending) in quarantined {
-            let referenced = conn
-                .query_row(
-                    "SELECT 1 FROM records WHERE media_path = ?1 OR thumb_path = ?1 LIMIT 1",
-                    [rel.as_str()],
-                    |row| row.get::<_, i64>(0),
-                )
-                .is_ok();
-            if referenced {
+            if still_referenced.contains(&rel) {
                 media::restore_media_file(&self.media_root, &rel, &pending);
             } else if let Ok(meta) = std::fs::metadata(&pending) {
                 let size = meta.len();
@@ -82,6 +96,35 @@ impl ClipboardDb {
         }
         drop(conn);
         media::note_media_removed(&self.media_root, removed);
+    }
+
+    /// One batched `media_path/thumb_path IN (...)` probe returning the set of
+    /// referenced relative paths.
+    fn referenced_media_set(
+        conn: &Connection,
+        files: &[String],
+    ) -> SqlResult<std::collections::HashSet<String>> {
+        if files.is_empty() {
+            return Ok(std::collections::HashSet::new());
+        }
+        let placeholders = Self::id_placeholders(files.len());
+        let refs: Vec<&dyn rusqlite::types::ToSql> = files
+            .iter()
+            .map(|f| f as &dyn rusqlite::types::ToSql)
+            .collect();
+        let bound: Vec<&dyn rusqlite::types::ToSql> =
+            refs.iter().copied().chain(refs.iter().copied()).collect();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT media_path FROM records WHERE media_path IN ({placeholders})
+             UNION
+             SELECT thumb_path FROM records WHERE thumb_path IN ({placeholders})"
+        ))?;
+        let rows = stmt.query_map(bound.as_slice(), |row| row.get::<_, String>(0))?;
+        let mut set = std::collections::HashSet::new();
+        for row in rows {
+            set.insert(row?);
+        }
+        Ok(set)
     }
 
     pub(super) fn fetch_media_paths_by_ids(
@@ -195,10 +238,10 @@ impl ClipboardDb {
             return Ok(());
         }
         let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
-        let tags_map = self.load_tags_batch(conn, &ids)?;
+        let mut tags_map = self.load_tags_batch(conn, &ids)?;
         for record in records.iter_mut() {
-            if let Some(tags) = tags_map.get(&record.id) {
-                record.tags = tags.clone();
+            if let Some(tags) = tags_map.get_mut(&record.id) {
+                record.tags = std::mem::take(tags);
             }
         }
         Ok(())

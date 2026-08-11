@@ -9,6 +9,18 @@ impl ClipboardDb {
     // === Stats ===
 
     pub fn get_stats(&self) -> SqlResult<StatsData> {
+        // The stats page polls during copy bursts; the aggregate below is a
+        // full-table scan, so serve a short-TTL snapshot instead of re-scanning
+        // every call. Staleness ≤5s is fine for sidebar counts.
+        {
+            let cache = self.stats_cache.lock();
+            if let Some((at, data)) = cache.as_ref() {
+                if at.elapsed() < std::time::Duration::from_secs(5) {
+                    return Ok(data.clone());
+                }
+            }
+        }
+
         let conn = self.lock_read();
 
         // One table scan: aggregates + per-type counts (known content_type values).
@@ -69,7 +81,7 @@ impl ClipboardDb {
         let media_bytes = media::cached_media_dir_size(&self.media_root);
         let storage_bytes = content_bytes.saturating_add(media_bytes);
 
-        Ok(StatsData {
+        let stats = StatsData {
             total_records,
             total_copies,
             favorites_count,
@@ -78,6 +90,8 @@ impl ClipboardDb {
             storage_bytes,
             data_path: self.media_root.display().to_string(),
             type_distribution,
-        })
+        };
+        *self.stats_cache.lock() = Some((std::time::Instant::now(), stats.clone()));
+        Ok(stats)
     }
 }

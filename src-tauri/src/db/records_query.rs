@@ -26,22 +26,29 @@ impl ClipboardDb {
         Some(format!("\"{}\"", q.replace('"', "\"\"")))
     }
 
-    /// Short (1–2 char) search: one `instr` pass over records (+ optional tag EXISTS).
-    /// Avoids leading-wildcard `LIKE '%X%'` which cannot use indexes and multiplies scans.
+    /// Short (1–2 char) search: one `instr` pass over records (+ optional tag
+    /// EXISTS). Avoids leading-wildcard `LIKE '%X%'` which cannot use indexes
+    /// and multiplies scans. `search_content` excludes the (potentially huge)
+    /// content column — single-character queries restrict to the short
+    /// columns (alias/source) so they do not force a full content scan per
+    /// keystroke.
     pub(super) fn push_short_query_predicate(
         sql: &mut String,
         params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
         query: &str,
         include_tags: bool,
+        search_content: bool,
     ) {
+        let q = query.to_string();
+        if search_content {
+            sql.push_str("instr(content, ?) > 0 OR ");
+            params.push(Box::new(q.clone()));
+        }
         sql.push_str(
-            "instr(content, ?) > 0
-             OR instr(alias, ?) > 0
+            "instr(alias, ?) > 0
              OR instr(source_app, ?) > 0
              OR instr(source_window, ?) > 0",
         );
-        let q = query.to_string();
-        params.push(Box::new(q.clone()));
         params.push(Box::new(q.clone()));
         params.push(Box::new(q.clone()));
         params.push(Box::new(q.clone()));
@@ -259,6 +266,36 @@ impl ClipboardDb {
         } else {
             Ok(None)
         }
+    }
+
+    /// List-shape row for one record (no `content_html`). Used by the AI
+    /// worker, which only needs flags/alias/tags — avoids reading the full
+    /// HTML blob on every enrichment job.
+    pub fn get_record_list(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
+        let conn = self.lock_read();
+        self.get_record_list_locked(&conn, id)
+    }
+
+    /// Full rows for a set of ids in one query (batch copy/paste reads).
+    pub fn get_records_by_ids(&self, ids: &[i64]) -> SqlResult<Vec<ClipboardRecord>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let conn = self.lock_read();
+        let placeholders = Self::id_placeholders(ids.len());
+        let params: Vec<&dyn rusqlite::types::ToSql> = ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {} FROM records WHERE id IN ({placeholders})",
+            RECORD_COLS
+        ))?;
+        let mut records: Vec<ClipboardRecord> = stmt
+            .query_map(params.as_slice(), |row| self.map_record_row(row))?
+            .collect::<SqlResult<Vec<_>>>()?;
+        self.enrich_tags(&conn, &mut records, true)?;
+        Ok(records)
     }
 
     pub(super) fn get_record_list_locked(

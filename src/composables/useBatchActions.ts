@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "vue-i18n";
+import type { ClipboardRecord } from "../types";
 import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
@@ -45,11 +46,10 @@ export function useBatchActions() {
       .filter((r) => r.content_type !== "image")
       .map((r) => r.id);
     // List rows truncate content to 400 chars — fetch full bodies for copy.
+    // Single batch IPC + one IN query instead of N concurrent get_record calls.
     const fullTexts: string[] = [];
     try {
-      const results = await Promise.all(
-        textIds.map((id) => invoke<{ content: string } | null>("get_record", { id }))
-      );
+      const results = await invoke<ClipboardRecord[]>("get_records_by_ids", { ids: textIds });
       for (const full of results) {
         if (full?.content) fullTexts.push(full.content);
       }

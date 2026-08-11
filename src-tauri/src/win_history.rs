@@ -21,6 +21,7 @@
 //!   `clipboard-history-imported` event with the inserted count.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
 use tracing::{debug, info, warn};
@@ -57,7 +58,7 @@ pub fn maybe_start_once(app: &AppHandle) {
     let Some(state) = app.try_state::<crate::AppState>() else {
         return;
     };
-    let settings = match state.db.get_settings().map(|s| (*s).clone()) {
+    let settings = match state.db.get_settings() {
         Ok(s) => s,
         Err(e) => {
             warn!("Skipping history import — settings unavailable: {e}");
@@ -150,7 +151,7 @@ fn import_windows_history(db: &ClipboardDb, app: &AppHandle) -> ImportOutcome {
         Err(_) => return ImportOutcome::RetryLater,
     }
 
-    let settings = match db.get_settings().map(|s| (*s).clone()) {
+    let settings = match db.get_settings() {
         Ok(s) => s,
         Err(e) => {
             warn!("could not load settings for history import: {e}");
@@ -207,7 +208,7 @@ fn import_windows_history(db: &ClipboardDb, app: &AppHandle) -> ImportOutcome {
 /// Insert a history text item unless it is already active. Returns true when a
 /// new row was created. Mirrors `capture.rs::process_text_job` (sensitive +
 /// auto-tag + capacity rules) but skips the dedup-update path.
-fn import_text(db: &ClipboardDb, text: &str, s: &Settings) -> bool {
+fn import_text(db: &ClipboardDb, text: &str, s: &Arc<Settings>) -> bool {
     if text.trim().is_empty() {
         return false;
     }
@@ -253,7 +254,7 @@ fn import_text(db: &ClipboardDb, text: &str, s: &Settings) -> bool {
     ) {
         Ok((id, is_new, _)) => {
             if is_new && s.features.tags && s.enable_auto_tag {
-                if let Err(e) = db.apply_auto_tags(id, text, &content_type, &s.auto_tag_rules) {
+                if let Err(e) = db.apply_auto_tags(id, text, &content_type, s) {
                     warn!("history item auto-tag failed: {e}");
                 }
             }
@@ -273,7 +274,7 @@ fn import_image(
     db: &ClipboardDb,
     content: &DataPackageView,
     media_root: &std::path::Path,
-    s: &Settings,
+    s: &Arc<Settings>,
 ) -> Result<(), String> {
     let stream_ref = content
         .GetBitmapAsync()

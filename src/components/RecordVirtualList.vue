@@ -48,6 +48,7 @@
         :is-leaving="leavingIds.has(item.record!.id)"
         :search-query="clipboardStore.searchQuery"
         :source-overrides="sourceOverrides"
+        :measure-row="measureRow"
         @click="emit('item-click', $event)"
         @activate="emit('item-activate', $event)"
         @context-menu="(e, r) => emit('item-context-menu', e, r)"
@@ -101,6 +102,8 @@ defineProps<{
   activeDescendantId: string | undefined;
   isPinned: (record: ClipboardRecord) => boolean;
   isOptionTabbable: (id: number) => boolean;
+  /** Reports mounted/unmounted row elements to the virtualizer for measuring. */
+  measureRow: (id: number, el: HTMLElement | null) => void;
 }>();
 
 const emit = defineEmits<{

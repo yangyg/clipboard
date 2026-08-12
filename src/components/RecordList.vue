@@ -59,6 +59,7 @@
           :active-descendant-id="activeDescendantId"
           :is-pinned="isPinned"
           :is-option-tabbable="isOptionTabbable"
+          :measure-row="measureRow"
           @scroll="onListScroll"
           @item-click="onItemClick"
           @item-activate="onItemActivate"
@@ -226,6 +227,7 @@ const {
   scrollTop,
   onListScroll,
   fillViewportIfNeeded,
+  measureRow,
 } = useVirtualList(listRef, listLayout);
 
 function setListLayout(mode: ListLayout) {

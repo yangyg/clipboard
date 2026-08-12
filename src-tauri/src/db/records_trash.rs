@@ -2,7 +2,8 @@
 //! All deletes write sync tombstones so WebDAV can propagate the deletion.
 use rusqlite::{params, OptionalExtension, Result as SqlResult};
 
-use super::ClipboardDb;
+use super::schema::DEFAULT_TAGS_INSERT;
+use super::{tombstones::ACK_KEY, ClipboardDb};
 
 impl ClipboardDb {
     pub fn trash_record(&self, id: i64) -> SqlResult<()> {
@@ -324,5 +325,208 @@ impl ClipboardDb {
         drop(conn);
         self.purge_media_pairs(&media);
         Ok(())
+    }
+
+    /// Wipe every clipboard artifact: all records (active + trash, favorites,
+    /// pinned, sensitive), media files, tags, search history, sync history and
+    /// the WebDAV tombstone state. App settings survive. No tombstones are
+    /// written — a cleared device joins the next WebDAV pull as fresh, so the
+    /// wipe must not propagate spurious deletions to peers.
+    pub fn clear_all_data(&self) -> SqlResult<()> {
+        let conn = self.conn.lock();
+        // Collect media references before the rows are gone so purge_media_pairs
+        // can delete the files (it quarantines + re-checks, race-safe vs capture).
+        let media: Vec<(Option<String>, Option<String>)> = {
+            let mut stmt = conn.prepare(
+                "SELECT media_path, thumb_path FROM records
+                 WHERE media_path IS NOT NULL OR thumb_path IS NOT NULL",
+            )?;
+            let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+            rows.collect::<SqlResult<Vec<_>>>()?
+        };
+        // record_tags cascades via FK; records_fts rows go via the AFTER DELETE
+        // trigger. Both require foreign_keys=ON (configure_connection sets it).
+        conn.execute("DELETE FROM records", [])?;
+        conn.execute("DELETE FROM tags", [])?;
+        // Re-seed the built-in defaults so a fresh slate still ships them.
+        conn.execute_batch(DEFAULT_TAGS_INSERT)?;
+        conn.execute("DELETE FROM search_history", [])?;
+        conn.execute("DELETE FROM sync_history", [])?;
+        conn.execute("DELETE FROM sync_tombstones", [])?;
+        conn.execute("DELETE FROM settings WHERE key = ?", [ACK_KEY])?;
+        drop(conn);
+        self.purge_media_pairs(&media);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClipboardDb;
+    use crate::ClipboardRecord;
+    use std::path::PathBuf;
+
+    fn temp_db() -> (ClipboardDb, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_clear_all_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+        (db, dir)
+    }
+
+    fn cleanup(dir: PathBuf) {
+        for name in ["test.db", "test.db-wal", "test.db-shm"] {
+            let _ = std::fs::remove_file(dir.join(name));
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    fn make_record(content: &str, hash: &str, trashed: bool) -> ClipboardRecord {
+        ClipboardRecord {
+            id: 0,
+            content: content.to_string(),
+            content_type: "text".into(),
+            source_app: String::new(),
+            source_window: String::new(),
+            source_name: String::new(),
+            source_device_id: String::new(),
+            hash: hash.to_string(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive: false,
+            is_trashed: trashed,
+            auto_expire_at: None,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            tags: vec![],
+            content_html: None,
+            media_path: None,
+            thumb_path: None,
+            width: None,
+            height: None,
+            media_abs: None,
+            thumb_abs: None,
+            content_len: None,
+            alias: String::new(),
+        }
+    }
+
+    #[test]
+    fn clear_all_data_wipes_records_media_tags_and_histories() {
+        let (db, dir) = temp_db();
+        // Media filenames must match the import guard (media/<64-hex>.png).
+        let media_hash = "a".repeat(64);
+        let media_rel = format!("media/{media_hash}.png");
+        let thumb_rel = format!("media/thumbs/{media_hash}.jpg");
+
+        // Media files on disk referenced by one record.
+        std::fs::create_dir_all(dir.join("media/thumbs")).unwrap();
+        std::fs::write(dir.join(&media_rel), b"png").unwrap();
+        std::fs::write(dir.join(&thumb_rel), b"jpg").unwrap();
+
+        let mut img = make_record("image copy", "img-hash", false);
+        img.media_path = Some(media_rel.clone());
+        img.thumb_path = Some(thumb_rel.clone());
+        let mut trashed = make_record("deleted", "trash-hash", true);
+        trashed.is_pinned = true;
+        db.import_records_with_merge(
+            &[make_record("hello", "txt-hash", false), img, trashed],
+            100,
+            None,
+        )
+        .unwrap();
+
+        // A tag + assignment, search history, sync history, tombstone + ack.
+        let tag_id = db.create_tag("user-tag", "#ff0000").unwrap();
+        let records = db.get_records_for_export(10, 0).unwrap();
+        let record_id = records[0].id;
+        db.set_record_tags(record_id, &[tag_id]).unwrap();
+        db.record_search_history("clipboard").unwrap();
+        db.insert_sync_history("sync", true, 1, 0, 0, 0, 0, 0, 0, 0, None)
+            .unwrap();
+        db.upsert_tombstone("txt-hash", "2026-02-01T00:00:00Z", false)
+            .unwrap();
+        db.apply_remote_tombstones(&[("remote-hash".into(), "2026-02-02T00:00:00Z".into())])
+            .unwrap(); // sets the ack watermark
+
+        // App settings must survive — store one.
+        db.conn
+            .lock()
+            .execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_keep_me', '1')",
+                [],
+            )
+            .unwrap();
+
+        db.clear_all_data().unwrap();
+
+        // Records (active + trash + favorites) all gone.
+        assert!(db.get_records_for_export(10, 0).unwrap().is_empty());
+        assert_eq!(db.get_trash_count().unwrap(), 0);
+        // Media files deleted from disk.
+        assert!(!dir.join(&media_rel).exists());
+        assert!(!dir.join(&thumb_rel).exists());
+        // Tags: only the re-seeded defaults remain (no user tag, no assignments).
+        let tags = db.get_all_tags(None, false).unwrap();
+        assert!(tags.len() == 5);
+        assert!(!tags.iter().any(|t| t.name == "user-tag"));
+        assert!(tags.iter().all(|t| t.count == 0));
+        // Histories emptied.
+        assert!(db.get_search_history(10).unwrap().is_empty());
+        assert!(db.get_sync_history(10).unwrap().is_empty());
+        // WebDAV tombstone state reset.
+        assert!(db.get_sync_tombstones().unwrap().is_empty());
+        assert!(db.get_tombstone_ack().unwrap().is_none());
+        // App settings survive.
+        let kept: Option<String> = db
+            .conn
+            .lock()
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'app_keep_me'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        assert_eq!(kept.as_deref(), Some("1"));
+
+        // Import re-derives text hashes; the seeded records use fake hashes, so
+        // assert emptiness directly instead of via hash lookups.
+        let count: i64 = db
+            .conn
+            .lock()
+            .query_row("SELECT COUNT(*) FROM records", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+
+        cleanup(dir);
+    }
+
+    #[test]
+    fn clear_all_data_is_idempotent_on_empty_db() {
+        let (db, dir) = temp_db();
+        db.clear_all_data().unwrap();
+        db.clear_all_data().unwrap();
+        assert!(db.get_records_for_export(10, 0).unwrap().is_empty());
+        cleanup(dir);
+    }
+
+    #[test]
+    fn clear_all_data_does_not_write_tombstones() {
+        let (db, dir) = temp_db();
+        let mut sensitive = make_record("sensitive copy", "sens-hash", false);
+        sensitive.is_sensitive = true;
+        db.import_records_with_merge(&[sensitive], 100, None)
+            .unwrap();
+        db.clear_all_data().unwrap();
+        // A fresh-slate wipe must not publish deletions for cleared records.
+        assert!(db.get_sync_tombstones().unwrap().is_empty());
+        cleanup(dir);
     }
 }

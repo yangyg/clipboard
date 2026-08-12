@@ -42,6 +42,18 @@
       </div>
       <span class="kbd-display">{{ formatBytes(stats?.storage_bytes ?? 0) }}</span>
     </div>
+
+    <div class="settings-section-title" style="margin-top: 1.25rem">{{ $t('settings.data.dangerZone') }}</div>
+    <div class="data-card">
+      <div>
+        <div class="setting-label">{{ $t('settings.data.clearAllTitle') }}</div>
+        <div class="setting-desc">{{ $t('settings.data.clearAllDesc') }}</div>
+      </div>
+      <button class="btn btn-danger" :disabled="isClearing" @click="clearAllData">
+        <AppIcon v-if="!isClearing" name="trash" :size="13" />
+        {{ isClearing ? $t('settings.data.clearingAll') : $t('settings.data.clearAllBtn') }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -51,9 +63,13 @@ import { useI18n } from "vue-i18n";
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useClipboardStore } from "../../stores/clipboard";
+import { useConfirm } from "../../composables/useConfirm";
+import { useToast } from "../../composables/useToast";
 import AppIcon from "../icons/AppIcon.vue";
 
 const clipboardStore = useClipboardStore();
+const { confirm } = useConfirm();
+const { toast } = useToast();
 const { t } = useI18n();
 
 const stats = computed(() => clipboardStore.stats);
@@ -64,6 +80,7 @@ const importStatus = ref("");
 const importStatusKind = ref<"success" | "error" | "">("");
 const isExporting = ref(false);
 const isImporting = ref(false);
+const isClearing = ref(false);
 
 async function exportData() {
   exportStatus.value = "";
@@ -108,6 +125,36 @@ async function importData() {
     importStatusKind.value = "error";
   } finally {
     isImporting.value = false;
+  }
+}
+
+async function clearAllData() {
+  const ok = await confirm({
+    title: t('confirm.clearAllTitle'),
+    message: t('confirm.clearAllMsg'),
+    confirmText: t('confirm.clearAllConfirm'),
+    cancelText: t('common.cancel'),
+    danger: true,
+  });
+  if (!ok) return;
+  isClearing.value = true;
+  try {
+    await invoke("clear_all_data");
+    // Refresh every store-backed facet that the wipe touches (records, tags,
+    // stats incl. the storage card, trash count). Search history reloads on
+    // the next WindowApp mount (SearchBar re-runs loadHistory).
+    await Promise.all([
+      clipboardStore.loadRecords(),
+      clipboardStore.loadTags(),
+      clipboardStore.loadStats(),
+      clipboardStore.loadTrashCount(),
+    ]);
+    toast(t('confirm.dataCleared'), "success");
+  } catch (e) {
+    console.error("Clear all data failed:", e);
+    toast(t('confirm.clearAllFailed'), "error");
+  } finally {
+    isClearing.value = false;
   }
 }
 

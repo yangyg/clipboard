@@ -116,6 +116,14 @@ pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
     state.db.clear_non_favorite().map_err(|e| e.to_string())
 }
 
+/// Wipe all clipboard data (records incl. favorites/pinned/trash, media files,
+/// tags, search/sync history, WebDAV tombstones + ack watermark). App settings
+/// survive; no tombstones are written so the next WebDAV pull joins fresh.
+#[tauri::command]
+pub async fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
+    state.db.clear_all_data().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
     require_feature(

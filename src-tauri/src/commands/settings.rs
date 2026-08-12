@@ -6,9 +6,12 @@ use tracing::{info, warn};
 use crate::window;
 use crate::{AppState, Settings};
 
+use super::spawn_db;
+
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<Settings, String> {
-    let arc = state.db.get_settings().map_err(|e| e.to_string())?;
+    let db = state.db.clone();
+    let arc = spawn_db(move || db.get_settings()).await?;
     Ok((*arc).clone())
 }
 
@@ -18,7 +21,8 @@ pub async fn save_settings(
     state: State<'_, AppState>,
     mut settings: Settings,
 ) -> Result<(), String> {
-    let previous = state.db.get_settings().map_err(|e| e.to_string())?;
+    let db = state.db.clone();
+    let previous = spawn_db(move || db.get_settings()).await?;
     let autostart_changed = settings.auto_start != previous.auto_start;
     let shortcut_changed = settings.global_shortcut != previous.global_shortcut;
 
@@ -32,12 +36,13 @@ pub async fn save_settings(
     }
 
     if settings.retention_days != previous.retention_days {
-        state
-            .db
-            .cleanup_retention(settings.retention_days)
-            .map_err(|e| e.to_string())?;
+        let db = state.db.clone();
+        let days = settings.retention_days;
+        spawn_db(move || db.cleanup_retention(days)).await?;
     }
-    if let Err(e) = state.db.save_settings(&settings) {
+    let db = state.db.clone();
+    let settings_for_db = settings.clone();
+    if let Err(e) = spawn_db(move || db.save_settings(&settings_for_db)).await {
         if autostart_changed {
             if let Err(revert_err) = apply_autostart(&app, previous.auto_start) {
                 warn!(
@@ -46,7 +51,7 @@ pub async fn save_settings(
                 );
             }
         }
-        return Err(e.to_string());
+        return Err(e);
     }
 
     if shortcut_changed {

@@ -3,6 +3,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::AppState;
 
+use super::spawn_db;
+
 #[derive(serde::Serialize, Clone)]
 pub struct TrayMenuState {
     pub paused: bool,
@@ -16,7 +18,8 @@ pub struct TrayMenuState {
 
 #[tauri::command]
 pub async fn get_tray_menu_state(state: State<'_, AppState>) -> Result<TrayMenuState, String> {
-    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    let db = state.db.clone();
+    let settings = spawn_db(move || db.get_settings()).await?;
     Ok(TrayMenuState {
         paused: *state.capture_paused.read(),
         theme: settings.theme.clone(),

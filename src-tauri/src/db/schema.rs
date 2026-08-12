@@ -6,7 +6,7 @@ use super::ClipboardDb;
 /// Increment when adding tables, columns, or indexes that older DBs must migrate.
 /// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
 /// the on-disk schema matches what this binary expects.
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 
 /// Default tag definitions seeded on schema init and re-seeded after
 /// `clear_all_data` so a fresh slate still ships the built-in tags.
@@ -125,8 +125,40 @@ impl ClipboardDb {
         // Runs here (after the `settings` table exists) so the one-shot flag has
         // somewhere to live.
         Self::migrate_keyset_indexes(conn)?;
+        // v8: the default list ORDER BY is `is_pinned DESC, updated_at DESC,
+        // id DESC`; v2's index stored is_pinned ascending, so the planner could
+        // not serve the ORDER BY in a single direction and fell back to a full
+        // temp B-tree sort (tens of ms at 50k+ rows). Store is_pinned
+        // descending so page-1 and keyset queries stop after LIMIT rows.
+        Self::migrate_list_order_index(conn)?;
         // Runs AFTER the `settings` table exists (its one-shot gate lives there).
         Self::enforce_active_hash_uniqueness(conn)?;
+        Ok(())
+    }
+
+    /// One-shot (`list_order_index_v3`): rebuild the main list index with the
+    /// pinned column stored descending so the default ORDER BY
+    /// `is_pinned DESC, updated_at DESC, id DESC` matches the index exactly
+    /// (equality on `is_trashed`). The v2 shape could only match is_pinned in
+    /// the ascending direction, forcing `USE TEMP B-TREE FOR LAST TERM OF
+    /// ORDER BY` on every first page.
+    fn migrate_list_order_index(conn: &Connection) -> SqlResult<()> {
+        let done: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'list_order_index_v3'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if done.as_deref() == Some("1") {
+            return Ok(());
+        }
+        conn.execute_batch(
+            "DROP INDEX IF EXISTS idx_records_trashed_pinned_updated;
+             CREATE INDEX idx_records_trashed_pinned_updated
+                 ON records(is_trashed, is_pinned DESC, updated_at DESC, id DESC);
+             INSERT OR REPLACE INTO settings (key, value) VALUES ('list_order_index_v3', '1');",
+        )?;
         Ok(())
     }
 

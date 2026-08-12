@@ -1,5 +1,7 @@
+use image::codecs::jpeg::JpegEncoder;
+use image::codecs::png::{CompressionType as PngCompression, FilterType as PngFilter};
 use image::imageops::FilterType;
-use image::{ImageEncoder, ImageFormat};
+use image::ImageEncoder;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -151,7 +153,16 @@ pub fn store_clipboard_image(
     // Main PNG
     let encode_png = || {
         let mut buf = Cursor::new(Vec::new());
-        let encoder = image::codecs::png::PngEncoder::new(&mut buf);
+        // Fast + no per-scanline filtering: image 0.25's default compression is
+        // already `Fast`, so the win is skipping the adaptive filter pass
+        // (~40-70% faster encode at ~10-30% larger files on photographic
+        // content). Bounded by MAX_EDGE 2560, the size delta is acceptable for
+        // capture latency; measured in docs/perf.md.
+        let encoder = image::codecs::png::PngEncoder::new_with_quality(
+            &mut buf,
+            PngCompression::Fast,
+            PngFilter::NoFilter,
+        );
         encoder
             .write_image(img.as_raw(), out_w, out_h, image::ColorType::Rgba8.into())
             .map_err(|e| format!("PNG encode error: {e}"))?;
@@ -167,7 +178,11 @@ pub fn store_clipboard_image(
         let thumb = image::imageops::resize(&img, tw, th, FilterType::Triangle);
         let rgb = image::DynamicImage::ImageRgba8(thumb).to_rgb8();
         let mut buf = Cursor::new(Vec::new());
-        rgb.write_to(&mut buf, ImageFormat::Jpeg)
+        // Explicit quality 82 (was the crate default ~80) — slightly better
+        // quality for the same encode cost; thumbs are 160px so this is cheap.
+        let encoder = JpegEncoder::new_with_quality(&mut buf, 82);
+        encoder
+            .write_image(rgb.as_raw(), tw, th, image::ColorType::Rgb8.into())
             .map_err(|e| format!("JPEG thumb encode error: {e}"))?;
         fs::write(&thumb_abs, buf.into_inner()).map_err(|e| e.to_string())
     };
@@ -353,6 +368,7 @@ pub fn load_image_rgba(
 #[cfg(test)]
 mod tests {
     use super::delete_media_files;
+    use super::store_clipboard_image;
 
     #[test]
     fn delete_media_files_removes_the_requested_files() {
@@ -372,6 +388,38 @@ mod tests {
 
         assert!(!dir.join("media/hash.png").exists());
         assert!(!dir.join("media/thumbs/hash.jpg").exists());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn fast_encoded_png_and_thumb_are_decodable_with_correct_dims() {
+        let dir = std::env::temp_dir().join(format!(
+            "clipvault_media_fast_enc_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("media/thumbs")).unwrap();
+
+        let w = 320u32;
+        let h = 200u32;
+        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                rgba.extend_from_slice(&[x as u8, y as u8, (x ^ y) as u8, 255]);
+            }
+        }
+        let stored =
+            store_clipboard_image(&dir, rgba, w, h, "aabbccddeeff00112233445566778899").unwrap();
+        assert!(stored.created);
+
+        let media = image::open(dir.join(&stored.media_path)).unwrap();
+        assert_eq!((media.width(), media.height()), (w, h));
+        let thumb = image::open(dir.join(&stored.thumb_path)).unwrap();
+        assert!(thumb.width() <= 160 && thumb.height() <= 160);
+
         let _ = std::fs::remove_dir_all(dir);
     }
 }

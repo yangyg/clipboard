@@ -14,7 +14,7 @@ use crate::clipboard::ClipboardMonitor;
 use crate::commands;
 use crate::db::ClipboardDb;
 use crate::panel::apply_global_shortcut;
-use crate::{tray, window};
+use crate::{tray, window, Settings};
 
 /// Ensure the device identity (sync id + display name) exists before any
 /// capture can stamp records with it. Runs before the capture pipeline starts;
@@ -56,6 +56,18 @@ pub(crate) fn setup(
     // be stamped with its origin.
     ensure_device_identity(&db);
 
+    // One settings snapshot for the whole startup path — `get_settings` is
+    // cached (Arc) after the first read, but reading it once here keeps the
+    // non-critical setup branches (autostart / shortcut / window chrome / blur)
+    // from re-entering the settings cache + DPAPI decrypt path sequentially.
+    let startup_settings = match db.get_settings() {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to load settings for startup setup: {}", e);
+            Arc::new(Settings::default())
+        }
+    };
+
     // ── AI enrichment worker (off the capture hot path) ──
     let ai_tx = ai::start_ai_worker(app_handle.clone(), db.clone());
 
@@ -70,22 +82,12 @@ pub(crate) fn setup(
 
     // ── Non-critical setup (autostart, shortcut, tray, theme, window) ──
 
-    // Sync OS autostart with persisted setting; skip if settings cannot be loaded
-    match db.get_settings() {
-        Ok(startup_settings) => {
-            if let Err(e) = commands::apply_autostart(&app_handle, startup_settings.auto_start) {
-                warn!("Startup autostart sync failed: {}", e);
-            }
-        }
-        Err(e) => {
-            error!("Failed to load settings for autostart sync: {}", e);
-        }
+    // Sync OS autostart with persisted setting; failures are logged, never fatal.
+    if let Err(e) = commands::apply_autostart(&app_handle, startup_settings.auto_start) {
+        warn!("Startup autostart sync failed: {}", e);
     }
 
-    let shortcut = db
-        .get_settings()
-        .map(|s| s.global_shortcut.clone())
-        .unwrap_or_else(|_| "Ctrl+Shift+V".into());
+    let shortcut = startup_settings.global_shortcut.clone();
     if let Err(e) = apply_global_shortcut(app.handle(), &shortcut) {
         warn!("Failed to register global shortcut {}: {}", shortcut, e);
         let shortcut_label = shortcut.clone();
@@ -112,30 +114,21 @@ pub(crate) fn setup(
     // and apply single-window-mode chrome (always-on-top flag + remembered size).
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_shadow(false);
-        match db.get_settings() {
-            Ok(settings) => {
-                let _ = window.set_always_on_top(settings.always_on_top);
-                let (min_w, min_h, _, _) = window::mode_size_bounds();
-                let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
-                    min_w, min_h,
-                ))));
-                let (w, h) = window::resolve_panel_size(&window, &settings);
-                window::SIZE_SAVE_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
-                let _ = window::apply_window_round_corners(&window, settings.panel_radius);
-            }
-            Err(e) => {
-                error!("Failed to load settings for window chrome: {}", e);
-                let radius = db.get_settings().map(|s| s.panel_radius).unwrap_or(20);
-                if let Err(e) = window::apply_window_round_corners(&window, radius) {
-                    warn!("Failed to apply window round corners: {}", e);
-                }
-            }
+        let _ = window.set_always_on_top(startup_settings.always_on_top);
+        let (min_w, min_h, _, _) = window::mode_size_bounds();
+        let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
+            min_w, min_h,
+        ))));
+        let (w, h) = window::resolve_panel_size(&window, &startup_settings);
+        window::SIZE_SAVE_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
+        if let Err(e) = window::apply_window_round_corners(&window, startup_settings.panel_radius) {
+            warn!("Failed to apply window round corners: {}", e);
         }
     }
 
     // Apply native frosted-glass backdrop from persisted 毛玻璃 setting.
-    let blur_enabled = db.get_settings().map(|s| s.enable_blur).unwrap_or(false);
+    let blur_enabled = startup_settings.enable_blur;
     if let Some(window) = app.get_webview_window("main") {
         if let Err(e) = window::apply_window_backdrop(&window, blur_enabled) {
             warn!("Failed to apply window backdrop: {}", e);

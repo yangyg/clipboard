@@ -45,3 +45,22 @@ pub(crate) const MAX_BATCH_IDS: usize = 1000;
 pub(crate) fn cap_ids(ids: Vec<i64>) -> Vec<i64> {
     ids.into_iter().take(MAX_BATCH_IDS).collect()
 }
+
+/// Run a blocking database operation on the tokio blocking pool.
+///
+/// Tauri async commands otherwise execute their body on async worker threads;
+/// rusqlite calls are blocking, so a slow query (or a capture insert holding
+/// the write lock) would occupy an async worker and stall unrelated IPC.
+/// `spawn_blocking` moves the DB work to the dedicated blocking pool while the
+/// command future just awaits the join handle.
+pub(crate) async fn spawn_db<F, T, E>(f: F) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, E> + Send + 'static,
+    T: Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+{
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("database task failed: {e}"))?
+        .map_err(|e| e.to_string())
+}

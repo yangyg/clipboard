@@ -299,3 +299,76 @@ fn deleting_tag_removes_it_from_full_text_search() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn get_all_tags_serves_ttl_cache_and_invalidates_on_mutation() {
+    let dir = std::env::temp_dir().join(format!(
+        "clipvault_tag_cache_test_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let record = ClipboardRecord {
+        id: 0,
+        content: "cache test".into(),
+        content_type: "text".into(),
+        source_app: String::new(),
+        source_window: String::new(),
+        source_name: String::new(),
+        source_device_id: String::new(),
+        hash: "hash-tag-cache".into(),
+        copy_count: 0,
+        is_favorite: false,
+        is_pinned: false,
+        is_sensitive: false,
+        is_trashed: false,
+        auto_expire_at: None,
+        created_at: now.clone(),
+        updated_at: now,
+        tags: vec![],
+        content_html: None,
+        media_path: None,
+        thumb_path: None,
+        width: None,
+        height: None,
+        media_abs: None,
+        thumb_abs: None,
+        content_len: None,
+        alias: String::new(),
+    };
+    db.import_records_with_merge(&[record], 100, None).unwrap();
+    let record_id = db.get_records_for_export(10, 0).unwrap()[0].id;
+    let tag_id = db.create_tag("cache-tag", "#ef4444").unwrap();
+    db.add_tag_to_record(record_id, tag_id).unwrap();
+
+    // Repeated identical reads return identical data (TTL cache hit).
+    let first = db.get_all_tags(None, false).unwrap();
+    let second = db.get_all_tags(None, false).unwrap();
+    assert_eq!(first.len(), second.len());
+    let names = |tags: &[crate::TagInfo]| tags.iter().map(|t| t.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&first), names(&second));
+
+    // A mutation (create_tag) bumps the epoch; the next read sees the new tag.
+    let before = db.get_all_tags(None, false).unwrap().len();
+    db.create_tag("cache-bust", "#22c55e").unwrap();
+    let after = db.get_all_tags(None, false).unwrap();
+    assert_eq!(after.len(), before + 1);
+    assert!(after.iter().any(|t| t.name == "cache-bust"));
+
+    // Distinct filter keys are cached independently.
+    let fav_a = db.get_all_tags(None, true).unwrap();
+    let fav_b = db.get_all_tags(None, true).unwrap();
+    assert_eq!(names(&fav_a), names(&fav_b));
+    assert_eq!(fav_a.len(), db.get_all_tags(None, false).unwrap().len());
+
+    for name in ["test.db", "test.db-wal", "test.db-shm"] {
+        let _ = std::fs::remove_file(dir.join(name));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}

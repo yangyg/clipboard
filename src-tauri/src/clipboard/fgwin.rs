@@ -189,31 +189,59 @@ fn decode_file_description(wide_desc: &[u16]) -> Option<String> {
     }
 }
 
-/// Cache friendly names per full exe path (bounded) so switching between the
-/// same apps doesn't re-read the version resource on every TTL expiry.
+/// Friendly-name cache state, module-scoped so unit tests can inspect it.
+#[cfg(windows)]
+struct FriendlyCache {
+    map: std::collections::HashMap<String, String>,
+    /// LRU order: oldest first, most-recently-used last.
+    order: Vec<String>,
+}
+
+#[cfg(windows)]
+static CACHE: std::sync::Mutex<Option<FriendlyCache>> = std::sync::Mutex::new(None);
+#[cfg(windows)]
+const MAX_ENTRIES: usize = 64;
+
+/// Cache friendly names per full exe path (bounded LRU) so switching between
+/// the same apps doesn't re-read the version resource on every TTL expiry.
+/// The version-resource read is disk I/O — it must never happen while holding
+/// the cache lock (the original design blocked the capture poll thread on the
+/// first capture from each app).
 #[cfg(windows)]
 fn friendly_name_for_path(path: &str) -> String {
-    use std::collections::HashMap;
-    use std::sync::Mutex;
-
-    static CACHE: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
-    const MAX_ENTRIES: usize = 512;
-
-    match CACHE.lock() {
-        Ok(mut guard) => {
-            let map = guard.get_or_insert_with(HashMap::new);
-            if let Some(name) = map.get(path) {
-                return name.clone();
+    // Fast path: pure map lookup + LRU reorder under the lock (no I/O).
+    if let Ok(mut guard) = CACHE.lock() {
+        if let Some(cache) = guard.as_mut() {
+            if let Some(name) = cache.map.get(path).cloned() {
+                if let Some(pos) = cache.order.iter().position(|p| p == path) {
+                    cache.order.remove(pos);
+                    cache.order.push(path.to_string());
+                }
+                return name;
             }
-            let name = read_file_description(path).unwrap_or_default();
-            if map.len() >= MAX_ENTRIES {
-                map.clear();
-            }
-            map.insert(path.to_string(), name.clone());
-            name
         }
-        Err(_) => read_file_description(path).unwrap_or_default(),
     }
+
+    // Slow path: read the version resource WITHOUT holding the cache lock, so
+    // concurrent captures never block on this disk I/O.
+    let name = read_file_description(path).unwrap_or_default();
+    if let Ok(mut guard) = CACHE.lock() {
+        let cache = guard.get_or_insert_with(|| FriendlyCache {
+            map: std::collections::HashMap::new(),
+            order: Vec::new(),
+        });
+        if !cache.map.contains_key(path) {
+            if cache.map.len() >= MAX_ENTRIES {
+                if let Some(oldest) = cache.order.first().cloned() {
+                    cache.map.remove(&oldest);
+                    cache.order.remove(0);
+                }
+            }
+            cache.map.insert(path.to_string(), name.clone());
+            cache.order.push(path.to_string());
+        }
+    }
+    name
 }
 
 #[cfg(not(windows))]
@@ -231,5 +259,34 @@ mod tests {
             super::decode_file_description(&description),
             Some("OpenCode 中文".to_string())
         );
+    }
+
+    #[test]
+    fn friendly_name_cache_is_bounded_and_lrus() {
+        use super::{friendly_name_for_path, CACHE};
+
+        // Fill past capacity with distinct (nonexistent → empty) paths.
+        for i in 0..80 {
+            friendly_name_for_path(&format!("C:\\nonexistent\\app-{i}.exe"));
+        }
+        let guard = CACHE.lock().unwrap();
+        let cache = guard.as_ref().expect("cache initialized");
+        assert!(cache.map.len() <= super::MAX_ENTRIES);
+        assert_eq!(cache.map.len(), cache.order.len());
+        // LRU: the first 16 entries (80 - 64) must have been evicted.
+        assert!(!cache.map.contains_key("C:\\nonexistent\\app-0.exe"));
+        assert!(!cache.map.contains_key("C:\\nonexistent\\app-15.exe"));
+        // The most recent entries are still resident.
+        assert!(cache.map.contains_key("C:\\nonexistent\\app-79.exe"));
+        drop(guard);
+
+        // Re-touch an old-but-resident entry; it must survive the next eviction.
+        friendly_name_for_path("C:\\nonexistent\\app-16.exe");
+        for i in 80..90 {
+            friendly_name_for_path(&format!("C:\\nonexistent\\app-{i}.exe"));
+        }
+        let guard = CACHE.lock().unwrap();
+        let cache = guard.as_ref().unwrap();
+        assert!(cache.map.contains_key("C:\\nonexistent\\app-16.exe"));
     }
 }

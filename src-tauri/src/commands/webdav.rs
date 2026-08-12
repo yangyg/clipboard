@@ -6,6 +6,8 @@ use tauri::State;
 use crate::webdav::WebDavSyncResult;
 use crate::{require_feature, AppState, FeatureId, SyncHistoryEntry};
 
+use super::spawn_db;
+
 fn log_sync_ok(db: &crate::db::ClipboardDb, action: &str, r: &WebDavSyncResult) {
     let _ = db.insert_sync_history(
         action,
@@ -79,15 +81,14 @@ pub async fn get_sync_history(
 ) -> Result<Vec<SyncHistoryEntry>, String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
     require_feature(&settings, FeatureId::Sync)?;
-    state
-        .db
-        .get_sync_history(limit.unwrap_or(20))
-        .map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.get_sync_history(limit.unwrap_or(20))).await
 }
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn clear_sync_history(state: State<'_, AppState>) -> Result<(), String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
     require_feature(&settings, FeatureId::Sync)?;
-    state.db.clear_sync_history().map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.clear_sync_history()).await
 }

@@ -350,6 +350,7 @@ impl ClipboardDb {
         conn.execute("DELETE FROM tags", [])?;
         // Re-seed the built-in defaults so a fresh slate still ships them.
         conn.execute_batch(DEFAULT_TAGS_INSERT)?;
+        super::tags::bump_tag_epoch();
         conn.execute("DELETE FROM search_history", [])?;
         conn.execute("DELETE FROM sync_history", [])?;
         conn.execute("DELETE FROM sync_tombstones", [])?;

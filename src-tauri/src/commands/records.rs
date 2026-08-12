@@ -4,7 +4,7 @@ use tauri::State;
 use crate::security;
 use crate::{require_feature, AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult};
 
-use super::{cap_ids, settings_features, MAX_PAGE_SIZE};
+use super::{cap_ids, settings_features, spawn_db, MAX_PAGE_SIZE};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn get_records(
@@ -20,14 +20,15 @@ pub async fn get_records(
     before_updated_at: Option<String>,
     before_id: Option<i64>,
 ) -> Result<RecordsPage, String> {
+    let perf_start = std::time::Instant::now();
     // Cleanup runs on the periodic thread — keep list reads off the hot path.
     // Bound `limit` so a compromised webview can't materialize every record.
     let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let include_tags = settings_features(&state)?.tags;
-    let records = state
-        .db
-        .get_records(
+    let db = state.db.clone();
+    let records = spawn_db(move || {
+        db.get_records(
             limit,
             offset,
             trashed.unwrap_or(false),
@@ -40,8 +41,11 @@ pub async fn get_records(
             before_id,
             include_tags,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+    })
+    .await?;
     let has_more = records.len() as i32 >= limit;
+    crate::perf::log_elapsed("get_records", perf_start);
     Ok(RecordsPage { records, has_more })
 }
 
@@ -63,10 +67,11 @@ pub async fn search_records(
     let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let include_tags = settings_features(&state)?.tags;
-    let records = state
-        .db
-        .search_records(
-            &query,
+    let db = state.db.clone();
+    let query_for_db = query.clone();
+    let records = spawn_db(move || {
+        db.search_records(
+            &query_for_db,
             limit,
             offset,
             content_type.as_deref(),
@@ -78,11 +83,14 @@ pub async fn search_records(
             before_updated_at.as_deref(),
             before_id,
         )
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+    })
+    .await?;
     let has_more = records.len() as i32 >= limit;
     // `total` is this page's length (not a global hit count) — kept for API compat.
     let total = records.len();
     let elapsed_ms = start.elapsed().as_millis() as u64;
+    crate::perf::log_elapsed("search_records", start);
     Ok(SearchResult {
         records,
         total,
@@ -97,7 +105,8 @@ pub async fn get_record(
     state: State<'_, AppState>,
     id: i64,
 ) -> Result<Option<ClipboardRecord>, String> {
-    state.db.get_record(id).map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.get_record(id)).await
 }
 
 /// Batch full-row read in a single IN query — replaces N concurrent
@@ -108,13 +117,15 @@ pub async fn get_records_by_ids(
     ids: Vec<i64>,
 ) -> Result<Vec<ClipboardRecord>, String> {
     let ids = cap_ids(ids);
-    state.db.get_records_by_ids(&ids).map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.get_records_by_ids(&ids)).await
 }
 
 /// Open a record's media file with the OS default app (Photos, etc.).
 #[tauri::command]
 pub async fn open_record_media(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    let record = state.db.get_record(id).map_err(|e| e.to_string())?;
+    let db = state.db.clone();
+    let record = spawn_db(move || db.get_record(id)).await?;
     let Some(r) = record else {
         return Err("记录不存在".into());
     };
@@ -173,7 +184,8 @@ pub async fn open_url(url: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn delete_record(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.trash_record(id).map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.trash_record(id)).await
 }
 
 #[tauri::command]
@@ -185,15 +197,15 @@ pub async fn delete_records_batch(
         &(*state.db.get_settings().map_err(|e| e.to_string())?),
         FeatureId::Batch,
     )?;
-    state
-        .db
-        .trash_records_batch(&cap_ids(ids))
-        .map_err(|e| e.to_string())
+    let ids = cap_ids(ids);
+    let db = state.db.clone();
+    spawn_db(move || db.trash_records_batch(&ids)).await
 }
 
 #[tauri::command]
 pub async fn restore_record(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state.db.restore_record(id).map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.restore_record(id)).await
 }
 
 #[tauri::command]
@@ -205,18 +217,15 @@ pub async fn restore_records_batch(
         &(*state.db.get_settings().map_err(|e| e.to_string())?),
         FeatureId::Batch,
     )?;
-    state
-        .db
-        .restore_records_batch(&cap_ids(ids))
-        .map_err(|e| e.to_string())
+    let ids = cap_ids(ids);
+    let db = state.db.clone();
+    spawn_db(move || db.restore_records_batch(&ids)).await
 }
 
 #[tauri::command]
 pub async fn permanently_delete_record(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    state
-        .db
-        .permanently_delete_record(id)
-        .map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.permanently_delete_record(id)).await
 }
 
 #[tauri::command]
@@ -228,30 +237,33 @@ pub async fn permanently_delete_records_batch(
         &(*state.db.get_settings().map_err(|e| e.to_string())?),
         FeatureId::Batch,
     )?;
-    state
-        .db
-        .permanently_delete_records_batch(&cap_ids(ids))
-        .map_err(|e| e.to_string())
+    let ids = cap_ids(ids);
+    let db = state.db.clone();
+    spawn_db(move || db.permanently_delete_records_batch(&ids)).await
 }
 
 #[tauri::command]
 pub async fn cleanup_expired(state: State<'_, AppState>) -> Result<Vec<i64>, String> {
-    state.db.cleanup_expired().map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.cleanup_expired()).await
 }
 
 #[tauri::command]
 pub async fn empty_trash(state: State<'_, AppState>) -> Result<usize, String> {
-    state.db.empty_trash().map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.empty_trash()).await
 }
 
 #[tauri::command]
 pub async fn get_trash_count(state: State<'_, AppState>) -> Result<i64, String> {
-    state.db.get_trash_count().map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.get_trash_count()).await
 }
 
 #[tauri::command]
 pub async fn toggle_favorite(state: State<'_, AppState>, id: i64) -> Result<bool, String> {
-    state.db.toggle_favorite(id).map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.toggle_favorite(id)).await
 }
 
 #[tauri::command]
@@ -264,15 +276,15 @@ pub async fn batch_set_favorite(
         &(*state.db.get_settings().map_err(|e| e.to_string())?),
         FeatureId::Batch,
     )?;
-    state
-        .db
-        .batch_set_favorite(&cap_ids(ids), favorite)
-        .map_err(|e| e.to_string())
+    let ids = cap_ids(ids);
+    let db = state.db.clone();
+    spawn_db(move || db.batch_set_favorite(&ids, favorite)).await
 }
 
 #[tauri::command]
 pub async fn toggle_pin(state: State<'_, AppState>, id: i64) -> Result<bool, String> {
-    state.db.toggle_pin(id).map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.toggle_pin(id)).await
 }
 
 #[tauri::command]
@@ -281,8 +293,6 @@ pub async fn set_record_alias(
     id: i64,
     alias: String,
 ) -> Result<String, String> {
-    state
-        .db
-        .set_record_alias(id, &alias)
-        .map_err(|e| e.to_string())
+    let db = state.db.clone();
+    spawn_db(move || db.set_record_alias(id, &alias)).await
 }

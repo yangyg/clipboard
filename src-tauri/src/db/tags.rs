@@ -1,9 +1,35 @@
 //! Tag CRUD, auto-tag rules, and record↔tag links.
 use rusqlite::{params, Connection, Result as SqlResult};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use super::{ClipboardDb, ContentType};
 use crate::{Settings, TagInfo};
+
+/// Monotonic generation counter for the tag graph. Any tag/record-tag
+/// mutation bumps it; `get_all_tags` serves its TTL cache only while the
+/// generation is unchanged, so counts can never go stale even if a write
+/// happens inside the TTL window.
+pub(super) static TAG_EPOCH: AtomicU64 = AtomicU64::new(0);
+
+pub(super) fn bump_tag_epoch() {
+    TAG_EPOCH.fetch_add(1, Ordering::Relaxed);
+}
+
+/// 2s TTL cache for `get_all_tags` keyed by (content_type, favorites_only).
+/// The query is a 3-table aggregate over every record_tag link; during copy
+/// bursts with auto-tag the frontend debounce (350ms) alone still fires it
+/// repeatedly, so the server-side cache absorbs the redundant joins.
+struct TagsCacheEntry {
+    at: Instant,
+    epoch: u64,
+    key: (Option<String>, bool),
+    tags: Vec<TagInfo>,
+}
+
+static TAGS_CACHE: parking_lot::Mutex<Option<TagsCacheEntry>> = parking_lot::Mutex::new(None);
+const TAGS_CACHE_TTL: Duration = Duration::from_secs(2);
 
 /// Fixed 12-color hue wheel (~30° steps). Must stay in sync with
 /// `TAG_PALETTE_HEX` in `src/utils/themeColors.ts`.
@@ -117,6 +143,17 @@ impl ClipboardDb {
         content_type: Option<&str>,
         favorites_only: bool,
     ) -> SqlResult<Vec<TagInfo>> {
+        let key = (content_type.map(str::to_string), favorites_only);
+        let epoch = TAG_EPOCH.load(Ordering::Relaxed);
+        {
+            let cache = TAGS_CACHE.lock();
+            if let Some(entry) = cache.as_ref() {
+                if entry.epoch == epoch && entry.key == key && entry.at.elapsed() < TAGS_CACHE_TTL {
+                    return Ok(entry.tags.clone());
+                }
+            }
+        }
+
         let conn = self.lock_read();
         let mut sql = String::from(
             "SELECT t.id, t.name, t.color, t.is_auto, COUNT(r.id) as cnt
@@ -150,6 +187,13 @@ impl ClipboardDb {
                 })
             })?
             .collect::<SqlResult<Vec<_>>>()?;
+        let mut cache = TAGS_CACHE.lock();
+        *cache = Some(TagsCacheEntry {
+            at: Instant::now(),
+            epoch,
+            key,
+            tags: tags.clone(),
+        });
         Ok(tags)
     }
 
@@ -159,6 +203,7 @@ impl ClipboardDb {
             "INSERT INTO tags (name, color) VALUES (?, ?)",
             params![name, color],
         )?;
+        bump_tag_epoch();
         Ok(conn.last_insert_rowid())
     }
 
@@ -270,6 +315,7 @@ impl ClipboardDb {
             )?;
         }
         fts_dirty.push(record_id);
+        bump_tag_epoch();
         Ok(true)
     }
 
@@ -327,6 +373,7 @@ impl ClipboardDb {
         // Single FTS rebuild after all tags (no per-INSERT triggers).
         Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
+        bump_tag_epoch();
         Ok(())
     }
 
@@ -344,6 +391,7 @@ impl ClipboardDb {
         // One batched FTS rebuild instead of N per-record refreshes.
         Self::refresh_records_fts_batch(&tx, &record_ids)?;
         tx.commit()?;
+        bump_tag_epoch();
         Ok(())
     }
 
@@ -367,6 +415,7 @@ impl ClipboardDb {
                 params![now, id],
             )?;
         }
+        bump_tag_epoch();
         Ok(())
     }
 
@@ -384,6 +433,7 @@ impl ClipboardDb {
         }
         Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
+        bump_tag_epoch();
         Ok(())
     }
 
@@ -399,6 +449,7 @@ impl ClipboardDb {
         }
         Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
+        bump_tag_epoch();
         Ok(())
     }
 
@@ -430,6 +481,7 @@ impl ClipboardDb {
         if old != new {
             Self::touch_record_updated_at(&conn, record_id)?;
         }
+        bump_tag_epoch();
         Ok(())
     }
 
@@ -467,6 +519,7 @@ impl ClipboardDb {
         }
         Self::refresh_record_fts(&tx, record_id)?;
         tx.commit()?;
+        bump_tag_epoch();
         Ok(added)
     }
 }

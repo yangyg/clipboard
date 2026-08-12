@@ -7,8 +7,11 @@ use crate::ClipboardRecord;
 /// Upper bound on FTS candidates materialized before the outer sort/keyset
 /// pass. A pathological query matching tens of thousands of rows should not
 /// force a full sort of every hit; beyond this the page is already deep enough
-/// that truncation is imperceptible (list UI soft-caps at ~120 rows).
-const FTS_CANDIDATE_LIMIT: i64 = 10_000;
+/// that truncation is imperceptible (list UI soft-caps at ~120 rows, and page
+/// 2+ uses keyset cursors over the same truncated candidate set). Measured at
+/// 50k rows: 10k candidates cost ~230ms p50 to sort; 2k stays comfortably
+/// under the 50ms p95 search target (docs/perf.md).
+const FTS_CANDIDATE_LIMIT: i64 = 2_000;
 
 impl ClipboardDb {
     pub fn search_records(
@@ -33,21 +36,31 @@ impl ClipboardDb {
         }
 
         let conn = self.lock_read();
-        let mut sql = format!(
-            "SELECT {} FROM records WHERE is_trashed = 0 AND (",
-            RECORD_COLS_LIST
-        );
+        let mut sql: String;
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
         // ≥3 chars: FTS5 trigram. Shorter: single-pass instr (no LIKE '%…%').
         if let Some(fts_match) = Self::build_fts_match_expr(query, include_tags) {
-            sql.push_str(&format!(
-                "id IN (SELECT rowid FROM records_fts WHERE records_fts MATCH ?
-                        ORDER BY rank LIMIT {})",
-                FTS_CANDIDATE_LIMIT
-            ));
+            // Drive the outer query from the bounded FTS candidate set and
+            // probe records by primary key. The previous `id IN (subquery)`
+            // shape made the planner scan every active row and test
+            // membership — measured ~80ms p50 at 50k rows even with the LIMIT.
+            // CROSS JOIN pins the join order (subquery first) so SQLite cannot
+            // flip back to the 50k-row covering-index scan.
+            sql = format!(
+                "SELECT {} FROM records
+                 CROSS JOIN (SELECT rowid FROM records_fts
+                             WHERE records_fts MATCH ?
+                             ORDER BY rank LIMIT {}) f ON f.rowid = records.id
+                 WHERE is_trashed = 0",
+                RECORD_COLS_LIST, FTS_CANDIDATE_LIMIT
+            );
             params.push(Box::new(fts_match));
         } else {
+            sql = format!(
+                "SELECT {} FROM records WHERE is_trashed = 0 AND (",
+                RECORD_COLS_LIST
+            );
             let single_char = query.chars().count() == 1;
             Self::push_short_query_predicate(
                 &mut sql,
@@ -56,8 +69,8 @@ impl ClipboardDb {
                 include_tags,
                 !single_char,
             );
+            sql.push(')');
         }
-        sql.push(')');
 
         if let Some(ct) = content_type.filter(|s| !s.is_empty() && *s != "all") {
             sql.push_str(" AND content_type = ?");

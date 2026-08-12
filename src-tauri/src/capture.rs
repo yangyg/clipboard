@@ -146,6 +146,7 @@ fn process_text_job(
     app: &tauri::AppHandle,
     ai_tx: &AiJobSender,
 ) {
+    let perf_start = std::time::Instant::now();
     let TextCaptureJob {
         captured,
         source_app,
@@ -208,6 +209,7 @@ fn process_text_job(
                 is_new
             );
             app.emit("clipboard-changed", list_ipc_payload(record)).ok();
+            crate::perf::log_elapsed("capture_text", perf_start);
 
             // AI enrichment (summary → alias + auto tags). Only for fresh
             // inserts of text-ish, non-sensitive records, and only when at
@@ -249,6 +251,7 @@ fn process_image_job(
     media_root: &Path,
     app: &tauri::AppHandle,
 ) {
+    let perf_start = std::time::Instant::now();
     let ImageCaptureJob {
         captured,
         source_app,
@@ -317,6 +320,7 @@ fn process_image_job(
                         id, is_new
                     );
                     app.emit("clipboard-changed", list_ipc_payload(record)).ok();
+                    crate::perf::log_elapsed("capture_image", perf_start);
                 }
                 Err(e) => {
                     warn!("Failed to insert image record: {}", e);

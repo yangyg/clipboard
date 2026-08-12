@@ -12,6 +12,7 @@ use crate::ClipboardRecord;
 
 /// Remember the previous foreground app, then show + focus the main panel.
 pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
+    let perf_start = std::time::Instant::now();
     if let Some(window) = app.get_webview_window("main") {
         let our = window.hwnd().ok().map(|h| h.0 as isize);
         set_our_main_hwnd(our);
@@ -25,6 +26,7 @@ pub(crate) fn show_main_panel(app: &tauri::AppHandle) {
         }
         let _ = app.emit("toggle-panel", true);
     }
+    crate::perf::log_elapsed("panel_show", perf_start);
     // Fallback trigger for the startup history import (also fires via
     // WindowEvent::Focused): the panel is about to be foreground now, so WinRT
     // clipboard-history access will succeed.

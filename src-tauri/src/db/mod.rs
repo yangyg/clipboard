@@ -22,6 +22,9 @@ mod records_write_tests;
 // Same split-out pattern keeps records_import.rs / tags.rs under the cap.
 #[cfg(test)]
 mod records_import_tests;
+// Release-only performance benchmarks (run explicitly with `--ignored perf`).
+#[cfg(test)]
+mod perf_bench;
 mod search_history;
 mod settings;
 mod stats;
@@ -129,14 +132,18 @@ const READ_POOL_SIZE: usize = 3;
 
 impl ClipboardDb {
     fn configure_connection(conn: &Connection, query_only: bool) -> SqlResult<()> {
-        conn.execute_batch(
+        // Readers get a smaller page cache (8MB vs the writer's 16MB): list and
+        // search working sets are a few pages, and with 3 pooled readers this
+        // trims ~24MB of potential RSS without measurable query cost.
+        let cache_kib = if query_only { -8192 } else { -16384 };
+        conn.execute_batch(&format!(
             "PRAGMA journal_mode=WAL;
              PRAGMA synchronous=NORMAL;
              PRAGMA foreign_keys=ON;
              PRAGMA busy_timeout=5000;
-             PRAGMA cache_size=-16384;
-             PRAGMA temp_store=MEMORY;",
-        )?;
+             PRAGMA cache_size={cache_kib};
+             PRAGMA temp_store=MEMORY;"
+        ))?;
         if query_only {
             // Fail loudly if a "read" path accidentally tries to mutate.
             conn.execute_batch("PRAGMA query_only=ON;")?;

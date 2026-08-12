@@ -8,6 +8,7 @@ mod features;
 mod ffi;
 mod media;
 mod panel;
+mod perf;
 mod security;
 mod setup;
 mod tray;
@@ -68,6 +69,7 @@ pub fn run() {
 
     let db_path = app_data_dir.join("clipvault.db");
     media::ensure_dirs(&app_data_dir).ok();
+    let db_init_start = std::time::Instant::now();
     let db = match ClipboardDb::new(&db_path, app_data_dir.clone()) {
         Ok(db) => Arc::new(db),
         Err(e) => {
@@ -76,6 +78,7 @@ pub fn run() {
             std::process::exit(1);
         }
     };
+    perf::log_elapsed("db_init", db_init_start);
     info!("Database initialized at {:?}", db_path);
 
     let monitor = Arc::new(RwLock::new(ClipboardMonitor::new()));

@@ -27,6 +27,7 @@ import { storeToRefs } from "pinia";
 import { useConfirm } from "./composables/useConfirm";
 import { useClipboardEvents } from "./composables/useClipboardEvents";
 import { setLocale, resolveLocale } from "./locales";
+import { perfMark, perfMeasure } from "./utils/perfMarks";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -46,13 +47,19 @@ const appWindow = getCurrentWindow();
 async function reloadPanelIfNeeded(force = false) {
   const now = Date.now();
   const stale = now - lastPanelReloadAt > PANEL_RELOAD_TTL_MS;
-  if (force || stale || clipboardStore.records.length === 0) {
+  // Skip while a prefetch/first load is already in flight — records.length is
+  // still 0 during that window, and a second loadRecords would double-fetch.
+  if (
+    !clipboardStore.isLoading &&
+    (force || stale || clipboardStore.records.length === 0)
+  ) {
     lastPanelReloadAt = now;
     await clipboardStore.loadRecords();
   }
 }
 
 async function showPanel() {
+  perfMark("clipvault:show:start");
   panelVisible.value = true;
   settingsVisible.value = false;
   // Snapshot previous FG before we steal focus (backup for non-Rust show paths).
@@ -67,7 +74,10 @@ async function showPanel() {
   // (blank list on cold start).
   await appWindow.show();
   await appWindow.setFocus();
-  await reloadPanelIfNeeded(false);
+  perfMeasure("clipvault:panel-show", "clipvault:show:start");
+  // 先显后填：首屏数据由启动预取并发加载（或已在 30s 新鲜度窗口内），这里
+  // 不再 await 列表刷新，首次帧不被 IPC 阻塞；loading 态由 RecordList 呈现。
+  void reloadPanelIfNeeded(false);
 }
 
 function hidePanel() {
@@ -111,13 +121,20 @@ useClipboardEvents({
 });
 
 onMounted(async () => {
+  perfMark("clipvault:boot:start");
   // Load settings
   await settingsStore.loadSettings();
   setLocale(resolveLocale(settings.value.language));
 
-  // showPanel() loads records once (avoid a duplicate get_records on cold start)
-  await clipboardStore.loadTags();
-  lastPanelReloadAt = 0; // force first load
+  // 首屏并行预取：记录 / 标签 / 回收站数 / 统计同时发起，不阻塞首帧显示。
+  // showPanel 内 reloadPanelIfNeeded 会因 isLoading 跳过，避免重复拉取。
+  lastPanelReloadAt = Date.now();
+  void Promise.allSettled([
+    clipboardStore.loadRecords(),
+    clipboardStore.loadTags(),
+    clipboardStore.loadTrashCount(),
+    clipboardStore.loadStats(),
+  ]);
   await showPanel();
 
   if (!settings.value.onboarding_completed) {

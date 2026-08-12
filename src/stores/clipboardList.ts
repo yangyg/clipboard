@@ -10,6 +10,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Ref } from "vue";
 import type { ClipboardRecord, RecordsPage, SearchResult } from "../types";
 import { featureEnabled } from "../composables/useFeature";
+import { perfMark, perfMeasure, perfMeasureOnce } from "../utils/perfMarks";
 
 export type { FilterTab } from "../types";
 import type { FilterTab } from "../types";
@@ -69,6 +70,7 @@ export interface ListActionsCtx {
   recordDetails: Ref<Map<number, ClipboardRecord>>;
   viewportFillToken: Ref<number>;
   scheduleLoadStats: () => void;
+  loadStats: () => Promise<void>;
   loadTrashCount: () => Promise<void>;
   /** Late-bound tag reload — breaks the list↔tags construction cycle. */
   scheduleLoadTags: () => void;
@@ -166,19 +168,27 @@ export function createListActions(ctx: ListActionsCtx) {
 
   async function loadRecords() {
     const seq = ++loadSeq;
+    perfMark("clipvault:load-records:start");
     ctx.isLoading.value = true;
     ctx.isLoadingMore.value = false;
     ctx.hasMore.value = true;
     listWindowDirty = false;
     try {
+      // Start the auxiliary IPC concurrently with the page fetch: trash count
+      // and stats were previously awaited serially after get_records, adding a
+      // full round-trip to every first-page load. Each helper swallows its own
+      // errors, so a failure there must not drop the record list.
+      const trashPromise = ctx.loadTrashCount();
+      const statsPromise = ctx.loadStats();
       const page = await invoke<RecordsPage>("get_records", listQueryArgs(0));
       if (seq !== loadSeq) return;
       ctx.records.value = page.records;
+      perfMeasure("clipvault:records-ready", "clipvault:load-records:start");
+      perfMeasureOnce("clipvault:boot-to-records", "clipvault:boot:start");
       ctx.hasMore.value = page.has_more;
       listFetchOffset = page.records.length;
       ctx.recordDetails.value = new Map();
-      ctx.scheduleLoadStats();
-      await ctx.loadTrashCount();
+      await Promise.allSettled([trashPromise, statsPromise]);
       // Preserve selection: re-fetch full detail after list truncated rows replaced cache.
       if (ctx.selectedId.value !== null) {
         void ensureRecordDetail(ctx.selectedId.value);
@@ -276,6 +286,7 @@ export function createListActions(ctx: ListActionsCtx) {
     const seq = loadSeq;
     ctx.isSearching.value = true;
     ctx.isLoading.value = true;
+    perfMark("clipvault:search:start");
     ctx.searchQuery.value = query;
     ctx.hasMore.value = true;
     listWindowDirty = false;
@@ -292,6 +303,7 @@ export function createListActions(ctx: ListActionsCtx) {
         return;
       }
       ctx.records.value = result.records;
+      perfMeasure("clipvault:search-roundtrip", "clipvault:search:start");
       ctx.hasMore.value = result.has_more;
       listFetchOffset = result.records.length;
       ctx.recordDetails.value = new Map();

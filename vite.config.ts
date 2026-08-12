@@ -16,10 +16,24 @@ export default defineConfig({
     },
   },
   build: {
+    target: "chrome120",
     rollupOptions: {
       input: {
         main: resolve(projectRoot, "index.html"),
         trayMenu: resolve(projectRoot, "tray-menu.html"),
+      },
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/[\\/]node_modules\/(vue|@vue|vue-i18n|pinia)[\\/]/.test(id)) {
+            return "vendor-vue";
+          }
+          if (id.includes("lucide-vue-next") || id.includes("@sketchyicons")) {
+            return "vendor-icons";
+          }
+          if (id.includes("dompurify")) return "vendor-sanitize";
+          return "vendor";
+        },
       },
     },
   },

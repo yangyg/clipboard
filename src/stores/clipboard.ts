@@ -135,6 +135,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     recordDetails,
     viewportFillToken,
     scheduleLoadStats,
+    loadStats,
     loadTrashCount,
     scheduleLoadTags: () => tagReload.fn(),
   });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useClipboardStore } from "@/stores/clipboard";
 import type { ClipboardRecord, StatsData } from "@/types";
@@ -368,5 +368,62 @@ describe("clipboardStore — reorderForUpdate / reorderForUpdates (tag-edit re-r
     // Both re-ranked; equal bump timestamps → server orders them id DESC.
     expect(store.records.map((r) => r.id)).toEqual([2, 1, 3]);
     expect(store.records[0].tags).toEqual(["new"]);
+  });
+});
+
+describe("clipboardStore — parallel first-screen load", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it("loads records, trash count, and stats concurrently and applies all results", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_records") {
+        return { records: [makeRecord({ id: 42 })], has_more: false };
+      }
+      if (cmd === "get_trash_count") return 7;
+      if (cmd === "get_stats") {
+        return {
+          total_records: 1,
+          total_copies: 0,
+          favorites_count: 0,
+          pinned_count: 0,
+          sensitive_count: 0,
+          storage_bytes: 0,
+          data_path: "",
+          type_distribution: { text: 1 },
+        } as StatsData;
+      }
+      return undefined;
+    });
+
+    const store = useClipboardStore();
+    await store.loadRecords();
+
+    expect(store.records.map((r) => r.id)).toEqual([42]);
+    expect(store.trashCount).toBe(7);
+    expect(store.stats?.total_records).toBe(1);
+    expect(invokeMock).toHaveBeenCalledWith("get_records", expect.anything());
+    expect(invokeMock).toHaveBeenCalledWith("get_trash_count");
+    expect(invokeMock).toHaveBeenCalledWith("get_stats");
+  });
+
+  it("keeps the record list even when the auxiliary stats call fails", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_records") {
+        return { records: [makeRecord({ id: 1 })], has_more: false };
+      }
+      if (cmd === "get_trash_count") return 0;
+      if (cmd === "get_stats") throw new Error("stats boom");
+      return undefined;
+    });
+
+    const store = useClipboardStore();
+    await store.loadRecords();
+    expect(store.records.map((r) => r.id)).toEqual([1]);
   });
 });

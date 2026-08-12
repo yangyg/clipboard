@@ -8,6 +8,17 @@ use super::ClipboardDb;
 /// the on-disk schema matches what this binary expects.
 const SCHEMA_VERSION: i64 = 7;
 
+/// Default tag definitions seeded on schema init and re-seeded after
+/// `clear_all_data` so a fresh slate still ships the built-in tags.
+/// Shared const — never drift between init and clear-all.
+pub(super) const DEFAULT_TAGS_INSERT: &str =
+    "INSERT OR IGNORE INTO tags (name, color, is_auto) VALUES
+    ('部署', '#22c55e', 1),
+    ('前端', '#6366f1', 1),
+    ('链接', '#eab308', 1),
+    ('重要', '#ef4444', 0),
+    ('设计', '#a855f7', 0);";
+
 /// FTS indexes only the first N chars of `content`. Trigram index size grows
 /// ~3-5x the source text, so a 10MB-cap record would otherwise build a ~30MB
 /// FTS entry and stall the capture write lock. Truncation keeps writes bounded;
@@ -55,7 +66,7 @@ impl ClipboardDb {
             "#,
         )?;
         Self::migrate_schema(conn)?;
-        conn.execute_batch(
+        conn.execute_batch(&format!(
             r#"
             CREATE TABLE IF NOT EXISTS tags (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,14 +116,10 @@ impl ClipboardDb {
             CREATE INDEX IF NOT EXISTS idx_sync_history_synced_at
                 ON sync_history(synced_at DESC);
 
-            INSERT OR IGNORE INTO tags (name, color, is_auto) VALUES
-                ('部署', '#22c55e', 1),
-                ('前端', '#6366f1', 1),
-                ('链接', '#eab308', 1),
-                ('重要', '#ef4444', 0),
-                ('设计', '#a855f7', 0);
+            {DEFAULT_TAGS_INSERT}
             "#,
-        )?;
+            DEFAULT_TAGS_INSERT = DEFAULT_TAGS_INSERT,
+        ))?;
         // v7: keyset pagination orders by (is_pinned, updated_at, id) with an id
         // tiebreak, so the composite indexes must carry id as the last column.
         // Runs here (after the `settings` table exists) so the one-shot flag has

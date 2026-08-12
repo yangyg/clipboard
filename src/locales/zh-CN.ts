@@ -281,6 +281,11 @@ export default {
     clearHistoryConfirm: '清空',
     historyCleared: '历史已清空',
     clearHistoryFailed: '清空失败',
+    clearAllTitle: '清空所有数据',
+    clearAllMsg: '确定要清空所有数据吗？所有记录（含收藏/置顶/回收站）、图片、标签、搜索历史与同步日志都将被永久删除，并重置本地 WebDAV 同步状态。此操作不可恢复，应用设置不受影响。',
+    clearAllConfirm: '清空',
+    dataCleared: '所有数据已清空',
+    clearAllFailed: '清空失败',
   },
   tray: {
     openPanel: '打开面板',
@@ -518,6 +523,11 @@ export default {
       storage: '存储',
       localStorage: '本地存储占用',
       storageDesc: '文本内容估算 + media 图片目录（不含 SQLite 索引开销）',
+      dangerZone: '危险操作',
+      clearAllTitle: '清空所有数据',
+      clearAllDesc: '删除全部记录（含收藏/置顶/回收站）、图片、标签、搜索历史与同步日志，并重置本地 WebDAV 同步状态。应用设置不受影响。',
+      clearAllBtn: '清空所有数据',
+      clearingAll: '清空中…',
     },
     sync: {
       title: 'WebDAV 同步',

@@ -193,19 +193,119 @@ export function useVirtualList(
 
   const gridRows = shallowRef<GridRow[]>([]);
 
-  // Also build on layout switch
-  watch(listLayout, (v) => {
+  // Also build on layout switch. Grid uses fixed card heights (estimates match
+  // CSS), so measurements only apply in list mode.
+  watch(listLayout, async (v) => {
     if (v === "grid") {
       gridRows.value = buildGridRows(flatItems.value);
+    } else {
+      // Keyed rows persist across the switch (no remount → no lifecycle
+      // callback), so re-observe + measure whatever is mounted once list
+      // layout has rendered. Rows mounted during grid mode were never observed.
+      await nextTick();
+      const el = listRef.value;
+      if (el) {
+        for (const t of Array.from(el.querySelectorAll<HTMLElement>(".record-item"))) {
+          const id = Number(t.dataset.recordId);
+          if (Number.isFinite(id)) measureRow(id, t);
+        }
+      }
     }
   });
 
+  /** Measured list-row heights by record id (list layout only). Unmeasured rows
+   * fall back to the `rowHeight` estimate. Keyed by id so a row keeps its real
+   * height across window enter/leave; pruned when its record leaves the list. */
+  const measuredHeights = shallowRef(new Map<number, number>());
+  let rowObserver: ResizeObserver | null = null;
+  /** id → element currently observed (for unobserve on unmount). */
+  const rowObservedEls = new Map<number, HTMLElement>();
+
+  function ensureRowObserver(): ResizeObserver {
+    if (!rowObserver) {
+      rowObserver = new ResizeObserver((entries) => {
+        applyRowMeasurements(entries.map((e) => ({ target: e.target as HTMLElement })));
+      });
+    }
+    return rowObserver;
+  }
+
+  /**
+   * Apply a batch of measured row heights. Only rows whose top sits entirely
+   * above the viewport shift the content the user sees — those adjust
+   * `scrollTop` by the height delta so the viewport does not jump (rows inside
+   * the viewport resize naturally; rows below are invisible to the user).
+   */
+  function applyRowMeasurements(entries: Array<{ target: HTMLElement }>) {
+    if (listLayout.value !== "list") return;
+    const heights = measuredHeights.value;
+    const el = listRef.value;
+    const itemIndex = el ? flatItemIndex.value : null;
+    let next: Map<number, number> | null = null;
+    let scrollDelta = 0;
+    for (const entry of entries) {
+      const id = Number(entry.target.dataset.recordId);
+      if (!Number.isFinite(id)) continue;
+      const h = Math.round(entry.target.offsetHeight);
+      const prev = heights.get(id);
+      if (prev !== undefined && Math.abs(prev - h) < 1) continue;
+      if (!next) next = new Map(heights);
+      next.set(id, h);
+      if (el && prev !== undefined && itemIndex) {
+        const item = itemIndex.get(id);
+        if (item && item.offset + item.height <= el.scrollTop) {
+          scrollDelta += h - prev;
+        }
+      }
+    }
+    if (!next) return;
+    measuredHeights.value = next;
+    if (el && scrollDelta !== 0) {
+      el.scrollTop += scrollDelta;
+      scrollTop.value = el.scrollTop;
+    }
+  }
+
+  /** Host wiring: mount → observe + measure; unmount → unobserve (keeps height). */
+  function measureRow(id: number, el: HTMLElement | null) {
+    if (el) {
+      rowObservedEls.set(id, el);
+      // Grid rows use fixed CSS heights — nothing to measure.
+      if (listLayout.value !== "list") return;
+      ensureRowObserver().observe(el);
+      // Immediate synchronous measure (RO fires on next frame — too late for
+      // the first paint; offsetHeight forces layout and is exact at mount).
+      applyRowMeasurements([{ target: el }]);
+    } else {
+      const prev = rowObservedEls.get(id);
+      if (prev && rowObserver) rowObserver.unobserve(prev);
+      rowObservedEls.delete(id);
+    }
+  }
+
+  /** Drop measurements whose record no longer exists (pagination / filter). */
+  function pruneMeasurements() {
+    const heights = measuredHeights.value;
+    const alive = new Set<number>();
+    for (const r of clipboardStore.filteredRecords) alive.add(r.id);
+    let removed = false;
+    for (const id of heights.keys()) {
+      if (!alive.has(id)) {
+        heights.delete(id);
+        removed = true;
+      }
+    }
+    if (removed) measuredHeights.value = new Map(heights);
+  }
+
   /** M-2: Numeric layout signature — detects id order / pin flags / row height
    * changes without O(N) string concatenation. Uses FNV-style hash (32-bit).
-   * Collision probability negligible for ≤1000 records (list soft cap = 120). */
+   * Collision probability negligible for ≤1000 records (list soft cap = 120).
+   * Folds in measured row heights so a measurement change rebuilds flatItems. */
   const layoutSig = computed(() => {
     const records = clipboardStore.filteredRecords;
-    // Incorporate row heights (change on font-size setting).
+    const heights = measuredHeights.value;
+    // Incorporate row heights (change on font-size setting / measurement).
     let h = rowHeight.value * 2654435761;
     h = (h ^ (labelHeight.value * 40503)) >>> 0;
     h = (h ^ (dividerHeight.value * 12347)) >>> 0;
@@ -217,6 +317,9 @@ export function useVirtualList(
       // Grid cards have type-dependent heights, so a type change must rebuild rows.
       const typeCode = r.content_type === "image" ? 1 : 0;
       h = (h ^ typeCode) >>> 0;
+      // List rows: measured height (or estimate) changes the layout signature.
+      const mh = listLayout.value === "list" ? (heights.get(r.id) ?? rowHeight.value) : rowHeight.value;
+      h = (h ^ Math.round(mh * 2654435761)) >>> 0;
       h = ((h << 5) ^ (h >>> 27)) >>> 0; // rotate-mix
     }
     return h;
@@ -229,6 +332,7 @@ export function useVirtualList(
     const rh = rowHeight.value;
     const lh = labelHeight.value;
     const dh = dividerHeight.value;
+    const heights = measuredHeights.value;
     // Single pass to detect pin partition presence (avoids two O(N) .some() scans).
     let hasPinned = false;
     let hasUnpinned = false;
@@ -248,14 +352,15 @@ export function useVirtualList(
         offset += dh;
         dividerInserted = true;
       }
+      const h = listLayout.value === "list" ? (heights.get(r.id) ?? rh) : rh;
       items.push({
         key: `r-${r.id}`,
         type: "record",
         id: r.id,
-        height: rh,
+        height: h,
         offset,
       });
-      offset += rh;
+      offset += h;
     }
     return items;
   }
@@ -266,7 +371,16 @@ export function useVirtualList(
     return m;
   }
 
+  /** id → FlatItem, for O(1) scroll-anchor lookups in applyRowMeasurements. */
+  function buildFlatItemIndex(items: FlatItem[]): Map<number, FlatItem> {
+    const m = new Map<number, FlatItem>();
+    for (const it of items) if (it.id != null) m.set(it.id, it);
+    return m;
+  }
+
   const flatItems = shallowRef<FlatItem[]>(buildFlatItems());
+  /** id → FlatItem (mirrors flatItems; rebuilt with layout only). */
+  const flatItemIndex = shallowRef(buildFlatItemIndex(flatItems.value));
   /** id → index in filteredRecords; rebuilt with layout only (not on content churn). */
   const recordIndexById = shallowRef(buildRecordIndex());
 
@@ -279,11 +393,13 @@ export function useVirtualList(
 
   watch(layoutSig, () => {
     flatItems.value = buildFlatItems();
+    flatItemIndex.value = buildFlatItemIndex(flatItems.value);
     recordIndexById.value = buildRecordIndex();
     // H-3: Keep grid rows in sync (must run AFTER flatItems + index update).
     if (listLayout.value === "grid") {
       gridRows.value = buildGridRows(flatItems.value);
     }
+    pruneMeasurements();
   });
 
   // Responsive: regroup grid rows whenever the column count changes.
@@ -485,6 +601,11 @@ export function useVirtualList(
       resizeObserver.disconnect();
       resizeObserver = null;
     }
+    if (rowObserver) {
+      rowObserver.disconnect();
+      rowObserver = null;
+    }
+    rowObservedEls.clear();
   });
 
   return {
@@ -496,5 +617,6 @@ export function useVirtualList(
     scrollTop,
     onListScroll,
     fillViewportIfNeeded,
+    measureRow,
   };
 }

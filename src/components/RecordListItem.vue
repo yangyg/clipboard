@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="rootEl"
     :id="`record-option-${record.id}`"
     class="record-item"
     role="option"
@@ -65,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord } from "../types";
 import { escapeHtml } from "../utils/highlightSearch";
@@ -88,7 +89,18 @@ const props = defineProps<{
   isLeaving: boolean;
   searchQuery: string;
   sourceOverrides: Record<string, string>;
+  /** Reports this row's element to the virtualizer (list layout measuring). */
+  measureRow?: (id: number, el: HTMLElement | null) => void;
 }>();
+
+const rootEl = ref<HTMLElement | null>(null);
+
+onMounted(() => {
+  props.measureRow?.(props.record.id, rootEl.value);
+});
+onUnmounted(() => {
+  props.measureRow?.(props.record.id, null);
+});
 
 const hasAlias = computed(() => recordAlias(props.record).length > 0);
 const settingsStore = useSettingsStore();

@@ -281,6 +281,11 @@ export default {
     clearHistoryConfirm: 'Clear',
     historyCleared: 'History cleared',
     clearHistoryFailed: 'Failed to clear',
+    clearAllTitle: 'Clear All Data',
+    clearAllMsg: 'Are you sure you want to clear all data? Every record (including favorites/pinned/trash), image, tag, search history and sync log will be permanently deleted, and the local WebDAV sync state will be reset. This cannot be undone. App settings are not affected.',
+    clearAllConfirm: 'Clear',
+    dataCleared: 'All data cleared',
+    clearAllFailed: 'Failed to clear',
   },
   tray: {
     openPanel: 'Open Panel',
@@ -518,6 +523,11 @@ export default {
       storage: 'Storage',
       localStorage: 'Local Storage Usage',
       storageDesc: 'Text content estimate + media image directory (excluding SQLite index overhead)',
+      dangerZone: 'Danger Zone',
+      clearAllTitle: 'Clear All Data',
+      clearAllDesc: 'Delete every record (including favorites/pinned/trash), image, tag, search history and sync log, and reset the local WebDAV sync state. App settings are not affected.',
+      clearAllBtn: 'Clear All Data',
+      clearingAll: 'Clearing…',
     },
     sync: {
       title: 'WebDAV Sync',

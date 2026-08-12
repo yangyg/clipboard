@@ -20,7 +20,10 @@ use rusqlite::{params, Connection, OptionalExtension, Result as SqlResult};
 
 use super::ClipboardDb;
 
-const ACK_KEY: &str = "webdav_tombstone_ack";
+/// Settings-table key holding the newest remote tombstone this device applied.
+/// `clear_all_data` drops it alongside the tombstone rows so a cleared device
+/// treats the next pull as a fresh join instead of re-propagating deletions.
+pub(super) const ACK_KEY: &str = "webdav_tombstone_ack";
 
 impl ClipboardDb {
     /// Insert or refresh a deletion tombstone. Keeps the *latest* `deleted_at`

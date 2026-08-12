@@ -147,6 +147,7 @@ pub fn run() {
             commands::get_sync_history,
             commands::clear_sync_history,
             commands::clear_history,
+            commands::clear_all_data,
             commands::get_stats,
             commands::set_window_corner_radius,
             commands::set_window_backdrop,

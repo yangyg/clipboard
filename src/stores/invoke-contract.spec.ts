@@ -83,6 +83,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
   export_data: { params: ["path"] },
   import_data_from_path: { params: ["path"] },
   clear_history: { params: [] },
+  clear_all_data: { params: [] },
   webdav_test_connection: { params: [] },
   webdav_pull: { params: [] },
   webdav_push: { params: [] },

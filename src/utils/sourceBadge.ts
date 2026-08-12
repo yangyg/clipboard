@@ -138,3 +138,20 @@ export function resolveDeviceLabel(
   const name = (deviceNames?.[deviceId] ?? "").trim();
   return name ? t("record.fromDevice", { name }) : t("record.otherDevice");
 }
+
+/**
+ * Resolve the tooltip for a device-origin badge. Returns "" when the record
+ * was captured locally (no badge) so callers hide the tooltip. Uses the same
+ * device lookup as `resolveDeviceLabel`; the raw device UUID stays hidden.
+ */
+export function resolveDeviceTooltip(
+  record: Pick<ClipboardRecord, "source_device_id">,
+  deviceNames: Record<string, string> | undefined,
+  localDeviceId: string | undefined,
+  t: TranslateFn,
+): string {
+  const deviceId = (record.source_device_id ?? "").trim();
+  if (!deviceId || deviceId === (localDeviceId ?? "").trim()) return "";
+  const name = (deviceNames?.[deviceId] ?? "").trim();
+  return name ? t("record.deviceTooltipName", { name }) : t("record.deviceTooltipOther");
+}

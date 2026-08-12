@@ -111,6 +111,8 @@ export default {
     systemClipboard: '系统剪贴板',
     fromDevice: '来自 {name}',
     otherDevice: '其他设备',
+    deviceTooltipName: '此记录来自其他设备：{name}',
+    deviceTooltipOther: '此记录来自其他设备',
     resizeList: '调整列表宽度',
     resizeSidebar: '调整侧栏宽度',
   },

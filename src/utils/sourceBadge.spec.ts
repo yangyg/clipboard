@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildSourceOverrides,
   resolveDeviceLabel,
+  resolveDeviceTooltip,
   resolveSourceLabel,
   sourceShortName,
   type TranslateFn,
@@ -11,6 +12,8 @@ const translations: Record<string, string> = {
   "record.systemClipboard": "系统剪贴板",
   "record.fromDevice": "来自 {name}",
   "record.otherDevice": "其他设备",
+  "record.deviceTooltipName": "此记录来自其他设备：{name}",
+  "record.deviceTooltipOther": "此记录来自其他设备",
   "sourceNames.notepad": "记事本",
   "sourceNames.paint": "画图",
 };
@@ -95,6 +98,29 @@ describe("sourceBadge", () => {
   it("falls back to the generic label for unknown devices", () => {
     expect(resolveDeviceLabel({ source_device_id: "dev-unknown" }, {}, "dev-local", t)).toBe(
       "其他设备",
+    );
+  });
+
+  it("hides the device tooltip for local records or missing origins", () => {
+    expect(resolveDeviceTooltip({ source_device_id: "" }, {}, "dev-local", t)).toBe("");
+    expect(resolveDeviceTooltip({ source_device_id: "dev-local" }, {}, "dev-local", t)).toBe("");
+    expect(resolveDeviceTooltip({}, { "dev-other": "办公电脑" }, "dev-local", t)).toBe("");
+  });
+
+  it("renders the tooltip with the known device name", () => {
+    expect(
+      resolveDeviceTooltip(
+        { source_device_id: "dev-other" },
+        { "dev-other": "办公电脑" },
+        "dev-local",
+        t,
+      ),
+    ).toBe("此记录来自其他设备：办公电脑");
+  });
+
+  it("renders the generic tooltip for unknown devices", () => {
+    expect(resolveDeviceTooltip({ source_device_id: "dev-unknown" }, {}, "dev-local", t)).toBe(
+      "此记录来自其他设备",
     );
   });
 });

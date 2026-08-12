@@ -111,6 +111,8 @@ export default {
     systemClipboard: 'System Clipboard',
     fromDevice: 'From {name}',
     otherDevice: 'Another device',
+    deviceTooltipName: 'This record is from another device: {name}',
+    deviceTooltipOther: 'This record is from another device',
     resizeList: 'Resize list column',
     resizeSidebar: 'Resize sidebar',
   },

@@ -165,6 +165,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     scheduleLoadStats,
     loadTrashCount,
     invalidateLoads: list.invalidateLoads,
+    reorderForUpdates,
   });
   const {
     pasteRecord,

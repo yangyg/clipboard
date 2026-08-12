@@ -24,6 +24,7 @@ export interface RecordActionsCtx {
   scheduleLoadStats: () => void;
   loadTrashCount: () => Promise<void>;
   invalidateLoads: () => void;
+  reorderForUpdates: (ids: number[]) => void;
 }
 
 export function createRecordActions(ctx: RecordActionsCtx) {
@@ -124,6 +125,9 @@ export function createRecordActions(ctx: RecordActionsCtx) {
     try {
       const saved = await invoke<string>("set_record_alias", { id, alias });
       ctx.patchRecord(id, { alias: saved });
+      // Rust bumps updated_at (sync watermark) only when the alias changed;
+      // re-rank so the visible list mirrors the DB order like tag edits.
+      if (saved !== record.alias) ctx.reorderForUpdates([id]);
       return saved;
     } catch (e) {
       console.error("Set alias failed:", e);

@@ -52,6 +52,8 @@ impl ClipboardDb {
     }
 
     /// Set short display alias (trim + max 80 chars). Empty clears. Does not touch content/hash.
+    /// Bumps `updated_at` (only when the alias actually changed) so alias-only edits propagate
+    /// through the record-level WebDAV merge (last-write-wins by `updated_at` — same as tag edits).
     pub fn set_record_alias(&self, id: i64, alias: &str) -> SqlResult<String> {
         let mut alias = alias.trim().to_string();
         if alias.chars().count() > ALIAS_MAX_CHARS {
@@ -62,13 +64,25 @@ impl ClipboardDb {
         // would otherwise drop the FTS row permanently (search misses).
         let tx = conn.unchecked_transaction()?;
         let n = tx.execute(
-            "UPDATE records SET alias = ? WHERE id = ?",
-            params![alias, id],
+            "UPDATE records SET alias = ?, updated_at = ?
+             WHERE id = ? AND alias != ?",
+            params![alias, chrono::Utc::now().to_rfc3339(), id, alias],
         )?;
         if n == 0 {
-            return Err(rusqlite::Error::QueryReturnedNoRows);
+            // No row updated: either the id is missing or the alias is unchanged
+            // (no-op edit must not bump the sync watermark). Keep the
+            // missing-row error contract from before.
+            let exists: i64 = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM records WHERE id = ?)",
+                [id],
+                |row| row.get(0),
+            )?;
+            if exists == 0 {
+                return Err(rusqlite::Error::QueryReturnedNoRows);
+            }
+        } else {
+            Self::refresh_record_fts(&tx, id)?;
         }
-        Self::refresh_record_fts(&tx, id)?;
         tx.commit()?;
         Ok(alias)
     }

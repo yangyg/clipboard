@@ -49,4 +49,24 @@ describe("PreviewContent", () => {
 
     expect(wrapper.emitted("open-image")).toHaveLength(1);
   });
+
+  it("intercepts http link click and emits open-link instead of navigating", async () => {
+    const wrapper = mountWithPlugins(PreviewContent, {
+      props: {
+        ...baseProps,
+        record: { ...record, content_type: "link", content: "https://example.com" },
+        plainContentHtml: "https://example.com",
+        safeLinkHref: "https://example.com",
+        openableLinkUrl: "https://example.com",
+        linkTitle: "Web link",
+      },
+    });
+
+    const anchor = wrapper.find("a.link-url");
+    expect(anchor.exists()).toBe(true);
+
+    await anchor.trigger("click");
+
+    expect(wrapper.emitted("open-link")).toHaveLength(1);
+  });
 });

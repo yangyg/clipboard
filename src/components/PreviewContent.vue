@@ -17,7 +17,17 @@
       <div class="link-card">
         <div class="link-icon"><AppIcon name="link" :size="22" /></div>
         <div class="link-title">{{ linkTitle }}</div>
-        <a v-if="safeLinkHref" class="link-url" :href="safeLinkHref" target="_blank" rel="noopener noreferrer" v-html="plainContentHtml"></a>
+        <!-- http(s) rendered as <a href> (right-click copy keeps working), but the
+             click is intercepted and routed through open_url so the system default
+             browser opens it — target=_blank navigation is unreliable in WebView2. -->
+        <a
+          v-if="safeLinkHref"
+          class="link-url"
+          :href="safeLinkHref"
+          :title="$t('preview.clickToOpenLink')"
+          @click.prevent="emit('open-link')"
+          v-html="plainContentHtml"
+        ></a>
         <button v-else-if="openableLinkUrl" type="button" class="link-url link-url-btn" :title="$t('preview.clickToOpenLink')" @click.stop="emit('open-link')">
           <span v-html="plainContentHtml"></span>
         </button>

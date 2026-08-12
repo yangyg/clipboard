@@ -7,6 +7,7 @@
         class="context-menu"
         :class="{ 'placement-top': placement === 'top' }"
         role="menu"
+        tabindex="-1"
         :style="{ left: pos.x + 'px', top: pos.y + 'px', width: width + 'px' }"
         @click.stop
       >
@@ -15,12 +16,12 @@
           <button
             type="button"
             class="ctx-item"
-            :class="{ danger: item.danger, focused: index === focusIndex }"
+            :class="{ danger: item.danger, focused: keyboardNav && index === focusIndex }"
             :role="item.toggle || item.checked !== undefined ? 'menuitemradio' : 'menuitem'"
             :aria-checked="item.toggle ? item.toggle.value : item.checked !== undefined ? !!item.checked : undefined"
             :tabindex="index === focusIndex ? 0 : -1"
             @click="select(item.id)"
-            @mouseenter="focusIndex = index"
+            @mouseenter="onMouseEnter(index)"
           >
             <span v-if="item.icon" class="ctx-icon">
               <AppIcon :name="item.icon" :size="14" />
@@ -80,6 +81,9 @@ const emit = defineEmits<{
 
 const menuRef = ref<HTMLElement | null>(null);
 const focusIndex = ref(0);
+/** Whether the highlight comes from real navigation (mouse/keyboard interaction)
+ *  instead of the menu just opening — so no item is pre-highlighted on open. */
+const keyboardNav = ref(false);
 const pos = reactive({ x: 0, y: 0 });
 let previousFocus: HTMLElement | null = null;
 
@@ -128,6 +132,7 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === "ArrowDown") {
     e.preventDefault();
     e.stopPropagation();
+    keyboardNav.value = true;
     focusIndex.value = (focusIndex.value + 1) % props.items.length;
     focusItem();
     return;
@@ -135,6 +140,7 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === "ArrowUp") {
     e.preventDefault();
     e.stopPropagation();
+    keyboardNav.value = true;
     focusIndex.value = (focusIndex.value - 1 + props.items.length) % props.items.length;
     focusItem();
     return;
@@ -144,6 +150,17 @@ function onKeydown(e: KeyboardEvent) {
     e.stopPropagation();
     const item = props.items[focusIndex.value];
     if (item) select(item.id);
+  }
+}
+
+function onMouseEnter(index: number) {
+  focusIndex.value = index;
+  // Mouse hover takes over from keyboard navigation — drop the keyboard
+  // highlight and move focus back to the container so a stale :focus-visible
+  // ring doesn't linger on the previously keyboard-focused item.
+  if (keyboardNav.value) {
+    keyboardNav.value = false;
+    menuRef.value?.focus();
   }
 }
 
@@ -167,11 +184,14 @@ watch(
     if (v) {
       previousFocus = (document.activeElement as HTMLElement) ?? null;
       focusIndex.value = 0;
+      keyboardNav.value = false;
       pos.x = props.x;
       pos.y = props.y;
       await nextTick();
       clamp();
-      focusItem();
+      // Focus the menu container, not the first item — the item highlight
+      // should only appear after the user hovers or starts keyboard navigation.
+      menuRef.value?.focus();
     } else if (previousFocus) {
       previousFocus.focus?.();
       previousFocus = null;

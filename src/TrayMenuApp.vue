@@ -14,11 +14,11 @@
           :id="`tray-item-${item.id}`"
           type="button"
           class="item"
-          :class="{ danger: item.danger, focused: index === focusIndex }"
+          :class="{ danger: item.danger, focused: keyboardNav && index === focusIndex }"
           role="menuitem"
           :tabindex="index === focusIndex ? 0 : -1"
           @click="onSelect(item.id)"
-          @mouseenter="focusIndex = index"
+          @mouseenter="onMouseEnter(index)"
         >
           <span class="icon"><AppIcon :name="item.icon" :size="14" /></span>
           <span class="label">{{ item.label }}</span>
@@ -45,6 +45,9 @@ const root = ref<HTMLElement | null>(null);
 const menuEl = ref<HTMLElement | null>(null);
 const items = ref<TrayMenuItemDef[]>([]);
 const focusIndex = ref(0);
+/** Whether the highlight comes from real interaction instead of the window just
+ *  opening — so the first item is not pre-highlighted on open. */
+const keyboardNav = ref(false);
 const appWindow = getCurrentWindow();
 const activeDescendantId = computed(() => {
   const item = items.value[focusIndex.value];
@@ -61,7 +64,20 @@ function focusActiveItem() {
   });
 }
 
-watch(focusIndex, () => focusActiveItem());
+watch(focusIndex, () => {
+  if (keyboardNav.value) focusActiveItem();
+});
+
+function onMouseEnter(index: number) {
+  focusIndex.value = index;
+  // Mouse hover takes over from keyboard navigation — drop the keyboard
+  // highlight and move focus back to the root so a stale :focus-visible ring
+  // doesn't linger on the previously keyboard-focused item.
+  if (keyboardNav.value) {
+    keyboardNav.value = false;
+    root.value?.focus();
+  }
+}
 
 const { applyChrome } = useTrayTheme();
 
@@ -115,14 +131,14 @@ function onKeydown(e: KeyboardEvent) {
   }
   if (e.key === "ArrowDown") {
     e.preventDefault();
+    keyboardNav.value = true;
     focusIndex.value = (focusIndex.value + 1) % items.value.length;
-    focusActiveItem();
     return;
   }
   if (e.key === "ArrowUp") {
     e.preventDefault();
+    keyboardNav.value = true;
     focusIndex.value = (focusIndex.value - 1 + items.value.length) % items.value.length;
-    focusActiveItem();
     return;
   }
   if (e.key === "Enter" || e.key === " ") {
@@ -139,9 +155,9 @@ async function onOpened() {
     console.error("get_tray_menu_state failed:", e);
   }
   focusIndex.value = 0;
+  keyboardNav.value = false;
   await fitWindowToContent();
   await focusRoot();
-  focusActiveItem();
 }
 
 onMounted(async () => {
@@ -152,9 +168,9 @@ onMounted(async () => {
     applyPaused(false);
   }
   focusIndex.value = 0;
+  keyboardNav.value = false;
   await fitWindowToContent();
   await focusRoot();
-  focusActiveItem();
 
   unlisteners.push(await listen("tray-menu-opened", () => void onOpened()));
 

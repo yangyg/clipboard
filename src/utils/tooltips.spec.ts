@@ -41,6 +41,30 @@ describe("tooltips", () => {
     expect(button.dataset.tooltip).toBe("Dynamic help");
   });
 
+  it("resolves tooltip targets through inline SVG icons", () => {
+    vi.useFakeTimers();
+    window.requestAnimationFrame = ((cb) => {
+      cb(0);
+      return 0;
+    }) as typeof window.requestAnimationFrame;
+    window.cancelAnimationFrame = (() => {}) as typeof window.cancelAnimationFrame;
+
+    // A badge whose trigger contains an <svg> icon: hovering the icon must
+    // still resolve to the tooltip-holding ancestor (SVG is not an HTMLElement).
+    document.body.innerHTML =
+      '<span class="badge" title="From office"><svg class="icon"><path/></svg>text</span>';
+    const span = document.querySelector<HTMLElement>(".badge")!;
+    const svg = span.querySelector("svg")!;
+    destroy = installTooltips().destroy;
+
+    svg.dispatchEvent(new MouseEvent("pointerover", { bubbles: true, clientX: 5, clientY: 5 }));
+    vi.advanceTimersByTime(400);
+
+    const tooltip = document.querySelector<HTMLElement>(".app-tooltip");
+    expect(tooltip).not.toBeNull();
+    expect(tooltip!.textContent).toBe("From office");
+  });
+
   it("hides the tooltip when the pointer leaves the target", () => {
     vi.useFakeTimers();
     // jsdom's requestAnimationFrame is not advanced by the fake timer clock, so
@@ -76,8 +100,7 @@ describe("tooltips", () => {
     expect(button.hasAttribute("aria-describedby")).toBe(false);
   });
 
-  it("shows when the pointer moves fast across the target without resetting the deadline", () => {
-    vi.useFakeTimers();
+  it("shows when the pointer moves fast across the target without resetting the deadline", () => {    vi.useFakeTimers();
     window.requestAnimationFrame = ((cb) => {
       cb(0);
       return 0;

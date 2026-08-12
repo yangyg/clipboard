@@ -4,7 +4,9 @@ const TOOLTIP_HIDE_MS = 100;
 const TOOLTIP_OFFSET_PX = 8;
 const VIEWPORT_PADDING_PX = 8;
 
-type TooltipTarget = HTMLElement;
+/** Any element that can host a tooltip. `Element` (not `HTMLElement`) so SVG
+ * icons inside a target still resolve to their tooltip-holding ancestor. */
+type TooltipTarget = Element;
 
 interface TooltipController {
   destroy: () => void;
@@ -13,7 +15,7 @@ interface TooltipController {
 let tooltipId = 0;
 
 function asTooltipTarget(node: EventTarget | null): TooltipTarget | null {
-  if (!(node instanceof HTMLElement)) return null;
+  if (!(node instanceof Element)) return null;
   return node.closest<TooltipTarget>(TOOLTIP_SELECTOR);
 }
 

@@ -1,6 +1,6 @@
 //! Tests for record insert/dedup/hash-uniqueness. Lives in its own file
 //! (mirroring `schema_tests.rs`) to keep `records_write.rs` under the
-//! 500-line cap.
+//! 800-line cap.
 use crate::db::{ClipboardDb, ContentType};
 use crate::detect::{sha256_hash, sha256_hash_bytes};
 use std::path::PathBuf;

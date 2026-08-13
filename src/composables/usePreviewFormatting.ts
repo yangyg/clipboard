@@ -6,6 +6,7 @@ import { computed, type ComputedRef, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord, Tag } from "../types";
 import { expandHexColor } from "../utils/clipboardColor";
+import { formatDateTime as formatAbsoluteDateTime } from "../utils/format";
 
 const TYPE_LABEL_KEYS: Record<string, string> = {
   text: "preview.typeText",
@@ -48,14 +49,7 @@ export function usePreviewFormatting(
   }
 
   function formatDateTime(iso: string): string {
-    return new Date(iso).toLocaleString(undefined, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    return formatAbsoluteDateTime(iso, true);
   }
 
   return { recordAlias, typeLabel, tagsByName, getTagBg, getTagColor, formatDateTime };

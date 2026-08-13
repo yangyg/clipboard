@@ -149,6 +149,7 @@ import { useSettings } from "../../composables/useSettings";
 import { useClipboardStore } from "../../stores/clipboard";
 import type { SyncHistoryEntry, WebDavSyncResult } from "../../types";
 import { formatWebDavResult } from "../../utils/webdavResult";
+import { formatDateTime } from "../../utils/format";
 import AppIcon from "../icons/AppIcon.vue";
 import PasswordInput from "../PasswordInput.vue";
 import TextInput from "../TextInput.vue";
@@ -168,7 +169,7 @@ const historyBusy = ref(false);
 
 function formatSyncTime(iso: string) {
   try {
-    return new Date(iso).toLocaleString();
+    return formatDateTime(iso);
   } catch {
     return iso;
   }

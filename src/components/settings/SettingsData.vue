@@ -65,6 +65,7 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { useClipboardStore } from "../../stores/clipboard";
 import { useConfirm } from "../../composables/useConfirm";
 import { useToast } from "../../composables/useToast";
+import { formatBytes as formatBytes } from "../../utils/format";
 import AppIcon from "../icons/AppIcon.vue";
 
 const clipboardStore = useClipboardStore();
@@ -156,12 +157,6 @@ async function clearAllData() {
   } finally {
     isClearing.value = false;
   }
-}
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 </script>
 

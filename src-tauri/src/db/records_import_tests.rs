@@ -1,5 +1,5 @@
 //! Tests for import/merge + export paging. Lives in its own file (mirroring
-//! `schema_tests.rs`) to keep `records_import.rs` under the 500-line cap.
+//! `schema_tests.rs`) to keep `records_import.rs` under the 800-line cap.
 use super::records_import::MAX_IMPORT_CONTENT_BYTES;
 use crate::db::{validate_import_records, ClipboardDb, ExportCursor, ImportSanitize};
 use crate::ClipboardRecord;

@@ -16,10 +16,10 @@ mod records_write;
 mod schema;
 
 // Tests for the insert/dedup path live in their own file (mirroring
-// schema_tests.rs) to keep records_write.rs under the 500-line cap.
+// schema_tests.rs) to keep records_write.rs under the 800-line cap.
 #[cfg(test)]
 mod records_write_tests;
-// Same split-out pattern keeps records_import.rs / tags.rs under the cap.
+// Same split-out pattern keeps records_import.rs / tags.rs / records_write.rs under the 800-line cap.
 #[cfg(test)]
 mod records_import_tests;
 // Release-only performance benchmarks (run explicitly with `--ignored perf`).
@@ -41,7 +41,7 @@ pub use records_export::ExportCursor;
 pub use records_import::{validate_import_records, ImportSanitize, MAX_IMPORT_TOTAL_BYTES};
 pub use tags::{nearest_palette_color, TagMergeStats, TagSyncRow, TAG_EPOCH_SENTINEL};
 // Schema compatibility tests live in `schema_tests.rs` (test-only module) to
-// keep schema.rs under the 500-line cap.
+// keep schema.rs under the 800-line cap.
 #[cfg(test)]
 mod schema_tests;
 

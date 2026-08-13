@@ -1,5 +1,5 @@
 //! Schema compatibility tests (test-only module, kept separate from schema.rs
-//! so the production file stays under the 500-line cap).
+//! so the production file stays under the 800-line cap).
 
 use crate::db::{ClipboardDb, ContentType, RECORD_COLS, RECORD_COLS_LIST};
 

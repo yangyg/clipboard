@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { Component as VueComponent } from "vue";
-import { useHanddrawnTheme } from "../../composables/useHanddrawnTheme";
-import { usePixelTheme } from "../../composables/usePixelTheme";
+import { useHanddrawnTheme, usePixelTheme } from "../../composables/usePixelTheme";
 import { PIXEL_ICONS } from "./pixelIcons";
 // Clean line icons — every theme except hand-drawn / pixel.
 import {

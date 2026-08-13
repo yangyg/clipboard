@@ -1,5 +1,5 @@
 //! Full-content export/backup paging (never uses list truncation columns).
-use rusqlite::{params, Connection, Result as SqlResult};
+use rusqlite::{Connection, Result as SqlResult};
 
 use super::{clamp_page_limit, ClipboardDb, RECORD_COLS};
 use crate::ClipboardRecord;
@@ -14,13 +14,15 @@ pub struct ExportCursor {
 }
 
 impl ClipboardDb {
-    /// OFFSET-based page — kept for tests / one-shot exports. Prefer
-    /// `get_records_for_export_page` for iterating large datasets.
+    /// OFFSET-based page — kept for tests. Production export iterates with
+    /// `get_records_for_export_page` (keyset, stable under mutation).
+    #[cfg(test)]
     pub fn get_records_for_export(
         &self,
         limit: i32,
         offset: i32,
     ) -> SqlResult<Vec<ClipboardRecord>> {
+        use rusqlite::params;
         let conn = self.lock_read();
         let mut stmt = conn.prepare(&format!(
             "SELECT {} FROM records WHERE is_trashed = 0

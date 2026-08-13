@@ -1,6 +1,6 @@
 //! Tests for tag palette snapping + tag mutation side effects. Lives in its
 //! own file (mirroring `schema_tests.rs`) to keep `tags.rs` under the
-//! 500-line cap.
+//! 800-line cap.
 use super::tags::{nearest_palette_color, normalize_color_key, TAG_PALETTE};
 use crate::db::{TagSyncRow, TAG_EPOCH_SENTINEL};
 use crate::ClipboardDb;

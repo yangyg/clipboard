@@ -17,16 +17,14 @@ pub(super) fn bump_tag_epoch() {
     TAG_EPOCH.fetch_add(1, Ordering::Relaxed);
 }
 
-/// 2s TTL cache for `get_all_tags` keyed by (content_type, favorites_only,
-/// last_sync_stamp). The query is a 3-table aggregate over every record_tag
-/// link; during copy bursts with auto-tag the frontend debounce (350ms) alone
-/// still fires it repeatedly, so the server-side cache absorbs the redundant
-/// joins. The last-sync stamp is part of the key because the per-tag `synced`
-/// flags depend on it — a sync that advances it must not serve stale badges.
+/// 2s TTL cache for `get_all_tags` keyed by (content_type, favorites_only).
+/// The query is a 3-table aggregate over every record_tag link; during copy
+/// bursts with auto-tag the frontend debounce (350ms) alone still fires it
+/// repeatedly, so the server-side cache absorbs the redundant joins.
 struct TagsCacheEntry {
     at: Instant,
     epoch: u64,
-    key: (Option<String>, bool, Option<String>),
+    key: (Option<String>, bool),
     tags: Vec<TagInfo>,
 }
 
@@ -168,24 +166,12 @@ impl ClipboardDb {
     // === Tag CRUD ===
 
     /// Tag counts respect the current list facet (type / favorites), exclude trash.
-    /// Each tag also carries a `synced` flag: sync configured AND the tag's
-    /// LWW stamp not newer than the last successful sync (a tag edited since
-    /// then shows as "待同步" until the next push).
     pub fn get_all_tags(
         &self,
         content_type: Option<&str>,
         favorites_only: bool,
     ) -> SqlResult<Vec<TagInfo>> {
-        // Settings are served from the in-memory cache; no DB lock is needed
-        // here beyond the one taken below.
-        let settings = self.get_settings()?;
-        let last_sync = settings.webdav_last_sync_at.clone();
-        let sync_configured = !settings.webdav_url.trim().is_empty();
-        let key = (
-            content_type.map(str::to_string),
-            favorites_only,
-            last_sync.clone(),
-        );
+        let key = (content_type.map(str::to_string), favorites_only);
         let epoch = TAG_EPOCH.load(Ordering::Relaxed);
         {
             let cache = TAGS_CACHE.lock();
@@ -198,7 +184,7 @@ impl ClipboardDb {
 
         let conn = self.lock_read();
         let mut sql = String::from(
-            "SELECT t.id, t.name, t.color, t.is_auto, t.updated_at, COUNT(r.id) as cnt
+            "SELECT t.id, t.name, t.color, t.is_auto, COUNT(r.id) as cnt
              FROM tags t
              LEFT JOIN record_tags rt ON rt.tag_id = t.id
              LEFT JOIN records r ON r.id = rt.record_id AND r.is_trashed = 0",
@@ -220,22 +206,12 @@ impl ClipboardDb {
         let mut stmt = conn.prepare(&sql)?;
         let tags = stmt
             .query_map(param_refs.as_slice(), |row| {
-                let updated_at: String = row.get(4)?;
-                // A tag is synced when sync is configured and its definition
-                // stamp is not newer than the last successful sync. Sentinel
-                // rows (never edited) compare as always ≤ any real sync time,
-                // so they read as synced once sync has ever run.
-                let synced = sync_configured
-                    && last_sync
-                        .as_deref()
-                        .is_some_and(|s| updated_at.as_str() <= s);
                 Ok(TagInfo {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     color: row.get(2)?,
                     is_auto: row.get::<_, i32>(3)? != 0,
-                    count: row.get(5)?,
-                    synced,
+                    count: row.get(4)?,
                 })
             })?
             .collect::<SqlResult<Vec<_>>>()?;

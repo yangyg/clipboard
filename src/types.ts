@@ -53,12 +53,6 @@ export interface Tag {
   color: string;
   is_auto: boolean;
   count: number;
-  /**
-   * Whether this tag's definition has reached the remote snapshot (sync
-   * configured AND not edited since the last successful sync). The sidebar
-   * shows a "待同步" badge when false and sync is configured.
-   */
-  synced?: boolean;
 }
 
 export interface AutoTagRule {

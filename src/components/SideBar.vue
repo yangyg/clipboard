@@ -83,12 +83,6 @@
             :title="$t('sidebar.autoTagCreated')"
             aria-hidden="true"
           ><AppIcon name="sparkles" :size="11" /></span>
-          <span
-            v-if="syncConfigured && tag.synced === false"
-            class="tag-sync-badge"
-            :data-tooltip="$t('sidebar.tagPendingSync')"
-            :title="$t('sidebar.tagPendingSync')"
-          ><AppIcon name="cloud" :size="10" /></span>
           <span class="tag-count">{{ tag.count }}</span>
         </button>
 
@@ -124,12 +118,6 @@
                 :title="$t('sidebar.autoTagCreated')"
                 aria-hidden="true"
               ><AppIcon name="sparkles" :size="11" /></span>
-              <span
-                v-if="syncConfigured && tag.synced === false"
-                class="tag-sync-badge"
-                :data-tooltip="$t('sidebar.tagPendingSync')"
-                :title="$t('sidebar.tagPendingSync')"
-              ><AppIcon name="cloud" :size="10" /></span>
               <span class="tag-count">{{ tag.count }}</span>
             </button>
           </template>
@@ -197,7 +185,6 @@ import type { Tag } from "../types";
 import { useI18n } from "vue-i18n";
 import { useSidebarMenus } from "../composables/useSidebarMenus";
 import { useMediaQuery } from "../composables/useMediaQuery";
-import { useSettingsStore } from "../stores/settings";
 import { FILTER_DEFINITIONS } from "../utils/filterDefinitions";
 
 const tagsEnabled = useFeature("tags");
@@ -206,14 +193,7 @@ const tagsEnabled = useFeature("tags");
 const isNarrow = useMediaQuery("(max-width: 720px)");
 
 const clipboardStore = useClipboardStore();
-const settingsStore = useSettingsStore();
 const { t } = useI18n();
-
-/** WebDAV is configured → the per-tag "待同步" badge has meaning. */
-const syncConfigured = computed(() => {
-  const url = settingsStore.settings.webdav_url ?? "";
-  return url.trim().length > 0;
-});
 
 const props = defineProps<{
   activeCategory?: string;
@@ -489,25 +469,6 @@ const {
   justify-content: center;
   color: var(--accent-text);
   opacity: 0.9;
-}
-
-/* "待同步" badge: tag edited after the last successful sync. Amber so it is
-   visible without competing with tag colors. */
-.tag-sync-badge {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: var(--radius-pill);
-  color: var(--warning);
-  background: var(--warning-soft);
-}
-
-.tag-item:hover .tag-sync-badge,
-.tag-item.active .tag-sync-badge {
-  color: var(--warning);
 }
 
 .tag-count {

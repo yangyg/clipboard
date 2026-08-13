@@ -63,7 +63,6 @@ pub async fn create_tag(
         color,
         is_auto: false,
         count: 0,
-        synced: false,
     })
 }
 

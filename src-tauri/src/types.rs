@@ -445,11 +445,6 @@ pub struct TagInfo {
     pub color: String,
     pub is_auto: bool,
     pub count: i64,
-    /// Whether the tag's current definition has reached the remote snapshot:
-    /// sync configured AND the tag's LWW stamp (`tags.updated_at`) is not newer
-    /// than the last successful sync. Derived in `get_all_tags`; the frontend
-    /// shows a "待同步" badge when false (and sync is configured).
-    pub synced: bool,
 }
 
 /// One WebDAV sync operation log row (local-only, never synced).

@@ -1,6 +1,5 @@
 //! Shared DB types and column-list constants (extracted from `db/mod.rs` to
 //! keep the connection-pool module small).
-use std::fmt;
 
 /// Content categories a captured clipboard payload can be classified into.
 /// `is_sensitive` is a separate boolean flag, not a ContentType variant.
@@ -11,18 +10,6 @@ pub enum ContentType {
     Link,
     Image,
     File,
-}
-
-impl fmt::Display for ContentType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ContentType::Text => write!(f, "text"),
-            ContentType::Code => write!(f, "code"),
-            ContentType::Link => write!(f, "link"),
-            ContentType::Image => write!(f, "image"),
-            ContentType::File => write!(f, "file"),
-        }
-    }
 }
 
 impl ContentType {

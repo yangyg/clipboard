@@ -40,6 +40,28 @@ fn resolve_stored_secret(
 }
 
 impl ClipboardDb {
+    /// Decrypt a DPAPI-encrypted secret in place, keeping the stored ciphertext
+    /// when decryption fails (a later save would otherwise overwrite the only
+    /// remaining copy with an empty string). Legacy plaintext values (no
+    /// prefix) pass through unchanged.
+    fn decrypt_secret_or_keep(secret: &mut String, label: &str) {
+        if !secret.starts_with(crate::security::DPAPI_PREFIX) {
+            return;
+        }
+        match crate::security::decrypt_secret(secret) {
+            Ok(plain) => *secret = plain,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to decrypt stored {label}; keeping the stored value \
+                     (a later save would otherwise overwrite it with an empty string): {e}"
+                );
+                // Keep the ciphertext as loaded; the settings UI will show it
+                // until the user re-enters the value. The encryption guard in
+                // `save_settings` must never double-encrypt it.
+            }
+        }
+    }
+
     /// Returns a shared reference-counted Settings snapshot. Clone is cheap (Arc bump).
     /// Callers needing mutation (resize persist, webdav sync) should clone the inner Settings.
     pub fn get_settings(&self) -> SqlResult<Arc<Settings>> {
@@ -61,38 +83,8 @@ impl ClipboardDb {
                         // reuse unchanged ciphertext instead of re-encrypting.
                         let stored_password = s.webdav_password.clone();
                         let stored_api_key = s.ai_api_key.clone();
-                        // WebDAV password is DPAPI-encrypted at rest; legacy
-                        // plaintext values (no prefix) pass through unchanged.
-                        if s.webdav_password.starts_with(crate::security::DPAPI_PREFIX) {
-                            match crate::security::decrypt_secret(&s.webdav_password) {
-                                Ok(pw) => s.webdav_password = pw,
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to decrypt stored WebDAV password; \
-                                         keeping the stored value (a later save would otherwise \
-                                         overwrite the only remaining copy with an empty string): {}",
-                                        e
-                                    );
-                                    // Keep the ciphertext as loaded; the settings UI will show
-                                    // it until the user re-enters the password. The encryption
-                                    // guard in `save_settings` must never double-encrypt it.
-                                }
-                            }
-                        }
-                        // AI API key gets the same secret-at-rest treatment.
-                        if s.ai_api_key.starts_with(crate::security::DPAPI_PREFIX) {
-                            match crate::security::decrypt_secret(&s.ai_api_key) {
-                                Ok(key) => s.ai_api_key = key,
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to decrypt stored AI API key; keeping the stored \
-                                         value (a later save would otherwise overwrite it with an \
-                                         empty string): {}",
-                                        e
-                                    );
-                                }
-                            }
-                        }
+                        Self::decrypt_secret_or_keep(&mut s.webdav_password, "WebDAV password");
+                        Self::decrypt_secret_or_keep(&mut s.ai_api_key, "AI API key");
                         let pw_pair = if stored_password.starts_with(crate::security::DPAPI_PREFIX)
                         {
                             (s.webdav_password.clone(), stored_password)
@@ -264,24 +256,11 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_db() -> (ClipboardDb, PathBuf) {
-        let dir = std::env::temp_dir().join(format!(
-            "clipvault_settings_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
-        (db, dir)
+        crate::db::test_util::temp_db("settings")
     }
 
     fn cleanup(dir: PathBuf) {
-        for name in ["test.db", "test.db-wal", "test.db-shm"] {
-            let _ = std::fs::remove_file(dir.join(name));
-        }
-        let _ = std::fs::remove_dir_all(dir);
+        crate::db::test_util::cleanup(dir)
     }
 
     fn make_record(content: &str, hash: &str, auto_expire_at: Option<&str>) -> ClipboardRecord {

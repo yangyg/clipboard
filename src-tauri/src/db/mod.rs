@@ -32,6 +32,8 @@ mod sync_history;
 mod tags;
 #[cfg(test)]
 mod tags_tests;
+#[cfg(test)]
+mod test_util;
 mod tombstones;
 mod types;
 

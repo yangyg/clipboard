@@ -334,35 +334,7 @@ impl ClipboardDb {
         if !fts_dirty.is_empty() {
             fts_dirty.sort_unstable();
             fts_dirty.dedup();
-            let placeholders = Self::id_placeholders(fts_dirty.len());
-            let params: Vec<&dyn rusqlite::types::ToSql> = fts_dirty
-                .iter()
-                .map(|id| id as &dyn rusqlite::types::ToSql)
-                .collect();
-            tx.execute(
-                &format!("DELETE FROM records_fts WHERE rowid IN ({placeholders})"),
-                params.as_slice(),
-            )?;
-            tx.execute(
-                &format!(
-                    "INSERT INTO records_fts(rowid, content, source_app, source_window, tags, alias)
-                     SELECT
-                        r.id,
-                        {},
-                        r.source_app,
-                        r.source_window,
-                        COALESCE((
-                            SELECT group_concat(t.name, ' ')
-                            FROM record_tags rt
-                            INNER JOIN tags t ON t.id = rt.tag_id
-                            WHERE rt.record_id = r.id
-                        ), ''),
-                        r.alias
-                     FROM records r WHERE r.id IN ({placeholders})",
-                    Self::fts_content_sql()
-                ),
-                params.as_slice(),
-            )?;
+            Self::refresh_records_fts_batch(&tx, &fts_dirty)?;
         }
 
         let overflow_media = self.evict_over_limit(&tx, max_records)?;

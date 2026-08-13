@@ -172,24 +172,11 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_db() -> (ClipboardDb, PathBuf) {
-        let dir = std::env::temp_dir().join(format!(
-            "clipvault_tombstone_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
-        (db, dir)
+        crate::db::test_util::temp_db("tombstones")
     }
 
     fn cleanup(dir: PathBuf) {
-        for name in ["test.db", "test.db-wal", "test.db-shm"] {
-            let _ = std::fs::remove_file(dir.join(name));
-        }
-        let _ = std::fs::remove_dir_all(dir);
+        crate::db::test_util::cleanup(dir)
     }
 
     fn make_record(content: &str, hash: &str, updated_at: &str) -> ClipboardRecord {

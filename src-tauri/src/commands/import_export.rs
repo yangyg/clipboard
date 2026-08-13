@@ -6,11 +6,13 @@ use tauri::State;
 
 use crate::security;
 use crate::{
-    db::{validate_import_records, ExportCursor, ImportSanitize, MAX_IMPORT_TOTAL_BYTES},
-    require_feature, AppState, ClipboardRecord, FeatureId, StatsData,
+    db::{
+        validate_import_records, ClipboardDb, ExportCursor, ImportSanitize, MAX_IMPORT_TOTAL_BYTES,
+    },
+    AppState, ClipboardRecord, FeatureId, StatsData,
 };
 
-use super::spawn_db;
+use super::{require_feature_state, spawn_db};
 
 /// Stream records as a JSON array directly to `path` (no full in-memory buffer).
 #[tauri::command]
@@ -57,19 +59,18 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
 /// Import records from the renderer. The payload travels as a raw JSON string;
 /// the byte-size gate runs BEFORE any deserialization so a compromised webview
 /// cannot force a multi-hundred-MB allocation through argument deserialization
-/// alone (record-count validation still runs in `validate_import_records`, but
-/// the allocation is already bounded by the string cap). Parse + validate + merge
-/// all run on the blocking pool, not the async worker.
-#[tauri::command(rename_all = "snake_case")]
-pub async fn import_data(state: State<'_, AppState>, records_json: String) -> Result<i32, String> {
-    if records_json.len() > MAX_IMPORT_TOTAL_BYTES {
-        return Err("导入内容过大（上限 64MB）".into());
-    }
-    let db = state.db.clone();
+/// Shared parse + validate + merge body for both import commands. `label`
+/// prefixes user-facing error messages ("导入内容"/"备份文件"). Runs on the
+/// blocking pool, not the async worker.
+async fn run_import(
+    db: std::sync::Arc<ClipboardDb>,
+    json: String,
+    label: &'static str,
+) -> Result<i32, String> {
     let settings = db.get_settings().map_err(|e| e.to_string())?;
     tokio::task::spawn_blocking(move || {
         let records: Vec<ClipboardRecord> =
-            serde_json::from_str(&records_json).map_err(|e| format!("导入内容格式不正确: {e}"))?;
+            serde_json::from_str(&json).map_err(|e| format!("{label}格式不正确: {e}"))?;
         validate_import_records(&records)?;
         db.import_records(
             &records,
@@ -82,6 +83,18 @@ pub async fn import_data(state: State<'_, AppState>, records_json: String) -> Re
     .map_err(|e| format!("导入任务失败: {e}"))?
 }
 
+/// Import a JSON payload in memory. The string arrives whole from IPC, so its
+/// length is the only cap needed here (record-count validation still runs in
+/// `validate_import_records`).
+#[tauri::command(rename_all = "snake_case")]
+pub async fn import_data(state: State<'_, AppState>, records_json: String) -> Result<i32, String> {
+    if records_json.len() > MAX_IMPORT_TOTAL_BYTES {
+        return Err("导入内容过大（上限 64MB）".into());
+    }
+    let db = state.db.clone();
+    run_import(db, records_json, "导入内容").await
+}
+
 /// Read a JSON backup from disk (path from native dialog) and import with sanitization.
 #[tauri::command]
 pub async fn import_data_from_path(
@@ -90,30 +103,17 @@ pub async fn import_data_from_path(
 ) -> Result<i32, String> {
     let path = security::validate_json_io_path(&path, false)?;
     let db = state.db.clone();
-    let settings = db.get_settings().map_err(|e| e.to_string())?;
-    tokio::task::spawn_blocking(move || {
-        // Cap import size to limit memory DoS from huge malicious files.
-        let mut text = String::new();
-        std::fs::File::open(&path)
-            .map_err(|e| format!("无法读取备份文件: {e}"))?
-            .take((MAX_IMPORT_TOTAL_BYTES + 1) as u64)
-            .read_to_string(&mut text)
-            .map_err(|e| format!("无法读取备份文件: {e}"))?;
-        if text.len() > MAX_IMPORT_TOTAL_BYTES {
-            return Err("备份文件过大（上限 64MB）".into());
-        }
-        let records: Vec<ClipboardRecord> =
-            serde_json::from_str(&text).map_err(|e| format!("备份文件格式不正确: {e}"))?;
-        validate_import_records(&records)?;
-        db.import_records(
-            &records,
-            settings.max_records,
-            Some(ImportSanitize::from(&*settings)),
-        )
-        .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("导入任务失败: {e}"))?
+    // Cap import size to limit memory DoS from huge malicious files.
+    let mut text = String::new();
+    std::fs::File::open(&path)
+        .map_err(|e| format!("无法读取备份文件: {e}"))?
+        .take((MAX_IMPORT_TOTAL_BYTES + 1) as u64)
+        .read_to_string(&mut text)
+        .map_err(|e| format!("无法读取备份文件: {e}"))?;
+    if text.len() > MAX_IMPORT_TOTAL_BYTES {
+        return Err("备份文件过大（上限 64MB）".into());
+    }
+    run_import(db, text, "备份文件").await
 }
 
 #[tauri::command]
@@ -133,10 +133,7 @@ pub async fn clear_all_data(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn get_stats(state: State<'_, AppState>) -> Result<StatsData, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Stats,
-    )?;
+    require_feature_state(&state, FeatureId::Stats)?;
     // Cleanup stays on the periodic background thread — stats is a hot UI poll.
     let perf_start = std::time::Instant::now();
     let db = state.db.clone();

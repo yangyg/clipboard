@@ -2,9 +2,9 @@
 use tauri::State;
 
 use crate::db::nearest_palette_color;
-use crate::{require_feature, AppState, FeatureId, TagInfo};
+use crate::{AppState, FeatureId, TagInfo};
 
-use super::{cap_ids, spawn_db};
+use super::{cap_ids, require_feature_state, spawn_db};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn get_all_tags(
@@ -12,10 +12,7 @@ pub async fn get_all_tags(
     content_type: Option<String>,
     favorites_only: Option<bool>,
 ) -> Result<Vec<TagInfo>, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     let perf_start = std::time::Instant::now();
     let db = state.db.clone();
     let tags = spawn_db(move || {
@@ -33,10 +30,7 @@ pub async fn create_tag(
     name: String,
     color: String,
 ) -> Result<TagInfo, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     // Snap arbitrary input onto the fixed 12-color wheel at the IPC boundary so
     // the DB never stores a string that could be injected into CSS color-mix.
     let color = nearest_palette_color(&color).to_string();
@@ -68,10 +62,7 @@ pub async fn create_tag(
 
 #[tauri::command]
 pub async fn delete_tag(state: State<'_, AppState>, id: i64) -> Result<(), String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     let db = state.db.clone();
     spawn_db(move || db.delete_tag(id)).await
 }
@@ -83,10 +74,7 @@ pub async fn update_tag(
     name: String,
     color: String,
 ) -> Result<(), String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     let color = nearest_palette_color(&color).to_string();
     let db = state.db.clone();
     spawn_db(move || db.update_tag(id, &name, &color)).await
@@ -98,10 +86,7 @@ pub async fn add_tag_to_record(
     record_id: i64,
     tag_id: i64,
 ) -> Result<(), String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     let db = state.db.clone();
     spawn_db(move || db.add_tag_to_record(record_id, tag_id)).await
 }
@@ -112,10 +97,7 @@ pub async fn remove_tag_from_record(
     record_id: i64,
     tag_id: i64,
 ) -> Result<(), String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     let db = state.db.clone();
     spawn_db(move || db.remove_tag_from_record(record_id, tag_id)).await
 }
@@ -126,10 +108,7 @@ pub async fn set_record_tags(
     record_id: i64,
     tag_ids: Vec<i64>,
 ) -> Result<(), String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Tags,
-    )?;
+    require_feature_state(&state, FeatureId::Tags)?;
     let tag_ids = cap_ids(tag_ids);
     let db = state.db.clone();
     spawn_db(move || db.set_record_tags(record_id, &tag_ids)).await

@@ -157,33 +157,67 @@ impl ClipboardDb {
         conn: &Connection,
         record_ids: &[i64],
     ) -> SqlResult<std::collections::HashMap<i64, Vec<String>>> {
+        let mut pairs = self.load_tag_pairs_batch(conn, record_ids, false)?;
+        let mut map = std::collections::HashMap::new();
+        for (rid, mut names) in pairs.drain() {
+            map.insert(rid, names.drain(..).map(|(n, _)| n).collect());
+        }
+        Ok(map)
+    }
+
+    /// Batch-load (name, color) tag pairs for multiple record IDs — used by the
+    /// export path so tag colors travel with the sync bundle.
+    pub(super) fn load_tag_colors_batch(
+        &self,
+        conn: &Connection,
+        record_ids: &[i64],
+    ) -> SqlResult<std::collections::HashMap<i64, Vec<(String, String)>>> {
+        self.load_tag_pairs_batch(conn, record_ids, true)
+    }
+
+    /// Shared batch query behind `load_tags_batch` / `load_tag_colors_batch` —
+    /// same shape, the color column is included only when requested.
+    fn load_tag_pairs_batch(
+        &self,
+        conn: &Connection,
+        record_ids: &[i64],
+        include_color: bool,
+    ) -> SqlResult<std::collections::HashMap<i64, Vec<(String, String)>>> {
         if record_ids.is_empty() {
             return Ok(std::collections::HashMap::new());
         }
         let placeholders = Self::id_placeholders(record_ids.len());
+        let color_col = if include_color { ", t.color" } else { "" };
         let sql = format!(
-            "SELECT rt.record_id, t.name FROM tags t
+            "SELECT rt.record_id, t.name{color_col} FROM tags t
              INNER JOIN record_tags rt ON rt.tag_id = t.id
-             WHERE rt.record_id IN ({})
-             ORDER BY rt.record_id",
-            placeholders
+             WHERE rt.record_id IN ({placeholders}) ORDER BY rt.record_id"
         );
         let params: Vec<&dyn rusqlite::types::ToSql> = record_ids
             .iter()
             .map(|id| id as &dyn rusqlite::types::ToSql)
             .collect();
         let mut stmt = conn.prepare(&sql)?;
-        let mut map: std::collections::HashMap<i64, Vec<String>> = std::collections::HashMap::new();
+        let mut map: std::collections::HashMap<i64, Vec<(String, String)>> =
+            std::collections::HashMap::new();
         for id in record_ids {
             map.entry(*id).or_default();
         }
         let rows = stmt.query_map(params.as_slice(), |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                if include_color {
+                    Some(row.get::<_, String>(2)?)
+                } else {
+                    None
+                },
+            ))
         })?;
         for row in rows {
-            let (rid, tag_name) = row?;
-            if let Some(tags) = map.get_mut(&rid) {
-                tags.push(tag_name);
+            let (rid, name, color) = row?;
+            if let Some(pairs) = map.get_mut(&rid) {
+                pairs.push((name, color.unwrap_or_default()));
             }
         }
         Ok(map)
@@ -245,49 +279,6 @@ impl ClipboardDb {
             }
         }
         Ok(())
-    }
-
-    /// Batch-load (name, color) tag pairs for multiple record IDs — used by the
-    /// export path so tag colors travel with the sync bundle.
-    pub(super) fn load_tag_colors_batch(
-        &self,
-        conn: &Connection,
-        record_ids: &[i64],
-    ) -> SqlResult<std::collections::HashMap<i64, Vec<(String, String)>>> {
-        if record_ids.is_empty() {
-            return Ok(std::collections::HashMap::new());
-        }
-        let placeholders = Self::id_placeholders(record_ids.len());
-        let sql = format!(
-            "SELECT rt.record_id, t.name, t.color FROM tags t
-             INNER JOIN record_tags rt ON rt.tag_id = t.id
-             WHERE rt.record_id IN ({}) ORDER BY rt.record_id",
-            placeholders
-        );
-        let params: Vec<&dyn rusqlite::types::ToSql> = record_ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
-        let mut stmt = conn.prepare(&sql)?;
-        let mut map: std::collections::HashMap<i64, Vec<(String, String)>> =
-            std::collections::HashMap::new();
-        for id in record_ids {
-            map.entry(*id).or_default();
-        }
-        let rows = stmt.query_map(params.as_slice(), |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-            ))
-        })?;
-        for row in rows {
-            let (rid, name, color) = row?;
-            if let Some(pairs) = map.get_mut(&rid) {
-                pairs.push((name, color));
-            }
-        }
-        Ok(map)
     }
 
     /// Assign (name, color) pairs onto records via one batch query (export path).

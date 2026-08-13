@@ -2,12 +2,14 @@
 use tauri::State;
 
 use crate::ai::AiClient;
-use crate::{require_feature, AppState, FeatureId};
+use crate::{AppState, FeatureId};
+
+use super::require_feature_state;
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn ai_test_connection(state: State<'_, AppState>) -> Result<(), String> {
     let settings = state.db.get_settings().map_err(|e| e.to_string())?;
-    require_feature(&settings, FeatureId::Ai)?;
+    require_feature_state(&state, FeatureId::Ai)?;
     if !settings.enable_ai {
         return Err("请先在 AI 设置中开启 AI 功能".into());
     }

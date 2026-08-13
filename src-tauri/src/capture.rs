@@ -204,7 +204,7 @@ fn process_text_job(
             info!(
                 "New clipboard record: id={}, type={}, formatted={}, is_new={}",
                 id,
-                content_type,
+                content_type.as_str(),
                 captured.html.is_some(),
                 is_new
             );

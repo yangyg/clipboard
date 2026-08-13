@@ -27,6 +27,7 @@ pub use tray::*;
 pub use webdav::*;
 
 use crate::AppState;
+use crate::FeatureId;
 use tauri::State;
 
 pub(crate) fn settings_features(
@@ -36,9 +37,24 @@ pub(crate) fn settings_features(
     Ok(s.features.clone())
 }
 
+/// Gate a command on a product capability, resolving the settings from the
+/// store in one call. Mirrors `require_feature` but for the common
+/// `state.db.get_settings()` + `FeatureId::X` pair that every command repeats.
+pub(crate) fn require_feature_state(
+    state: &State<'_, AppState>,
+    id: FeatureId,
+) -> Result<(), String> {
+    let settings = state.db.get_settings().map_err(|e| e.to_string())?;
+    crate::require_feature(&settings, id)
+}
+
 /// Upper bound for page-size IPC args — a compromised webview must not be able
 /// to materialize every record (incl. sensitive) in a single call.
-pub(crate) const MAX_PAGE_SIZE: i32 = 200;
+///
+/// Distinct from `db::MAX_PAGE_SIZE` (500, the DB-level cap): commands clamp
+/// user input to this stricter IPC bound so the webview can never request the
+/// full table in one page.
+pub(crate) const MAX_IPC_PAGE_SIZE: i32 = 200;
 /// Upper bound for batch id args, keeps placeholders / SQL bounded.
 pub(crate) const MAX_BATCH_IDS: usize = 1000;
 

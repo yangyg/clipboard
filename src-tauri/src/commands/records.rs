@@ -2,9 +2,9 @@
 use tauri::State;
 
 use crate::security;
-use crate::{require_feature, AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult};
+use crate::{AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult};
 
-use super::{cap_ids, settings_features, spawn_db, MAX_PAGE_SIZE};
+use super::{cap_ids, require_feature_state, settings_features, spawn_db, MAX_IPC_PAGE_SIZE};
 
 #[tauri::command(rename_all = "snake_case")]
 pub async fn get_records(
@@ -23,7 +23,7 @@ pub async fn get_records(
     let perf_start = std::time::Instant::now();
     // Cleanup runs on the periodic thread — keep list reads off the hot path.
     // Bound `limit` so a compromised webview can't materialize every record.
-    let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
+    let limit = limit.unwrap_or(60).clamp(1, MAX_IPC_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let include_tags = settings_features(&state)?.tags;
     let db = state.db.clone();
@@ -64,7 +64,7 @@ pub async fn search_records(
     before_id: Option<i64>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
-    let limit = limit.unwrap_or(60).clamp(1, MAX_PAGE_SIZE);
+    let limit = limit.unwrap_or(60).clamp(1, MAX_IPC_PAGE_SIZE);
     let offset = offset.unwrap_or(0).max(0);
     let include_tags = settings_features(&state)?.tags;
     let db = state.db.clone();
@@ -193,10 +193,7 @@ pub async fn delete_records_batch(
     state: State<'_, AppState>,
     ids: Vec<i64>,
 ) -> Result<usize, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Batch,
-    )?;
+    require_feature_state(&state, FeatureId::Batch)?;
     let ids = cap_ids(ids);
     let db = state.db.clone();
     spawn_db(move || db.trash_records_batch(&ids)).await
@@ -213,10 +210,7 @@ pub async fn restore_records_batch(
     state: State<'_, AppState>,
     ids: Vec<i64>,
 ) -> Result<usize, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Batch,
-    )?;
+    require_feature_state(&state, FeatureId::Batch)?;
     let ids = cap_ids(ids);
     let db = state.db.clone();
     spawn_db(move || db.restore_records_batch(&ids)).await
@@ -233,10 +227,7 @@ pub async fn permanently_delete_records_batch(
     state: State<'_, AppState>,
     ids: Vec<i64>,
 ) -> Result<usize, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Batch,
-    )?;
+    require_feature_state(&state, FeatureId::Batch)?;
     let ids = cap_ids(ids);
     let db = state.db.clone();
     spawn_db(move || db.permanently_delete_records_batch(&ids)).await
@@ -272,10 +263,7 @@ pub async fn batch_set_favorite(
     ids: Vec<i64>,
     favorite: bool,
 ) -> Result<usize, String> {
-    require_feature(
-        &(*state.db.get_settings().map_err(|e| e.to_string())?),
-        FeatureId::Batch,
-    )?;
+    require_feature_state(&state, FeatureId::Batch)?;
     let ids = cap_ids(ids);
     let db = state.db.clone();
     spawn_db(move || db.batch_set_favorite(&ids, favorite)).await

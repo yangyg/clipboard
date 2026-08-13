@@ -38,7 +38,7 @@ impl ClipboardDb {
             return Ok(0);
         }
         let conn = self.conn.lock();
-        let rows = self.fetch_trash_metadata(&conn, ids)?;
+        let rows = self.fetch_trash_rows(&conn, Some(ids), false)?;
         let now = chrono::Utc::now().to_rfc3339();
         let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
@@ -49,29 +49,46 @@ impl ClipboardDb {
         params.push(&now);
         params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
         let count = conn.execute(&sql, params.as_slice())?;
-        for (hash, is_sensitive) in rows {
+        for (_, hash, is_sensitive) in rows {
             Self::upsert_tombstone_conn(&conn, &hash, &now, is_sensitive)?;
         }
         Ok(count)
     }
 
-    /// (hash, is_sensitive) for the given ids — tombstone inputs.
-    fn fetch_trash_metadata(
+    /// `(id, hash, is_sensitive)` rows among `ids` (or all rows when `ids` is
+    /// None), optionally restricted to trashed rows. Shared tombstone input
+    /// builder for the trash / restore / permanent-delete / empty-trash paths.
+    fn fetch_trash_rows(
         &self,
         conn: &rusqlite::Connection,
-        ids: &[i64],
-    ) -> SqlResult<Vec<(String, bool)>> {
-        let placeholders = Self::id_placeholders(ids.len());
-        let mut stmt = conn.prepare(&format!(
-            "SELECT hash, is_sensitive FROM records WHERE id IN ({placeholders})"
-        ))?;
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
+        ids: Option<&[i64]>,
+        trashed_only: bool,
+    ) -> SqlResult<Vec<(i64, String, bool)>> {
+        let filter = match (ids, trashed_only) {
+            (Some(ids), false) => format!("WHERE id IN ({})", Self::id_placeholders(ids.len())),
+            (Some(ids), true) => format!(
+                "WHERE is_trashed = 1 AND id IN ({})",
+                Self::id_placeholders(ids.len())
+            ),
+            (None, true) => "WHERE is_trashed = 1".to_string(),
+            (None, false) => String::new(),
+        };
+        let sql = format!("SELECT id, hash, is_sensitive FROM records {filter}");
+        let mut stmt = conn.prepare(&sql)?;
+        let params: Vec<&dyn rusqlite::types::ToSql> = match ids {
+            Some(ids) => ids
+                .iter()
+                .map(|id| id as &dyn rusqlite::types::ToSql)
+                .collect(),
+            None => Vec::new(),
+        };
         let rows = stmt
             .query_map(params.as_slice(), |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i32>(2)? != 0,
+                ))
             })?
             .collect::<SqlResult<Vec<_>>>()?;
         Ok(rows)
@@ -125,7 +142,7 @@ impl ClipboardDb {
             return Ok(0);
         }
         let conn = self.conn.lock();
-        let hashes = self.fetch_hashes(&conn, ids)?;
+        let hashes = self.fetch_trash_rows(&conn, Some(ids), false)?;
         // Drop trashed rows whose hash was reclaimed by a fresh active copy
         // BEFORE the restore UPDATE: otherwise the partial unique index
         // `uq_records_hash_active` would abort the whole statement. Such rows
@@ -141,25 +158,10 @@ impl ClipboardDb {
         params.push(&now);
         params.extend(ids.iter().map(|id| id as &dyn rusqlite::types::ToSql));
         let count = conn.execute(&sql, params.as_slice())?;
-        for hash in hashes {
+        for (_, hash, _) in hashes {
             conn.execute("DELETE FROM sync_tombstones WHERE hash = ?", [hash])?;
         }
         Ok(count)
-    }
-
-    fn fetch_hashes(&self, conn: &rusqlite::Connection, ids: &[i64]) -> SqlResult<Vec<String>> {
-        let placeholders = Self::id_placeholders(ids.len());
-        let mut stmt = conn.prepare(&format!(
-            "SELECT hash FROM records WHERE id IN ({placeholders})"
-        ))?;
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
-        let hashes = stmt
-            .query_map(params.as_slice(), |row| row.get::<_, String>(0))?
-            .collect::<SqlResult<Vec<_>>>()?;
-        Ok(hashes)
     }
 
     /// Trashed rows whose hash an active row already holds can never be
@@ -209,7 +211,7 @@ impl ClipboardDb {
         }
         let conn = self.conn.lock();
         let media = self.fetch_media_paths_by_ids(&conn, ids)?;
-        let rows = self.fetch_trashed_metadata(&conn, ids)?;
+        let rows = self.fetch_trash_rows(&conn, Some(ids), true)?;
         let placeholders = Self::id_placeholders(ids.len());
         let sql = format!(
             "DELETE FROM records WHERE is_trashed = 1 AND id IN ({})",
@@ -223,7 +225,7 @@ impl ClipboardDb {
         drop(conn);
         if count > 0 {
             let now = chrono::Utc::now().to_rfc3339();
-            for (hash, is_sensitive) in rows {
+            for (_, hash, is_sensitive) in rows {
                 // See permanently_delete_record: log, never swallow silently.
                 if let Err(e) = self.upsert_tombstone(&hash, &now, is_sensitive) {
                     tracing::warn!("Failed to write tombstone for {hash}: {e}");
@@ -234,45 +236,9 @@ impl ClipboardDb {
         Ok(count)
     }
 
-    /// (hash, is_sensitive) for trashed rows among `ids` — tombstone inputs.
-    fn fetch_trashed_metadata(
-        &self,
-        conn: &rusqlite::Connection,
-        ids: &[i64],
-    ) -> SqlResult<Vec<(String, bool)>> {
-        let placeholders = Self::id_placeholders(ids.len());
-        let mut stmt = conn.prepare(&format!(
-            "SELECT hash, is_sensitive FROM records
-             WHERE is_trashed = 1 AND id IN ({placeholders})"
-        ))?;
-        let params: Vec<&dyn rusqlite::types::ToSql> = ids
-            .iter()
-            .map(|id| id as &dyn rusqlite::types::ToSql)
-            .collect();
-        let rows = stmt
-            .query_map(params.as_slice(), |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)? != 0))
-            })?
-            .collect::<SqlResult<Vec<_>>>()?;
-        Ok(rows)
-    }
-
     pub fn empty_trash(&self) -> SqlResult<usize> {
         let conn = self.conn.lock();
-        let rows: Vec<(i64, String, bool)> = {
-            let mut stmt =
-                conn.prepare("SELECT id, hash, is_sensitive FROM records WHERE is_trashed = 1")?;
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((
-                        row.get::<_, i64>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, i32>(2)? != 0,
-                    ))
-                })?
-                .collect::<SqlResult<Vec<_>>>()?;
-            rows
-        };
+        let rows = self.fetch_trash_rows(&conn, None, true)?;
         let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
         let now = chrono::Utc::now().to_rfc3339();
@@ -371,24 +337,11 @@ mod tests {
     use std::path::PathBuf;
 
     fn temp_db() -> (ClipboardDb, PathBuf) {
-        let dir = std::env::temp_dir().join(format!(
-            "clipvault_clear_all_test_{}_{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
-        (db, dir)
+        crate::db::test_util::temp_db("trash")
     }
 
     fn cleanup(dir: PathBuf) {
-        for name in ["test.db", "test.db-wal", "test.db-shm"] {
-            let _ = std::fs::remove_file(dir.join(name));
-        }
-        let _ = std::fs::remove_dir_all(dir);
+        crate::db::test_util::cleanup(dir)
     }
 
     fn make_record(content: &str, hash: &str, trashed: bool) -> ClipboardRecord {

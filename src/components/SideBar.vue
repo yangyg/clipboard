@@ -2,32 +2,48 @@
   <aside class="sidebar">
     <!-- Navigation: Categories (includes favorites as a view filter) -->
     <nav class="sidebar-section" :aria-label="$t('sidebar.categories')">
-      <div class="sidebar-label">{{ $t('sidebar.categories') }}</div>
       <button
-        v-for="item in categoryItems"
-        :key="item.key"
         type="button"
-        class="nav-item"
-        :class="{
-          active: props.activeCategory === item.key,
-          'has-cat-color': !!item.color,
-        }"
-        :style="item.color ? { '--cat-color': item.color } : undefined"
-        :aria-current="props.activeCategory === item.key ? 'page' : undefined"
-        :data-tooltip="isNarrow ? item.label : undefined"
-        :aria-label="item.label"
-        @click="selectCategory(item.key)"
+        class="sidebar-section-toggle"
+        :aria-expanded="!categoriesCollapsed"
+        @click="categoriesCollapsed = !categoriesCollapsed"
       >
-        <span class="nav-icon">
-          <AppIcon
-            :name="item.icon"
-            :size="15"
-            :fill="props.activeCategory === item.key && item.icon === 'star' ? 'currentColor' : 'none'"
-          />
-        </span>
-        <span class="nav-label">{{ item.label }}</span>
-        <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
+        <span class="sidebar-label">{{ $t('sidebar.categories') }}</span>
+        <AppIcon
+          name="arrowUp"
+          :size="10"
+          class="section-chevron"
+          :class="{ collapsed: categoriesCollapsed }"
+          aria-hidden="true"
+        />
       </button>
+      <div v-show="!categoriesCollapsed">
+        <button
+          v-for="item in categoryItems"
+          :key="item.key"
+          type="button"
+          class="nav-item"
+          :class="{
+            active: props.activeCategory === item.key,
+            'has-cat-color': !!item.color,
+          }"
+          :style="item.color ? { '--cat-color': item.color } : undefined"
+          :aria-current="props.activeCategory === item.key ? 'page' : undefined"
+          :data-tooltip="isNarrow ? item.label : undefined"
+          :aria-label="item.label"
+          @click="selectCategory(item.key)"
+        >
+          <span class="nav-icon">
+            <AppIcon
+              :name="item.icon"
+              :size="15"
+              :fill="props.activeCategory === item.key && item.icon === 'star' ? 'currentColor' : 'none'"
+            />
+          </span>
+          <span class="nav-label">{{ item.label }}</span>
+          <span v-if="item.count !== undefined" class="nav-count">{{ item.count }}</span>
+        </button>
+      </div>
     </nav>
 
     <!-- Trash: separate from categories / favorites -->
@@ -48,9 +64,27 @@
     </nav>
 
     <!-- Tags Section -->
-    <div v-if="tagsEnabled" class="sidebar-section sidebar-tags-section">
+    <div
+      v-if="tagsEnabled"
+      class="sidebar-section"
+      :class="tagsCollapsed ? 'sidebar-tags-section-collapsed' : 'sidebar-tags-section'"
+    >
       <div class="sidebar-tags-header">
-        <div class="sidebar-label">{{ $t('sidebar.tagManagement') }}</div>
+        <button
+          type="button"
+          class="sidebar-section-toggle sidebar-tags-toggle"
+          :aria-expanded="!tagsCollapsed"
+          @click="tagsCollapsed = !tagsCollapsed"
+        >
+          <span class="sidebar-label">{{ $t('sidebar.tagManagement') }}</span>
+          <AppIcon
+            name="arrowUp"
+            :size="10"
+            class="section-chevron"
+            :class="{ collapsed: tagsCollapsed }"
+            aria-hidden="true"
+          />
+        </button>
         <button
           type="button"
           class="tag-add"
@@ -62,7 +96,7 @@
           <AppIcon name="plus" :size="11" />
         </button>
       </div>
-      <div class="tags-list" role="list">
+      <div v-show="!tagsCollapsed" class="tags-list" role="list">
         <button
           v-for="tag in primaryTags"
           :key="tag.id"
@@ -211,6 +245,10 @@ const emit = defineEmits<{
 
 const moreTagsOpen = ref(false);
 
+/** Clicking a section title collapses/expands its list (session state). */
+const categoriesCollapsed = ref(false);
+const tagsCollapsed = ref(false);
+
 /** Count > 0, or currently selected (so a zero-count filter stays visible). */
 const primaryTags = computed(() =>
   clipboardStore.tags.filter(
@@ -321,6 +359,11 @@ const {
   overflow: hidden;
 }
 
+/* Collapsed: don't stretch into the remaining space (the tags list is hidden). */
+.sidebar-tags-section-collapsed {
+  flex: 0 0 auto;
+}
+
 .sidebar-tags-header {
   display: flex;
   align-items: center;
@@ -335,6 +378,37 @@ const {
    Keep the left padding so the title aligns with the other section labels. */
 .sidebar-tags-header .sidebar-label {
   padding: 0 0 0 var(--space-2);
+}
+
+/* Clickable wrapper around the section title (collapse/expand). Invisible —
+   all styling stays on `.sidebar-label`, so titles look exactly as before. */
+.sidebar-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+/* In the tags header the toggle takes the free space so the chevron sits
+   right after the label and the add button stays right-aligned. */
+.sidebar-tags-toggle {
+  flex: 1;
+  min-width: 0;
+}
+
+.section-chevron {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.section-chevron.collapsed {
+  transform: rotate(-90deg);
 }
 
 .sidebar-label {
@@ -588,7 +662,7 @@ const {
     min-width: 56px;
   }
 
-  .sidebar-label,
+  .sidebar-section-toggle,
   .nav-label,
   .nav-count,
   .tag-name,

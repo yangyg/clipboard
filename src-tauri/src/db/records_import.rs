@@ -187,6 +187,17 @@ impl ClipboardDb {
             };
 
             if existing_hashes.contains(&hash) {
+                // Read the active row before the merge: the UPDATE below may
+                // raise `updated_at` to the incoming value, and the tag LWW
+                // gate must compare against the local pre-merge timestamp —
+                // an older snapshot must never roll back a newer local edit.
+                let (id, local_updated_at) = tx.query_row(
+                    "SELECT id, updated_at FROM records WHERE hash = ? AND is_trashed = 0",
+                    [&hash],
+                    |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+                )?;
+                let incoming_newer = record.updated_at.as_str() > local_updated_at.as_str();
+
                 let changed = tx.execute(
                     "UPDATE records SET
                         is_favorite = CASE WHEN is_favorite = 1 OR ? = 1 THEN 1 ELSE 0 END,
@@ -239,19 +250,15 @@ impl ClipboardDb {
                 if changed > 0 {
                     merged += 1;
                 }
-                // Tag sync: replace the links only when the incoming snapshot
-                // actually carries tags — a bundle written before tag-sync
-                // shipped has an empty `tags` array and must not wipe the
-                // local associations.
-                if record.tags.iter().any(|t| !t.trim().is_empty()) {
+                // Tag sync (LWW): replace the links only when the incoming
+                // snapshot is strictly newer AND actually carries tags — a
+                // bundle written before tag-sync shipped has an empty `tags`
+                // array and must not wipe the local associations, and a stale
+                // snapshot must not clobber a newer local tag edit.
+                if incoming_newer && record.tags.iter().any(|t| !t.trim().is_empty()) {
                     // Same predicate as the UPDATE above: a trashed row may
                     // share the hash with an active row, and tags belong to
                     // the active one.
-                    let id: i64 = tx.query_row(
-                        "SELECT id FROM records WHERE hash = ? AND is_trashed = 0",
-                        [&hash],
-                        |row| row.get(0),
-                    )?;
                     if super::ClipboardDb::set_record_tags_by_name_conn_cached(
                         &tx,
                         id,

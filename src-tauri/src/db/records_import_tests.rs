@@ -27,7 +27,15 @@ fn cleanup(dir: PathBuf) {
 }
 
 fn make_record(content: &str, hash: &str, tags: &[&str]) -> ClipboardRecord {
-    let now = chrono::Utc::now().to_rfc3339();
+    make_record_at(content, hash, tags, chrono::Utc::now().to_rfc3339())
+}
+
+fn make_record_at(
+    content: &str,
+    hash: &str,
+    tags: &[&str],
+    stamp: String,
+) -> ClipboardRecord {
     ClipboardRecord {
         id: 0,
         content: content.to_string(),
@@ -43,8 +51,8 @@ fn make_record(content: &str, hash: &str, tags: &[&str]) -> ClipboardRecord {
         is_sensitive: false,
         is_trashed: false,
         auto_expire_at: None,
-        created_at: now.clone(),
-        updated_at: now,
+        created_at: stamp.clone(),
+        updated_at: stamp,
         tags: tags.iter().map(|s| s.to_string()).collect(),
         content_html: None,
         media_path: None,
@@ -99,6 +107,52 @@ fn import_merge_preserves_local_tags_for_tagless_snapshot() {
         .unwrap();
     let exported = db.get_records_for_export(10, 0).unwrap();
     assert_eq!(exported[0].tags, ["重要"]);
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_preserves_newer_local_tags_against_older_snapshot() {
+    let (db, dir) = temp_db();
+    let t_older = "2026-01-02T00:00:00Z".to_string();
+    let t_newer = "2026-02-02T00:00:00Z".to_string();
+    db.import_records_with_merge(
+        &[make_record_at("same", "hash-lww", &["重要"], t_newer)],
+        100,
+        None,
+    )
+    .unwrap();
+    db.import_records_with_merge(
+        &[make_record_at("same", "hash-lww", &["链接"], t_older)],
+        100,
+        None,
+    )
+    .unwrap();
+    let exported = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(exported[0].tags, ["重要"]);
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_applies_newer_snapshot_tags_over_stale_local() {
+    let (db, dir) = temp_db();
+    let t_older = "2026-01-02T00:00:00Z".to_string();
+    let t_newer = "2026-02-02T00:00:00Z".to_string();
+    db.import_records_with_merge(
+        &[make_record_at("same", "hash-lww2", &["重要"], t_older)],
+        100,
+        None,
+    )
+    .unwrap();
+    let (_, _, tc) = db
+        .import_records_with_merge(
+            &[make_record_at("same", "hash-lww2", &["链接"], t_newer)],
+            100,
+            None,
+        )
+        .unwrap();
+    let exported = db.get_records_for_export(10, 0).unwrap();
+    assert_eq!(exported[0].tags, ["链接"]);
+    assert_eq!(tc, 1);
     cleanup(dir);
 }
 

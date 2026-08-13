@@ -30,12 +30,7 @@ fn make_record(content: &str, hash: &str, tags: &[&str]) -> ClipboardRecord {
     make_record_at(content, hash, tags, chrono::Utc::now().to_rfc3339())
 }
 
-fn make_record_at(
-    content: &str,
-    hash: &str,
-    tags: &[&str],
-    stamp: String,
-) -> ClipboardRecord {
+fn make_record_at(content: &str, hash: &str, tags: &[&str], stamp: String) -> ClipboardRecord {
     make_record_with_colors(content, hash, tags, &[], stamp)
 }
 

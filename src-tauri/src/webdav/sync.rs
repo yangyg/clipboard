@@ -217,9 +217,7 @@ pub async fn webdav_pull(
     let local_tombstones: HashMap<String, String> = {
         let load_db = Arc::clone(db);
         let rows = tokio::task::spawn_blocking(move || {
-            load_db
-                .get_sync_tombstones()
-                .map_err(|e| e.to_string())
+            load_db.get_sync_tombstones().map_err(|e| e.to_string())
         })
         .await
         .map_err(|e| format!("WebDAV 加载本地 tombstone 任务失败: {e}"))??;
@@ -699,8 +697,7 @@ mod tests {
 
     #[test]
     fn filter_tombstoned_drops_older_copies_keeps_newer_recopy() {
-        let tombstones =
-            HashMap::from([("h1".to_string(), "2026-02-01T00:00:00Z".to_string())]);
+        let tombstones = HashMap::from([("h1".to_string(), "2026-02-01T00:00:00Z".to_string())]);
         let records = vec![
             mk("h1", "2026-01-01T00:00:00Z"), // stale copy → dropped
             mk("h1", "2026-03-01T00:00:00Z"), // deliberate re-copy → kept
@@ -708,7 +705,9 @@ mod tests {
         ];
         let kept = filter_tombstoned(records, &tombstones);
         assert_eq!(kept.len(), 2);
-        assert!(kept.iter().any(|r| r.hash == "h1" && r.updated_at == "2026-03-01T00:00:00Z"));
+        assert!(kept
+            .iter()
+            .any(|r| r.hash == "h1" && r.updated_at == "2026-03-01T00:00:00Z"));
         assert!(kept.iter().any(|r| r.hash == "h2"));
     }
 

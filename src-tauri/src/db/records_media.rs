@@ -275,7 +275,11 @@ impl ClipboardDb {
             map.entry(*id).or_default();
         }
         let rows = stmt.query_map(params.as_slice(), |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })?;
         for row in rows {
             let (rid, name, color) = row?;

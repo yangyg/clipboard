@@ -242,7 +242,11 @@ impl ClipboardDb {
     /// cross-device id collisions (tags merge by name, not by autoincrement id).
     /// An incoming `color` is snapped to the palette and applied to the found
     /// tag too, so tag colors follow records across devices.
-    fn ensure_tag_by_name_conn(conn: &Connection, name: &str, color: Option<&str>) -> SqlResult<i64> {
+    fn ensure_tag_by_name_conn(
+        conn: &Connection,
+        name: &str,
+        color: Option<&str>,
+    ) -> SqlResult<i64> {
         // Colors arrive from an untrusted bundle — snap so the tags table never
         // stores a string that could be injected into CSS color-mix.
         let color = color.map(nearest_palette_color);
@@ -427,11 +431,10 @@ impl ClipboardDb {
 
     pub fn update_tag(&self, id: i64, name: &str, color: &str) -> SqlResult<()> {
         let conn = self.conn.lock();
-        let old: (String, String) = conn.query_row(
-            "SELECT name, color FROM tags WHERE id = ?",
-            [id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?;
+        let old: (String, String) =
+            conn.query_row("SELECT name, color FROM tags WHERE id = ?", [id], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?;
         conn.execute(
             "UPDATE tags SET name = ?, color = ? WHERE id = ?",
             params![name, color, id],

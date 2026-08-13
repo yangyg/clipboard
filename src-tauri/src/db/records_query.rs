@@ -108,6 +108,51 @@ impl ClipboardDb {
         }
     }
 
+    /// Append the pagination tail shared by list + search queries: either the
+    /// keyset predicate (`is_pinned/updated_at/id`) or an OFFSET clause. Both
+    /// branches MUST stay in sync across callers — a drift here silently breaks
+    /// paging (skipped/duplicate rows) with no compile-time error.
+    pub(super) fn push_pagination_tail(
+        sql: &mut String,
+        params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+        use_keyset: bool,
+        before_pinned: Option<i32>,
+        before_updated_at: Option<&str>,
+        before_id: Option<i64>,
+        limit: i32,
+        offset: i32,
+        trashed: bool,
+        sort: Option<&str>,
+    ) {
+        if use_keyset {
+            let pin = before_pinned.unwrap_or(0);
+            let ts = before_updated_at.unwrap().to_string();
+            let id = before_id.unwrap();
+            // ORDER BY is_pinned DESC, updated_at DESC, id DESC → next page
+            sql.push_str(
+                " AND (
+                    is_pinned < ?
+                    OR (is_pinned = ? AND updated_at < ?)
+                    OR (is_pinned = ? AND updated_at = ? AND id < ?)
+                )",
+            );
+            params.push(Box::new(pin));
+            params.push(Box::new(pin));
+            params.push(Box::new(ts.clone()));
+            params.push(Box::new(pin));
+            params.push(Box::new(ts));
+            params.push(Box::new(id));
+            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
+            params.push(Box::new(clamp_page_limit(limit)));
+        } else {
+            sql.push_str(" ORDER BY ");
+            sql.push_str(Self::order_by_clause(trashed, sort));
+            sql.push_str(" LIMIT ? OFFSET ?");
+            params.push(Box::new(clamp_page_limit(limit)));
+            params.push(Box::new(offset.max(0)));
+        }
+    }
+
     /// Build a comma-joined `?,?,…` placeholder list for an `IN (…)` clause.
     pub(super) fn id_placeholders(n: usize) -> String {
         std::iter::repeat_n("?", n).collect::<Vec<_>>().join(",")
@@ -213,33 +258,18 @@ impl ClipboardDb {
             && before_updated_at.is_some()
             && matches!(sort.unwrap_or("updated_desc"), "updated_desc");
 
-        if use_keyset {
-            let pin = before_pinned.unwrap_or(0);
-            let ts = before_updated_at.unwrap().to_string();
-            let id = before_id.unwrap();
-            // ORDER BY is_pinned DESC, updated_at DESC, id DESC → next page
-            sql.push_str(
-                " AND (
-                    is_pinned < ?
-                    OR (is_pinned = ? AND updated_at < ?)
-                    OR (is_pinned = ? AND updated_at = ? AND id < ?)
-                )",
-            );
-            params.push(Box::new(pin));
-            params.push(Box::new(pin));
-            params.push(Box::new(ts.clone()));
-            params.push(Box::new(pin));
-            params.push(Box::new(ts));
-            params.push(Box::new(id));
-            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
-            params.push(Box::new(clamp_page_limit(limit)));
-        } else {
-            sql.push_str(" ORDER BY ");
-            sql.push_str(Self::order_by_clause(trashed, sort));
-            sql.push_str(" LIMIT ? OFFSET ?");
-            params.push(Box::new(clamp_page_limit(limit)));
-            params.push(Box::new(offset.max(0)));
-        }
+        Self::push_pagination_tail(
+            &mut sql,
+            &mut params,
+            use_keyset,
+            before_pinned,
+            before_updated_at,
+            before_id,
+            limit,
+            offset,
+            trashed,
+            sort,
+        );
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();

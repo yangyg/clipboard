@@ -1,7 +1,7 @@
 //! Full-text / short-query search over records.
 use rusqlite::Result as SqlResult;
 
-use super::{clamp_page_limit, ClipboardDb, RECORD_COLS_LIST};
+use super::{ClipboardDb, RECORD_COLS_LIST};
 use crate::ClipboardRecord;
 
 /// Upper bound on FTS candidates materialized before the outer sort/keyset
@@ -88,33 +88,18 @@ impl ClipboardDb {
             && before_updated_at.is_some()
             && matches!(sort.unwrap_or("updated_desc"), "updated_desc");
 
-        if use_keyset {
-            let pin = before_pinned.unwrap_or(0);
-            let ts = before_updated_at.unwrap().to_string();
-            let id = before_id.unwrap();
-            // ORDER BY is_pinned DESC, updated_at DESC, id DESC → next page
-            sql.push_str(
-                " AND (
-                    is_pinned < ?
-                    OR (is_pinned = ? AND updated_at < ?)
-                    OR (is_pinned = ? AND updated_at = ? AND id < ?)
-                )",
-            );
-            params.push(Box::new(pin));
-            params.push(Box::new(pin));
-            params.push(Box::new(ts.clone()));
-            params.push(Box::new(pin));
-            params.push(Box::new(ts));
-            params.push(Box::new(id));
-            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
-            params.push(Box::new(clamp_page_limit(limit)));
-        } else {
-            sql.push_str(" ORDER BY ");
-            sql.push_str(Self::order_by_clause(false, sort));
-            sql.push_str(" LIMIT ? OFFSET ?");
-            params.push(Box::new(clamp_page_limit(limit)));
-            params.push(Box::new(offset.max(0)));
-        }
+        ClipboardDb::push_pagination_tail(
+            &mut sql,
+            &mut params,
+            use_keyset,
+            before_pinned,
+            before_updated_at,
+            before_id,
+            limit,
+            offset,
+            false,
+            sort,
+        );
 
         let param_refs: Vec<&dyn rusqlite::types::ToSql> =
             params.iter().map(|p| p.as_ref()).collect();

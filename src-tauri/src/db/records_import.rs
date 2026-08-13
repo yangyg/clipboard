@@ -263,6 +263,7 @@ impl ClipboardDb {
                         &tx,
                         id,
                         &record.tags,
+                        &record.tag_colors,
                         &mut tag_id_cache,
                         &mut fts_dirty,
                     )? {
@@ -315,6 +316,7 @@ impl ClipboardDb {
                     &tx,
                     record_id,
                     &record.tags,
+                    &record.tag_colors,
                     &mut tag_id_cache,
                     &mut fts_dirty,
                 )? {

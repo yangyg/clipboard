@@ -240,25 +240,37 @@ impl ClipboardDb {
     /// Find a tag by name or create it as non-auto. JSON import and WebDAV pull
     /// use this so tag definitions follow records across devices without
     /// cross-device id collisions (tags merge by name, not by autoincrement id).
-    fn ensure_tag_by_name_conn(conn: &Connection, name: &str) -> SqlResult<i64> {
+    /// An incoming `color` is snapped to the palette and applied to the found
+    /// tag too, so tag colors follow records across devices.
+    fn ensure_tag_by_name_conn(conn: &Connection, name: &str, color: Option<&str>) -> SqlResult<i64> {
+        // Colors arrive from an untrusted bundle — snap so the tags table never
+        // stores a string that could be injected into CSS color-mix.
+        let color = color.map(nearest_palette_color);
         if let Ok(id) = conn.query_row("SELECT id FROM tags WHERE name = ?", [name], |row| {
             row.get(0)
         }) {
+            if let Some(c) = color {
+                conn.execute(
+                    "UPDATE tags SET color = ? WHERE id = ? AND color != ?",
+                    params![c, id, c],
+                )?;
+            }
             return Ok(id);
         }
         conn.execute(
             "INSERT INTO tags (name, color, is_auto) VALUES (?, ?, 0)",
-            params![name, Self::auto_tag_color(name)],
+            params![name, color.unwrap_or_else(|| Self::auto_tag_color(name))],
         )?;
         Ok(conn.last_insert_rowid())
     }
 
     /// Replace a record's tag links by name inside the caller's transaction.
     /// Dedupes + trims names; missing tags are created via
-    /// `ensure_tag_by_name_conn`. Returns `Ok(false)` (leaving record_tags /
-    /// FTS untouched) when `names` is empty or identical to the record's
-    /// current tags — callers rely on that to avoid wiping local tags from
-    /// tag-less snapshots and to count real changes.
+    /// `ensure_tag_by_name_conn` (incoming `colors` applied to each tag so tag
+    /// colors follow records across devices). Returns `Ok(false)` (leaving
+    /// record_tags / FTS untouched) when `names` is empty or identical to the
+    /// record's current tags — callers rely on that to avoid wiping local tags
+    /// from tag-less snapshots and to count real changes.
     ///
     /// Batched for bulk import: tag ids come from a caller-owned cache (one
     /// SELECT/INSERT per distinct tag across the whole batch instead of per
@@ -268,6 +280,7 @@ impl ClipboardDb {
         conn: &Connection,
         record_id: i64,
         names: &[String],
+        colors: &[(String, String)],
         tag_id_cache: &mut std::collections::HashMap<String, i64>,
         fts_dirty: &mut Vec<i64>,
     ) -> SqlResult<bool> {
@@ -281,6 +294,28 @@ impl ClipboardDb {
         }
         if seen.is_empty() {
             return Ok(false);
+        }
+        // Resolve ids (creating missing tags with the incoming color) and apply
+        // colors BEFORE the identity check — a pure color change must propagate
+        // even when the link set is unchanged (the caller already gates the call
+        // on the snapshot being strictly newer).
+        let mut tag_ids: Vec<(String, i64)> = Vec::with_capacity(seen.len());
+        let mut touched = false;
+        for name in &seen {
+            let color = colors
+                .iter()
+                .find(|(n, _)| n.as_str() == *name)
+                .map(|(_, c)| c.as_str());
+            let id = match tag_id_cache.get(*name) {
+                Some(id) => *id,
+                None => {
+                    let id = Self::ensure_tag_by_name_conn(conn, name, color)?;
+                    tag_id_cache.insert(name.to_string(), id);
+                    id
+                }
+            };
+            touched |= color.is_some();
+            tag_ids.push((name.to_string(), id));
         }
         let mut seen_sorted = seen.clone();
         seen_sorted.sort_unstable();
@@ -297,18 +332,13 @@ impl ClipboardDb {
         };
         current.sort_unstable();
         if current == seen_sorted {
+            if touched {
+                bump_tag_epoch();
+            }
             return Ok(false);
         }
         conn.execute("DELETE FROM record_tags WHERE record_id = ?", [record_id])?;
-        for name in seen {
-            let tag_id = match tag_id_cache.get(name) {
-                Some(id) => *id,
-                None => {
-                    let id = Self::ensure_tag_by_name_conn(conn, name)?;
-                    tag_id_cache.insert(name.to_string(), id);
-                    id
-                }
-            };
+        for (_, tag_id) in &tag_ids {
             conn.execute(
                 "INSERT OR IGNORE INTO record_tags (record_id, tag_id) VALUES (?, ?)",
                 params![record_id, tag_id],
@@ -397,16 +427,20 @@ impl ClipboardDb {
 
     pub fn update_tag(&self, id: i64, name: &str, color: &str) -> SqlResult<()> {
         let conn = self.conn.lock();
-        let old: String =
-            conn.query_row("SELECT name FROM tags WHERE id = ?", [id], |row| row.get(0))?;
+        let old: (String, String) = conn.query_row(
+            "SELECT name, color FROM tags WHERE id = ?",
+            [id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
         conn.execute(
             "UPDATE tags SET name = ?, color = ? WHERE id = ?",
             params![name, color, id],
         )?;
-        if old != name {
+        if old.0 != name || old.1 != color {
             // tags_fts_au already rebuilt the affected search rows; bump
-            // updated_at so the rename reaches other devices via the
-            // record-level sync watermark.
+            // updated_at so the rename/color change reaches other devices via
+            // the record-level sync watermark (records re-push with the new
+            // tag names + colors).
             let now = chrono::Utc::now().to_rfc3339();
             conn.execute(
                 "UPDATE records SET updated_at = ? WHERE id IN (

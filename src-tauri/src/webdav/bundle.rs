@@ -362,6 +362,7 @@ mod tests {
             created_at: now.clone(),
             updated_at: now,
             tags: vec![],
+            tag_colors: Vec::new(),
             content_html: None,
             media_path: None,
             thumb_path: None,

@@ -155,6 +155,7 @@ impl ClipboardDb {
             created_at: row.get(12)?,
             updated_at: row.get(13)?,
             tags: Vec::new(),
+            tag_colors: Vec::new(),
             media_path,
             thumb_path,
             width: row.get(16)?,

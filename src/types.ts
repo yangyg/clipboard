@@ -29,6 +29,8 @@ export interface ClipboardRecord {
   created_at: string;
   updated_at: string;
   tags: string[];
+  /** Tag name → palette-color pairs carried by the sync/export bundle (export only). */
+  tag_colors?: [string, string][];
   /** HTML fragment when rich format was captured */
   content_html?: string | null;
   /** Relative path under app data dir (image records) */

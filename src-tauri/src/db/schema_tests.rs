@@ -396,6 +396,7 @@ fn map_record_row_binds_column_order_for_both_column_lists() {
         created_at: now.clone(),
         updated_at: now,
         tags: vec!["重要".into()],
+        tag_colors: Vec::new(),
         content_html: Some("<b>world</b>".into()),
         media_path: None,
         thumb_path: None,

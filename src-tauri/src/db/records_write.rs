@@ -133,6 +133,7 @@ impl ClipboardDb {
             created_at: now.to_string(),
             updated_at: now.to_string(),
             tags: Vec::new(),
+            tag_colors: Vec::new(),
             content_html: None,
             media_path: media_path.map(str::to_string),
             thumb_path: thumb_path.map(str::to_string),

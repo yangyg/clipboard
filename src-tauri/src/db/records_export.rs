@@ -68,13 +68,15 @@ impl ClipboardDb {
 
     /// Export bundles travel to other machines / backups: absolute media paths
     /// are local-only and must never leak into the payload. Tags are enriched
-    /// because the bundle must be self-contained.
+    /// because the bundle must be self-contained; tag colors ride along so they
+    /// follow records across devices.
     fn strip_local_paths(
         &self,
         conn: &Connection,
         records: &mut [ClipboardRecord],
     ) -> SqlResult<()> {
         self.enrich_tags(conn, records, true)?;
+        self.enrich_tag_colors(conn, records)?;
         for record in records.iter_mut() {
             record.media_abs = None;
             record.thumb_abs = None;

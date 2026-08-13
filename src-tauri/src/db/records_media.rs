@@ -246,4 +246,62 @@ impl ClipboardDb {
         }
         Ok(())
     }
+
+    /// Batch-load (name, color) tag pairs for multiple record IDs — used by the
+    /// export path so tag colors travel with the sync bundle.
+    pub(super) fn load_tag_colors_batch(
+        &self,
+        conn: &Connection,
+        record_ids: &[i64],
+    ) -> SqlResult<std::collections::HashMap<i64, Vec<(String, String)>>> {
+        if record_ids.is_empty() {
+            return Ok(std::collections::HashMap::new());
+        }
+        let placeholders = Self::id_placeholders(record_ids.len());
+        let sql = format!(
+            "SELECT rt.record_id, t.name, t.color FROM tags t
+             INNER JOIN record_tags rt ON rt.tag_id = t.id
+             WHERE rt.record_id IN ({}) ORDER BY rt.record_id",
+            placeholders
+        );
+        let params: Vec<&dyn rusqlite::types::ToSql> = record_ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::types::ToSql)
+            .collect();
+        let mut stmt = conn.prepare(&sql)?;
+        let mut map: std::collections::HashMap<i64, Vec<(String, String)>> =
+            std::collections::HashMap::new();
+        for id in record_ids {
+            map.entry(*id).or_default();
+        }
+        let rows = stmt.query_map(params.as_slice(), |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        })?;
+        for row in rows {
+            let (rid, name, color) = row?;
+            if let Some(pairs) = map.get_mut(&rid) {
+                pairs.push((name, color));
+            }
+        }
+        Ok(map)
+    }
+
+    /// Assign (name, color) pairs onto records via one batch query (export path).
+    pub(super) fn enrich_tag_colors(
+        &self,
+        conn: &Connection,
+        records: &mut [ClipboardRecord],
+    ) -> SqlResult<()> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        let ids: Vec<i64> = records.iter().map(|r| r.id).collect();
+        let mut colors_map = self.load_tag_colors_batch(conn, &ids)?;
+        for record in records.iter_mut() {
+            if let Some(pairs) = colors_map.get_mut(&record.id) {
+                record.tag_colors = std::mem::take(pairs);
+            }
+        }
+        Ok(())
+    }
 }

@@ -42,6 +42,22 @@ pub(super) fn join_remote(root: &str, rel: &str) -> String {
     )
 }
 
+/// Drop incoming records that a local deletion tombstone covers (incoming copy
+/// not strictly newer than the deletion time). Keeps deliberate re-copies.
+fn filter_tombstoned(
+    mut records: Vec<crate::ClipboardRecord>,
+    tombstones: &HashMap<String, String>,
+) -> Vec<crate::ClipboardRecord> {
+    if tombstones.is_empty() {
+        return records;
+    }
+    records.retain(|r| match tombstones.get(&r.hash) {
+        Some(deleted_at) => r.updated_at.as_str() > deleted_at.as_str(),
+        None => true,
+    });
+    records
+}
+
 fn ensure_device_id(settings: &mut Settings) -> String {
     if settings.webdav_device_id.trim().is_empty() {
         settings.webdav_device_id = uuid::Uuid::new_v4().to_string();
@@ -193,6 +209,26 @@ pub async fn webdav_pull(
     let mut records = state.records;
     if !settings.webdav_sync_sensitive {
         records.retain(|r| !r.is_sensitive);
+    }
+    // Local explicit deletions must not resurrect from the remote snapshot: a
+    // record this device has tombstoned was deliberately deleted, so it is
+    // dropped unless the incoming copy is strictly newer than the deletion
+    // (a deliberate re-copy on another device wins).
+    let local_tombstones: HashMap<String, String> = {
+        let load_db = Arc::clone(db);
+        let rows = tokio::task::spawn_blocking(move || {
+            load_db
+                .get_sync_tombstones()
+                .map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| format!("WebDAV 加载本地 tombstone 任务失败: {e}"))??;
+        rows.into_iter()
+            .map(|(hash, deleted_at, _)| (hash, deleted_at))
+            .collect()
+    };
+    if !local_tombstones.is_empty() {
+        records = filter_tombstoned(records, &local_tombstones);
     }
 
     let entry_by_hash: HashMap<String, ManifestEntry> = manifest
@@ -625,7 +661,63 @@ pub struct WebDavSyncResult {
 
 #[cfg(test)]
 mod tests {
-    use super::pick_origin;
+    use super::{filter_tombstoned, pick_origin};
+    use crate::ClipboardRecord;
+    use std::collections::HashMap;
+
+    fn mk(hash: &str, updated_at: &str) -> ClipboardRecord {
+        ClipboardRecord {
+            id: 0,
+            content: String::new(),
+            content_type: "text".into(),
+            source_app: String::new(),
+            source_window: String::new(),
+            source_name: String::new(),
+            source_device_id: String::new(),
+            hash: hash.to_string(),
+            copy_count: 0,
+            is_favorite: false,
+            is_pinned: false,
+            is_sensitive: false,
+            is_trashed: false,
+            auto_expire_at: None,
+            created_at: updated_at.to_string(),
+            updated_at: updated_at.to_string(),
+            tags: vec![],
+            tag_colors: Vec::new(),
+            content_html: None,
+            media_path: None,
+            thumb_path: None,
+            width: None,
+            height: None,
+            media_abs: None,
+            thumb_abs: None,
+            content_len: None,
+            alias: String::new(),
+        }
+    }
+
+    #[test]
+    fn filter_tombstoned_drops_older_copies_keeps_newer_recopy() {
+        let tombstones =
+            HashMap::from([("h1".to_string(), "2026-02-01T00:00:00Z".to_string())]);
+        let records = vec![
+            mk("h1", "2026-01-01T00:00:00Z"), // stale copy → dropped
+            mk("h1", "2026-03-01T00:00:00Z"), // deliberate re-copy → kept
+            mk("h2", "2026-01-01T00:00:00Z"), // never tombstoned → kept
+        ];
+        let kept = filter_tombstoned(records, &tombstones);
+        assert_eq!(kept.len(), 2);
+        assert!(kept.iter().any(|r| r.hash == "h1" && r.updated_at == "2026-03-01T00:00:00Z"));
+        assert!(kept.iter().any(|r| r.hash == "h2"));
+    }
+
+    #[test]
+    fn filter_tombstoned_keeps_everything_without_tombstones() {
+        let records = vec![mk("h1", "2026-01-01T00:00:00Z")];
+        let kept = filter_tombstoned(records, &HashMap::new());
+        assert_eq!(kept.len(), 1);
+    }
 
     #[test]
     fn origin_follows_earlier_creator() {

@@ -53,6 +53,10 @@ pub struct ClipboardRecord {
     pub updated_at: String,
     #[serde(default)]
     pub tags: Vec<String>,
+    /// Tag name → palette-color pairs carried by the sync/export bundle so tag
+    /// colors follow records across devices. Empty outside the export path.
+    #[serde(default, rename = "tag_colors", skip_serializing_if = "Vec::is_empty")]
+    pub tag_colors: Vec<(String, String)>,
     /// HTML clipboard fragment when format was captured (Word, browser, etc.)
     #[serde(default, rename = "content_html")]
     pub content_html: Option<String>,

@@ -73,6 +73,7 @@ fn tag_mutations_bump_record_updated_at() {
         created_at: now.clone(),
         updated_at: now,
         tags: vec![],
+        tag_colors: Vec::new(),
         content_html: None,
         media_path: None,
         thumb_path: None,
@@ -115,6 +116,12 @@ fn tag_mutations_bump_record_updated_at() {
     db.update_tag(tag_id, "VIP", "#ef4444").unwrap();
     assert_ne!(read_updated(), after_set);
 
+    // A color-only change must bump too so colors reach other devices.
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    let after_color = read_updated();
+    db.update_tag(tag_id, "VIP", "#22c55e").unwrap();
+    assert_ne!(read_updated(), after_color);
+
     for name in ["test.db", "test.db-wal", "test.db-shm"] {
         let _ = std::fs::remove_file(dir.join(name));
     }
@@ -153,6 +160,7 @@ fn add_auto_tags_by_name_merges_and_is_idempotent() {
         created_at: now.clone(),
         updated_at: now,
         tags: vec![],
+        tag_colors: Vec::new(),
         content_html: None,
         media_path: None,
         thumb_path: None,
@@ -243,6 +251,7 @@ fn deleting_tag_removes_it_from_full_text_search() {
         created_at: now.clone(),
         updated_at: now,
         tags: vec![],
+        tag_colors: Vec::new(),
         content_html: None,
         media_path: None,
         thumb_path: None,
@@ -332,6 +341,7 @@ fn get_all_tags_serves_ttl_cache_and_invalidates_on_mutation() {
         created_at: now.clone(),
         updated_at: now,
         tags: vec![],
+        tag_colors: Vec::new(),
         content_html: None,
         media_path: None,
         thumb_path: None,

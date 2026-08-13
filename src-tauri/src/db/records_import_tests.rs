@@ -36,6 +36,16 @@ fn make_record_at(
     tags: &[&str],
     stamp: String,
 ) -> ClipboardRecord {
+    make_record_with_colors(content, hash, tags, &[], stamp)
+}
+
+fn make_record_with_colors(
+    content: &str,
+    hash: &str,
+    tags: &[&str],
+    colors: &[(&str, &str)],
+    stamp: String,
+) -> ClipboardRecord {
     ClipboardRecord {
         id: 0,
         content: content.to_string(),
@@ -54,6 +64,10 @@ fn make_record_at(
         created_at: stamp.clone(),
         updated_at: stamp,
         tags: tags.iter().map(|s| s.to_string()).collect(),
+        tag_colors: colors
+            .iter()
+            .map(|(n, c)| (n.to_string(), c.to_string()))
+            .collect(),
         content_html: None,
         media_path: None,
         thumb_path: None,
@@ -153,6 +167,134 @@ fn import_merge_applies_newer_snapshot_tags_over_stale_local() {
     let exported = db.get_records_for_export(10, 0).unwrap();
     assert_eq!(exported[0].tags, ["链接"]);
     assert_eq!(tc, 1);
+    cleanup(dir);
+}
+
+#[test]
+fn import_applies_tag_colors_from_newer_snapshot() {
+    let (db, dir) = temp_db();
+    db.import_records_with_merge(
+        &[make_record_with_colors(
+            "color",
+            "hash-c1",
+            &["工作"],
+            &[("工作", "#a855f7")],
+            "2026-03-01T00:00:00Z".to_string(),
+        )],
+        100,
+        None,
+    )
+    .unwrap();
+    let tags = db.get_all_tags(None, false).unwrap();
+    assert_eq!(
+        tags.iter().find(|t| t.name == "工作").unwrap().color,
+        "#a855f7"
+    );
+    cleanup(dir);
+}
+
+#[test]
+fn import_color_only_change_updates_existing_tag_color() {
+    let (db, dir) = temp_db();
+    let t_older = "2026-01-02T00:00:00Z".to_string();
+    let t_newer = "2026-02-02T00:00:00Z".to_string();
+    db.import_records_with_merge(
+        &[make_record_with_colors(
+            "color",
+            "hash-c2",
+            &["工作"],
+            &[("工作", "#ef4444")],
+            t_older,
+        )],
+        100,
+        None,
+    )
+    .unwrap();
+    // Identical link set, newer snapshot, different color — color must still apply.
+    let (_, _, tc) = db
+        .import_records_with_merge(
+            &[make_record_with_colors(
+                "color",
+                "hash-c2",
+                &["工作"],
+                &[("工作", "#22c55e")],
+                t_newer,
+            )],
+            100,
+            None,
+        )
+        .unwrap();
+    assert_eq!(tc, 0);
+    let tags = db.get_all_tags(None, false).unwrap();
+    assert_eq!(
+        tags.iter().find(|t| t.name == "工作").unwrap().color,
+        "#22c55e"
+    );
+    cleanup(dir);
+}
+
+#[test]
+fn import_older_snapshot_does_not_recolor_tag() {
+    let (db, dir) = temp_db();
+    let t_older = "2026-01-02T00:00:00Z".to_string();
+    let t_newer = "2026-02-02T00:00:00Z".to_string();
+    db.import_records_with_merge(
+        &[make_record_with_colors(
+            "color",
+            "hash-c3",
+            &["工作"],
+            &[("工作", "#22c55e")],
+            t_newer,
+        )],
+        100,
+        None,
+    )
+    .unwrap();
+    db.import_records_with_merge(
+        &[make_record_with_colors(
+            "color",
+            "hash-c3",
+            &["工作"],
+            &[("工作", "#ef4444")],
+            t_older,
+        )],
+        100,
+        None,
+    )
+    .unwrap();
+    let tags = db.get_all_tags(None, false).unwrap();
+    assert_eq!(
+        tags.iter().find(|t| t.name == "工作").unwrap().color,
+        "#22c55e"
+    );
+    cleanup(dir);
+}
+
+#[test]
+fn export_carries_tag_colors_in_bundle_payload() {
+    let (db, dir) = temp_db();
+    db.import_records_with_merge(
+        &[make_record_with_colors(
+            "color",
+            "hash-c4",
+            &["工作", "重要"],
+            &[("工作", "#a855f7"), ("重要", "#ef4444")],
+            "2026-03-01T00:00:00Z".to_string(),
+        )],
+        100,
+        None,
+    )
+    .unwrap();
+    let exported = db.get_records_for_export(10, 0).unwrap();
+    let mut colors = exported[0].tag_colors.clone();
+    colors.sort();
+    assert_eq!(
+        colors,
+        vec![
+            ("工作".to_string(), "#a855f7".to_string()),
+            ("重要".to_string(), "#ef4444".to_string()),
+        ]
+    );
     cleanup(dir);
 }
 

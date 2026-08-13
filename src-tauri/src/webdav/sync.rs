@@ -94,12 +94,14 @@ async fn persist_last_sync(db: &Arc<ClipboardDb>, settings: &mut Settings) -> Re
     let db = Arc::clone(db);
     let mut next = settings.clone();
     next.webdav_last_sync_at = Some(Utc::now().to_rfc3339());
-    let next = tokio::task::spawn_blocking(move || -> Result<Settings, String> {
-        db.save_settings(&next).map_err(|e| e.to_string())?;
-        Ok(next)
-    })
-    .await
-    .map_err(|e| format!("WebDAV 保存设置任务失败: {e}"))??;
+    let next = super::spawn_block(
+        "WebDAV 保存设置",
+        move || -> Result<Settings, String> {
+            db.save_settings(&next).map_err(|e| e.to_string())?;
+            Ok(next)
+        },
+    )
+    .await?;
     *settings = next;
     Ok(())
 }
@@ -141,12 +143,12 @@ async fn fetch_remote_state(
         Some(remote) => {
             let bytes = remote.bytes;
             // Bundle parse is pure CPU over up-to-64MB — run off the async worker.
-            let (records, bytes) = tokio::task::spawn_blocking(move || -> Result<_, String> {
-                let records = parse_bundle(&bytes)?;
-                Ok((records, bytes))
-            })
-            .await
-            .map_err(|e| format!("解析 bundle 任务失败: {e}"))??;
+            let (records, bytes) =
+                super::spawn_block("解析 bundle", move || -> Result<_, String> {
+                    let records = parse_bundle(&bytes)?;
+                    Ok((records, bytes))
+                })
+                .await?;
             (records, remote.etag, true, Some(bytes))
         }
         None => (Vec::new(), None, false, None),
@@ -217,11 +219,10 @@ pub async fn webdav_pull(
     // (a deliberate re-copy on another device wins).
     let local_tombstones: HashMap<String, String> = {
         let load_db = Arc::clone(db);
-        let rows = tokio::task::spawn_blocking(move || {
+        let rows = super::spawn_block("WebDAV 加载本地 tombstone", move || {
             load_db.get_sync_tombstones().map_err(|e| e.to_string())
         })
-        .await
-        .map_err(|e| format!("WebDAV 加载本地 tombstone 任务失败: {e}"))??;
+        .await?;
         rows.into_iter()
             .map(|(hash, deleted_at, _)| (hash, deleted_at))
             .collect()
@@ -266,7 +267,7 @@ pub async fn webdav_pull(
     // The merge is a full-content transaction over the pulled bundle — run it
     // off the async worker so large imported sets don't hold a Tokio executor thread.
     let merge_db = Arc::clone(db);
-    let (pulled, merged, tags_pulled, trashed) = tokio::task::spawn_blocking(move || {
+    let (pulled, merged, tags_pulled, trashed) = super::spawn_block("WebDAV 导入", move || {
         let (pulled, merged, tags_pulled) = merge_db
             .import_records_with_merge(&records, max, Some(sanitize))
             .map_err(|e| e.to_string())?;
@@ -277,8 +278,7 @@ pub async fn webdav_pull(
             .map_err(|e| e.to_string())?;
         Ok::<_, String>((pulled, merged, tags_pulled, trashed))
     })
-    .await
-    .map_err(|e| format!("WebDAV 导入任务失败: {e}"))??;
+    .await?;
     if trashed > 0 {
         info!("WebDAV pull: applied {trashed} deletion tombstone(s)");
     }
@@ -349,9 +349,10 @@ pub async fn webdav_push(
     // heaviest DB read in the app — keep it off the async worker.
     let load_db = Arc::clone(db);
     let local = filter_syncable(
-        tokio::task::spawn_blocking(move || load_all_export(&load_db))
-            .await
-            .map_err(|e| format!("WebDAV 加载本地记录任务失败: {e}"))??,
+        super::spawn_block("WebDAV 加载本地记录", move || {
+            load_all_export(&load_db)
+        })
+        .await?,
         settings.webdav_sync_sensitive,
     );
     // Only the hash set is needed for the upload fan-out below — keeping the
@@ -401,13 +402,12 @@ pub async fn webdav_push(
     // newer-wins rule, then GC once every device has acked them.
     let sync_sensitive = settings.webdav_sync_sensitive;
     let load_db = Arc::clone(db);
-    let (local_tombstones, local_ack) = tokio::task::spawn_blocking(move || {
+    let (local_tombstones, local_ack) = super::spawn_block("WebDAV 加载 tombstone", move || {
         let ts = load_db.get_sync_tombstones().map_err(|e| e.to_string())?;
         let ack = load_db.get_tombstone_ack().map_err(|e| e.to_string())?;
         Ok::<_, String>((ts, ack))
     })
-    .await
-    .map_err(|e| format!("WebDAV 加载 tombstone 任务失败: {e}"))??;
+    .await?;
     let local_tombstones: Vec<(String, String)> = local_tombstones
         .into_iter()
         // Sensitive tombstones follow the same policy as sensitive records.
@@ -536,9 +536,8 @@ pub async fn webdav_push(
     let mut records: Vec<crate::ClipboardRecord> = catalog.into_values().collect();
     records.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
 
-    let bundle_payload = tokio::task::spawn_blocking(move || serialize_bundle(&records))
-        .await
-        .map_err(|e| format!("WebDAV 打包 bundle 任务失败: {e}"))??;
+    let bundle_payload =
+        super::spawn_block("WebDAV 打包 bundle", move || serialize_bundle(&records)).await?;
     let mut device_names = settings.webdav_device_names.clone();
     let device_name = settings.webdav_device_name.trim();
     if !device_name.is_empty() {

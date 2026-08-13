@@ -57,11 +57,11 @@ pub async fn export_data(state: State<'_, AppState>, path: String) -> Result<(),
 }
 
 /// Import records from the renderer. The payload travels as a raw JSON string;
-/// the byte-size gate runs BEFORE any deserialization so a compromised webview
-/// cannot force a multi-hundred-MB allocation through argument deserialization
 /// Shared parse + validate + merge body for both import commands. `label`
-/// prefixes user-facing error messages ("导入内容"/"备份文件"). Runs on the
-/// blocking pool, not the async worker.
+/// prefixes user-facing error messages ("导入内容"/"备份文件"). The byte-size
+/// gate runs BEFORE any deserialization (in the callers) so a compromised
+/// webview cannot force a multi-hundred-MB allocation through argument
+/// deserialization; parsing itself runs on the blocking pool.
 async fn run_import(
     db: std::sync::Arc<ClipboardDb>,
     json: String,

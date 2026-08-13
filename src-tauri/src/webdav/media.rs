@@ -40,9 +40,10 @@ fn write_downloaded_media(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 /// Read a media file off the async executor (std::fs blocks the Tokio worker).
 async fn read_media_file(abs: std::path::PathBuf) -> Result<Vec<u8>, String> {
-    tokio::task::spawn_blocking(move || fs::read(&abs).map_err(|e| e.to_string()))
-        .await
-        .map_err(|e| format!("媒体读取任务失败: {e}"))?
+    super::spawn_block("媒体读取", move || {
+        fs::read(&abs).map_err(|e| e.to_string())
+    })
+    .await
 }
 
 pub(super) async fn download_media_if_needed(
@@ -69,14 +70,13 @@ pub(super) async fn download_media_if_needed(
         let remote = join_remote(root, rel);
         if let Some(bytes) = client.get_bytes(&remote).await? {
             let path = abs.clone();
-            tokio::task::spawn_blocking(move || {
+            super::spawn_block("媒体下载", move || {
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
                 }
                 write_downloaded_media(&path, &bytes)
             })
-            .await
-            .map_err(|e| format!("媒体下载任务失败: {e}"))??;
+            .await?;
             downloaded = true;
         }
     }

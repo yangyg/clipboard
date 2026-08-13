@@ -14,9 +14,8 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Soft delete / Trash** | Deleted records move to trash first (recoverable). Permanent delete and empty-trash require confirmation. |
 | **Sensitive record** | Records matching patterns (passwords, verification codes, API keys, credit-card-like numbers). Auto-expire after a short TTL (default 600s). `is_sensitive` is a bool, not a content type. |
 | **Hash dedup** | SHA-256 of text fingerprint (plain + HTML) or full image bytes. Duplicate copies update `updated_at` only — do **not** bump `copy_count`. |
-| **Floating panel** | Always-on-top compact overlay. Hides on blur. Kept mounted via `v-show`. |
-| **Window mode** | Full window with SideBar + RecordList + PreviewPane. Min width 760px. |
-| **Paste target** | The foreground HWND at the moment the panel opened. Paste writes clipboard → focuses target → sends Ctrl+V. |
+| **Window** | Single borderless window with SideBar + RecordList + PreviewPane. Min width 760px. Paste with auto-close minimizes the window (no separate floating panel). |
+| **Paste target** | The foreground HWND at the moment the window opened. Paste writes clipboard → focuses target → sends Ctrl+V. |
 | **Source app** | The executable name of the process that owned the clipboard content at capture time. Shown as a plain-text label via `resolveSourceLabel` (friendly name, empty →「系统剪贴板」); the preview meta line's tooltip shows the raw exe path. |
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
 | **Soft cap** | In-memory list pages are soft-capped (`PAGE_SIZE × 2`). When dirty, the next `loadMore` reloads from DB. |
@@ -32,7 +31,7 @@ See `docs/adr/` for immutable decision records:
 - **ADR-0001** — Virtual-list composable extraction & responsive grid column single-source-of-truth (JS, not CSS `auto-fill`).
 - **ADR-0002** — Native OS-theme watcher (invisible HWND + `WM_SETTINGCHANGE`) as the primary source for follow-system theme, because WebView2 matchMedia events are unreliable while hidden. **Superseded by ADR-0004 (feature removed).**
 - **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor. Later appended: per-family token files under `src/styles/themes/`, the hand-drawn family (`handdrawn`/`handdrawn-light`, with sketch styling + `@sketchyicons/vue` icons) and the monochrome family (`mono`/`mono-light`).
-- **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 13 fixed cards in one radiogroup.
+- **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 23 fixed cards in one radiogroup.
 - **ADR-0005** — Clipboard monitor is event-driven on Windows (`AddClipboardFormatListener` on a message-only window + 150ms event-debounce + 1s sequence watchdog for sleep catch-up / busy retry / listener-failure fallback). Non-Windows keeps the 250ms poll loop; both paths share `handle_clipboard_tick`.
 
 ## Key Design Constraints

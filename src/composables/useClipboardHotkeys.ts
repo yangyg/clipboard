@@ -5,11 +5,6 @@ import { useSettingsStore } from "../stores/settings";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
 
-export interface ClipboardHotkeyOptions {
-  /** Optional close callback (unused in the single window mode). */
-  onClose?: () => void;
-}
-
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   const tag = el.tagName;
@@ -21,7 +16,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
  * Escape layering: search focus is handled by SearchBar (stopPropagation);
  * here we clear batch → clear selection.
  */
-export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
+export function useClipboardHotkeys() {
   const clipboardStore = useClipboardStore();
   const settingsStore = useSettingsStore();
   const { toast } = useToast();
@@ -86,10 +81,6 @@ export function useClipboardHotkeys(options: ClipboardHotkeyOptions = {}) {
         e.preventDefault();
         clipboardStore.clearSelection();
         return;
-      }
-      if (options.onClose) {
-        e.preventDefault();
-        options.onClose();
       }
       return;
     }

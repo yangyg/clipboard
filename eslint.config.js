@@ -10,8 +10,6 @@ export default tseslint.config(
       "dist/**",
       "node_modules/**",
       "src-tauri/**",
-      "graphify-out/**",
-      ".qoder/**",
       "public/**",
     ],
   },
@@ -37,12 +35,18 @@ export default tseslint.config(
     rules: {
       // Single-word component names (App, SideBar, etc.) are intentional here.
       "vue/multi-word-component-names": "off",
-      // Type-narrowing casts are used deliberately in a few store getters.
-      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": [
-        "warn",
+        "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+    },
+  },
+  {
+    // Test mocks (VTU mounting options, stub payloads) and the mount helper
+    // deliberately use `any`; production code must stay explicit.
+    files: ["**/*.spec.ts", "src/test/**/*.ts", "**/*.d.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
   {

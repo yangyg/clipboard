@@ -7,10 +7,13 @@ use crate::detect::detect_sensitive;
 use crate::security;
 use crate::{ClipboardRecord, Settings};
 
-pub const MAX_IMPORT_RECORDS: usize = 100_000;
+/// Total import payload cap is `pub` — the IPC commands gate on it before
+/// deserializing. The per-record caps are validation-only, so they stay
+/// `pub(super)` (visible to the db module's test files).
 pub const MAX_IMPORT_TOTAL_BYTES: usize = 64 * 1024 * 1024;
-pub const MAX_IMPORT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
-pub const MAX_IMPORT_HTML_BYTES: usize = 512 * 1024;
+pub(super) const MAX_IMPORT_RECORDS: usize = 100_000;
+pub(super) const MAX_IMPORT_CONTENT_BYTES: usize = 16 * 1024 * 1024;
+pub(super) const MAX_IMPORT_HTML_BYTES: usize = 512 * 1024;
 
 /// Sanitization policy applied to untrusted record bundles (JSON import /
 /// WebDAV pull). Mirrors the capture pipeline so remote `is_sensitive` /

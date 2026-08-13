@@ -9,13 +9,6 @@
         @click="categoriesCollapsed = !categoriesCollapsed"
       >
         <span class="sidebar-label">{{ $t('sidebar.categories') }}</span>
-        <AppIcon
-          name="arrowUp"
-          :size="10"
-          class="section-chevron"
-          :class="{ collapsed: categoriesCollapsed }"
-          aria-hidden="true"
-        />
       </button>
       <div v-show="!categoriesCollapsed">
         <button
@@ -77,13 +70,6 @@
           @click="tagsCollapsed = !tagsCollapsed"
         >
           <span class="sidebar-label">{{ $t('sidebar.tagManagement') }}</span>
-          <AppIcon
-            name="arrowUp"
-            :size="10"
-            class="section-chevron"
-            :class="{ collapsed: tagsCollapsed }"
-            aria-hidden="true"
-          />
         </button>
         <button
           type="button"
@@ -395,20 +381,12 @@ const {
   border-radius: 0;
 }
 
-/* In the tags header the toggle takes the free space so the chevron sits
-   right after the label and the add button stays right-aligned. */
+/* In the tags header the toggle takes the free space so the label row spans
+   the full width and the add button stays right-aligned (also a larger click
+   target for collapsing). */
 .sidebar-tags-toggle {
   flex: 1;
   min-width: 0;
-}
-
-.section-chevron {
-  flex-shrink: 0;
-  transition: transform var(--transition-fast);
-}
-
-.section-chevron.collapsed {
-  transform: rotate(-90deg);
 }
 
 .sidebar-label {

@@ -62,12 +62,9 @@ function onOverlayClick() {
 }
 
 function onCardKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") {
-    e.preventDefault();
-    e.stopPropagation();
-    emit("close");
-    return;
-  }
+  // Escape is handled by `onWindowKeydown` (capture phase, registered while
+  // open) so it also fires when focus is outside the card; handling it here
+  // too would emit "close" twice.
   if (e.key !== "Tab") return;
   const nodes = focusableNodes().filter((el) => el !== cardRef.value);
   if (nodes.length === 0) {
@@ -110,6 +107,9 @@ watch(
       previousFocus = null;
     }
   },
+  // `immediate` so a dialog mounted already-open still wires the Escape
+  // handler (not only dialogs that start closed and are later opened).
+  { immediate: true },
 );
 
 onUnmounted(() => {

@@ -267,11 +267,6 @@ body.anim-disabled *::after {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
-.panel {
-  background: var(--bg-surface);
-  overflow: hidden;
-  transition: background var(--transition-smooth);
-}
 
 .icon-btn {
   width: 32px;
@@ -352,48 +347,6 @@ body.anim-disabled *::after {
 .type-chip {
   background: color-mix(in srgb, var(--type-color, var(--text-secondary)) 15%, transparent);
   color: var(--type-color, var(--text-secondary));
-}
-
-.badge {
-  font-size: var(--text-xs);
-  padding: 1px 5px;
-  border-radius: var(--radius-xs);
-  font-weight: 500;
-  display: inline-block;
-}
-.badge-text {
-  background: color-mix(in srgb, var(--type-text) 15%, transparent);
-  color: var(--type-text);
-}
-.badge-code {
-  background: color-mix(in srgb, var(--type-code) 15%, transparent);
-  color: var(--type-code);
-}
-.badge-link {
-  background: color-mix(in srgb, var(--type-link) 15%, transparent);
-  color: var(--type-link);
-}
-.badge-image {
-  background: color-mix(in srgb, var(--type-image) 15%, transparent);
-  color: var(--type-image);
-}
-.badge-file {
-  background: color-mix(in srgb, var(--type-file) 15%, transparent);
-  color: var(--type-file);
-}
-.badge-sensitive {
-  background: var(--sensitive-soft);
-  color: var(--sensitive);
-}
-
-.tag-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--text-xs);
-  padding: 1px 6px;
-  border-radius: var(--radius-xs);
-  font-weight: 500;
 }
 
 /* Shared keyboard key chrome (SearchBar / settings / welcome) */

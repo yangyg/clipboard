@@ -40,15 +40,29 @@ describe("BaseDialog", () => {
     expect(wrapper.find(".dialog-card").attributes("role")).toBe("alertdialog");
   });
 
-  it("emits close on Escape keydown on card", async () => {
+  it("emits close on Escape (window keydown, single handler)", async () => {
     const wrapper = mount(BaseDialog, {
       props: { open: true },
       slots: { default: "<p>body</p>" },
       global: { stubs },
     });
     await nextTick();
-    await wrapper.find(".dialog-card").trigger("keydown", { key: "Escape" });
+    // Escape is handled once at the window (capture) listener while open —
+    // the card-level handler only deals with Tab focus trapping. The test
+    // wrapper is a detached tree, so dispatch on window directly.
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(wrapper.emitted("close")).toBeTruthy();
+  });
+
+  it("does not emit close on Escape when closed", async () => {
+    const wrapper = mount(BaseDialog, {
+      props: { open: false },
+      slots: { default: "<p>body</p>" },
+      global: { stubs },
+    });
+    await nextTick();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(wrapper.emitted("close")).toBeFalsy();
   });
 
   it("emits close when overlay is clicked (closeOnOverlay=true)", async () => {

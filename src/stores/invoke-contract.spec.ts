@@ -14,7 +14,8 @@ import { setActivePinia, createPinia } from "pinia";
 import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "@/stores/clipboard";
 import { useSettingsStore } from "@/stores/settings";
-import type { ClipboardRecord, Settings, StatsData } from "@/types";
+import { makeRecord } from "@/test/factories";
+import type { Settings, StatsData } from "@/types";
 
 // ─── Contract Definition ─────────────────────────────────────────────────────
 // Each key is a Tauri command name; the value is the set of expected parameter
@@ -96,18 +97,6 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function makeRecord(overrides: Partial<ClipboardRecord> = {}): ClipboardRecord {
-  return {
-    id: 1, content: "test", content_type: "text", source_app: "test.exe",
-    source_window: "Test", hash: "abc", copy_count: 0, is_favorite: false,
-    is_pinned: false, is_sensitive: false, is_trashed: false,
-    auto_expire_at: null, created_at: "2026-01-01T00:00:00Z",
-    updated_at: "2026-01-01T00:00:00Z", tags: [], alias: "",
-    ...overrides,
-  };
-}
-
 
 const MOCK_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V", max_records: 1000, retention_days: 30,

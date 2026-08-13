@@ -60,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed } from "vue";
 import SideBar from "./SideBar.vue";
 import SearchBar from "./SearchBar.vue";
 import RecordList from "./RecordList.vue";
@@ -74,6 +74,7 @@ import { useToast } from "../composables/useToast";
 import { useI18n } from "vue-i18n";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useColumnResize } from "../composables/useColumnResize";
+import { useMediaQuery } from "../composables/useMediaQuery";
 import { isFilterTab } from "../utils/filterDefinitions";
 import type { Tag } from "../types";
 
@@ -90,14 +91,8 @@ defineEmits<{
 
 useClipboardHotkeys();
 
-// --- Sidebar column resize ---
-const narrowMq = window.matchMedia("(max-width: 720px)");
-const isNarrow = ref(narrowMq.matches);
-function onMqChange(e: MediaQueryListEvent) {
-  isNarrow.value = e.matches;
-}
-onMounted(() => narrowMq.addEventListener("change", onMqChange));
-onUnmounted(() => narrowMq.removeEventListener("change", onMqChange));
+// --- Sidebar column resize (narrow view disables resize) ---
+const isNarrow = useMediaQuery("(max-width: 720px)");
 
 const {
   width: sidebarWidth,

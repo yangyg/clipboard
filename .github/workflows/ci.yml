@@ -53,9 +53,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Reads the channel from rust-toolchain.toml (single source of truth).
+      # Must match the channel in rust-toolchain.toml, otherwise cargo's
+      # override would download a second toolchain on the runner.
       - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: "1.94"
           components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
@@ -86,8 +88,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Reads the channel from rust-toolchain.toml (single source of truth).
+      # Must match the channel in rust-toolchain.toml (see backend job).
       - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94"
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -120,8 +124,10 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Reads the channel from rust-toolchain.toml (single source of truth).
+      # Must match the channel in rust-toolchain.toml (see backend job).
       - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.94"
 
       - uses: Swatinem/rust-cache@v2
         with:

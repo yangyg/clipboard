@@ -17,14 +17,16 @@ pub(super) fn bump_tag_epoch() {
     TAG_EPOCH.fetch_add(1, Ordering::Relaxed);
 }
 
-/// 2s TTL cache for `get_all_tags` keyed by (content_type, favorites_only).
-/// The query is a 3-table aggregate over every record_tag link; during copy
-/// bursts with auto-tag the frontend debounce (350ms) alone still fires it
-/// repeatedly, so the server-side cache absorbs the redundant joins.
+/// 2s TTL cache for `get_all_tags` keyed by (content_type, favorites_only,
+/// last_sync_stamp). The query is a 3-table aggregate over every record_tag
+/// link; during copy bursts with auto-tag the frontend debounce (350ms) alone
+/// still fires it repeatedly, so the server-side cache absorbs the redundant
+/// joins. The last-sync stamp is part of the key because the per-tag `synced`
+/// flags depend on it — a sync that advances it must not serve stale badges.
 struct TagsCacheEntry {
     at: Instant,
     epoch: u64,
-    key: (Option<String>, bool),
+    key: (Option<String>, bool, Option<String>),
     tags: Vec<TagInfo>,
 }
 
@@ -134,16 +136,56 @@ pub fn migrate_tag_palette_v2(conn: &Connection) -> SqlResult<()> {
     Ok(())
 }
 
+/// One tag definition as carried by the standalone tags sync (tags.json). Tag
+/// edits propagate through this snapshot keyed on `updated_at` (LWW) instead of
+/// rewriting every linked record's `updated_at`.
+#[derive(Debug, Clone)]
+pub struct TagSyncRow {
+    pub name: String,
+    pub color: String,
+    pub is_auto: bool,
+    pub updated_at: String,
+}
+
+/// Result of applying a remote tag snapshot: `tags_pulled` on the wire is
+/// `added + changed + deleted`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct TagMergeStats {
+    pub added: i32,
+    pub changed: i32,
+    pub deleted: i32,
+}
+
+/// `(tag_name, deleted_at)` pairs carried by the tag sync.
+pub type TagTombstoneRows = Vec<(String, String)>;
+
+/// Epoch sentinel stamped on legacy rows when `tags.updated_at` ships. It
+/// keeps a post-upgrade merge from stamping migration time over real remote
+/// edits, and protects never-touched rows from the conservative GC.
+pub const TAG_EPOCH_SENTINEL: &str = "1970-01-01T00:00:00Z";
+
 impl ClipboardDb {
     // === Tag CRUD ===
 
     /// Tag counts respect the current list facet (type / favorites), exclude trash.
+    /// Each tag also carries a `synced` flag: sync configured AND the tag's
+    /// LWW stamp not newer than the last successful sync (a tag edited since
+    /// then shows as "待同步" until the next push).
     pub fn get_all_tags(
         &self,
         content_type: Option<&str>,
         favorites_only: bool,
     ) -> SqlResult<Vec<TagInfo>> {
-        let key = (content_type.map(str::to_string), favorites_only);
+        // Settings are served from the in-memory cache; no DB lock is needed
+        // here beyond the one taken below.
+        let settings = self.get_settings()?;
+        let last_sync = settings.webdav_last_sync_at.clone();
+        let sync_configured = !settings.webdav_url.trim().is_empty();
+        let key = (
+            content_type.map(str::to_string),
+            favorites_only,
+            last_sync.clone(),
+        );
         let epoch = TAG_EPOCH.load(Ordering::Relaxed);
         {
             let cache = TAGS_CACHE.lock();
@@ -156,7 +198,7 @@ impl ClipboardDb {
 
         let conn = self.lock_read();
         let mut sql = String::from(
-            "SELECT t.id, t.name, t.color, t.is_auto, COUNT(r.id) as cnt
+            "SELECT t.id, t.name, t.color, t.is_auto, t.updated_at, COUNT(r.id) as cnt
              FROM tags t
              LEFT JOIN record_tags rt ON rt.tag_id = t.id
              LEFT JOIN records r ON r.id = rt.record_id AND r.is_trashed = 0",
@@ -178,12 +220,22 @@ impl ClipboardDb {
         let mut stmt = conn.prepare(&sql)?;
         let tags = stmt
             .query_map(param_refs.as_slice(), |row| {
+                let updated_at: String = row.get(4)?;
+                // A tag is synced when sync is configured and its definition
+                // stamp is not newer than the last successful sync. Sentinel
+                // rows (never edited) compare as always ≤ any real sync time,
+                // so they read as synced once sync has ever run.
+                let synced = sync_configured
+                    && last_sync
+                        .as_deref()
+                        .is_some_and(|s| updated_at.as_str() <= s);
                 Ok(TagInfo {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     color: row.get(2)?,
                     is_auto: row.get::<_, i32>(3)? != 0,
-                    count: row.get(4)?,
+                    count: row.get(5)?,
+                    synced,
                 })
             })?
             .collect::<SqlResult<Vec<_>>>()?;
@@ -199,9 +251,10 @@ impl ClipboardDb {
 
     pub fn create_tag(&self, name: &str, color: &str) -> SqlResult<i64> {
         let conn = self.conn.lock();
+        let now = chrono::Utc::now().to_rfc3339();
         conn.execute(
-            "INSERT INTO tags (name, color) VALUES (?, ?)",
-            params![name, color],
+            "INSERT INTO tags (name, color, updated_at) VALUES (?, ?, ?)",
+            params![name, color, now],
         )?;
         bump_tag_epoch();
         Ok(conn.last_insert_rowid())
@@ -231,8 +284,12 @@ impl ClipboardDb {
             return Ok(id);
         }
         conn.execute(
-            "INSERT INTO tags (name, color, is_auto) VALUES (?, ?, 1)",
-            params![name, Self::auto_tag_color(name)],
+            "INSERT INTO tags (name, color, is_auto, updated_at) VALUES (?, ?, 1, ?)",
+            params![
+                name,
+                Self::auto_tag_color(name),
+                chrono::Utc::now().to_rfc3339()
+            ],
         )?;
         Ok(conn.last_insert_rowid())
     }
@@ -242,10 +299,18 @@ impl ClipboardDb {
     /// cross-device id collisions (tags merge by name, not by autoincrement id).
     /// An incoming `color` is snapped to the palette and applied to the found
     /// tag too, so tag colors follow records across devices.
+    ///
+    /// `snapshot_updated_at` is the LWW stamp of the incoming snapshot (the
+    /// record's `updated_at` on the bundle path). It is stored on the tag so
+    /// the standalone tags sync can reconcile later merges without rewriting
+    /// records. A tag deleted on another device (tombstoned) is NOT recreated
+    /// here while the tombstone is at least as new as the snapshot — otherwise
+    /// a stale record bundle would resurrect it.
     fn ensure_tag_by_name_conn(
         conn: &Connection,
         name: &str,
         color: Option<&str>,
+        snapshot_updated_at: &str,
     ) -> SqlResult<i64> {
         // Colors arrive from an untrusted bundle — snap so the tags table never
         // stores a string that could be injected into CSS color-mix.
@@ -253,18 +318,46 @@ impl ClipboardDb {
         if let Ok(id) = conn.query_row("SELECT id FROM tags WHERE name = ?", [name], |row| {
             row.get(0)
         }) {
-            if let Some(c) = color {
+            let (existing_color, existing_updated_at): (String, String) = conn.query_row(
+                "SELECT color, updated_at FROM tags WHERE id = ?",
+                [id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )?;
+            let apply = match (color, snapshot_updated_at > existing_updated_at.as_str()) {
+                (Some(c), true) if c != existing_color => Some(c),
+                _ => None,
+            };
+            if let Some(c) = apply {
                 conn.execute(
-                    "UPDATE tags SET color = ? WHERE id = ? AND color != ?",
-                    params![c, id, c],
+                    "UPDATE tags SET color = ?, updated_at = ? WHERE id = ?",
+                    params![c, snapshot_updated_at, id],
                 )?;
             }
             return Ok(id);
         }
+        // A deletion tombstone newer than this snapshot means the tag was
+        // deliberately deleted elsewhere; the stale bundle must not resurrect it.
+        let tombstoned: Option<String> = conn
+            .query_row(
+                "SELECT deleted_at FROM tag_tombstones WHERE name = ?",
+                [name],
+                |row| row.get(0),
+            )
+            .ok();
+        if let Some(deleted_at) = tombstoned {
+            if deleted_at.as_str() >= snapshot_updated_at {
+                return Ok(0); // caller treats 0 as "not linked"
+            }
+        }
         conn.execute(
-            "INSERT INTO tags (name, color, is_auto) VALUES (?, ?, 0)",
-            params![name, color.unwrap_or_else(|| Self::auto_tag_color(name))],
+            "INSERT INTO tags (name, color, is_auto, updated_at) VALUES (?, ?, 0, ?)",
+            params![
+                name,
+                color.unwrap_or_else(|| Self::auto_tag_color(name)),
+                snapshot_updated_at
+            ],
         )?;
+        conn.execute("DELETE FROM tag_tombstones WHERE name = ?", [name])?;
         Ok(conn.last_insert_rowid())
     }
 
@@ -287,6 +380,7 @@ impl ClipboardDb {
         colors: &[(String, String)],
         tag_id_cache: &mut std::collections::HashMap<String, i64>,
         fts_dirty: &mut Vec<i64>,
+        snapshot_updated_at: &str,
     ) -> SqlResult<bool> {
         let mut seen: Vec<&str> = Vec::new();
         for name in names {
@@ -313,13 +407,21 @@ impl ClipboardDb {
             let id = match tag_id_cache.get(*name) {
                 Some(id) => *id,
                 None => {
-                    let id = Self::ensure_tag_by_name_conn(conn, name, color)?;
+                    let id = Self::ensure_tag_by_name_conn(conn, name, color, snapshot_updated_at)?;
                     tag_id_cache.insert(name.to_string(), id);
                     id
                 }
             };
+            // id == 0 means the name is tombstoned (deleted elsewhere) with a
+            // tombstone at least as new as this snapshot — never re-link it.
+            if id == 0 {
+                continue;
+            }
             touched |= color.is_some();
             tag_ids.push((name.to_string(), id));
+        }
+        if tag_ids.is_empty() {
+            return Ok(false);
         }
         let mut seen_sorted = seen.clone();
         seen_sorted.sort_unstable();
@@ -414,6 +516,10 @@ impl ClipboardDb {
     pub fn delete_tag(&self, id: i64) -> SqlResult<()> {
         let mut conn = self.conn.lock();
         let tx = conn.transaction()?;
+        // Delete tombstones are keyed by name (tags merge by name across
+        // devices, not by id) so other devices can drop the same tag.
+        let name: String =
+            tx.query_row("SELECT name FROM tags WHERE id = ?", [id], |row| row.get(0))?;
         let record_ids: Vec<i64> = {
             let mut stmt = tx.prepare("SELECT record_id FROM record_tags WHERE tag_id = ?")?;
             let ids = stmt
@@ -422,6 +528,14 @@ impl ClipboardDb {
             ids
         };
         tx.execute("DELETE FROM tags WHERE id = ?", [id])?;
+        // A local delete must win over stale remote bundles: keep the tombstone
+        // until the tag is recreated (or another device re-creates it, which
+        // clears the row in ensure_tag_by_name_conn).
+        tx.execute(
+            "INSERT INTO tag_tombstones (name, deleted_at) VALUES (?, ?)
+             ON CONFLICT(name) DO UPDATE SET deleted_at = excluded.deleted_at",
+            params![name, chrono::Utc::now().to_rfc3339()],
+        )?;
         // One batched FTS rebuild instead of N per-record refreshes.
         Self::refresh_records_fts_batch(&tx, &record_ids)?;
         tx.commit()?;
@@ -429,27 +543,33 @@ impl ClipboardDb {
         Ok(())
     }
 
+    /// Split rename/color so a color-only edit never triggers the `tags_fts_au`
+    /// FTS rebuild (the trigger only fires on `UPDATE OF name`). Tag edits no
+    /// longer touch `records.updated_at` — tag definitions sync standalone via
+    /// the tags.json snapshot, keyed on `tags.updated_at` (LWW), so touching
+    /// every linked record here would re-push the whole record bundle for a tag
+    /// that no record content depends on.
     pub fn update_tag(&self, id: i64, name: &str, color: &str) -> SqlResult<()> {
         let conn = self.conn.lock();
         let old: (String, String) =
             conn.query_row("SELECT name, color FROM tags WHERE id = ?", [id], |row| {
                 Ok((row.get(0)?, row.get(1)?))
             })?;
-        conn.execute(
-            "UPDATE tags SET name = ?, color = ? WHERE id = ?",
-            params![name, color, id],
-        )?;
+        if old.0 != name {
+            // `UPDATE OF name` fires tags_fts_au, which rebuilds the FTS rows of
+            // every linked record with the new name. Deliberately NO tombstone
+            // for the old name: renames are definition-only changes and other
+            // devices converge by the snapshot lacking the old name (zero-link
+            // leftovers are GC'd), never by force-rewriting their records.
+            conn.execute("UPDATE tags SET name = ? WHERE id = ?", params![name, id])?;
+        }
+        if old.1 != color {
+            conn.execute("UPDATE tags SET color = ? WHERE id = ?", params![color, id])?;
+        }
         if old.0 != name || old.1 != color {
-            // tags_fts_au already rebuilt the affected search rows; bump
-            // updated_at so the rename/color change reaches other devices via
-            // the record-level sync watermark (records re-push with the new
-            // tag names + colors).
-            let now = chrono::Utc::now().to_rfc3339();
             conn.execute(
-                "UPDATE records SET updated_at = ? WHERE id IN (
-                    SELECT record_id FROM record_tags WHERE tag_id = ?
-                 )",
-                params![now, id],
+                "UPDATE tags SET updated_at = ? WHERE id = ?",
+                params![chrono::Utc::now().to_rfc3339(), id],
             )?;
         }
         bump_tag_epoch();
@@ -558,5 +678,191 @@ impl ClipboardDb {
         tx.commit()?;
         bump_tag_epoch();
         Ok(added)
+    }
+
+    // === Standalone tag sync (tags.json) ===
+
+    /// Full tag definitions + deletion tombstones, for publishing tags.json.
+    pub fn get_tag_sync_rows(&self) -> SqlResult<(Vec<TagSyncRow>, TagTombstoneRows)> {
+        let conn = self.lock_read();
+        let mut stmt = conn.prepare("SELECT name, color, is_auto, updated_at FROM tags")?;
+        let tags = stmt
+            .query_map([], |row| {
+                Ok(TagSyncRow {
+                    name: row.get(0)?,
+                    color: row.get(1)?,
+                    is_auto: row.get::<_, i32>(2)? != 0,
+                    updated_at: row.get(3)?,
+                })
+            })?
+            .collect::<SqlResult<Vec<_>>>()?;
+        let mut stmt = conn.prepare("SELECT name, deleted_at FROM tag_tombstones")?;
+        let tombstones = stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<SqlResult<Vec<_>>>()?;
+        Ok((tags, tombstones))
+    }
+
+    /// Merge a remote tags.json snapshot into the local tag definitions, LWW by
+    /// `updated_at`:
+    /// - newer incoming rows update color/is_auto and advance the stamp;
+    /// - tags absent locally and not tombstoned (or tombstoned older) are added;
+    /// - incoming tombstones delete local tags not edited after the deletion
+    ///   (affected records get one batched FTS rebuild);
+    /// - conservative GC: local tags absent from the snapshot, never touched
+    ///   since the snapshot, and linked to zero records are removed (no
+    ///   tombstone — this is not a real delete, a device that still has the tag
+    ///   can re-add it). Never-touched sentinel rows (fresh installs / re-seeds)
+    ///   are exempt so built-in defaults survive a first pull.
+    pub fn merge_tag_snapshot(
+        &self,
+        incoming: &[TagSyncRow],
+        incoming_tombstones: &[(String, String)],
+        remote_snapshot_updated_at: &str,
+    ) -> SqlResult<TagMergeStats> {
+        let mut conn = self.conn.lock();
+        let tx = conn.transaction()?;
+        let mut stats = TagMergeStats::default();
+
+        // 1. Fold incoming tombstones into the local table (keep the newest per name).
+        for (name, deleted_at) in incoming_tombstones {
+            tx.execute(
+                "INSERT INTO tag_tombstones (name, deleted_at) VALUES (?, ?)
+                 ON CONFLICT(name) DO UPDATE SET deleted_at = MAX(deleted_at, excluded.deleted_at)",
+                params![name, deleted_at],
+            )?;
+        }
+
+        // 2. Apply incoming tag definitions (LWW by updated_at).
+        let mut local: std::collections::HashMap<String, (i64, String, bool, String)> = {
+            let mut stmt = tx.prepare("SELECT id, name, color, is_auto, updated_at FROM tags")?;
+            let rows: Vec<(String, (i64, String, bool, String))> = stmt
+                .query_map([], |row| {
+                    Ok((
+                        row.get::<_, String>(1)?,
+                        (
+                            row.get(0)?,
+                            row.get(2)?,
+                            row.get::<_, i32>(3)? != 0,
+                            row.get(4)?,
+                        ),
+                    ))
+                })?
+                .collect::<SqlResult<_>>()?;
+            rows.into_iter().collect()
+        };
+        for tag in incoming {
+            if let Some((id, lcolor, lauto, lupdated)) = local.get(&tag.name).cloned() {
+                if tag.updated_at.as_str() <= lupdated.as_str() {
+                    continue; // local is at least as new — nothing to do
+                }
+                let color_changed = tag.color != lcolor;
+                let auto_changed = tag.is_auto != lauto;
+                if color_changed || auto_changed {
+                    tx.execute(
+                        "UPDATE tags SET color = ?, is_auto = ? WHERE id = ?",
+                        params![tag.color, tag.is_auto as i32, id],
+                    )?;
+                    stats.changed += 1;
+                }
+                // Always advance the stamp so a re-merge of the same snapshot is
+                // a no-op even when color/is_auto are identical.
+                tx.execute(
+                    "UPDATE tags SET updated_at = ? WHERE id = ?",
+                    params![tag.updated_at, id],
+                )?;
+                if let Some(entry) = local.get_mut(&tag.name) {
+                    entry.1 = tag.color.clone();
+                    entry.2 = tag.is_auto;
+                    entry.3 = tag.updated_at.clone();
+                }
+            } else {
+                // Tombstone gate: deleted elsewhere at/after this stamp → don't resurrect.
+                let tombstone: Option<String> = tx
+                    .query_row(
+                        "SELECT deleted_at FROM tag_tombstones WHERE name = ?",
+                        [&tag.name],
+                        |row| row.get(0),
+                    )
+                    .ok();
+                if let Some(deleted_at) = tombstone {
+                    if deleted_at.as_str() >= tag.updated_at.as_str() {
+                        continue;
+                    }
+                }
+                tx.execute(
+                    "INSERT INTO tags (name, color, is_auto, updated_at) VALUES (?, ?, ?, ?)",
+                    params![tag.name, tag.color, tag.is_auto as i32, tag.updated_at],
+                )?;
+                tx.execute("DELETE FROM tag_tombstones WHERE name = ?", [&tag.name])?;
+                let new_id = tx.last_insert_rowid();
+                local.insert(
+                    tag.name.clone(),
+                    (
+                        new_id,
+                        tag.color.clone(),
+                        tag.is_auto,
+                        tag.updated_at.clone(),
+                    ),
+                );
+                stats.added += 1;
+            }
+        }
+
+        // 3. Incoming tombstone deletes (a local tag edited after the deletion
+        //    wins and is kept; its tombstone still blocks stale bundles).
+        let mut fts_dirty: Vec<i64> = Vec::new();
+        for (name, deleted_at) in incoming_tombstones {
+            let Some((id, lupdated)) = local.get(name).map(|(id, _, _, u)| (*id, u.clone())) else {
+                continue;
+            };
+            if lupdated.as_str() > deleted_at.as_str() {
+                continue; // local edit wins
+            }
+            let mut stmt = tx.prepare("SELECT record_id FROM record_tags WHERE tag_id = ?")?;
+            let ids = stmt
+                .query_map([id], |row| row.get(0))?
+                .collect::<SqlResult<Vec<i64>>>()?;
+            fts_dirty.extend(ids);
+            tx.execute("DELETE FROM tags WHERE id = ?", [id])?;
+            local.remove(name);
+            stats.deleted += 1;
+        }
+
+        // 4. Conservative GC: local tags the snapshot doesn't know, last touched
+        //    before the snapshot, with zero linked records — safe local cleanup.
+        let incoming_names: std::collections::HashSet<&str> =
+            incoming.iter().map(|t| t.name.as_str()).collect();
+        let stale: Vec<String> = local
+            .iter()
+            .filter(|(name, (_, _, _, updated))| {
+                !incoming_names.contains(name.as_str())
+                    && updated.as_str() != TAG_EPOCH_SENTINEL
+                    && updated.as_str() < remote_snapshot_updated_at
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in stale {
+            let (id, _, _, _) = local[&name];
+            let links: i64 = tx.query_row(
+                "SELECT COUNT(*) FROM record_tags WHERE tag_id = ?",
+                [id],
+                |row| row.get(0),
+            )?;
+            if links == 0 {
+                tx.execute("DELETE FROM tags WHERE id = ?", [id])?;
+                local.remove(&name);
+                stats.deleted += 1;
+            }
+        }
+
+        if !fts_dirty.is_empty() {
+            fts_dirty.sort_unstable();
+            fts_dirty.dedup();
+            Self::refresh_records_fts_batch(&tx, &fts_dirty)?;
+        }
+        tx.commit()?;
+        bump_tag_epoch();
+        Ok(stats)
     }
 }

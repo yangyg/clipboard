@@ -191,6 +191,7 @@ export default {
     autoTagCreated: '自动打标规则创建',
     editTag: '编辑',
     deleteTag: '删除',
+    tagPendingSync: '待同步：此标签的修改尚未推送到其他设备，下次同步时上传',
     webdavNotConfigured: '请先在设置中配置 WebDAV 同步',
     webdavSyncFailed: 'WebDAV 同步失败：{error}',
     deleteTagTitle: '删除标签',

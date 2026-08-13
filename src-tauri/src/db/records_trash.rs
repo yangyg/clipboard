@@ -348,6 +348,9 @@ impl ClipboardDb {
         // trigger. Both require foreign_keys=ON (configure_connection sets it).
         conn.execute("DELETE FROM records", [])?;
         conn.execute("DELETE FROM tags", [])?;
+        // Tag-delete tombstones are cleared too, else a re-seeded tag would
+        // stay blocked from syncing back in on this device.
+        conn.execute("DELETE FROM tag_tombstones", [])?;
         // Re-seed the built-in defaults so a fresh slate still ships them.
         conn.execute_batch(DEFAULT_TAGS_INSERT)?;
         super::tags::bump_tag_epoch();

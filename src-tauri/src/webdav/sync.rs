@@ -20,6 +20,7 @@ use super::client::WebDavClient;
 use super::media::{
     download_media_if_needed, upload_media_paths_if_needed, MEDIA_TRANSFER_CONCURRENCY,
 };
+use super::tags::{pull_tags_snapshot, push_tags_snapshot};
 
 type UploadResult = Result<(bool, bool), String>;
 type UploadTask = (String, tokio::task::JoinHandle<UploadResult>);
@@ -281,16 +282,23 @@ pub async fn webdav_pull(
     if trashed > 0 {
         info!("WebDAV pull: applied {trashed} deletion tombstone(s)");
     }
+    // Standalone tag sync: tag definitions merge LWW by `tags.updated_at`, so
+    // they no longer ride the record bundle (and tag edits never rewrite every
+    // linked record's `updated_at`).
+    let tags_pulled_total = tags_pulled
+        + pull_tags_snapshot(db, &client, &root)
+            .await
+            .map_err(|e| format!("WebDAV 标签同步失败: {e}"))?;
     persist_last_sync(db, settings).await?;
 
     info!(
-        "WebDAV pull: new={pulled} merged={merged} tags={tags_pulled} media_dl={media_downloaded}"
+        "WebDAV pull: new={pulled} merged={merged} tags={tags_pulled_total} media_dl={media_downloaded}"
     );
     Ok(WebDavSyncResult {
         pulled,
         pushed: 0,
         merged,
-        tags_pulled,
+        tags_pulled: tags_pulled_total,
         tags_pushed: 0,
         media_downloaded,
         media_uploaded: 0,
@@ -540,7 +548,7 @@ pub async fn webdav_push(
         version: 2,
         protocol: PROTOCOL.to_string(),
         updated_at: Utc::now().to_rfc3339(),
-        device_id,
+        device_id: device_id.clone(),
         entries,
         tombstones,
         device_acks,
@@ -609,6 +617,16 @@ pub async fn webdav_push(
         };
     }
 
+    // Standalone tag sync: publish the local tag definitions + tombstones as
+    // tags.json (LWW-merged, conditional PUT). Tag edits no longer bump every
+    // linked record's `updated_at`, so definitions flow through this file
+    // instead of re-pushing the record bundle.
+    let (tags_pushed_total, tags_pulled_on_push) =
+        push_tags_snapshot(db, &client, &root, &device_id)
+            .await
+            .map_err(|e| format!("WebDAV 标签同步失败: {e}"))?;
+    let tags_pushed = tags_pushed_total + tags_pushed;
+
     persist_last_sync(db, settings).await?;
 
     info!(
@@ -618,7 +636,7 @@ pub async fn webdav_push(
         pulled: 0,
         pushed,
         merged: 0,
-        tags_pulled: 0,
+        tags_pulled: tags_pulled_on_push,
         tags_pushed,
         media_downloaded: 0,
         media_uploaded,

@@ -276,6 +276,10 @@ async function runWebDav(
       await clipboardStore.loadRecords();
       await clipboardStore.loadStats();
     }
+    // Any successful sync advances `webdav_last_sync_at`, which flips the
+    // sidebar "待同步" badges; pull/sync also merge tag definitions via
+    // tags.json. Refresh the tag list so both settle immediately.
+    await clipboardStore.loadTags();
     await loadHistory();
   } catch (e) {
     webdavStatus.value = `${action === "pull" ? t('settings.sync.webdavPullFailed', { error: String(e) }) : action === "push" ? t('settings.sync.webdavPushFailed', { error: String(e) }) : t('settings.sync.webdavSyncFailed', { error: String(e) })}`;

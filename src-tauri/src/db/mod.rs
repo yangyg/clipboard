@@ -37,8 +37,7 @@ mod types;
 
 pub use records_export::ExportCursor;
 pub use records_import::{validate_import_records, ImportSanitize, MAX_IMPORT_TOTAL_BYTES};
-pub use tags::nearest_palette_color;
-
+pub use tags::{nearest_palette_color, TagMergeStats, TagSyncRow, TAG_EPOCH_SENTINEL};
 // Schema compatibility tests live in `schema_tests.rs` (test-only module) to
 // keep schema.rs under the 500-line cap.
 #[cfg(test)]

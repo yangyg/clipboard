@@ -356,7 +356,7 @@ describe("clipboardStore — reorderForUpdate / reorderForUpdates (tag-edit re-r
     expect(store.records.map((r) => r.id)).toEqual([1, 2]);
   });
 
-  it("updateTag rename re-ranks every affected row", async () => {
+  it("updateTag rename patches names without re-ranking (tags sync standalone)", async () => {
     const store = useClipboardStore();
     store.tags = [{ id: 1, name: "old", color: "#fff", is_auto: false, count: 2 }];
     store.records = [
@@ -365,9 +365,14 @@ describe("clipboardStore — reorderForUpdate / reorderForUpdates (tag-edit re-r
       makeRecord({ id: 3, tags: ["other"] }),
     ];
     await store.updateTag(1, "new", "#eee");
-    // Both re-ranked; equal bump timestamps → server orders them id DESC.
-    expect(store.records.map((r) => r.id)).toEqual([2, 1, 3]);
-    expect(store.records[0].tags).toEqual(["new"]);
+    // Renames no longer bump records.updated_at (tag definitions sync via
+    // tags.json), so the list order is untouched.
+    expect(store.records.map((r) => r.id)).toEqual([1, 2, 3]);
+    expect(store.records.map((r) => r.tags)).toEqual([
+      ["new"],
+      ["new"],
+      ["other"],
+    ]);
   });
 });
 

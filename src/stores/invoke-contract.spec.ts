@@ -544,7 +544,7 @@ describe("Tauri invoke contract — completeness", () => {
       if (cmd === "import_data") return Promise.resolve(0);
       if (cmd === "create_tag") {
         const a = args as Record<string, unknown>;
-        return Promise.resolve({ id: 1, name: a?.name, color: a?.color, is_auto: false, count: 0 });
+        return Promise.resolve({ id: 1, name: a?.name, color: a?.color, is_auto: false, count: 0, synced: false });
       }
       return Promise.resolve(undefined);
     });

@@ -258,7 +258,8 @@ impl ClipboardDb {
                 if incoming_newer && record.tags.iter().any(|t| !t.trim().is_empty()) {
                     // Same predicate as the UPDATE above: a trashed row may
                     // share the hash with an active row, and tags belong to
-                    // the active one.
+                    // the active one. The incoming record's `updated_at` is the
+                    // LWW stamp for the tag definitions it carries.
                     if super::ClipboardDb::set_record_tags_by_name_conn_cached(
                         &tx,
                         id,
@@ -266,6 +267,7 @@ impl ClipboardDb {
                         &record.tag_colors,
                         &mut tag_id_cache,
                         &mut fts_dirty,
+                        &record.updated_at,
                     )? {
                         tags_changed += 1;
                     }
@@ -319,6 +321,7 @@ impl ClipboardDb {
                     &record.tag_colors,
                     &mut tag_id_cache,
                     &mut fts_dirty,
+                    &record.updated_at,
                 )? {
                     tags_changed += 1;
                 }

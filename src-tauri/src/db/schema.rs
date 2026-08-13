@@ -6,7 +6,7 @@ use super::ClipboardDb;
 /// Increment when adding tables, columns, or indexes that older DBs must migrate.
 /// Stored in `settings(key='schema_version')` so doctor / diagnostics can verify
 /// the on-disk schema matches what this binary expects.
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
 
 /// Default tag definitions seeded on schema init and re-seeded after
 /// `clear_all_data` so a fresh slate still ships the built-in tags.
@@ -84,6 +84,15 @@ impl ClipboardDb {
             );
             CREATE INDEX IF NOT EXISTS idx_record_tags_tag_id ON record_tags(tag_id);
 
+            -- Tag deletions propagate across devices via these tombstones
+            -- (the tags.json snapshot is a full set, so a deleted tag would
+            -- otherwise look like "just absent" and silently resurrect from
+            -- stale record bundles). Cleared when the tag is recreated.
+            CREATE TABLE IF NOT EXISTS tag_tombstones (
+                name TEXT PRIMARY KEY,
+                deleted_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -133,6 +142,44 @@ impl ClipboardDb {
         Self::migrate_list_order_index(conn)?;
         // Runs AFTER the `settings` table exists (its one-shot gate lives there).
         Self::enforce_active_hash_uniqueness(conn)?;
+        Self::migrate_tags_sync_v1(conn)?;
+        Ok(())
+    }
+
+    /// One-shot (`tags_sync_v1`): add `tags.updated_at` for the standalone tag
+    /// sync (tag edits propagate via a tags.json snapshot keyed on this column
+    /// instead of rewriting every linked record's `updated_at`). Existing rows
+    /// get a sentinel epoch so a post-upgrade merge always lets genuine remote
+    /// edits win instead of stamping the migration time over them; the first
+    /// real local edit then re-stamps the row.
+    fn migrate_tags_sync_v1(conn: &Connection) -> SqlResult<()> {
+        let done: Option<String> = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'tags_sync_v1'",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+        if done.as_deref() == Some("1") {
+            return Ok(());
+        }
+        let has_col: bool = {
+            let mut stmt = conn.prepare("PRAGMA table_info(tags)")?;
+            let cols = stmt
+                .query_map([], |row| row.get::<_, String>(1))?
+                .collect::<SqlResult<Vec<String>>>()?;
+            cols.iter().any(|c| c == "updated_at")
+        };
+        if !has_col {
+            conn.execute(
+                "ALTER TABLE tags ADD COLUMN updated_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00Z'",
+                [],
+            )?;
+        }
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('tags_sync_v1', '1')",
+            [],
+        )?;
         Ok(())
     }
 

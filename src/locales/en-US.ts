@@ -191,6 +191,7 @@ export default {
     autoTagCreated: 'Created by auto-tag rule',
     editTag: 'Edit',
     deleteTag: 'Delete',
+    tagPendingSync: 'Pending sync: changes to this tag have not reached other devices yet — they upload on the next sync',
     webdavNotConfigured: 'Please configure WebDAV in Settings first',
     webdavSyncFailed: 'WebDAV sync failed: {error}',
     deleteTagTitle: 'Delete Tag',

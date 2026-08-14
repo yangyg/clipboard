@@ -23,7 +23,7 @@
     />
 
     <!-- Sensitive Warning -->
-    <div v-if="record.is_sensitive" class="sensitive-warning">
+    <div v-if="record.is_sensitive" class="sensitive-warning" role="alert">
       <AppIcon name="warning" :size="14" />
       <span>{{ $t('preview.sensitiveContent') }}</span>
       <span class="auto-expire" v-if="record.auto_expire_at">

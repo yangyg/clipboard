@@ -354,15 +354,11 @@ impl ClipboardDb {
         self.get_record_tags_locked(&conn, record_id)
     }
 
-    /// Full record + bump copy_count in one write lock (paste hot path).
-    ///
-    /// Paste is a *use* action, not a content update: it increments
-    /// `copy_count` but deliberately does **not** bump `updated_at`. Keeping
-    /// `updated_at` as content-freshness only (capture / re-copy / tag edits)
-    /// means pasting never re-ranks the `updated_desc` list, never protects a
-    /// record from capacity eviction, and never raises the WebDAV LWW watermark.
+    /// Full record for the paste hot path (active rows only). Does **not**
+    /// bump `copy_count` — the caller increments after the clipboard write
+    /// succeeds so a failed write cannot inflate the counter.
     pub fn take_record_for_paste(&self, id: i64) -> SqlResult<Option<ClipboardRecord>> {
-        let conn = self.conn.lock();
+        let conn = self.lock_read();
         let mut record = {
             let mut stmt = conn.prepare(&format!(
                 "SELECT {} FROM records WHERE id = ? AND is_trashed = 0",
@@ -375,13 +371,22 @@ impl ClipboardDb {
             self.map_record_row(row)?
         };
         record.tags = self.get_record_tags_locked(&conn, record.id)?;
+        Ok(Some(record))
+    }
 
+    /// Increment paste count after the clipboard write succeeded.
+    /// Paste is a *use* action, not a content update: it increments
+    /// `copy_count` but deliberately does **not** bump `updated_at`. Keeping
+    /// `updated_at` as content-freshness only (capture / re-copy / tag edits)
+    /// means pasting never re-ranks the `updated_desc` list, never protects a
+    /// record from capacity eviction, and never raises the WebDAV LWW watermark.
+    pub fn bump_copy_count(&self, id: i64) -> SqlResult<()> {
+        let conn = self.conn.lock();
         conn.execute(
-            "UPDATE records SET copy_count = copy_count + 1 WHERE id = ?",
+            "UPDATE records SET copy_count = copy_count + 1 WHERE id = ? AND is_trashed = 0",
             params![id],
         )?;
-        record.copy_count = record.copy_count.saturating_add(1);
-        Ok(Some(record))
+        Ok(())
     }
 }
 

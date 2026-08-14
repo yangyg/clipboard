@@ -215,7 +215,7 @@ fn import_text(db: &ClipboardDb, text: &str, s: &Arc<Settings>) -> bool {
     // Mirror the live-capture cap: oversized history items are skipped so an
     // accidental huge copy does not bloat the DB / FTS index.
     let cap = s.max_text_bytes.max(0) as usize;
-    if cap > 0 && text.len() > cap {
+    if crate::detect::exceeds_text_byte_cap(text.len(), 0, s.max_text_bytes) {
         info!(
             "Skipping oversized history text item: {} bytes (cap {} bytes)",
             text.len(),

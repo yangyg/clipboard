@@ -13,7 +13,9 @@ use crate::clipboard::{
     get_foreground_window_info, CapturedImage, CapturedText, ClipboardEvent, ClipboardMonitor,
 };
 use crate::db::{ClipboardDb, ContentType, ImageMeta};
-use crate::detect::{detect_content_type, detect_sensitive, sha256_hash, sha256_hash_bytes};
+use crate::detect::{
+    detect_content_type, detect_sensitive, exceeds_text_byte_cap, sha256_hash, sha256_hash_bytes,
+};
 use crate::media;
 use crate::panel::list_ipc_payload;
 use crate::Settings;
@@ -162,12 +164,13 @@ fn process_text_job(
     // the DB + FTS trigram index and stall the write lock while the index
     // builds. The OS clipboard itself is untouched, so the user still has the
     // original — it just never enters the history.
-    let cap = settings.max_text_bytes.max(0) as usize;
-    if cap > 0 && captured.text.len() > cap {
+    let html_len = captured.html.as_ref().map(|h| h.len()).unwrap_or(0);
+    if exceeds_text_byte_cap(captured.text.len(), html_len, settings.max_text_bytes) {
         info!(
-            "Skipping oversized text capture: {} bytes (cap {} bytes)",
+            "Skipping oversized text capture: {}+{} bytes (cap {} bytes)",
             captured.text.len(),
-            cap
+            html_len,
+            settings.max_text_bytes
         );
         return;
     }

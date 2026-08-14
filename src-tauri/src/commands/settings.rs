@@ -35,6 +35,12 @@ pub async fn save_settings(
         apply_autostart(&app, settings.auto_start)?;
     }
 
+    // Bind the new shortcut *before* persisting so a registration failure
+    // cannot leave DB and runtime out of sync.
+    if shortcut_changed {
+        crate::apply_global_shortcut(&app, &settings.global_shortcut)?;
+    }
+
     if settings.retention_days != previous.retention_days {
         let db = state.db.clone();
         let days = settings.retention_days;
@@ -51,15 +57,15 @@ pub async fn save_settings(
                 );
             }
         }
-        return Err(e);
-    }
-
-    if shortcut_changed {
-        if let Err(e) = crate::apply_global_shortcut(&app, &settings.global_shortcut) {
-            warn!("Failed to apply new global shortcut: {}", e);
-            // Persist succeeded; surface so UI can reload / warn
-            return Err(e);
+        if shortcut_changed {
+            if let Err(revert_err) = crate::apply_global_shortcut(&app, &previous.global_shortcut) {
+                warn!(
+                    "Failed to revert global shortcut after settings save error: {}",
+                    revert_err
+                );
+            }
         }
+        return Err(e);
     }
 
     if settings.panel_radius != previous.panel_radius {
@@ -122,9 +128,14 @@ fn is_autostart_already_cleared(err: &impl std::fmt::Display) -> bool {
 }
 
 #[tauri::command]
-pub async fn set_capture_paused(state: State<'_, AppState>, paused: bool) -> Result<(), String> {
+pub async fn set_capture_paused(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    paused: bool,
+) -> Result<(), String> {
     *state.capture_paused.write() = paused;
     info!("Capture paused: {}", paused);
+    let _ = app.emit("capture-paused", paused);
     Ok(())
 }
 

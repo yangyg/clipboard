@@ -265,7 +265,7 @@ impl ClipboardDb {
         let rows: Vec<(i64, String, bool)> = {
             let mut stmt = conn.prepare(
                 "SELECT id, hash, is_sensitive FROM records
-                     WHERE is_favorite = 0 AND is_trashed = 0",
+                     WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0",
             )?;
             let rows = stmt
                 .query_map([], |row| {
@@ -285,7 +285,7 @@ impl ClipboardDb {
             Self::upsert_tombstone_conn(&conn, hash, &now, *is_sensitive)?;
         }
         conn.execute(
-            "DELETE FROM records WHERE is_favorite = 0 AND is_trashed = 0",
+            "DELETE FROM records WHERE is_favorite = 0 AND is_pinned = 0 AND is_trashed = 0",
             [],
         )?;
         drop(conn);
@@ -472,6 +472,34 @@ mod tests {
         db.clear_all_data().unwrap();
         db.clear_all_data().unwrap();
         assert!(db.get_records_for_export(10, 0).unwrap().is_empty());
+        cleanup(dir);
+    }
+
+    #[test]
+    fn clear_non_favorite_keeps_pinned_and_favorites() {
+        let (db, dir) = temp_db();
+        let mut pinned = make_record("keep pinned", "pin-hash", false);
+        pinned.is_pinned = true;
+        let mut favorite = make_record("keep favorite", "fav-hash", false);
+        favorite.is_favorite = true;
+        let ordinary = make_record("drop me", "drop-hash", false);
+        db.import_records_with_merge(&[pinned, favorite, ordinary], 100, None)
+            .unwrap();
+
+        db.clear_non_favorite().unwrap();
+
+        let mut contents: Vec<String> = db
+            .get_records_for_export(10, 0)
+            .unwrap()
+            .into_iter()
+            .map(|r| r.content)
+            .collect();
+        contents.sort();
+        assert_eq!(
+            contents,
+            vec!["keep favorite".to_string(), "keep pinned".to_string()]
+        );
+        assert_eq!(db.get_sync_tombstones().unwrap().len(), 1);
         cleanup(dir);
     }
 

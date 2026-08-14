@@ -1,7 +1,7 @@
 <template>
-  <BaseDialog :open="visible" @close="$emit('close')">
+  <BaseDialog :open="visible" labelled-by="alias-dialog-title" @close="$emit('close')">
     <div class="dialog-header">
-      <span class="dialog-title">{{ hasAlias ? $t('alias.editTitle') : $t('alias.setTitle') }}</span>
+      <span id="alias-dialog-title" class="dialog-title">{{ hasAlias ? $t('alias.editTitle') : $t('alias.setTitle') }}</span>
       <button type="button" class="dialog-close" :aria-label="$t('common.close')" @click="$emit('close')">
         <AppIcon name="close" :size="14" />
       </button>

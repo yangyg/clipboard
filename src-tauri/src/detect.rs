@@ -216,6 +216,14 @@ pub fn sha256_hash_slices(parts: &[&[u8]]) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// True when a capture's stored payload would exceed `max_text_bytes`.
+/// `cap == 0` means unlimited. HTML is counted with the plain text so a tiny
+/// caption plus a huge CF_HTML fragment cannot bypass the storage cap.
+pub fn exceeds_text_byte_cap(text_len: usize, html_len: usize, cap: i32) -> bool {
+    let cap = cap.max(0) as usize;
+    cap > 0 && text_len.saturating_add(html_len) > cap
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -385,5 +393,14 @@ mod tests {
             sha256_hash("abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn text_byte_cap_counts_html_and_treats_zero_as_unlimited() {
+        assert!(!exceeds_text_byte_cap(10, 0, 0));
+        assert!(!exceeds_text_byte_cap(10, 0, 10));
+        assert!(exceeds_text_byte_cap(11, 0, 10));
+        assert!(exceeds_text_byte_cap(4, 7, 10));
+        assert!(!exceeds_text_byte_cap(4, 6, 10));
     }
 }

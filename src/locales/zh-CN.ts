@@ -266,7 +266,7 @@ export default {
     trashEmptied: '回收站已清空',
     emptyFailed: '清空失败',
     clearHistoryTitle: '清空历史',
-    clearHistoryMsg: '确定要清空所有历史记录吗？此操作不可恢复。',
+    clearHistoryMsg: '将永久删除未收藏、未置顶的记录（不可恢复，并会同步到其他设备）。收藏与置顶会保留。',
     clearHistoryConfirm: '清空',
     historyCleared: '历史已清空',
     clearHistoryFailed: '清空失败',
@@ -409,7 +409,7 @@ export default {
       maxTextSizeDesc: '超过该大小（字节）的文本复制将跳过保存，0 表示不限制',
       maxTextSizeUnlimited: '不限',
       clearHistory: '清理历史',
-      clearHistoryDesc: '手动清理所有记录',
+      clearHistoryDesc: '删除未收藏、未置顶的记录（永久删除并同步到其他设备）。收藏与置顶会保留。',
       clearHistoryBtn: '清空历史',
     },
     tags: {

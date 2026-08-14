@@ -430,9 +430,13 @@ fn handle_clipboard_tick(
             };
 
             if unchanged {
-                // Stale bitmap + new text (common on Windows) → still emit text.
+                // Stale bitmap + new *meaningful* text (Windows often keeps
+                // both). URL-only accompaniment of "Copy image" must not spawn
+                // a duplicate link record on every re-copy of the same bitmap.
                 if let Some(captured) = text {
-                    maybe_emit_text(last_text_fp, captured, on_change);
+                    if is_meaningful_share_text(&captured.text) {
+                        maybe_emit_text(last_text_fp, captured, on_change);
+                    }
                 }
             } else {
                 let width = img.width as u32;

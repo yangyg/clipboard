@@ -1,6 +1,6 @@
 <template>
   <!-- Loading (initial only) -->
-  <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state">
+  <div v-if="clipboardStore.isLoading && clipboardStore.records.length === 0" class="loading-state" role="status" :aria-label="$t('common.loading')">
     <div class="loading-spinner"></div>
     <span>{{ $t('common.loading') }}</span>
   </div>
@@ -12,7 +12,7 @@
     <div v-if="emptyState.hint" class="empty-hint">
       <template v-if="emptyState.clearSearch">
         {{ $t('emptyState.tryOtherKeywords') }}
-        <button class="clear-link" @click="clipboardStore.search('')">{{ $t('common.clearSearch') }}</button>
+        <button type="button" class="clear-link" @click="clipboardStore.search('')">{{ $t('common.clearSearch') }}</button>
       </template>
       <template v-else>{{ emptyState.hint }}</template>
     </div>

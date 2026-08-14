@@ -83,8 +83,10 @@ impl ClipboardDb {
         Ok(imported)
     }
 
-    /// Import with hash dedup. Existing hashes get a shallow merge:
-    /// newer `updated_at`, OR on favorite/pin, max `copy_count`, fill missing media paths.
+    /// Import with hash dedup. Existing hashes get a merge:
+    /// newer `updated_at`, OR on favorite/pin, max `copy_count`, fill missing media paths,
+    /// and LWW replace of alias / content_html / source_* when the incoming snapshot
+    /// is strictly newer (so alias-only and rich-text edits propagate).
     /// Returns `(inserted, merged, tags_changed)` — `tags_changed` counts records whose
     /// tag links were actually written/changed (WebDAV pull surfaces this in its summary).
     pub fn import_records_with_merge(
@@ -189,6 +191,11 @@ impl ClipboardDb {
                 None => (record.is_sensitive, record.auto_expire_at.clone()),
             };
 
+            let mut alias = record.alias.trim().to_string();
+            if alias.chars().count() > ALIAS_MAX_CHARS {
+                alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
+            }
+
             if existing_hashes.contains(&hash) {
                 // Read the active row before the merge: the UPDATE below may
                 // raise `updated_at` to the incoming value, and the tag LWW
@@ -200,6 +207,7 @@ impl ClipboardDb {
                     |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
                 )?;
                 let incoming_newer = record.updated_at.as_str() > local_updated_at.as_str();
+                let lww = incoming_newer as i32;
 
                 let changed = tx.execute(
                     "UPDATE records SET
@@ -219,6 +227,13 @@ impl ClipboardDb {
                                  AND (auto_expire_at IS NULL OR auto_expire_at = '')
                                  AND ? IS NOT NULL
                             THEN ? ELSE auto_expire_at END,
+                        -- LWW payload: alias / HTML / capture-source follow the
+                        -- newer snapshot so alias-only and rich-text edits sync.
+                        alias = CASE WHEN ? = 1 THEN ? ELSE alias END,
+                        content_html = CASE WHEN ? = 1 THEN ? ELSE content_html END,
+                        source_app = CASE WHEN ? = 1 THEN ? ELSE source_app END,
+                        source_window = CASE WHEN ? = 1 THEN ? ELSE source_window END,
+                        source_name = CASE WHEN ? = 1 THEN ? ELSE source_name END,
                         -- First-origin semantics: adopt the incoming device only
                         -- when it is non-empty AND the earlier creator (or the
                         -- local row has no origin yet). A non-empty origin is
@@ -244,6 +259,16 @@ impl ClipboardDb {
                         auto_expire_at,
                         auto_expire_at,
                         auto_expire_at,
+                        lww,
+                        alias,
+                        lww,
+                        content_html,
+                        lww,
+                        record.source_app,
+                        lww,
+                        record.source_window,
+                        lww,
+                        record.source_name,
                         record.source_device_id,
                         record.created_at,
                         record.source_device_id,
@@ -252,6 +277,11 @@ impl ClipboardDb {
                 )?;
                 if changed > 0 {
                     merged += 1;
+                }
+                // Alias / source live in FTS — rebuild when a newer snapshot
+                // may have replaced them (same batch as tag FTS refreshes).
+                if incoming_newer {
+                    fts_dirty.push(id);
                 }
                 // Tag sync (LWW): replace the links only when the incoming
                 // snapshot is strictly newer AND actually carries tags — a
@@ -276,11 +306,6 @@ impl ClipboardDb {
                     }
                 }
                 continue;
-            }
-
-            let mut alias = record.alias.trim().to_string();
-            if alias.chars().count() > ALIAS_MAX_CHARS {
-                alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
             }
 
             tx.execute(

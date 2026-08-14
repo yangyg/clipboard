@@ -4,11 +4,48 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
+import { useBatchActions } from "./useBatchActions";
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+export type ListHotkeyAction =
+  | "toggle-batch-select"
+  | "batch-delete"
+  | "paste"
+  | "restore"
+  | "delete"
+  | "plain-paste";
+
+/** Pure key → action map for the record list (exported for tests). */
+export function resolveListHotkey(
+  e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean },
+  ctx: {
+    batchMode: boolean;
+    trashFilter: boolean;
+    selectedId: number | null;
+    selectedCount: number;
+  },
+): ListHotkeyAction | null {
+  if (e.key === "Enter" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    if (ctx.selectedId == null) return null;
+    if (ctx.batchMode) return "toggle-batch-select";
+    if (ctx.trashFilter) return "restore";
+    return "paste";
+  }
+  if (e.altKey && (e.key === "v" || e.key === "V")) {
+    if (ctx.batchMode || ctx.trashFilter || ctx.selectedId == null) return null;
+    return "plain-paste";
+  }
+  if (e.key === "Delete" || e.key === "Backspace") {
+    if (ctx.batchMode && ctx.selectedCount > 0) return "batch-delete";
+    if (ctx.selectedId == null) return null;
+    return "delete";
+  }
+  return null;
 }
 
 /**
@@ -22,6 +59,7 @@ export function useClipboardHotkeys() {
   const { toast } = useToast();
   const { confirm, current: confirmOpen } = useConfirm();
   const { t } = useI18n();
+  const { batchDelete } = useBatchActions();
 
   async function pasteSelected(mode?: "original" | "plain") {
     const id = clipboardStore.selectedId;
@@ -107,48 +145,57 @@ export function useClipboardHotkeys() {
       return;
     }
 
-    if (e.key === "Enter" && !e.altKey && !e.ctrlKey && !e.metaKey) {
-      if (clipboardStore.selectedId == null) return;
-      e.preventDefault();
-      if (clipboardStore.trashFilter) {
-        void clipboardStore.restoreRecord(clipboardStore.selectedId);
-      } else {
-        void pasteSelected();
+    const action = resolveListHotkey(e, {
+      batchMode: clipboardStore.batchMode,
+      trashFilter: clipboardStore.trashFilter,
+      selectedId: clipboardStore.selectedId,
+      selectedCount: clipboardStore.selectedIds.size,
+    });
+    if (!action) {
+      if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
+        if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
+        e.preventDefault();
+        void (async () => {
+          const next = await clipboardStore.toggleFavorite(clipboardStore.selectedId!);
+          if (next == null) toast(t("common.operationFailed"), "error");
+        })();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === "t" || e.key === "T")) {
+        if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
+        e.preventDefault();
+        void (async () => {
+          const next = await clipboardStore.togglePin(clipboardStore.selectedId!);
+          if (next == null) toast(t("common.operationFailed"), "error");
+        })();
       }
       return;
     }
 
-    if (e.altKey && (e.key === "v" || e.key === "V")) {
-      e.preventDefault();
-      void pasteSelected("plain");
-      return;
-    }
-
-    if ((e.ctrlKey || e.metaKey) && (e.key === "d" || e.key === "D")) {
-      if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
-      e.preventDefault();
-      void (async () => {
-        const next = await clipboardStore.toggleFavorite(clipboardStore.selectedId!);
-        if (next == null) toast(t("common.operationFailed"), "error");
-      })();
-      return;
-    }
-
-    if ((e.ctrlKey || e.metaKey) && (e.key === "t" || e.key === "T")) {
-      if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
-      e.preventDefault();
-      void (async () => {
-        const next = await clipboardStore.togglePin(clipboardStore.selectedId!);
-        if (next == null) toast(t("common.operationFailed"), "error");
-      })();
-      return;
-    }
-
-    if (e.key === "Delete" || e.key === "Backspace") {
-      if (clipboardStore.selectedId == null) return;
-      // Avoid deleting while editing; already guarded by isTypingTarget
-      e.preventDefault();
-      void deleteSelected();
+    e.preventDefault();
+    switch (action) {
+      case "toggle-batch-select":
+        if (clipboardStore.selectedId != null) {
+          clipboardStore.toggleBatchSelect(clipboardStore.selectedId);
+        }
+        break;
+      case "batch-delete":
+        void batchDelete();
+        break;
+      case "paste":
+        void pasteSelected();
+        break;
+      case "plain-paste":
+        void pasteSelected("plain");
+        break;
+      case "restore":
+        if (clipboardStore.selectedId != null) {
+          void clipboardStore.restoreRecord(clipboardStore.selectedId);
+        }
+        break;
+      case "delete":
+        void deleteSelected();
+        break;
     }
   }
 

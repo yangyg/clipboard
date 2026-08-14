@@ -36,8 +36,14 @@ impl ClipboardDb {
             .unwrap_or_default();
         let conn = self.conn.lock();
         if let Some(id) = Self::find_active_duplicate(&conn, hash)? {
-            let record =
-                self.refresh_duplicate_source(&conn, id, source_app, source_window, source_name)?;
+            let record = self.refresh_duplicate_source(
+                &conn,
+                id,
+                source_app,
+                source_window,
+                source_name,
+                content_html,
+            )?;
             return Ok((id, false, record));
         }
         let now = chrono::Utc::now().to_rfc3339();
@@ -166,8 +172,11 @@ impl ClipboardDb {
     }
 
     /// Re-copy of an existing record: refresh source/timestamp only (paste
-    /// count is a separate action). FTS indexes source_app/source_window, but
-    /// the content-only trigger never fires here — refresh the FTS row only
+    /// count is a separate action). HTML is payload, not identity — when the
+    /// new copy carries a different CF_HTML fragment, store it so paste writes
+    /// the latest formatting. A plain-text recopy (`None`) keeps the existing
+    /// HTML rather than wiping rich text. FTS indexes source_app/source_window,
+    /// but the content-only trigger never fires here — refresh the FTS row only
     /// when the source actually changed, so searching by the new source still
     /// matches.
     fn refresh_duplicate_source(
@@ -177,6 +186,7 @@ impl ClipboardDb {
         source_app: &str,
         source_window: &str,
         source_name: &str,
+        content_html: Option<&str>,
     ) -> SqlResult<ClipboardRecord> {
         let source_changed: bool = conn.query_row(
             "SELECT source_app != ?1 OR source_window != ?2 OR source_name != ?3
@@ -185,8 +195,18 @@ impl ClipboardDb {
             |row| row.get(0),
         )?;
         conn.execute(
-            "UPDATE records SET updated_at = ?, source_app = ?, source_window = ?, source_name = ? WHERE id = ?",
-            params![chrono::Utc::now().to_rfc3339(), source_app, source_window, source_name, id],
+            "UPDATE records SET updated_at = ?, source_app = ?, source_window = ?, source_name = ?,
+             content_html = CASE WHEN ? IS NOT NULL THEN ? ELSE content_html END
+             WHERE id = ?",
+            params![
+                chrono::Utc::now().to_rfc3339(),
+                source_app,
+                source_window,
+                source_name,
+                content_html,
+                content_html,
+                id
+            ],
         )?;
         if source_changed {
             Self::refresh_record_fts(conn, id)?;

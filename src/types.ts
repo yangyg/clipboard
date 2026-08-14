@@ -1,6 +1,6 @@
 // ============================================================
 // Clipboard — TypeScript Types
-// NOTE: Keep in sync with Rust structs in src-tauri/src/lib.rs:
+// NOTE: Keep in sync with Rust structs in src-tauri/src/types.rs:
 //   ClipboardRecord, Settings, StatsData, TagInfo, SearchResult
 // ============================================================
 

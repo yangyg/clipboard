@@ -266,7 +266,7 @@ export default {
     trashEmptied: 'Trash emptied',
     emptyFailed: 'Failed to empty',
     clearHistoryTitle: 'Clear History',
-    clearHistoryMsg: 'Are you sure you want to clear all history? This cannot be undone.',
+    clearHistoryMsg: 'This permanently deletes records that are not favorited or pinned (cannot be undone, and syncs to other devices). Favorites and pinned items are kept.',
     clearHistoryConfirm: 'Clear',
     historyCleared: 'History cleared',
     clearHistoryFailed: 'Failed to clear',
@@ -409,7 +409,7 @@ export default {
       maxTextSizeDesc: 'Text copies larger than this (bytes) are skipped and not stored. 0 = unlimited',
       maxTextSizeUnlimited: 'Unlimited',
       clearHistory: 'Clear History',
-      clearHistoryDesc: 'Manually clear all records',
+      clearHistoryDesc: 'Permanently delete records that are not favorited or pinned (also syncs to other devices). Favorites and pinned items are kept.',
       clearHistoryBtn: 'Clear History',
     },
     tags: {

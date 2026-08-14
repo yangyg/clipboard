@@ -497,3 +497,61 @@ fn import_merge_fills_empty_origin_from_incoming() {
     assert_eq!(rows[0].source_device_id, "dev-remote");
     cleanup(dir);
 }
+
+#[test]
+fn import_merge_applies_newer_alias_html_and_source() {
+    let (db, dir) = temp_db();
+    let older = "2026-01-01T00:00:00Z".to_string();
+    let newer = "2026-02-01T00:00:00Z".to_string();
+
+    let mut local = make_record_at("same", "lww-fields", &[], older);
+    local.alias = "old-alias".into();
+    local.content_html = Some("<b>old</b>".into());
+    local.source_app = "old.exe".into();
+    local.source_window = "OldWin".into();
+    local.source_name = "Old App".into();
+    db.import_records_with_merge(&[local], 100, None).unwrap();
+
+    let mut incoming = make_record_at("same", "lww-fields", &[], newer);
+    incoming.alias = "new-alias".into();
+    incoming.content_html = Some("<i>new</i>".into());
+    incoming.source_app = "new.exe".into();
+    incoming.source_window = "NewWin".into();
+    incoming.source_name = "New App".into();
+    db.import_records_with_merge(&[incoming], 100, None)
+        .unwrap();
+
+    let row = &db.get_records_for_export(10, 0).unwrap()[0];
+    assert_eq!(row.alias, "new-alias");
+    assert_eq!(row.content_html.as_deref(), Some("<i>new</i>"));
+    assert_eq!(row.source_app, "new.exe");
+    assert_eq!(row.source_window, "NewWin");
+    assert_eq!(row.source_name, "New App");
+    cleanup(dir);
+}
+
+#[test]
+fn import_merge_keeps_newer_local_alias_against_older_snapshot() {
+    let (db, dir) = temp_db();
+    let older = "2026-01-01T00:00:00Z".to_string();
+    let newer = "2026-02-01T00:00:00Z".to_string();
+
+    let mut local = make_record_at("same", "lww-keep", &[], newer);
+    local.alias = "local-alias".into();
+    local.content_html = Some("<b>local</b>".into());
+    local.source_app = "local.exe".into();
+    db.import_records_with_merge(&[local], 100, None).unwrap();
+
+    let mut incoming = make_record_at("same", "lww-keep", &[], older);
+    incoming.alias = "stale-alias".into();
+    incoming.content_html = Some("<i>stale</i>".into());
+    incoming.source_app = "stale.exe".into();
+    db.import_records_with_merge(&[incoming], 100, None)
+        .unwrap();
+
+    let row = &db.get_records_for_export(10, 0).unwrap()[0];
+    assert_eq!(row.alias, "local-alias");
+    assert_eq!(row.content_html.as_deref(), Some("<b>local</b>"));
+    assert_eq!(row.source_app, "local.exe");
+    cleanup(dir);
+}

@@ -28,6 +28,7 @@
                 type="button"
                 class="nav-item"
                 :class="{ active: activeSection === section.key }"
+                :aria-current="activeSection === section.key ? 'page' : undefined"
                 :data-tooltip="isNarrow ? $t(section.labelKey) : undefined"
                 :aria-label="$t(section.labelKey)"
                 @click="activeSection = section.key"

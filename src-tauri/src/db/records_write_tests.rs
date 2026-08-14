@@ -123,3 +123,73 @@ fn insert_stamps_device_origin_and_recopy_keeps_it() {
     assert_eq!(rec2.source_device_id, "dev-1");
     cleanup(dir);
 }
+
+fn insert_html(
+    db: &ClipboardDb,
+    content: &str,
+    html: Option<&str>,
+) -> (i64, bool, crate::ClipboardRecord) {
+    let hash = sha256_hash(&sha256_hash(content));
+    db.insert_record(
+        content,
+        &ContentType::Text,
+        &hash,
+        false,
+        1000,
+        600,
+        "app.exe",
+        "win",
+        "",
+        None,
+        html,
+    )
+    .unwrap()
+}
+
+#[test]
+fn recopy_refreshes_content_html_when_payload_changes() {
+    let (db, dir) = temp_db();
+    let (id, is_new, _) = insert_html(&db, "hello", Some("<b>hello</b>"));
+    assert!(is_new);
+
+    let (_, is_new2, _) = insert_html(&db, "hello", Some("<i>hello</i>"));
+    assert!(!is_new2);
+    let rec = db.get_record(id).unwrap().unwrap();
+    assert_eq!(rec.content_html.as_deref(), Some("<i>hello</i>"));
+    cleanup(dir);
+}
+
+#[test]
+fn recopy_without_html_keeps_existing_rich_text() {
+    let (db, dir) = temp_db();
+    let (id, _, _) = insert_html(&db, "hello", Some("<b>hello</b>"));
+    let (_, is_new, _) = insert(&db, "hello");
+    assert!(!is_new);
+    let rec = db.get_record(id).unwrap().unwrap();
+    assert_eq!(rec.content_html.as_deref(), Some("<b>hello</b>"));
+    cleanup(dir);
+}
+
+#[test]
+fn take_record_for_paste_does_not_increment_copy_count() {
+    let (db, dir) = temp_db();
+    let (id, _, rec) = insert(&db, "paste me");
+    assert_eq!(rec.copy_count, 0);
+    let loaded = db.take_record_for_paste(id).unwrap().unwrap();
+    assert_eq!(loaded.copy_count, 0);
+    assert_eq!(db.get_record(id).unwrap().unwrap().copy_count, 0);
+    cleanup(dir);
+}
+
+#[test]
+fn bump_copy_count_increments_active_row_only() {
+    let (db, dir) = temp_db();
+    let (id, _, _) = insert(&db, "paste me");
+    db.bump_copy_count(id).unwrap();
+    assert_eq!(db.get_record(id).unwrap().unwrap().copy_count, 1);
+    db.trash_record(id).unwrap();
+    db.bump_copy_count(id).unwrap();
+    // Trashed rows are not paste targets — count stays at the last active bump.
+    assert_eq!(db.get_record(id).unwrap().unwrap().copy_count, 1);
+    cleanup(dir);
+}

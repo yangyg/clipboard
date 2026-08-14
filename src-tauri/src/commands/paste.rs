@@ -74,10 +74,10 @@ pub async fn paste_record(
     let _paste_guard = PASTE_GATE.lock().await;
 
     // 1) Write clipboard while we still own the foreground (focus rights intact).
-    let outcome = tokio::task::spawn_blocking(move || {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
         let record = db.take_record_for_paste(id).map_err(|e| e.to_string())?;
         let Some(r) = record else {
-            return Ok::<_, String>(PasteOutcome::Missing);
+            return Err("记录不存在或已在回收站".into());
         };
 
         monitor
@@ -120,14 +120,11 @@ pub async fn paste_record(
         if !wrote {
             return Err("写入剪贴板失败".into());
         }
-        Ok(PasteOutcome::Ready)
+        db.bump_copy_count(r.id).map_err(|e| e.to_string())?;
+        Ok(())
     })
     .await
     .map_err(|e| format!("paste task join error: {e}"))??;
-
-    if matches!(outcome, PasteOutcome::Missing) {
-        return Ok(());
-    }
 
     // 2) Focus the previous app FIRST (we still have FG privilege as the active window).
     clipboard::track_last_foreign_foreground();
@@ -192,9 +189,4 @@ pub async fn paste_record(
     }
 
     Ok(())
-}
-
-enum PasteOutcome {
-    Missing,
-    Ready,
 }

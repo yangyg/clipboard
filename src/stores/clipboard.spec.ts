@@ -29,6 +29,23 @@ describe("clipboardStore (smoke)", () => {
     expect(store.selectedIds.size).toBe(0);
   });
 
+  it("selectAllFiltered selects every loaded row in batch mode", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 }), makeRecord({ id: 2 })];
+    store.toggleBatchMode();
+    store.selectAllFiltered();
+    expect([...store.selectedIds].sort()).toEqual([1, 2]);
+    store.clearBatchSelection();
+    expect(store.selectedIds.size).toBe(0);
+  });
+
+  it("selectAllFiltered is a no-op outside batch mode", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 })];
+    store.selectAllFiltered();
+    expect(store.selectedIds.size).toBe(0);
+  });
+
   it("prepends a new record after pinned rows via onNewRecord", () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 1, is_pinned: true })];

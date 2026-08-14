@@ -260,6 +260,16 @@ export const useClipboardStore = defineStore("clipboard", () => {
     selectedIds.value = next;
   }
 
+  /** Select every currently loaded row (batch mode only). */
+  function selectAllFiltered() {
+    if (!batchMode.value) return;
+    selectedIds.value = new Set(records.value.map((r) => r.id));
+  }
+
+  function clearBatchSelection() {
+    selectedIds.value = new Set();
+  }
+
   function setPauseCapture(paused: boolean) {
     pauseCapture.value = paused;
   }
@@ -374,6 +384,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     setTrashFilter,
     toggleBatchMode,
     toggleBatchSelect,
+    selectAllFiltered,
+    clearBatchSelection,
     setPauseCapture,
     togglePauseCapture,
     ensureRecordDetail,

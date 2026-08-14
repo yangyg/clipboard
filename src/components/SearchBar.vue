@@ -24,6 +24,7 @@
         :aria-label="$t('search.ariaLabel')"
         aria-autocomplete="list"
         :aria-expanded="showDropdown"
+        :aria-controls="showDropdown && suggestions.length > 0 ? 'search-suggest-list' : undefined"
         :aria-activedescendant="showDropdown && activeIndex >= 0 ? 'suggest-' + activeIndex : undefined"
         :placeholder="compact ? $t('search.placeholderCompact') : $t('search.placeholder')"
         @focus="onFocus"

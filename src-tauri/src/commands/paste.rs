@@ -31,13 +31,18 @@ async fn focus_paste_target_on_main_thread(app: &AppHandle, hwnd: isize) -> bool
     rx.await.unwrap_or(false)
 }
 
+/// Write the record to the clipboard, then try to send Ctrl+V to the paste target.
+///
+/// Returns `Ok(true)` when key injection ran, `Ok(false)` when the clipboard was
+/// updated but no valid target was focused (caller should tell the user to paste
+/// manually). Missing/trashed records and clipboard write failures are `Err`.
 #[tauri::command]
 pub async fn paste_record(
     app: AppHandle,
     state: State<'_, AppState>,
     id: i64,
     mode: Option<String>,
-) -> Result<(), String> {
+) -> Result<bool, String> {
     // H-5: Read-only preparation OUTSIDE the mutex — reduces lock hold time.
     let auto_close = match state.db.get_settings() {
         Ok(s) => s.auto_close_on_paste,
@@ -188,5 +193,5 @@ pub async fn paste_record(
         }
     }
 
-    Ok(())
+    Ok(can_paste)
 }

@@ -12,6 +12,7 @@ export interface Suggestion {
   <div
     :ref="elRef"
     class="search-suggest"
+    id="search-suggest-list"
     role="listbox"
     :aria-label="$t('search.suggestionsHistory')"
     :style="{ left: pos.x + 'px', top: pos.y + 'px', width: pos.width + 'px' }"

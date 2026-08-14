@@ -13,8 +13,8 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **Auto-tag** | Rules (`auto_tag_rules`) that match record content type or keywords and assign tags automatically on insert. |
 | **Soft delete / Trash** | Deleted records move to trash first (recoverable). Permanent delete and empty-trash require confirmation. |
 | **Sensitive record** | Records matching patterns (passwords, verification codes, API keys, credit-card-like numbers). Auto-expire after a short TTL (default 600s). `is_sensitive` is a bool, not a content type. |
-| **Hash dedup** | SHA-256 of text fingerprint (plain + HTML) or full image bytes. Duplicate copies update `updated_at` only — do **not** bump `copy_count`. |
-| **Window** | Single borderless window with SideBar + RecordList + PreviewPane. Min width 760px. Paste with auto-close minimizes the window (no separate floating panel). |
+| **Hash dedup** | SHA-256 of **plain text** (HTML variants share identity) or full image bytes. Duplicate copies update `updated_at` only — do **not** bump `copy_count`. |
+| **Window** | Single borderless window with SideBar + RecordList + PreviewPane. Min width 780px. Paste with auto-close minimizes the window (no separate floating panel). |
 | **Paste target** | The foreground HWND at the moment the window opened. Paste writes clipboard → focuses target → sends Ctrl+V. |
 | **Source app** | The executable name of the process that owned the clipboard content at capture time. Shown as a plain-text label via `resolveSourceLabel` (friendly name, empty →「系统剪贴板」); the preview meta line's tooltip shows the raw exe path. |
 | **Keyset pagination** | List queries use keyset cursors (`before_pinned` / `before_updated_at` / `before_id`) instead of OFFSET to avoid drift when new rows prepend. |
@@ -22,6 +22,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows. It monitors t
 | **WebDAV sync** | Cloud sync via WebDAV protocol `clipvault-webdav-v1`. Manifest + JSONL bundle; media files synced alongside. Default remote dir `ClipVaultSync`. |
 | **Tombstone** | Deletion marker `(hash, deleted_at)` published in the WebDAV manifest (manifest version 2). Explicit deletions propagate cross-device: recipients move their older copies to trash (recoverable); a strictly newer re-copy wins and supersedes the tombstone. Automatic cleanup (eviction / sensitive expiry) never writes tombstones. |
 | **Search history** | Distinct search terms submitted via Enter / suggestion-select, stored in the `search_history` table (query PK + count + last_searched_at). Drives the search-box autocomplete dropdown (top 10, recency-ordered). **Local-only** — excluded from export/import and WebDAV sync. |
+| **AI enrichment** | Optional async summary → `alias` + auto-tags for new text/code/link records. Dual gate: `features.ai` (capability, default on, hides the AI settings section when off) **and** `enable_ai` (runtime, default **off**, even on upgrades). Sensitive records never leave the machine. See ADR-0006. |
 | **UI font** | `font_family` setting — a preset key (`default`/`yahei`/`simhei`/`simsun`/`kaiti`/`segoe`) or `system:<name>` for an OS-installed font. Applied as `--font-sans`; every stack carries a CJK-capable fallback (`Microsoft YaHei UI`). |
 
 ## Architecture Decision Records
@@ -33,6 +34,7 @@ See `docs/adr/` for immutable decision records:
 - **ADR-0003** — Colorful preset themes are additive fixed full-token blocks (dark `dracula`/`nord`/`sunset` + light `dracula-light`/`nord-light`/`sunset-light`), extending the `theme` union; no custom accent / `color-mix` refactor. Later appended: per-family token files under `src/styles/themes/`, the hand-drawn family (`handdrawn`/`handdrawn-light`, with sketch styling + `@sketchyicons/vue` icons) and the monochrome family (`mono`/`mono-light`).
 - **ADR-0004** — Removed the "follow system" theme option entirely (supersedes ADR-0002). Legacy saved `theme: "system"` normalizes to `dark` on load; the theme UI is 23 fixed cards in one radiogroup.
 - **ADR-0005** — Clipboard monitor is event-driven on Windows (`AddClipboardFormatListener` on a message-only window + 150ms event-debounce + 1s sequence watchdog for sleep catch-up / busy retry / listener-failure fallback). Non-Windows keeps the 250ms poll loop; both paths share `handle_clipboard_tick`.
+- **ADR-0006** — AI enrichment uses two independent switches: `features.ai` (product capability, default on) and `enable_ai` (runtime, default off). Capture enqueue and the worker require both.
 
 ## Key Design Constraints
 

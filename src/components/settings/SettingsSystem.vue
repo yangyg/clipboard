@@ -28,10 +28,12 @@
         <div class="setting-label">{{ $t('settings.system.language') }}</div>
         <div class="setting-desc">{{ $t('settings.system.languageDesc') }}</div>
       </div>
-      <div class="segmented">
+      <div class="segmented" role="radiogroup" :aria-label="$t('settings.system.language')">
         <button
           type="button"
           class="segment-btn"
+          role="radio"
+          :aria-checked="settings.language === 'zh-CN'"
           :class="{ selected: settings.language === 'zh-CN' }"
           @click="updateLanguage('zh-CN')"
         >
@@ -40,6 +42,8 @@
         <button
           type="button"
           class="segment-btn"
+          role="radio"
+          :aria-checked="settings.language === 'en-US'"
           :class="{ selected: settings.language === 'en-US' }"
           @click="updateLanguage('en-US')"
         >
@@ -48,6 +52,8 @@
         <button
           type="button"
           class="segment-btn"
+          role="radio"
+          :aria-checked="settings.language === 'system'"
           :class="{ selected: settings.language === 'system' }"
           @click="updateLanguage('system')"
         >

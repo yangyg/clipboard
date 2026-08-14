@@ -11,6 +11,7 @@ import { useConfirm } from "./useConfirm";
 import { useToast } from "./useToast";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord, Tag } from "../types";
+import { toastPasteOutcome } from "../utils/pasteNotify";
 
 export interface PreviewActionsCtx {
   record: ComputedRef<ClipboardRecord | null>;
@@ -87,8 +88,8 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
     if (!ctx.record.value) return;
     const mode = settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original";
     try {
-      await clipboardStore.pasteRecord(ctx.record.value.id, mode);
-      toast(mode === "plain" ? t('record.pastedPlain') : t('record.pasted'), "success");
+      const injected = await clipboardStore.pasteRecord(ctx.record.value.id, mode);
+      toastPasteOutcome(injected, mode, t, toast);
     } catch {
       toast(t('record.pasteFailed'), "error");
     }
@@ -97,8 +98,8 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
   async function pastePlain() {
     if (!ctx.record.value) return;
     try {
-      await clipboardStore.pasteRecord(ctx.record.value.id, "plain");
-      toast(t('record.pastedPlain'), "success");
+      const injected = await clipboardStore.pasteRecord(ctx.record.value.id, "plain");
+      toastPasteOutcome(injected, "plain", t, toast);
     } catch {
       toast(t('record.pasteFailed'), "error");
     }

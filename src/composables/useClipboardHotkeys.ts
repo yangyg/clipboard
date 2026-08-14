@@ -5,6 +5,7 @@ import { useSettingsStore } from "../stores/settings";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
 import { useBatchActions } from "./useBatchActions";
+import { toastPasteOutcome } from "../utils/pasteNotify";
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -15,6 +16,7 @@ function isTypingTarget(el: EventTarget | null): boolean {
 export type ListHotkeyAction =
   | "toggle-batch-select"
   | "batch-delete"
+  | "select-all"
   | "paste"
   | "restore"
   | "delete"
@@ -30,6 +32,10 @@ export function resolveListHotkey(
     selectedCount: number;
   },
 ): ListHotkeyAction | null {
+  if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+    if (ctx.batchMode) return "select-all";
+    return null;
+  }
   if (e.key === "Enter" && !e.altKey && !e.ctrlKey && !e.metaKey) {
     if (ctx.selectedId == null) return null;
     if (ctx.batchMode) return "toggle-batch-select";
@@ -68,8 +74,8 @@ export function useClipboardHotkeys() {
       mode ??
       (settingsStore.settings.default_paste_mode === "plain" ? "plain" : "original");
     try {
-      await clipboardStore.pasteRecord(id, pasteMode);
-      toast(pasteMode === "plain" ? t("record.pastedPlain") : t("record.pasted"), "success");
+      const injected = await clipboardStore.pasteRecord(id, pasteMode);
+      toastPasteOutcome(injected, pasteMode, t, toast);
       // Window minimize on paste is handled in Rust (focus restore). Don't double-hide here.
     } catch {
       toast(t("record.pasteFailed"), "error");
@@ -178,6 +184,9 @@ export function useClipboardHotkeys() {
         if (clipboardStore.selectedId != null) {
           clipboardStore.toggleBatchSelect(clipboardStore.selectedId);
         }
+        break;
+      case "select-all":
+        clipboardStore.selectAllFiltered();
         break;
       case "batch-delete":
         void batchDelete();

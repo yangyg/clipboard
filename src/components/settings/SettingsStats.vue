@@ -1,19 +1,21 @@
 <template>
+  <div v-if="!stats" class="stats-loading" role="status">{{ $t('common.loading') }}</div>
+  <template v-else>
   <div class="stats-dashboard">
     <div class="stats-card">
-      <div class="stats-value accent">{{ stats?.total_records ?? 0 }}</div>
+      <div class="stats-value accent">{{ stats.total_records }}</div>
       <div class="stats-label">{{ $t('settings.stats.totalRecords') }}</div>
     </div>
     <div class="stats-card">
-      <div class="stats-value success">{{ stats?.total_copies ?? 0 }}</div>
+      <div class="stats-value success">{{ stats.total_copies }}</div>
       <div class="stats-label">{{ $t('settings.stats.totalCopies') }}</div>
     </div>
     <div class="stats-card">
-      <div class="stats-value warning">{{ stats?.favorites_count ?? 0 }}</div>
+      <div class="stats-value warning">{{ stats.favorites_count }}</div>
       <div class="stats-label">{{ $t('settings.stats.favorites') }}</div>
     </div>
     <div class="stats-card">
-      <div class="stats-value sensitive">{{ stats?.sensitive_count ?? 0 }}</div>
+      <div class="stats-value sensitive">{{ stats.sensitive_count }}</div>
       <div class="stats-label">{{ $t('settings.stats.sensitive') }}</div>
     </div>
   </div>
@@ -32,6 +34,7 @@
       </div>
     </div>
   </div>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -75,6 +78,12 @@ const typeDistribution = computed(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 22px;
+}
+
+.stats-loading {
+  margin-bottom: 22px;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
 }
 
 .stats-card {

@@ -56,4 +56,19 @@ describe("resolveListHotkey", () => {
       ),
     ).toBeNull();
   });
+
+  it("selects all loaded rows with Ctrl+A in batch mode", () => {
+    expect(
+      resolveListHotkey(
+        { key: "a", altKey: false, ctrlKey: true, metaKey: false },
+        { ...base, batchMode: true },
+      ),
+    ).toBe("select-all");
+  });
+
+  it("does not steal Ctrl+A outside batch mode", () => {
+    expect(
+      resolveListHotkey({ key: "a", altKey: false, ctrlKey: true, metaKey: false }, base),
+    ).toBeNull();
+  });
 });

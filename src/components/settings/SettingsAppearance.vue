@@ -32,12 +32,14 @@
         <div class="setting-label">{{ $t('settings.appearance.searchBarTitle') }}</div>
         <div class="setting-desc">{{ $t('settings.appearance.searchBarDesc') }}</div>
       </div>
-      <div class="segmented">
+      <div class="segmented" role="radiogroup" :aria-label="$t('settings.appearance.searchBarTitle')">
         <button
           v-for="sm in SEARCH_MODES"
           :key="sm.key"
           type="button"
           class="segment-btn"
+          role="radio"
+          :aria-checked="settings.search_mode === sm.key"
           :class="{ selected: settings.search_mode === sm.key }"
           @click="update('search_mode', sm.key)"
         >

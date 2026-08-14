@@ -5,6 +5,16 @@
       {{ $t('batch.selected', { count: clipboardStore.selectedIds.size }) }}
     </div>
     <div class="batch-actions">
+      <button
+        type="button"
+        class="batch-btn"
+        :disabled="!hasRows"
+        :title="allVisibleSelected ? $t('batch.deselectAll') : $t('batch.selectAll')"
+        @click="toggleSelectAll"
+      >
+        <AppIcon name="batch" :size="13" />
+        {{ allVisibleSelected ? $t('batch.deselectAll') : $t('batch.selectAll') }}
+      </button>
       <template v-if="clipboardStore.trashFilter">
         <button type="button" class="batch-btn" :disabled="!hasSelection" @click="batchRestore">
           <AppIcon name="restore" :size="13" /> {{ $t('common.restore') }}
@@ -41,6 +51,16 @@ const clipboardStore = useClipboardStore();
 const { toggleBatchMode, batchCopy, batchFavorite, batchDelete, batchRestore } = useBatchActions();
 
 const hasSelection = computed(() => clipboardStore.selectedIds.size > 0);
+const hasRows = computed(() => clipboardStore.filteredRecords.length > 0);
+const allVisibleSelected = computed(() => {
+  const list = clipboardStore.filteredRecords;
+  return list.length > 0 && list.every((r) => clipboardStore.selectedIds.has(r.id));
+});
+
+function toggleSelectAll() {
+  if (allVisibleSelected.value) clipboardStore.clearBatchSelection();
+  else clipboardStore.selectAllFiltered();
+}
 </script>
 
 <style scoped>

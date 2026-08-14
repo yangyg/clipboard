@@ -210,10 +210,18 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
   it("pasteRecord → paste_record with { id, mode }", async () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 10 })];
-    await store.pasteRecord(10, "plain");
+    vi.mocked(invoke).mockResolvedValueOnce(true);
+    await expect(store.pasteRecord(10, "plain")).resolves.toBe(true);
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "paste_record");
     expect(call).toBeTruthy();
     expect(call![1]).toEqual({ id: 10, mode: "plain" });
+  });
+
+  it("pasteRecord returns false when Ctrl+V was skipped", async () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 10 })];
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+    await expect(store.pasteRecord(10, "original")).resolves.toBe(false);
   });
 
   it("deleteRecord → delete_record with { id }", async () => {

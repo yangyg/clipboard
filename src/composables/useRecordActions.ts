@@ -11,6 +11,7 @@ import { useConfirm } from "./useConfirm";
 import { useToast } from "./useToast";
 import type { ClipboardRecord } from "../types";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
+import { toastPasteOutcome } from "../utils/pasteNotify";
 
 export interface RecordActionsCtx {
   listRef: Ref<HTMLElement | null>;
@@ -169,8 +170,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
 
   async function quickPaste(id: number) {
     try {
-      await clipboardStore.pasteRecord(id);
-      toast(t('record.pasted'), "success");
+      const injected = await clipboardStore.pasteRecord(id);
+      toastPasteOutcome(injected, "original", t, toast);
     } catch {
       toast(t('record.pasteFailed'), "error");
     }
@@ -247,8 +248,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
       return;
     }
     try {
-      await clipboardStore.pasteRecord(id);
-      toast(t('record.pasted'), "success");
+      const injected = await clipboardStore.pasteRecord(id);
+      toastPasteOutcome(injected, "original", t, toast);
     } catch {
       toast(t('record.pasteFailed'), "error");
     }
@@ -268,8 +269,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
 
     if (id === "paste") {
       try {
-        await clipboardStore.pasteRecord(record.id);
-        toast(t('record.pasted'), "success");
+        const injected = await clipboardStore.pasteRecord(record.id);
+        toastPasteOutcome(injected, "original", t, toast);
       } catch {
         toast(t('record.pasteFailed'), "error");
       }
@@ -277,8 +278,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     }
     if (id === "pastePlain") {
       try {
-        await clipboardStore.pasteRecord(record.id, "plain");
-        toast(t('record.pastedPlain'), "success");
+        const injected = await clipboardStore.pasteRecord(record.id, "plain");
+        toastPasteOutcome(injected, "plain", t, toast);
       } catch {
         toast(t('record.pasteFailed'), "error");
       }

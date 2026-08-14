@@ -10,6 +10,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Ref } from "vue";
 import type { ClipboardRecord, RecordsPage, SearchResult } from "../types";
 import { featureEnabled } from "../composables/useFeature";
+import { useToast } from "../composables/useToast";
+import { i18n } from "../locales";
 import { perfMark, perfMeasure, perfMeasureOnce } from "../utils/perfMarks";
 
 export type { FilterTab } from "../types";
@@ -196,6 +198,9 @@ export function createListActions(ctx: ListActionsCtx) {
       if (ctx.hasMore.value) requestViewportFill();
     } catch (e) {
       console.error("Failed to load records:", e);
+      if (seq === loadSeq) {
+        useToast().toast(i18n.global.t("record.loadFailed"), "error");
+      }
     } finally {
       if (seq === loadSeq) ctx.isLoading.value = false;
     }
@@ -269,6 +274,9 @@ export function createListActions(ctx: ListActionsCtx) {
       }
     } catch (e) {
       console.error("Failed to load more records:", e);
+      if (seq === loadSeq) {
+        useToast().toast(i18n.global.t("record.loadFailed"), "error");
+      }
     } finally {
       if (seq === loadSeq) ctx.isLoadingMore.value = false;
     }
@@ -313,6 +321,9 @@ export function createListActions(ctx: ListActionsCtx) {
       if (ctx.hasMore.value) requestViewportFill();
     } catch (e) {
       console.error("Search failed:", e);
+      if (capturedSeq === searchSeq) {
+        useToast().toast(i18n.global.t("record.searchFailed"), "error");
+      }
     } finally {
       if (capturedSeq === searchSeq) {
         ctx.isSearching.value = false;

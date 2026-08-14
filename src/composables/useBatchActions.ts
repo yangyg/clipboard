@@ -4,6 +4,7 @@ import type { ClipboardRecord } from "../types";
 import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
+import { toastPasteOutcome } from "../utils/pasteNotify";
 
 /** Shared batch bar actions for the window app. */
 export function useBatchActions() {
@@ -29,8 +30,9 @@ export function useBatchActions() {
     if (images.length === selected.length) {
       if (images.length === 1) {
         try {
-          await clipboardStore.pasteRecord(images[0].id, "original");
-          toast(t("batch.pastedImage"), "success");
+          const injected = await clipboardStore.pasteRecord(images[0].id, "original");
+          if (injected) toast(t("batch.pastedImage"), "success");
+          else toastPasteOutcome(false, "original", t, toast);
         } catch {
           toast(t("record.pasteFailed"), "error");
         }

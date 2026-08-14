@@ -28,16 +28,18 @@ export interface RecordActionsCtx {
 }
 
 export function createRecordActions(ctx: RecordActionsCtx) {
-  async function pasteRecord(id: number, mode: "original" | "plain" = "original") {
+  /** Returns whether Ctrl+V was sent (`false` = clipboard written, keys skipped). */
+  async function pasteRecord(id: number, mode: "original" | "plain" = "original"): Promise<boolean> {
     setPasteFocusLock(true);
     try {
-      await invoke("paste_record", { id, mode });
+      const injected = await invoke<boolean>("paste_record", { id, mode });
       const row = ctx.records.value.find((r) => r.id === id);
       if (row) ctx.patchRecord(id, { copy_count: row.copy_count + 1 });
       const detail = ctx.recordDetails.value.get(id);
       if (detail) {
         detailUpsert(ctx.recordDetails, id, { copy_count: detail.copy_count + 1 });
       }
+      return Boolean(injected);
     } catch (e) {
       console.error("Paste failed:", e);
       throw e;

@@ -49,12 +49,14 @@
         <div class="setting-label">{{ $t('settings.shortcuts.defaultPasteMode') }}</div>
         <div class="setting-desc">{{ $t('settings.shortcuts.defaultPasteModeDesc') }}</div>
       </div>
-      <div class="segmented">
+      <div class="segmented" role="radiogroup" :aria-label="$t('settings.shortcuts.defaultPasteMode')">
         <button
           v-for="mode in PASTE_MODES"
           :key="mode.key"
           type="button"
           class="segment-btn"
+          role="radio"
+          :aria-checked="settings.default_paste_mode === mode.key"
           :class="{ selected: settings.default_paste_mode === mode.key }"
           @click="update('default_paste_mode', mode.key)"
         >

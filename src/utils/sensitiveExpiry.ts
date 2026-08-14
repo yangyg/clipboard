@@ -28,3 +28,23 @@ export function needsExpiryConfirm(
   // Removing pin leaves favorite as the only shield; removing favorite leaves pin.
   return kind === "pin" ? !record.is_favorite : !record.is_pinned;
 }
+
+/**
+ * Slider label parts for `sensitive_auto_expire_seconds`. Matches the
+ * backend: ≤0 means mark-only (no `auto_expire_at`).
+ */
+export type SensitiveExpireDisplay =
+  | { kind: "never" }
+  | { kind: "seconds"; seconds: number }
+  | { kind: "minutes"; minutes: number }
+  | { kind: "compound"; minutes: number; seconds: number };
+
+export function sensitiveExpireDisplay(seconds: number): SensitiveExpireDisplay {
+  if (!Number.isFinite(seconds) || seconds <= 0) return { kind: "never" };
+  const s = Math.trunc(seconds);
+  if (s < 60) return { kind: "seconds", seconds: s };
+  const minutes = Math.floor(s / 60);
+  const rem = s % 60;
+  if (rem === 0) return { kind: "minutes", minutes };
+  return { kind: "compound", minutes, seconds: rem };
+}

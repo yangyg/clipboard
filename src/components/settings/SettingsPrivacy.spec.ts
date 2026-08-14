@@ -88,3 +88,40 @@ describe("SettingsPrivacy ignored-app add row", () => {
     wrapper.unmount();
   });
 });
+
+describe("SettingsPrivacy sensitive expire slider", () => {
+  function expireSlider(wrapper: VueWrapper<any>) {
+    return wrapper.find('input[type="range"]');
+  }
+
+  it("allows 0 and labels it as never auto-delete", async () => {
+    const wrapper = mountPrivacy();
+    const slider = expireSlider(wrapper);
+    expect(slider.attributes("min")).toBe("0");
+
+    await slider.setValue("0");
+    expect(useSettingsStore().settings.sensitive_auto_expire_seconds).toBe(0);
+    expect(wrapper.find(".slider-value").text()).toBe("不自动删除");
+    wrapper.unmount();
+  });
+
+  it("shows seconds when under one minute", async () => {
+    const wrapper = mountPrivacy();
+    await expireSlider(wrapper).setValue("10");
+    expect(wrapper.find(".slider-value").text()).toBe("10 秒");
+    wrapper.unmount();
+  });
+
+  it("shows whole minutes at the default 600s", () => {
+    const wrapper = mountPrivacy();
+    expect(wrapper.find(".slider-value").text()).toBe("10 分钟");
+    wrapper.unmount();
+  });
+
+  it("shows minutes and leftover seconds together", async () => {
+    const wrapper = mountPrivacy();
+    await expireSlider(wrapper).setValue("70");
+    expect(wrapper.find(".slider-value").text()).toBe("1 分 10 秒");
+    wrapper.unmount();
+  });
+});

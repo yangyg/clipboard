@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { makeRecord } from "../test/factories";
-import { isExpired, needsExpiryConfirm } from "./sensitiveExpiry";
+import {
+  isExpired,
+  needsExpiryConfirm,
+  sensitiveExpireDisplay,
+} from "./sensitiveExpiry";
 
 const past = "2000-01-01T00:00:00Z";
 const future = new Date(Date.now() + 60_000).toISOString();
@@ -67,5 +71,31 @@ describe("needsExpiryConfirm", () => {
         "favorite",
       ),
     ).toBe(false);
+  });
+});
+
+describe("sensitiveExpireDisplay", () => {
+  it("treats 0 / negative / non-finite as never", () => {
+    expect(sensitiveExpireDisplay(0)).toEqual({ kind: "never" });
+    expect(sensitiveExpireDisplay(-10)).toEqual({ kind: "never" });
+    expect(sensitiveExpireDisplay(Number.NaN)).toEqual({ kind: "never" });
+  });
+
+  it("shows seconds below one minute", () => {
+    expect(sensitiveExpireDisplay(10)).toEqual({ kind: "seconds", seconds: 10 });
+    expect(sensitiveExpireDisplay(50)).toEqual({ kind: "seconds", seconds: 50 });
+  });
+
+  it("shows whole minutes without a seconds remainder", () => {
+    expect(sensitiveExpireDisplay(60)).toEqual({ kind: "minutes", minutes: 1 });
+    expect(sensitiveExpireDisplay(600)).toEqual({ kind: "minutes", minutes: 10 });
+  });
+
+  it("compounds minutes and leftover seconds", () => {
+    expect(sensitiveExpireDisplay(70)).toEqual({
+      kind: "compound",
+      minutes: 1,
+      seconds: 10,
+    });
   });
 });

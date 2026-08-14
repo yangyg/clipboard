@@ -242,3 +242,29 @@ fn insert_record_applies_auto_tags_on_new_insert() {
     assert_eq!(id2, id);
     cleanup(dir);
 }
+
+#[test]
+fn insert_sensitive_with_zero_ttl_skips_expiry() {
+    let (db, dir) = temp_db();
+    let content = "password: hunter2";
+    let hash = sha256_hash(&sha256_hash(content));
+    let (_, is_new, rec) = db
+        .insert_record(
+            content,
+            &ContentType::Text,
+            &hash,
+            true,
+            1000,
+            0,
+            "app.exe",
+            "win",
+            "",
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(is_new);
+    assert!(rec.is_sensitive);
+    assert!(rec.auto_expire_at.is_none());
+    cleanup(dir);
+}

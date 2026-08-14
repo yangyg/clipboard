@@ -18,8 +18,17 @@
         <div class="setting-desc">{{ $t('settings.privacy.autoExpireDesc') }}</div>
       </div>
       <div class="slider-row">
-        <input type="range" min="10" max="3600" step="10" :aria-label="$t('settings.privacy.autoExpire')" :aria-valuetext="$t('settings.privacy.autoExpireUnit', { minutes: Math.floor(settings.sensitive_auto_expire_seconds / 60) })" :value="settings.sensitive_auto_expire_seconds" @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))" />
-        <span class="slider-value">{{ $t('settings.privacy.autoExpireUnit', { minutes: Math.floor(settings.sensitive_auto_expire_seconds / 60) }) }}</span>
+        <input
+          type="range"
+          min="0"
+          max="3600"
+          step="10"
+          :aria-label="$t('settings.privacy.autoExpire')"
+          :aria-valuetext="expireValueText"
+          :value="settings.sensitive_auto_expire_seconds"
+          @input="(e) => update('sensitive_auto_expire_seconds', Number((e.target as HTMLInputElement).value))"
+        />
+        <span class="slider-value expire-value">{{ expireValueText }}</span>
       </div>
     </div>
   </div>
@@ -44,6 +53,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettings } from "../../composables/useSettings";
 import { useToast } from "../../composables/useToast";
+import { sensitiveExpireDisplay } from "../../utils/sensitiveExpiry";
 import AppIcon from "../icons/AppIcon.vue";
 import TextInput from "../TextInput.vue";
 import ToggleSwitch from "../ToggleSwitch.vue";
@@ -51,6 +61,23 @@ import ToggleSwitch from "../ToggleSwitch.vue";
 const { settings, settingsStore, update } = useSettings();
 const { toast } = useToast();
 const { t } = useI18n();
+
+const expireValueText = computed(() => {
+  const d = sensitiveExpireDisplay(settings.sensitive_auto_expire_seconds);
+  switch (d.kind) {
+    case "never":
+      return t("settings.privacy.autoExpireNever");
+    case "seconds":
+      return t("settings.privacy.autoExpireSeconds", { seconds: d.seconds });
+    case "minutes":
+      return t("settings.privacy.autoExpireMinutes", { minutes: d.minutes });
+    case "compound":
+      return t("settings.privacy.autoExpireCompound", {
+        minutes: d.minutes,
+        seconds: d.seconds,
+      });
+  }
+});
 
 const newIgnoredApp = ref("");
 const ignoreInput = ref<InstanceType<typeof TextInput> | null>(null);
@@ -163,5 +190,10 @@ function removeIgnoredApp(app: string) {
 
 :deep(.ignore-input:focus) {
   border-color: var(--border-focus);
+}
+
+.expire-value {
+  min-width: 7.5em;
+  white-space: nowrap;
 }
 </style>

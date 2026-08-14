@@ -16,6 +16,7 @@ export default {
     loadMore: '加载更多…',
     scrollForMore: '继续滚动加载更多',
     operationFailed: '操作失败',
+    featureDisabled: '{name}功能已关闭',
     clearSearch: '清除搜索',
     days: '天',
     minimize: '最小化',

@@ -12,6 +12,7 @@ import { useToast } from "./useToast";
 import type { ClipboardRecord } from "../types";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import { toastPasteOutcome } from "../utils/pasteNotify";
+import { humanizeInvokeError } from "../utils/invokeError";
 
 export interface RecordActionsCtx {
   listRef: Ref<HTMLElement | null>;
@@ -185,8 +186,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
   async function onRowRestore(id: number) {
     try {
       await clipboardStore.restoreRecord(id);
-    } catch {
-      toast(t('common.operationFailed'), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 
@@ -202,8 +203,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
         try {
           await clipboardStore.permanentlyDeleteRecord(record.id);
           toast(t('record.deletedPermanently'), "success");
-        } catch {
-          toast(t('common.operationFailed'), "error");
+        } catch (e) {
+          toast(humanizeInvokeError(e, t), "error");
         }
       }
       return;
@@ -216,8 +217,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     try {
       await flipAfter(() => clipboardStore.deleteRecord(record.id));
       toast(t('record.deleted'), "success");
-    } catch {
-      toast(t('common.operationFailed'), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     } finally {
       const cleared = new Set(leavingIds.value);
       cleared.delete(record.id);
@@ -225,9 +226,10 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     }
   }
 
-  function onItemClick(id: number) {
+  function onItemClick(id: number, event?: MouseEvent) {
     if (clipboardStore.batchMode) {
-      clipboardStore.toggleBatchSelect(id);
+      if (event?.shiftKey) clipboardStore.selectBatchRange(id);
+      else clipboardStore.toggleBatchSelect(id);
       return;
     }
     clipboardStore.selectRecord(id);
@@ -242,8 +244,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     if (clipboardStore.trashFilter) {
       try {
         await clipboardStore.restoreRecord(id);
-      } catch {
-        toast(t('common.operationFailed'), "error");
+      } catch (e) {
+        toast(humanizeInvokeError(e, t), "error");
       }
       return;
     }
@@ -301,8 +303,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     if (id === "restore") {
       try {
         await clipboardStore.restoreRecord(record.id);
-      } catch {
-        toast(t('common.operationFailed'), "error");
+      } catch (e) {
+        toast(humanizeInvokeError(e, t), "error");
       }
       return;
     }
@@ -321,8 +323,8 @@ export function useRecordActions(ctx: RecordActionsCtx) {
         try {
           await clipboardStore.permanentlyDeleteRecord(record.id);
           toast(t('record.deletedPermanently'), "success");
-        } catch {
-          toast(t('common.operationFailed'), "error");
+        } catch (e) {
+          toast(humanizeInvokeError(e, t), "error");
         }
       }
     }

@@ -5,7 +5,7 @@
     labelled-by="welcome-title"
     described-by="welcome-desc"
     :close-on-overlay="false"
-    @close="emit('complete')"
+    :close-on-escape="false"
   >
     <div class="dialog-header">
       <span id="welcome-title" class="dialog-title">{{ $t('welcome.title') }}</span>

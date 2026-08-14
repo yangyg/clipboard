@@ -6,6 +6,7 @@ import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
 import { useBatchActions } from "./useBatchActions";
 import { toastPasteOutcome } from "../utils/pasteNotify";
+import { humanizeInvokeError } from "../utils/invokeError";
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -96,16 +97,16 @@ export function useClipboardHotkeys() {
       try {
         await clipboardStore.permanentlyDeleteRecord(id);
         toast(t("record.deletedPermanently"), "success");
-      } catch {
-        toast(t("common.operationFailed"), "error");
+      } catch (e) {
+        toast(humanizeInvokeError(e, t), "error");
       }
       return;
     }
     try {
       await clipboardStore.deleteRecord(id);
       toast(t("record.deleted"), "success");
-    } catch {
-      toast(t("common.operationFailed"), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 

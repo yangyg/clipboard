@@ -49,7 +49,7 @@
         :search-query="clipboardStore.searchQuery"
         :source-overrides="sourceOverrides"
         :measure-row="measureRow"
-        @click="emit('item-click', $event)"
+        @click="(id: number, event?: MouseEvent) => emit('item-click', id, event)"
         @activate="emit('item-activate', $event)"
         @context-menu="(e, r) => emit('item-context-menu', e, r)"
         @paste="emit('item-paste', $event)"
@@ -108,7 +108,7 @@ defineProps<{
 
 const emit = defineEmits<{
   scroll: [];
-  "item-click": [id: number];
+  "item-click": [id: number, event?: MouseEvent];
   "item-activate": [id: number];
   "item-context-menu": [event: MouseEvent, record: ClipboardRecord];
   "item-paste": [id: number];

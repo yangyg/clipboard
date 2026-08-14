@@ -5,6 +5,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
 import { toastPasteOutcome } from "../utils/pasteNotify";
+import { humanizeInvokeError } from "../utils/invokeError";
 
 /** Shared batch bar actions for the window app. */
 export function useBatchActions() {
@@ -80,8 +81,8 @@ export function useBatchActions() {
     }
     try {
       await clipboardStore.batchFavorite(ids);
-    } catch {
-      toast(t("common.operationFailed"), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 
@@ -106,8 +107,8 @@ export function useBatchActions() {
         await clipboardStore.deleteBatch(ids);
         toast(t("record.deleted"), "success");
       }
-    } catch {
-      toast(t("common.operationFailed"), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 
@@ -120,8 +121,8 @@ export function useBatchActions() {
     try {
       await clipboardStore.restoreRecordsBatch(ids);
       toast(t("record.restored"), "success");
-    } catch {
-      toast(t("common.operationFailed"), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 

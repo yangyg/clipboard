@@ -192,11 +192,10 @@ async function loadSystemFonts() {
   if (systemFontsLoaded.value) return;
   try {
     systemFonts.value = await invoke<string[]>("get_system_fonts");
+    systemFontsLoaded.value = true;
   } catch (e) {
     console.error("Failed to load system fonts:", e);
     useToast().toast(i18n.global.t("settings.appearance.fontLoadError"), "error");
-  } finally {
-    systemFontsLoaded.value = true;
   }
 }
 

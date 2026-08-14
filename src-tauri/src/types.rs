@@ -413,7 +413,6 @@ impl Default for Settings {
 #[derive(Debug, Serialize)]
 pub struct SearchResult {
     pub records: Vec<ClipboardRecord>,
-    pub total: usize,
     pub query: String,
     #[serde(rename = "elapsed_ms")]
     pub elapsed_ms: u64,

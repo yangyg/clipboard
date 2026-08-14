@@ -19,7 +19,7 @@
       'is-leaving': isLeaving,
     }"
     :data-record-id="record.id"
-    @click="emit('click', record.id)"
+    @click="emit('click', record.id, $event)"
     @contextmenu.prevent="emit('context-menu', $event, record)"
     @keydown.enter.prevent.stop="emit('activate', record.id)"
     @keydown.space.prevent="emit('click', record.id)"
@@ -122,7 +122,7 @@ const deviceTooltip = computed(() =>
 );
 
 const emit = defineEmits<{
-  click: [id: number];
+  click: [id: number, event?: MouseEvent];
   activate: [id: number];
   "context-menu": [event: MouseEvent, record: ClipboardRecord];
   paste: [id: number];

@@ -12,6 +12,7 @@ import { useToast } from "./useToast";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord, Tag } from "../types";
 import { toastPasteOutcome } from "../utils/pasteNotify";
+import { humanizeInvokeError } from "../utils/invokeError";
 
 export interface PreviewActionsCtx {
   record: ComputedRef<ClipboardRecord | null>;
@@ -135,8 +136,8 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
     try {
       await clipboardStore.deleteRecord(ctx.record.value.id);
       toast(t('record.deleted'), "success");
-    } catch {
-      toast(t('common.operationFailed'), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 
@@ -144,8 +145,8 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
     if (!ctx.record.value) return;
     try {
       await clipboardStore.restoreRecord(ctx.record.value.id);
-    } catch {
-      toast(t('common.operationFailed'), "error");
+    } catch (e) {
+      toast(humanizeInvokeError(e, t), "error");
     }
   }
 
@@ -161,8 +162,8 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
       try {
         await clipboardStore.permanentlyDeleteRecord(ctx.record.value.id);
         toast(t('record.deletedPermanently'), "success");
-      } catch {
-        toast(t('common.operationFailed'), "error");
+      } catch (e) {
+        toast(humanizeInvokeError(e, t), "error");
       }
     }
   }

@@ -33,6 +33,7 @@
 
     <!-- Content Preview -->
     <PreviewContent
+      :key="record.id"
       :record="record"
       :show-html-preview="showHtmlPreview"
       :sanitized-html="sanitizedHtml"

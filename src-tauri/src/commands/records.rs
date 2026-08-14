@@ -87,13 +87,10 @@ pub async fn search_records(
     })
     .await?;
     let has_more = records.len() as i32 >= limit;
-    // `total` is this page's length (not a global hit count) — kept for API compat.
-    let total = records.len();
     let elapsed_ms = start.elapsed().as_millis() as u64;
     crate::perf::log_elapsed("search_records", start);
     Ok(SearchResult {
         records,
-        total,
         query,
         elapsed_ms,
         has_more,

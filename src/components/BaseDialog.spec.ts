@@ -76,6 +76,17 @@ describe("BaseDialog", () => {
     expect(wrapper.emitted("close")).toBeTruthy();
   });
 
+  it("does not emit close on Escape when closeOnEscape=false", async () => {
+    const wrapper = mount(BaseDialog, {
+      props: { open: true, closeOnEscape: false },
+      slots: { default: "<p>body</p>" },
+      global: { stubs },
+    });
+    await nextTick();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(wrapper.emitted("close")).toBeFalsy();
+  });
+
   it("does not emit close on overlay click when closeOnOverlay=false", async () => {
     const wrapper = mount(BaseDialog, {
       props: { open: true, closeOnOverlay: false },

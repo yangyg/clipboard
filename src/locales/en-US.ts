@@ -16,6 +16,7 @@ export default {
     loadMore: 'Loading more…',
     scrollForMore: 'Scroll for more',
     operationFailed: 'Operation failed',
+    featureDisabled: '{name} is turned off',
     clearSearch: 'Clear search',
     days: 'days',
     minimize: 'Minimize',

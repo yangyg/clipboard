@@ -14,6 +14,7 @@ import { createRecordActions } from "./clipboardRecordActions";
 import { useSettingsStore } from "./settings";
 import { useToast } from "../composables/useToast";
 import { i18n } from "../locales";
+import { humanizeInvokeError } from "../utils/invokeError";
 
 export type { FilterTab, ListSort } from "./clipboardList";
 export { LIST_SORT_OPTIONS } from "./clipboardList";
@@ -34,6 +35,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const listSort = ref<ListSort>("updated_desc");
   const batchMode = ref(false);
   const selectedIds = ref<Set<number>>(new Set());
+  /** Last row clicked in batch mode — Shift+click range starts here. */
+  const batchAnchorId = ref<number | null>(null);
   const pauseCapture = ref(false);
   const stats = ref<StatsData | null>(null);
   const tags = ref<Tag[]>([]);
@@ -250,7 +253,10 @@ export const useClipboardStore = defineStore("clipboard", () => {
       return;
     }
     batchMode.value = !batchMode.value;
-    if (!batchMode.value) selectedIds.value = new Set();
+    if (!batchMode.value) {
+      selectedIds.value = new Set();
+      batchAnchorId.value = null;
+    }
   }
 
   function toggleBatchSelect(id: number) {
@@ -258,6 +264,25 @@ export const useClipboardStore = defineStore("clipboard", () => {
     if (next.has(id)) next.delete(id);
     else next.add(id);
     selectedIds.value = next;
+    batchAnchorId.value = id;
+  }
+
+  /** Inclusive range from the last toggle/click through `id` (Shift+click). */
+  function selectBatchRange(id: number) {
+    if (!batchMode.value) return;
+    const list = records.value;
+    const anchor = batchAnchorId.value ?? id;
+    const a = list.findIndex((r) => r.id === anchor);
+    const b = list.findIndex((r) => r.id === id);
+    if (a < 0 || b < 0) {
+      toggleBatchSelect(id);
+      return;
+    }
+    const [lo, hi] = a < b ? [a, b] : [b, a];
+    const next = new Set(selectedIds.value);
+    for (let i = lo; i <= hi; i++) next.add(list[i].id);
+    selectedIds.value = next;
+    batchAnchorId.value = id;
   }
 
   /** Select every currently loaded row (batch mode only). */
@@ -284,7 +309,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
       console.error("Toggle pause failed:", e);
       // Silent failure here means the user believes capture is paused while
       // it keeps recording — always surface the error.
-      useToast().toast(i18n.global.t("common.operationFailed"), "error");
+      useToast().toast(humanizeInvokeError(e, i18n.global.t), "error");
     }
   }
 
@@ -384,6 +409,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     setTrashFilter,
     toggleBatchMode,
     toggleBatchSelect,
+    selectBatchRange,
     selectAllFiltered,
     clearBatchSelection,
     setPauseCapture,

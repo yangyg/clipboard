@@ -94,6 +94,22 @@ const emit = defineEmits<{
   padding: var(--space-4) var(--space-5);
   overflow-x: hidden;
   overflow-y: auto;
+  animation: preview-enter var(--transition-fast) ease-out;
+}
+@keyframes preview-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preview-content {
+    animation: none;
+  }
 }
 
 .html-preview {

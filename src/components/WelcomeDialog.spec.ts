@@ -22,6 +22,16 @@ describe("WelcomeDialog", () => {
     expect(wrapper.find("button.btn-primary").exists()).toBe(true);
   });
 
+  it("does not emit complete on Escape", async () => {
+    const wrapper = mountWithPlugins(WelcomeDialog, {
+      props: { open: true, shortcut: "Ctrl+Shift+V" },
+      global: { stubs },
+    });
+    await nextTick();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(wrapper.emitted("complete")).toBeFalsy();
+  });
+
   it("emits 'complete' when start button is clicked", async () => {
     const wrapper = mountWithPlugins(WelcomeDialog, {
       props: { open: true, shortcut: "Ctrl+Shift+V" },

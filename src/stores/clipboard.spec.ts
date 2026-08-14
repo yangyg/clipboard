@@ -39,6 +39,15 @@ describe("clipboardStore (smoke)", () => {
     expect(store.selectedIds.size).toBe(0);
   });
 
+  it("selectBatchRange selects an inclusive span from the last click", () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 }), makeRecord({ id: 2 }), makeRecord({ id: 3 })];
+    store.toggleBatchMode();
+    store.toggleBatchSelect(1);
+    store.selectBatchRange(3);
+    expect([...store.selectedIds].sort()).toEqual([1, 2, 3]);
+  });
+
   it("selectAllFiltered is a no-op outside batch mode", () => {
     const store = useClipboardStore();
     store.records = [makeRecord({ id: 1 })];

@@ -200,7 +200,6 @@ export const DEFAULT_AUTO_TAG_RULES: AutoTagRule[] = [
 
 export interface SearchResult {
   records: ClipboardRecord[];
-  total: number;
   query: string;
   elapsed_ms: number;
   has_more: boolean;
@@ -215,22 +214,6 @@ export interface SearchHistoryEntry {
   query: string;
   search_count: number;
   last_searched_at: string;
-}
-
-export interface ExportOptions {
-  format: 'json' | 'csv' | 'markdown' | 'sqlite';
-  include_images: boolean;
-  exclude_sensitive: boolean;
-  date_from?: string;
-  date_to?: string;
-  record_ids?: number[];
-}
-
-export interface ImportResult {
-  total: number;
-  imported: number;
-  skipped: number;
-  errors: string[];
 }
 
 export interface StatsData {

@@ -33,10 +33,13 @@ const props = withDefaults(
     labelledBy?: string;
     describedBy?: string;
     closeOnOverlay?: boolean;
+    /** First-run welcome keeps Esc from completing onboarding. */
+    closeOnEscape?: boolean;
   }>(),
   {
     role: "dialog",
     closeOnOverlay: true,
+    closeOnEscape: true,
   },
 );
 
@@ -87,7 +90,7 @@ function onWindowKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
     e.preventDefault();
     e.stopPropagation();
-    emit("close");
+    if (props.closeOnEscape) emit("close");
   }
 }
 

@@ -29,31 +29,34 @@ const COMMON_CJK_FRAGMENTS: &[&str] = &[
     "noto serif sc",
 ];
 
-/// Installed CJK-capable font families (cached after the first call).
+/// Installed CJK-capable font families (cached after the first successful call).
 /// Async: the enumeration reads every installed font face, which takes a few
 /// seconds — run it off the main thread (via `spawn_blocking`) so the UI never
 /// freezes while the settings picker loads.
+///
+/// Returns `Err` when DirectWrite enumeration fails so the settings page can
+/// distinguish "load failed" from "no CJK fonts installed".
 #[tauri::command]
-pub async fn get_system_fonts() -> Vec<String> {
+pub async fn get_system_fonts() -> Result<Vec<String>, String> {
     {
-        let guard = FONT_CACHE.lock().unwrap();
+        let guard = FONT_CACHE.lock().map_err(|e| e.to_string())?;
         if let Some(cached) = guard.as_ref() {
-            return cached.clone();
+            return Ok(cached.clone());
         }
     }
     let fonts = tauri::async_runtime::spawn_blocking(enumerate_cjk_fonts)
         .await
-        .unwrap_or_default();
-    let mut guard = FONT_CACHE.lock().unwrap();
+        .map_err(|e| format!("枚举系统字体失败: {e}"))??;
+    let mut guard = FONT_CACHE.lock().map_err(|e| e.to_string())?;
     *guard = Some(fonts.clone());
-    fonts
+    Ok(fonts)
 }
 
-fn enumerate_cjk_fonts() -> Vec<String> {
+fn enumerate_cjk_fonts() -> Result<Vec<String>, String> {
     let source = SystemSource::new();
-    let Ok(families) = source.all_families() else {
-        return Vec::new();
-    };
+    let families = source
+        .all_families()
+        .map_err(|e| format!("读取系统字体失败: {e}"))?;
 
     let mut seen = HashSet::new();
     let mut common = Vec::new();
@@ -85,7 +88,7 @@ fn enumerate_cjk_fonts() -> Vec<String> {
 
     common.sort_by_key(|a| a.to_lowercase());
     rest.sort_by_key(|a| a.to_lowercase());
-    common.into_iter().chain(rest).collect()
+    Ok(common.into_iter().chain(rest).collect())
 }
 
 #[cfg(test)]
@@ -103,7 +106,7 @@ mod tests {
 
     #[test]
     fn enumeration_returns_unique_sorted_names() {
-        let fonts = enumerate_cjk_fonts();
+        let fonts = enumerate_cjk_fonts().expect("enumerate system fonts");
         let mut seen = std::collections::HashSet::new();
         for name in &fonts {
             assert!(!name.is_empty());

@@ -77,6 +77,8 @@ export default {
     unfavorite: '取消收藏',
     permanentDelete: '永久删除',
     permanentDeleteMsg: '确定要永久删除这条记录吗？此操作不可恢复。',
+    expiryConfirmTitle: '敏感记录已过期',
+    expiryConfirmMsg: '这条敏感记录已过期，取消保护后会在下次清理时被永久删除，且无法从回收站恢复。确定继续吗？',
     sensitive: '敏感',
     setAlias: '设置别名',
     editAlias: '编辑别名',

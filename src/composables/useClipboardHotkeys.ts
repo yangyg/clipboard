@@ -4,6 +4,7 @@ import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import { useToast } from "./useToast";
 import { useConfirm } from "./useConfirm";
+import { useExpiryGuard } from "./useExpiryGuard";
 import { useBatchActions } from "./useBatchActions";
 import { toastPasteOutcome } from "../utils/pasteNotify";
 import { humanizeInvokeError } from "../utils/invokeError";
@@ -65,6 +66,7 @@ export function useClipboardHotkeys() {
   const settingsStore = useSettingsStore();
   const { toast } = useToast();
   const { confirm, current: confirmOpen } = useConfirm();
+  const { confirmUnprotectIfNeeded } = useExpiryGuard();
   const { t } = useI18n();
   const { batchDelete } = useBatchActions();
 
@@ -163,7 +165,10 @@ export function useClipboardHotkeys() {
         if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
         e.preventDefault();
         void (async () => {
-          const next = await clipboardStore.toggleFavorite(clipboardStore.selectedId!);
+          const id = clipboardStore.selectedId!;
+          const record = clipboardStore.selectedRecord;
+          if (record && record.is_favorite && !(await confirmUnprotectIfNeeded(record, "favorite"))) return;
+          const next = await clipboardStore.toggleFavorite(id);
           if (next == null) toast(t("common.operationFailed"), "error");
         })();
         return;
@@ -172,7 +177,10 @@ export function useClipboardHotkeys() {
         if (clipboardStore.selectedId == null || clipboardStore.trashFilter) return;
         e.preventDefault();
         void (async () => {
-          const next = await clipboardStore.togglePin(clipboardStore.selectedId!);
+          const id = clipboardStore.selectedId!;
+          const record = clipboardStore.selectedRecord;
+          if (record && record.is_pinned && !(await confirmUnprotectIfNeeded(record, "pin"))) return;
+          const next = await clipboardStore.togglePin(id);
           if (next == null) toast(t("common.operationFailed"), "error");
         })();
       }

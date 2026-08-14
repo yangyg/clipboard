@@ -77,6 +77,8 @@ export default {
     unfavorite: 'Unfavorite',
     permanentDelete: 'Delete permanently',
     permanentDeleteMsg: 'Are you sure you want to permanently delete this record? This cannot be undone.',
+    expiryConfirmTitle: 'Sensitive record expired',
+    expiryConfirmMsg: 'This sensitive record has expired. Removing its last protection will permanently delete it on the next cleanup and it cannot be restored from trash. Continue?',
     sensitive: 'Sensitive',
     setAlias: 'Set alias',
     editAlias: 'Edit alias',

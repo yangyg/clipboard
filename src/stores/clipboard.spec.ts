@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "@/stores/clipboard";
 import { makeRecord } from "@/test/factories";
 import type { StatsData } from "@/types";
@@ -179,6 +180,46 @@ describe("clipboardStore — removeExpiredFromList", () => {
     store.records = [makeRecord({ id: 1 })];
     store.removeExpiredFromList([]);
     expect(store.records.length).toBe(1);
+  });
+});
+
+describe("clipboardStore — purgeExpiredRecords respects favorite/pinned", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.mocked(invoke).mockClear();
+    vi.mocked(invoke).mockImplementation((cmd: string) => {
+      if (cmd === "cleanup_expired") return Promise.resolve([]);
+      return Promise.resolve(undefined);
+    });
+  });
+
+  it("drops past-due unprotected rows but keeps favorited/pinned/trashed ones", async () => {
+    const store = useClipboardStore();
+    const past = "2000-01-01T00:00:00Z";
+    store.records = [
+      makeRecord({ id: 1, auto_expire_at: past }),
+      makeRecord({ id: 2, auto_expire_at: past, is_favorite: true }),
+      makeRecord({ id: 3, auto_expire_at: past, is_pinned: true }),
+      makeRecord({ id: 4, auto_expire_at: past, is_trashed: true }),
+    ];
+
+    await store.purgeExpiredRecords();
+
+    expect(store.records.map((r) => r.id)).toEqual([2, 3, 4]);
+  });
+
+  it("does not re-trigger the sweep loop over protected past-due rows", async () => {
+    const store = useClipboardStore();
+    store.records = [
+      makeRecord({ id: 1, auto_expire_at: "2000-01-01T00:00:00Z", is_favorite: true }),
+    ];
+
+    await store.purgeExpiredRecords();
+
+    expect(store.records.map((r) => r.id)).toEqual([1]);
+    expect(
+      vi.mocked(invoke).mock.calls.filter((c) => c[0] === "cleanup_expired"),
+    ).toHaveLength(1);
   });
 });
 

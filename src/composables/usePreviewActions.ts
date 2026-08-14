@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import { useConfirm } from "./useConfirm";
+import { useExpiryGuard } from "./useExpiryGuard";
 import { useToast } from "./useToast";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord, Tag } from "../types";
@@ -24,6 +25,7 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
   const clipboardStore = useClipboardStore();
   const settingsStore = useSettingsStore();
   const { confirm } = useConfirm();
+  const { confirmUnprotectIfNeeded } = useExpiryGuard();
   const { toast } = useToast();
   const { t } = useI18n();
 
@@ -108,13 +110,17 @@ export function usePreviewActions(ctx: PreviewActionsCtx) {
 
   async function favorite() {
     if (!ctx.record.value) return;
-    const next = await clipboardStore.toggleFavorite(ctx.record.value.id);
+    const record = ctx.record.value;
+    if (record.is_favorite && !(await confirmUnprotectIfNeeded(record, "favorite"))) return;
+    const next = await clipboardStore.toggleFavorite(record.id);
     if (next == null) toast(t('common.operationFailed'), "error");
   }
 
   async function pin() {
     if (!ctx.record.value) return;
-    const id = ctx.record.value.id;
+    const record = ctx.record.value;
+    if (record.is_pinned && !(await confirmUnprotectIfNeeded(record, "pin"))) return;
+    const id = record.id;
     pinOverride.value = !pinnedDisplay.value;
     if (
       settingsStore.settings.enable_animation &&

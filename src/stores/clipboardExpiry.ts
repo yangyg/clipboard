@@ -17,6 +17,17 @@ export interface ExpirySchedulerCtx {
   stats: Ref<StatsData | null>;
 }
 
+/**
+ * True for rows the backend `cleanup_expired` also skips: favorite/pinned
+ * (user-kept sensitive records) and trashed (owned by the trash-retention
+ * window). The frontend sweep must mirror this so a protected record that has
+ * passed its auto-expiry neither disappears from the list nor re-triggers the
+ * sweep loop.
+ */
+function isProtectedFromExpiry(r: ClipboardRecord): boolean {
+  return r.is_favorite || r.is_pinned || r.is_trashed;
+}
+
 export function createExpiryScheduler(ctx: ExpirySchedulerCtx) {
   let expireSweepTimer: ReturnType<typeof setTimeout> | null = null;
   let expireSweepRunning = false;
@@ -44,10 +55,18 @@ export function createExpiryScheduler(ctx: ExpirySchedulerCtx) {
     try {
       const ids = await invoke<number[]>("cleanup_expired");
       removeExpiredFromList(ids);
-      // Also drop any locally past-due rows (clock skew / missed event)
+      // Also drop any locally past-due rows (clock skew / missed event).
+      // Skip favorite/pinned/trashed rows to mirror the backend
+      // `cleanup_expired` WHERE clause — a protected sensitive record must not
+      // vanish from the list just because its auto-expiry passed.
       const now = Date.now();
       const stale = ctx.records.value
-        .filter((r) => r.auto_expire_at && new Date(r.auto_expire_at).getTime() <= now)
+        .filter(
+          (r) =>
+            r.auto_expire_at &&
+            new Date(r.auto_expire_at).getTime() <= now &&
+            !isProtectedFromExpiry(r),
+        )
         .map((r) => r.id);
       if (stale.length > 0) {
         removeExpiredFromList(stale);
@@ -71,7 +90,10 @@ export function createExpiryScheduler(ctx: ExpirySchedulerCtx) {
     const now = Date.now();
     let nextAt = Infinity;
     for (const r of ctx.records.value) {
-      if (!r.auto_expire_at) continue;
+      // Protected rows (favorite/pinned/trashed) are never swept by the
+      // backend, so they must not drive the reschedule either — otherwise a
+      // protected past-due row would re-trigger the sweep in a tight loop.
+      if (!r.auto_expire_at || isProtectedFromExpiry(r)) continue;
       // M-1: Only parse the nearest timestamp (one Date parse vs N).
       const t = new Date(r.auto_expire_at).getTime();
       if (Number.isNaN(t)) continue;

@@ -8,6 +8,7 @@ import { useI18n } from "vue-i18n";
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import { useConfirm } from "./useConfirm";
+import { useExpiryGuard } from "./useExpiryGuard";
 import { useToast } from "./useToast";
 import type { ClipboardRecord } from "../types";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
@@ -31,6 +32,7 @@ export function useRecordActions(ctx: RecordActionsCtx) {
   const clipboardStore = useClipboardStore();
   const settingsStore = useSettingsStore();
   const { confirm } = useConfirm();
+  const { confirmUnprotectIfNeeded } = useExpiryGuard();
   const { toast } = useToast();
   const { t } = useI18n();
 
@@ -100,6 +102,7 @@ export function useRecordActions(ctx: RecordActionsCtx) {
   async function scheduleTogglePin(record: ClipboardRecord) {
     if (leavingIds.value.has(record.id)) return;
     const next = !isPinned(record);
+    if (!next && !(await confirmUnprotectIfNeeded(record, "pin"))) return;
     const pending = new Map(pinOverride.value);
     pending.set(record.id, next);
     pinOverride.value = pending;
@@ -179,6 +182,9 @@ export function useRecordActions(ctx: RecordActionsCtx) {
   }
 
   async function onRowFavorite(id: number) {
+    const record = clipboardStore.records.find((r) => r.id === id);
+    if (!record) return;
+    if (record.is_favorite && !(await confirmUnprotectIfNeeded(record, "favorite"))) return;
     const next = await clipboardStore.toggleFavorite(id);
     if (next == null) toast(t('common.operationFailed'), "error");
   }
@@ -288,6 +294,7 @@ export function useRecordActions(ctx: RecordActionsCtx) {
       return;
     }
     if (id === "favorite") {
+      if (record.is_favorite && !(await confirmUnprotectIfNeeded(record, "favorite"))) return;
       const next = await clipboardStore.toggleFavorite(record.id);
       if (next == null) toast(t('common.operationFailed'), "error");
       return;

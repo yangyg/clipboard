@@ -111,10 +111,9 @@ pub(crate) fn setup(
     }
 
     // Clip main window to rounded corners (avoids rectangular / black corners on Windows)
-    // and apply single-window-mode chrome (always-on-top flag + remembered size).
+    // and apply single-window-mode chrome (always-on-top, blur, remembered size).
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_shadow(false);
-        let _ = window.set_always_on_top(startup_settings.always_on_top);
         let (min_w, min_h, _, _) = window::mode_size_bounds();
         let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
             min_w, min_h,
@@ -122,17 +121,7 @@ pub(crate) fn setup(
         let (w, h) = window::resolve_panel_size(&window, &startup_settings);
         window::SIZE_SAVE_GEN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(w, h)));
-        if let Err(e) = window::apply_window_round_corners(&window, startup_settings.panel_radius) {
-            warn!("Failed to apply window round corners: {}", e);
-        }
-    }
-
-    // Apply native frosted-glass backdrop from persisted 毛玻璃 setting.
-    let blur_enabled = startup_settings.enable_blur;
-    if let Some(window) = app.get_webview_window("main") {
-        if let Err(e) = window::apply_window_backdrop(&window, blur_enabled) {
-            warn!("Failed to apply window backdrop: {}", e);
-        }
+        window::apply_window_chrome(&window, &startup_settings);
     }
 
     // Periodic cleanup off the capture path — stamp only after success.

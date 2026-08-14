@@ -150,6 +150,18 @@ pub(crate) fn schedule_persist_window_size(app: tauri::AppHandle) {
 /// cheap while still tracking the live size.
 static LAST_ROUNDED: Mutex<Option<(i32, i32, i32)>> = Mutex::new(None);
 
+/// Native chrome that must stay in sync across setup / save_settings / live preview:
+/// always-on-top, round-corner clip, and DWM acrylic backdrop.
+pub(crate) fn apply_window_chrome(window: &tauri::WebviewWindow, settings: &Settings) {
+    let _ = window.set_always_on_top(settings.always_on_top);
+    if let Err(e) = apply_window_round_corners(window, settings.panel_radius) {
+        warn!("Failed to apply window round corners: {}", e);
+    }
+    if let Err(e) = apply_window_backdrop(window, settings.enable_blur) {
+        warn!("Failed to apply window backdrop: {}", e);
+    }
+}
+
 /// Clip the HWND to a rounded rect so corners are not rectangular (and not black).
 /// `radius` is logical CSS px from 面板外观 → 圆角大小; scaled to physical pixels.
 pub(crate) fn apply_window_round_corners(

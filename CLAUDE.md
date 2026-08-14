@@ -46,7 +46,7 @@ Clipboard is a **Tauri v2** desktop clipboard manager for Windows.
 - **List UI:** `RecordList` window-virtualizes rows via the `useVirtualList` composable (row height scales with `font_size`; grid rows grouped in JS). Grid column count is a **single JS source of truth** (`gridCols` from ResizeObserver, inline `grid-template-columns`) — never CSS `auto-fill`, which would drift from the virtualizer's row grouping (ADR-0001). Toolbar (`ListToolbar`) + empty/loading state (`ListEmptyState`) are child components. Soft-cap bounds in-memory pages; soft-cap dirty → next `loadMore` reloads. Default sort `loadMore` uses **keyset** (`before_pinned` / `before_updated_at` / `before_id`) to avoid OFFSET drift when new rows prepend. `showPanel` reloads at most every ~30s unless empty.
 - **Stats:** one SQL scan (aggregates + per-type CASE counts) + `SUM(content_len)` + `SUM(length(content_html))`; backend **5s TTL cache**; `media/` size cached 120s and **incrementally adjusted** on image store/delete. Frontend `scheduleLoadStats`: 800ms debounce + 5s max-wait. Tag assign uses `set_record_tags` (one transaction + single FTS refresh).
 - **Expire sweep:** watches expire fingerprint (`count:nearest`), not every list length change.
-- **Appearance IPC:** `set_window_corner_radius` only when `panel_radius` changes.
+- **Appearance IPC:** Frontend live-previews `set_window_corner_radius` / `set_window_backdrop` when those settings change. `save_settings` and startup apply the same chrome through `window::apply_window_chrome` (always-on-top + corners + blur).
 - **Asset protocol:** `protocol-asset`; scope uses `$LOCALDATA/ClipVault/media/**/*` (not `$LOCALAPPDATA`)
 - **Autostart / shortcut / ignore list:** applied from Rust on `save_settings` / setup (not frontend-only)
 
@@ -93,13 +93,13 @@ App.vue                          # Events; WindowApp; WelcomeDialog; ToastHost, 
 - `lib.rs` — `run()`: logging, dirs, DB init, plugin registration, `invoke_handler`, window events, resume safety-net
 - `setup.rs` — one-time setup closure (capture pipeline, autostart, shortcut, tray, corners, backdrop, cleanup thread)
 - `commands/` — Tauri commands: `mod.rs` (re-exports + `MAX_PAGE_SIZE`/`MAX_BATCH_IDS`), `records.rs`, `paste.rs`, `settings.rs`, `tags.rs`, `tray.rs`, `import_export.rs`, `search_history.rs`, `webdav.rs`, `ai.rs`
-- `window.rs` — adaptive / remembered size, round corners, resize persistence. **Min width 780** (SideBar+List+Preview+resizers).
+- `window.rs` — adaptive / remembered size, round corners, acrylic backdrop, resize persistence. **Min width 780** (SideBar+List+Preview+resizers). `apply_window_chrome` is the shared setup/`save_settings` path.
 - `tray.rs` — tray icon (no native menu); right-click shows `tray-menu` window; left-click → `toggle_main_panel`; **Windows power-resume** rebuilds tray + reloads webviews
 - `clipboard/` — `mod.rs` (monitor re-export), `monitor.rs` (Windows event loop + watchdog / non-Windows poll loop, sequence/fp watermark, suppression), `capture` lives in `capture.rs` (worker threads + periodic cleanup ~60s), `paste.rs` (target HWND, focus restore + Ctrl+V), `write.rs` (text/PNG/image write), `fgwin.rs` (foreground window), `image.rs` (image fingerprint/downscale ≤2560 edge)
 - `capture.rs` — capture worker + **periodic cleanup thread** (~60s)
 - `panel.rs` — `show_main_panel` / `toggle_main_panel`, `apply_global_shortcut`, adaptive size, `list_ipc_payload`
 - `media.rs` — encode/store/load/delete (max edge **2560**, thumb **160**); media dir size cache
-- `detect.rs` — content type + sensitive detection + SHA-256 helpers. Link type via `security::is_openable_link`
+- `detect.rs` — content type + sensitive detection + SHA-256 helpers. `ContentType` lives in `types.rs` (not `db`). Link type via `security::is_openable_link`
 - `security.rs` — media path must resolve under media root; export/import JSON path checks; **openable-link whitelist** (`is_openable_link` / `link_scheme` + `LINK_PREFIXES`); DPAPI; safe media rel-paths only
 - `features.rs` — feature flags (tags/batch/sync/stats/ai) + `require_feature`
 - `ai/` — OpenAI-compatible client + bounded worker (`try_send`, full queue drops). Dual gate `features.ai` ∧ `enable_ai` (ADR-0006); sensitive records never sent

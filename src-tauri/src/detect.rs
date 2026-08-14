@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use sha2::{Digest, Sha256};
 
-use crate::db::ContentType;
+use crate::types::ContentType;
 
 // ============================================================
 // Pre-compiled Regex Patterns

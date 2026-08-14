@@ -68,15 +68,12 @@ pub async fn save_settings(
         return Err(e);
     }
 
-    if settings.panel_radius != previous.panel_radius {
+    let chrome_changed = settings.panel_radius != previous.panel_radius
+        || settings.always_on_top != previous.always_on_top
+        || settings.enable_blur != previous.enable_blur;
+    if chrome_changed {
         if let Some(window) = app.get_webview_window("main") {
-            let _ = window::apply_window_round_corners(&window, settings.panel_radius);
-        }
-    }
-
-    if settings.always_on_top != previous.always_on_top {
-        if let Some(window) = app.get_webview_window("main") {
-            let _ = window.set_always_on_top(settings.always_on_top);
+            window::apply_window_chrome(&window, &settings);
         }
     }
     let _ = app.emit("settings-updated", ());

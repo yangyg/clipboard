@@ -150,6 +150,8 @@ import { useClipboardStore } from "../../stores/clipboard";
 import type { SyncHistoryEntry, WebDavSyncResult } from "../../types";
 import { formatWebDavResult } from "../../utils/webdavResult";
 import { formatDateTime } from "../../utils/format";
+import { humanizeInvokeError } from "../../utils/invokeError";
+import { useToast } from "../../composables/useToast";
 import AppIcon from "../icons/AppIcon.vue";
 import PasswordInput from "../PasswordInput.vue";
 import TextInput from "../TextInput.vue";
@@ -158,6 +160,7 @@ import ToggleSwitch from "../ToggleSwitch.vue";
 const { settings, settingsStore, update } = useSettings();
 const clipboardStore = useClipboardStore();
 const { t } = useI18n();
+const { toast } = useToast();
 
 const webdavBusy = ref(false);
 const webdavAction = ref<"" | "test" | "pull" | "push" | "sync">("");
@@ -219,6 +222,7 @@ async function loadHistory() {
     syncHistory.value = await invoke<SyncHistoryEntry[]>("get_sync_history", { limit: 20 });
   } catch (e) {
     console.error("Failed to load sync history:", e);
+    toast(humanizeInvokeError(e, t), "error");
   } finally {
     historyBusy.value = false;
   }
@@ -231,6 +235,7 @@ async function clearHistory() {
     syncHistory.value = [];
   } catch (e) {
     console.error("Failed to clear sync history:", e);
+    toast(humanizeInvokeError(e, t), "error");
   } finally {
     historyBusy.value = false;
   }

@@ -1,39 +1,7 @@
 //! Shared DB types and column-list constants (extracted from `db/mod.rs` to
 //! keep the connection-pool module small).
 
-/// Content categories a captured clipboard payload can be classified into.
-/// `is_sensitive` is a separate boolean flag, not a ContentType variant.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ContentType {
-    Text,
-    Code,
-    Link,
-    Image,
-    File,
-}
-
-impl ContentType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ContentType::Text => "text",
-            ContentType::Code => "code",
-            ContentType::Link => "link",
-            ContentType::Image => "image",
-            ContentType::File => "file",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Self {
-        match s {
-            "text" => ContentType::Text,
-            "code" => ContentType::Code,
-            "link" => ContentType::Link,
-            "image" => ContentType::Image,
-            "file" => ContentType::File,
-            _ => ContentType::Text,
-        }
-    }
-}
+pub use crate::types::ContentType;
 
 /// Optional image metadata when inserting an image record.
 #[derive(Debug, Clone)]

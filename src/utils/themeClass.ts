@@ -3,7 +3,7 @@
  * chrome. Keeps the two `body`-level theme class lists in sync.
  */
 
-import { THEME_DEFINITIONS } from "./themeRegistry";
+import { isThemeKey, THEME_DEFINITIONS } from "./themeRegistry";
 
 /** Every non-default theme class `applyTheme` can attach to <body>. */
 export const THEME_CLASSES = THEME_DEFINITIONS
@@ -12,8 +12,9 @@ export const THEME_CLASSES = THEME_DEFINITIONS
 
 /** Attach the theme class for `theme` (dark = default, no class) to <body>. */
 export function applyTheme(theme: string) {
+  const key = theme === "system" || !isThemeKey(theme) ? "dark" : theme;
   document.body.classList.remove(...THEME_CLASSES);
-  if (theme !== "dark") {
-    document.body.classList.add(`${theme}-theme`);
+  if (key !== "dark") {
+    document.body.classList.add(`${key}-theme`);
   }
 }

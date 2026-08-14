@@ -96,6 +96,10 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
       keywords: [...r.keywords],
       content_types: [...r.content_types],
     })),
+    language:
+      raw?.language === "en-US" || raw?.language === "zh-CN" || raw?.language === "system"
+        ? raw.language
+        : DEFAULT_SETTINGS.language,
   };
 }
 

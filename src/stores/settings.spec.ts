@@ -165,4 +165,11 @@ describe("settingsStore colorful preset themes", () => {
     await store.loadSettings();
     expect(store.settings.theme).toBe("dark");
   });
+
+  it("normalizes an unknown language to the default", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ language: "fr-FR" } as unknown as Settings);
+    const store = useSettingsStore();
+    await store.loadSettings();
+    expect(store.settings.language).toBe("system");
+  });
 });

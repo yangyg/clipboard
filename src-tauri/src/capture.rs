@@ -196,14 +196,7 @@ fn process_text_job(
         None,
         captured.html.as_deref(),
     ) {
-        Ok((id, is_new, mut record)) => {
-            if is_new && settings.features.tags && settings.enable_auto_tag {
-                if let Err(e) = db.apply_auto_tags(id, &captured.text, &content_type, &settings) {
-                    warn!("Failed to apply auto tags: {}", e);
-                } else if let Ok(tags) = db.get_record_tag_names(id) {
-                    record.tags = tags;
-                }
-            }
+        Ok((id, is_new, record)) => {
             info!(
                 "New clipboard record: id={}, type={}, formatted={}, is_new={}",
                 id,
@@ -308,16 +301,7 @@ fn process_image_job(
                 Some(&image_meta),
                 None,
             ) {
-                Ok((id, is_new, mut record)) => {
-                    if is_new && settings.features.tags && settings.enable_auto_tag {
-                        if let Err(e) =
-                            db.apply_auto_tags(id, &label, &ContentType::Image, &settings)
-                        {
-                            warn!("Failed to apply auto tags: {}", e);
-                        } else if let Ok(tags) = db.get_record_tag_names(id) {
-                            record.tags = tags;
-                        }
-                    }
+                Ok((id, is_new, record)) => {
                     info!(
                         "New clipboard record: id={}, type=image, is_new={}",
                         id, is_new

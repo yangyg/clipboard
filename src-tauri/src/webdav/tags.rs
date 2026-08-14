@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use super::client::WebDavClient;
-use super::sync::join_remote;
+use super::sync_common::join_remote;
 use crate::db::{ClipboardDb, TagMergeStats, TagSyncRow, TAG_EPOCH_SENTINEL};
 
 pub const TAGS_REL: &str = "records/tags.json";

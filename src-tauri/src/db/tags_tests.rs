@@ -2,7 +2,7 @@
 //! own file (mirroring `schema_tests.rs`) to keep `tags.rs` under the
 //! 800-line cap.
 use super::tags::{nearest_palette_color, normalize_color_key, TAG_PALETTE};
-use crate::db::{TagSyncRow, TAG_EPOCH_SENTINEL};
+use crate::db::{PageCursor, TagSyncRow, TAG_EPOCH_SENTINEL};
 use crate::ClipboardDb;
 use crate::ClipboardRecord;
 
@@ -267,7 +267,17 @@ fn merge_tag_snapshot_tombstone_deletes_tag() {
         .all(|t| t.name != "临时"));
     // The record is no longer searchable by the deleted tag name.
     assert!(db
-        .search_records("临时", 10, 0, None, false, None, None, true, None, None, None)
+        .search_records(
+            "临时",
+            10,
+            0,
+            None,
+            false,
+            None,
+            None,
+            true,
+            PageCursor::default()
+        )
         .unwrap()
         .is_empty());
 
@@ -554,7 +564,7 @@ fn add_auto_tags_by_name_merges_and_is_idempotent() {
     assert!(tags.contains(&"代码".to_string()));
 
     // New auto tags are created as is_auto.
-    let conn = db.conn.lock();
+    let conn = db.lock_write();
     let is_auto: bool = conn
         .query_row("SELECT is_auto FROM tags WHERE name = '代码'", [], |r| {
             r.get::<_, i32>(0)
@@ -633,9 +643,7 @@ fn deleting_tag_removes_it_from_full_text_search() {
             None,
             None,
             true,
-            None,
-            None,
-            None
+            PageCursor::default(),
         )
         .unwrap()
         .len(),
@@ -652,9 +660,7 @@ fn deleting_tag_removes_it_from_full_text_search() {
             None,
             None,
             true,
-            None,
-            None,
-            None
+            PageCursor::default(),
         )
         .unwrap()
         .is_empty());

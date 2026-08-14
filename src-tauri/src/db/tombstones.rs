@@ -51,14 +51,14 @@ impl ClipboardDb {
         deleted_at: &str,
         is_sensitive: bool,
     ) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         Self::upsert_tombstone_conn(&conn, hash, deleted_at, is_sensitive)
     }
 
     /// Drop a tombstone — called on restore (un-delete propagation) and when a
     /// push proves a newer active copy supersedes it.
     pub fn remove_tombstone(&self, hash: &str) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute("DELETE FROM sync_tombstones WHERE hash = ?", [hash])?;
         Ok(())
     }
@@ -105,7 +105,7 @@ impl ClipboardDb {
         &self,
         tombstones: &[(String, String)],
     ) -> SqlResult<(usize, Option<String>)> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let mut applied = 0usize;
         let mut ack: Option<String> = conn
             .query_row(
@@ -307,7 +307,7 @@ mod tests {
         db.restore_record(id).unwrap();
 
         assert!(db.get_sync_tombstones().unwrap().is_empty());
-        let conn = db.conn.lock();
+        let conn = db.lock_write();
         let updated_at: String = conn
             .query_row("SELECT updated_at FROM records WHERE id = ?", [id], |r| {
                 r.get(0)

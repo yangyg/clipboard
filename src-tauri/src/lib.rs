@@ -10,6 +10,7 @@ mod media;
 mod panel;
 mod perf;
 mod security;
+mod settings_effects;
 mod setup;
 mod tray;
 mod types;

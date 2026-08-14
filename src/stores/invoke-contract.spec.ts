@@ -28,12 +28,14 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
     params: [
       "limit", "offset", "trashed", "content_type", "favorites_only",
       "tag", "sort", "before_pinned", "before_updated_at", "before_id",
+      "before_created_at", "before_copy_count",
     ],
   },
   search_records: {
     params: [
       "query", "limit", "offset", "content_type", "favorites_only",
       "tag", "sort", "before_pinned", "before_updated_at", "before_id",
+      "before_created_at", "before_copy_count",
     ],
   },
   get_pending_history_import: { params: [] },

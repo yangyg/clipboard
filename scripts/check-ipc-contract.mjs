@@ -13,6 +13,8 @@
  *   3. Frontend literal payloads: no unknown keys, no missing required
  *      (non-Option) Rust params — Tauri silently ignores unknown keys, so
  *      this catches silent contract breakage
+ *   4. Event names: every `app.emit("…")` in Rust has a `listen("…")` in
+ *      the frontend, and vice versa (plugin / window events are allowlisted)
  *
  * Exit codes:
  *   0 - All commands match
@@ -401,6 +403,42 @@ function validatePayloadKeys(rustCommands, sites) {
   return errors;
 }
 
+const RUST_SRC = 'src-tauri/src';
+/** Frontend `listen` names that are not emitted from this crate (plugins / OS). */
+const LISTEN_ALLOWLIST = new Set();
+/** Rust `emit` names with no frontend `listen` (internal / other webviews). */
+const EMIT_ALLOWLIST = new Set();
+
+function collectEventNames(files, regex) {
+  const names = new Set();
+  for (const file of files) {
+    const raw = readFileSync(file, 'utf8');
+    regex.lastIndex = 0;
+    let match;
+    while ((match = regex.exec(raw)) !== null) {
+      names.add(match[1]);
+    }
+  }
+  return names;
+}
+
+function validateEvents(emitted, listened) {
+  const errors = [];
+  for (const name of emitted) {
+    if (LISTEN_ALLOWLIST.has(name)) continue;
+    if (!listened.has(name)) {
+      errors.push(`Rust emits "${name}" but no frontend listen("${name}") was found`);
+    }
+  }
+  for (const name of listened) {
+    if (EMIT_ALLOWLIST.has(name)) continue;
+    if (!emitted.has(name)) {
+      errors.push(`Frontend listens for "${name}" but no Rust emit("${name}") was found`);
+    }
+  }
+  return errors;
+}
+
 /**
  * Main validation logic
  */
@@ -426,16 +464,28 @@ function main() {
     const invokeSites = parseFrontendInvokes(
       collectSourceFiles(join(__dirname, '..', FRONTEND_DIR))
     );
+    const rustSrcFiles = collectRustFiles(join(__dirname, '..', RUST_SRC));
+    const frontendSrcFiles = collectSourceFiles(join(__dirname, '..', FRONTEND_DIR));
+    const emittedEvents = collectEventNames(
+      rustSrcFiles,
+      /\.emit\(\s*"([^"]+)"/g
+    );
+    const listenedEvents = collectEventNames(
+      frontendSrcFiles,
+      /\blisten(?:<[^>]*>)?\(\s*"([^"]+)"/g
+    );
 
     console.log(`Found ${rustCommands.size} Rust commands`);
     console.log(`Found ${tsContracts.size} TypeScript contracts`);
     console.log(`Found ${registered.length} registered handlers`);
     console.log(`Found ${invokeSites.length} frontend invoke call sites`);
+    console.log(`Found ${emittedEvents.size} Rust emit events / ${listenedEvents.size} frontend listen events`);
     console.log('');
 
     const { errors: contractErrors, warnings } = validateContracts(rustCommands, tsContracts);
     const registrationErrors = validateRegistration(rustCommands, registered);
     const payloadErrors = validatePayloadKeys(rustCommands, invokeSites);
+    const eventErrors = validateEvents(emittedEvents, listenedEvents);
     const unknownCommandSites = invokeSites.filter((s) => !rustCommands.has(s.command));
 
     // Report warnings
@@ -464,8 +514,14 @@ function main() {
       for (const error of registrationErrors) console.log(`  ${error}`);
       console.log('');
     }
+    if (eventErrors.length > 0) {
+      console.log('❌ Event contract errors:');
+      for (const error of eventErrors) console.log(`  ${error}`);
+      console.log('');
+    }
 
-    const totalErrors = contractErrors.length + frontendErrors.length + registrationErrors.length;
+    const totalErrors =
+      contractErrors.length + frontendErrors.length + registrationErrors.length + eventErrors.length;
     if (totalErrors > 0) {
       console.log('❌ Errors:');
       for (const e of contractErrors) {
@@ -482,7 +538,7 @@ function main() {
       process.exit(1);
     }
 
-    console.log('✅ All commands match!');
+    console.log('✅ All commands and events match!');
     process.exit(0);
   } catch (err) {
     console.error('❌ Parse error:', err.message);

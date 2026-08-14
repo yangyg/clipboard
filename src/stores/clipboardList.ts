@@ -88,10 +88,6 @@ export function createListActions(ctx: ListActionsCtx) {
   const LIST_SOFT_CAP = PAGE_SIZE * 2;
   let searchSeq = 0;
   let loadSeq = 0;
-  /** Server-side offset for the next loadMore (not records.length — soft-cap may trim). */
-  let listFetchOffset = 0;
-  /** Soft-cap dropped rows → offset window has holes; next loadMore reloads. */
-  let listWindowDirty = false;
   /** L-4: In-flight detail fetches — prevents duplicate IPC when selection changes rapidly. */
   const detailInFlight = new Set<number>();
   let incomingFlashTimer: ReturnType<typeof setTimeout> | null = null;
@@ -102,10 +98,27 @@ export function createListActions(ctx: ListActionsCtx) {
     ctx.viewportFillToken.value += 1;
   }
 
-  function listQueryArgs(
-    offset: number,
-    cursor?: { before_pinned: number; before_updated_at: string; before_id: number } | null
-  ) {
+  type ListCursor = {
+    before_pinned: number
+    before_updated_at: string
+    before_id: number
+    before_created_at: string
+    before_copy_count: number
+  }
+
+  function cursorFromLast(): ListCursor | null {
+    const last = ctx.records.value[ctx.records.value.length - 1];
+    if (!last) return null;
+    return {
+      before_pinned: last.is_pinned ? 1 : 0,
+      before_updated_at: last.updated_at,
+      before_id: last.id,
+      before_created_at: last.created_at,
+      before_copy_count: last.copy_count,
+    };
+  }
+
+  function listQueryArgs(offset: number, cursor?: ListCursor | null) {
     const favoritesOnly = !ctx.trashFilter.value && ctx.activeFilter.value === "favorites";
     // Must match #[tauri::command(rename_all = "snake_case")] on get_records.
     return {
@@ -122,14 +135,12 @@ export function createListActions(ctx: ListActionsCtx) {
       before_pinned: cursor?.before_pinned ?? null,
       before_updated_at: cursor?.before_updated_at ?? null,
       before_id: cursor?.before_id ?? null,
+      before_created_at: cursor?.before_created_at ?? null,
+      before_copy_count: cursor?.before_copy_count ?? null,
     };
   }
 
-  function searchFilterArgs(cursor?: {
-    before_pinned: number
-    before_updated_at: string
-    before_id: number
-  }) {
+  function searchFilterArgs(cursor?: ListCursor | null) {
     const favoritesOnly = ctx.activeFilter.value === "favorites";
     // Must match #[tauri::command(rename_all = "snake_case")] on search_records.
     return {
@@ -138,10 +149,11 @@ export function createListActions(ctx: ListActionsCtx) {
       favorites_only: favoritesOnly,
       tag: featureEnabled("tags") ? ctx.activeTag.value : null,
       sort: ctx.listSort.value,
-      // Keyset cursor for the default newest-first sort (null → OFFSET page).
       before_pinned: cursor?.before_pinned ?? null,
       before_updated_at: cursor?.before_updated_at ?? null,
       before_id: cursor?.before_id ?? null,
+      before_created_at: cursor?.before_created_at ?? null,
+      before_copy_count: cursor?.before_copy_count ?? null,
     };
   }
 
@@ -174,7 +186,6 @@ export function createListActions(ctx: ListActionsCtx) {
     ctx.isLoading.value = true;
     ctx.isLoadingMore.value = false;
     ctx.hasMore.value = true;
-    listWindowDirty = false;
     try {
       // Start the auxiliary IPC concurrently with the page fetch: trash count
       // and stats were previously awaited serially after get_records, adding a
@@ -188,7 +199,6 @@ export function createListActions(ctx: ListActionsCtx) {
       perfMeasure("clipvault:records-ready", "clipvault:load-records:start");
       perfMeasureOnce("clipvault:boot-to-records", "clipvault:boot:start");
       ctx.hasMore.value = page.has_more;
-      listFetchOffset = page.records.length;
       ctx.recordDetails.value = new Map();
       await Promise.allSettled([trashPromise, statsPromise]);
       // Preserve selection: re-fetch full detail after list truncated rows replaced cache.
@@ -208,68 +218,24 @@ export function createListActions(ctx: ListActionsCtx) {
 
   async function loadMore() {
     if (!ctx.hasMore.value || ctx.isLoading.value || ctx.isLoadingMore.value) return;
-    // Offset-based sorts (created_desc, copies_desc, updated_asc) can skip rows
-    // when the soft cap has trimmed the local window; keyset pagination for
-    // updated_desc is stable against prepends/trim so we continue normally.
-    if (listWindowDirty && ctx.listSort.value !== "updated_desc") {
-      await reloadList();
-      return;
-    }
     const seq = loadSeq;
     ctx.isLoadingMore.value = true;
     try {
+      const cursor = cursorFromLast();
       if (ctx.searchQuery.value.trim()) {
-        if (ctx.listSort.value === "updated_desc" && ctx.records.value.length > 0) {
-          // Keyset cursor — search results are stable against new captures that
-          // match the query (no OFFSET drift across pages).
-          const last = ctx.records.value[ctx.records.value.length - 1];
-          const result = await invoke<SearchResult>("search_records", {
-            query: ctx.searchQuery.value,
-            limit: PAGE_SIZE,
-            offset: 0,
-            ...searchFilterArgs({
-              before_pinned: last.is_pinned ? 1 : 0,
-              before_updated_at: last.updated_at,
-              before_id: last.id,
-            }),
-          });
-          if (seq !== loadSeq || ctx.trashFilter.value) return;
-          appendRecords(result.records);
-          listFetchOffset = 0;
-          ctx.hasMore.value = result.has_more;
-        } else {
-          const offset = listFetchOffset;
-          const result = await invoke<SearchResult>("search_records", {
-            query: ctx.searchQuery.value,
-            limit: PAGE_SIZE,
-            offset,
-            ...searchFilterArgs(),
-          });
-          if (seq !== loadSeq || ctx.trashFilter.value) return;
-          appendRecords(result.records);
-          listFetchOffset = offset + result.records.length;
-          ctx.hasMore.value = result.has_more;
-        }
-      } else if (ctx.listSort.value === "updated_desc" && ctx.records.value.length > 0) {
-        // Keyset cursor — stable when new rows are prepended during scroll.
-        const last = ctx.records.value[ctx.records.value.length - 1];
-        const page = await invoke<RecordsPage>(
-          "get_records",
-          listQueryArgs(0, {
-            before_pinned: last.is_pinned ? 1 : 0,
-            before_updated_at: last.updated_at,
-            before_id: last.id,
-          })
-        );
-        if (seq !== loadSeq) return;
-        appendRecords(page.records);
-        ctx.hasMore.value = page.has_more;
+        const result = await invoke<SearchResult>("search_records", {
+          query: ctx.searchQuery.value,
+          limit: PAGE_SIZE,
+          offset: 0,
+          ...searchFilterArgs(cursor),
+        });
+        if (seq !== loadSeq || ctx.trashFilter.value) return;
+        appendRecords(result.records);
+        ctx.hasMore.value = result.has_more;
       } else {
-        const offset = listFetchOffset;
-        const page = await invoke<RecordsPage>("get_records", listQueryArgs(offset));
+        const page = await invoke<RecordsPage>("get_records", listQueryArgs(0, cursor));
         if (seq !== loadSeq) return;
         appendRecords(page.records);
-        listFetchOffset = offset + page.records.length;
         ctx.hasMore.value = page.has_more;
       }
     } catch (e) {
@@ -297,7 +263,6 @@ export function createListActions(ctx: ListActionsCtx) {
     perfMark("clipvault:search:start");
     ctx.searchQuery.value = query;
     ctx.hasMore.value = true;
-    listWindowDirty = false;
     try {
       const result = await invoke<SearchResult>("search_records", {
         query,
@@ -313,7 +278,6 @@ export function createListActions(ctx: ListActionsCtx) {
       ctx.records.value = result.records;
       perfMeasure("clipvault:search-roundtrip", "clipvault:search:start");
       ctx.hasMore.value = result.has_more;
-      listFetchOffset = result.records.length;
       ctx.recordDetails.value = new Map();
       if (ctx.selectedId.value !== null) {
         void ensureRecordDetail(ctx.selectedId.value);
@@ -375,8 +339,7 @@ export function createListActions(ctx: ListActionsCtx) {
     }
     const restKeep = Math.max(0, LIST_SOFT_CAP - pinned.length);
     const next = pinned.concat(rest.slice(0, restKeep));
-    // Local window no longer matches contiguous server offsets.
-    listWindowDirty = true;
+    // Trimmed tail is still in the DB — keep hasMore so scroll re-fetches via keyset.
     ctx.hasMore.value = true;
     if (ctx.selectedId.value !== null && !next.some((r) => r.id === ctx.selectedId.value)) {
       ctx.selectedId.value = null;
@@ -557,11 +520,6 @@ export function createListActions(ctx: ListActionsCtx) {
   /** Invalidate in-flight list loads (e.g. after emptyTrash clears the list). */
   function invalidateLoads() {
     loadSeq += 1;
-    // The visible window was replaced out-of-band: reset server-side pagination
-    // too, otherwise a stale offset/hasMore yields mis-paged or redundant
-    // loadMore requests on the next scroll.
-    listFetchOffset = 0;
-    listWindowDirty = false;
     ctx.hasMore.value = false;
   }
 

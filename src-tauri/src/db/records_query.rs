@@ -5,6 +5,31 @@ use rusqlite::{params, Connection, Result as SqlResult, Row};
 use super::{clamp_page_limit, ClipboardDb, RECORD_COLS, RECORD_COLS_LIST};
 use crate::ClipboardRecord;
 
+/// Keyset cursor for list/search pagination. `Default` is "first page"
+/// (no predicate → OFFSET 0). Fields beyond `id`/`updated_at` are only
+/// required for the matching sort (`created_desc` / `copies_desc`).
+#[derive(Debug, Default, Clone, Copy)]
+pub struct PageCursor<'a> {
+    pub pinned: Option<i32>,
+    pub updated_at: Option<&'a str>,
+    pub id: Option<i64>,
+    pub created_at: Option<&'a str>,
+    pub copy_count: Option<i32>,
+}
+
+impl PageCursor<'_> {
+    pub(crate) fn is_ready(self, sort: Option<&str>) -> bool {
+        if self.id.is_none() {
+            return false;
+        }
+        match sort.unwrap_or("updated_desc") {
+            "created_desc" => self.created_at.is_some(),
+            "copies_desc" => self.copy_count.is_some() && self.updated_at.is_some(),
+            _ => self.updated_at.is_some(),
+        }
+    }
+}
+
 impl ClipboardDb {
     // === Query helpers ===
 
@@ -99,50 +124,34 @@ impl ClipboardDb {
             };
         }
         match secondary {
-            "updated_at ASC" => "is_pinned DESC, updated_at ASC",
-            "created_at DESC" => "is_pinned DESC, created_at DESC",
+            "updated_at ASC" => "is_pinned DESC, updated_at ASC, id ASC",
+            "created_at DESC" => "is_pinned DESC, created_at DESC, id DESC",
             "copy_count DESC, updated_at DESC" => {
-                "is_pinned DESC, copy_count DESC, updated_at DESC"
+                "is_pinned DESC, copy_count DESC, updated_at DESC, id DESC"
             }
-            _ => "is_pinned DESC, updated_at DESC",
+            _ => "is_pinned DESC, updated_at DESC, id DESC",
         }
     }
 
-    /// Append the pagination tail shared by list + search queries: either the
-    /// keyset predicate (`is_pinned/updated_at/id`) or an OFFSET clause. Both
-    /// branches MUST stay in sync across callers — a drift here silently breaks
-    /// paging (skipped/duplicate rows) with no compile-time error.
+    /// Append the pagination tail shared by list + search queries: either a
+    /// sort-specific keyset predicate or an OFFSET clause. Both branches MUST
+    /// stay in sync across callers — a drift here silently breaks paging
+    /// (skipped/duplicate rows) with no compile-time error.
     pub(super) fn push_pagination_tail(
         sql: &mut String,
         params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
         use_keyset: bool,
-        before_pinned: Option<i32>,
-        before_updated_at: Option<&str>,
-        before_id: Option<i64>,
+        cursor: PageCursor<'_>,
         limit: i32,
         offset: i32,
         trashed: bool,
         sort: Option<&str>,
     ) {
         if use_keyset {
-            let pin = before_pinned.unwrap_or(0);
-            let ts = before_updated_at.unwrap().to_string();
-            let id = before_id.unwrap();
-            // ORDER BY is_pinned DESC, updated_at DESC, id DESC → next page
-            sql.push_str(
-                " AND (
-                    is_pinned < ?
-                    OR (is_pinned = ? AND updated_at < ?)
-                    OR (is_pinned = ? AND updated_at = ? AND id < ?)
-                )",
-            );
-            params.push(Box::new(pin));
-            params.push(Box::new(pin));
-            params.push(Box::new(ts.clone()));
-            params.push(Box::new(pin));
-            params.push(Box::new(ts));
-            params.push(Box::new(id));
-            sql.push_str(" ORDER BY is_pinned DESC, updated_at DESC, id DESC LIMIT ?");
+            Self::push_keyset_predicate(sql, params, trashed, sort, cursor);
+            sql.push_str(" ORDER BY ");
+            sql.push_str(Self::order_by_clause(trashed, sort));
+            sql.push_str(" LIMIT ?");
             params.push(Box::new(clamp_page_limit(limit)));
         } else {
             sql.push_str(" ORDER BY ");
@@ -150,6 +159,138 @@ impl ClipboardDb {
             sql.push_str(" LIMIT ? OFFSET ?");
             params.push(Box::new(clamp_page_limit(limit)));
             params.push(Box::new(offset.max(0)));
+        }
+    }
+
+    /// `WHERE` fragment for the row strictly after `cursor` under `sort`.
+    /// Comparisons must match `order_by_clause` (pinned-first on active lists,
+    /// id as the total-order tiebreak) or page 2 will skip/duplicate.
+    fn push_keyset_predicate(
+        sql: &mut String,
+        params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
+        trashed: bool,
+        sort: Option<&str>,
+        cursor: PageCursor<'_>,
+    ) {
+        let pin = cursor.pinned.unwrap_or(0);
+        let id = cursor.id.expect("keyset cursor requires before_id");
+        let sort = sort.unwrap_or("updated_desc");
+
+        if trashed {
+            match sort {
+                "updated_asc" => {
+                    let ts = cursor.updated_at.unwrap().to_string();
+                    sql.push_str(" AND (updated_at > ? OR (updated_at = ? AND id > ?))");
+                    params.push(Box::new(ts.clone()));
+                    params.push(Box::new(ts));
+                    params.push(Box::new(id));
+                }
+                "created_desc" => {
+                    let ts = cursor.created_at.unwrap().to_string();
+                    sql.push_str(" AND (created_at < ? OR (created_at = ? AND id < ?))");
+                    params.push(Box::new(ts.clone()));
+                    params.push(Box::new(ts));
+                    params.push(Box::new(id));
+                }
+                "copies_desc" => {
+                    let copies = cursor.copy_count.unwrap();
+                    let ts = cursor.updated_at.unwrap().to_string();
+                    sql.push_str(
+                        " AND (
+                            copy_count < ?
+                            OR (copy_count = ? AND updated_at < ?)
+                            OR (copy_count = ? AND updated_at = ? AND id < ?)
+                        )",
+                    );
+                    params.push(Box::new(copies));
+                    params.push(Box::new(copies));
+                    params.push(Box::new(ts.clone()));
+                    params.push(Box::new(copies));
+                    params.push(Box::new(ts));
+                    params.push(Box::new(id));
+                }
+                _ => {
+                    let ts = cursor.updated_at.unwrap().to_string();
+                    sql.push_str(" AND (updated_at < ? OR (updated_at = ? AND id < ?))");
+                    params.push(Box::new(ts.clone()));
+                    params.push(Box::new(ts));
+                    params.push(Box::new(id));
+                }
+            }
+            return;
+        }
+
+        match sort {
+            "updated_asc" => {
+                let ts = cursor.updated_at.unwrap().to_string();
+                sql.push_str(
+                    " AND (
+                        is_pinned < ?
+                        OR (is_pinned = ? AND updated_at > ?)
+                        OR (is_pinned = ? AND updated_at = ? AND id > ?)
+                    )",
+                );
+                params.push(Box::new(pin));
+                params.push(Box::new(pin));
+                params.push(Box::new(ts.clone()));
+                params.push(Box::new(pin));
+                params.push(Box::new(ts));
+                params.push(Box::new(id));
+            }
+            "created_desc" => {
+                let ts = cursor.created_at.unwrap().to_string();
+                sql.push_str(
+                    " AND (
+                        is_pinned < ?
+                        OR (is_pinned = ? AND created_at < ?)
+                        OR (is_pinned = ? AND created_at = ? AND id < ?)
+                    )",
+                );
+                params.push(Box::new(pin));
+                params.push(Box::new(pin));
+                params.push(Box::new(ts.clone()));
+                params.push(Box::new(pin));
+                params.push(Box::new(ts));
+                params.push(Box::new(id));
+            }
+            "copies_desc" => {
+                let copies = cursor.copy_count.unwrap();
+                let ts = cursor.updated_at.unwrap().to_string();
+                sql.push_str(
+                    " AND (
+                        is_pinned < ?
+                        OR (is_pinned = ? AND copy_count < ?)
+                        OR (is_pinned = ? AND copy_count = ? AND updated_at < ?)
+                        OR (is_pinned = ? AND copy_count = ? AND updated_at = ? AND id < ?)
+                    )",
+                );
+                params.push(Box::new(pin));
+                params.push(Box::new(pin));
+                params.push(Box::new(copies));
+                params.push(Box::new(pin));
+                params.push(Box::new(copies));
+                params.push(Box::new(ts.clone()));
+                params.push(Box::new(pin));
+                params.push(Box::new(copies));
+                params.push(Box::new(ts));
+                params.push(Box::new(id));
+            }
+            _ => {
+                let ts = cursor.updated_at.unwrap().to_string();
+                sql.push_str(
+                    " AND (
+                        is_pinned < ?
+                        OR (is_pinned = ? AND updated_at < ?)
+                        OR (is_pinned = ? AND updated_at = ? AND id < ?)
+                    )",
+                );
+                params.push(Box::new(pin));
+                params.push(Box::new(pin));
+                params.push(Box::new(ts.clone()));
+                params.push(Box::new(pin));
+                params.push(Box::new(ts));
+                params.push(Box::new(id));
+            }
         }
     }
 
@@ -229,10 +370,7 @@ impl ClipboardDb {
         favorites_only: bool,
         tag_name: Option<&str>,
         sort: Option<&str>,
-        // Keyset cursor (preferred over OFFSET when list mutates via prepend).
-        before_pinned: Option<i32>,
-        before_updated_at: Option<&str>,
-        before_id: Option<i64>,
+        cursor: PageCursor<'_>,
         include_tags: bool,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let conn = self.lock_read();
@@ -252,19 +390,14 @@ impl ClipboardDb {
         }
         Self::push_tag_filter(&mut sql, &mut params, tag_name, include_tags);
 
-        // Keyset for default newest-first (+ pinned). Avoids OFFSET drift when
-        // clipboard-changed prepends rows while the user scrolls.
-        let use_keyset = before_id.is_some()
-            && before_updated_at.is_some()
-            && matches!(sort.unwrap_or("updated_desc"), "updated_desc");
-
+        // Keyset for every whitelist sort. Avoids OFFSET drift when the list
+        // mutates (prepend, copy_count bump, created_at-stable inserts) while
+        // the user scrolls.
         Self::push_pagination_tail(
             &mut sql,
             &mut params,
-            use_keyset,
-            before_pinned,
-            before_updated_at,
-            before_id,
+            cursor.is_ready(sort),
+            cursor,
             limit,
             offset,
             trashed,
@@ -381,7 +514,7 @@ impl ClipboardDb {
     /// means pasting never re-ranks the `updated_desc` list, never protects a
     /// record from capacity eviction, and never raises the WebDAV LWW watermark.
     pub fn bump_copy_count(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute(
             "UPDATE records SET copy_count = copy_count + 1 WHERE id = ? AND is_trashed = 0",
             params![id],
@@ -454,10 +587,10 @@ mod tests {
             ClipboardDb::order_by_clause(true, Some("copies_desc")),
             "copy_count DESC, updated_at DESC, id DESC"
         );
-        // Active lists keep pinned-first semantics.
+        // Active lists keep pinned-first semantics + id tiebreak (keyset).
         assert_eq!(
             ClipboardDb::order_by_clause(false, Some("updated_desc")),
-            "is_pinned DESC, updated_at DESC"
+            "is_pinned DESC, updated_at DESC, id DESC"
         );
     }
 }

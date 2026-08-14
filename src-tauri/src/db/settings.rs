@@ -179,7 +179,7 @@ impl ClipboardDb {
             }
         }
         {
-            let conn = self.conn.lock();
+            let conn = self.lock_write();
             conn.execute(
                 "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_settings', ?)",
                 [&json],
@@ -189,8 +189,54 @@ impl ClipboardDb {
         Ok(())
     }
 
+    /// Persist only the window size remembered after a user resize.
+    /// Other fields are read-modify-written so a concurrent user save is kept.
+    pub fn save_window_geometry(&self, width: i32, height: i32) -> Result<(), SettingsError> {
+        let current = self.get_settings()?;
+        if current.window_width == width && current.window_height == height {
+            return Ok(());
+        }
+        let mut next = (*current).clone();
+        next.window_width = width;
+        next.window_height = height;
+        self.save_settings(&next)
+    }
+
+    /// Persist WebDAV sync stamps / device-name map without OS side effects.
+    /// Overlays onto a fresh load so a concurrent user save (theme, etc.) is kept.
+    pub fn save_sync_metadata(&self, patch: &Settings) -> Result<Settings, SettingsError> {
+        let mut next = (*self.get_settings()?).clone();
+        next.webdav_last_sync_at = patch.webdav_last_sync_at.clone();
+        next.webdav_device_names = patch.webdav_device_names.clone();
+        next.webdav_device_id = patch.webdav_device_id.clone();
+        next.webdav_device_name = patch.webdav_device_name.clone();
+        self.save_settings(&next)?;
+        Ok(next)
+    }
+
+    /// Fill empty `webdav_device_id` / `webdav_device_name` once at startup.
+    pub fn ensure_device_identity(&self) -> Result<(), SettingsError> {
+        let current = self.get_settings()?;
+        let mut next = (*current).clone();
+        let mut changed = false;
+        if next.webdav_device_id.trim().is_empty() {
+            next.webdav_device_id = uuid::Uuid::new_v4().to_string();
+            changed = true;
+        }
+        if next.webdav_device_name.trim().is_empty() {
+            next.webdav_device_name =
+                std::env::var("COMPUTERNAME").unwrap_or_else(|_| "My Device".to_string());
+            changed = true;
+        }
+        if changed {
+            self.save_settings(&next)?;
+            tracing::info!("Device identity ensured (id={})", next.webdav_device_id);
+        }
+        Ok(())
+    }
+
     pub fn cleanup_expired(&self) -> SqlResult<Vec<i64>> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let now = chrono::Utc::now().to_rfc3339();
         // Respect pin/favorite, consistent with retention and max-record
         // eviction: a user who pinned/favorited a sensitive record (e.g. an OTP
@@ -226,7 +272,7 @@ impl ClipboardDb {
         if retention_days <= 0 {
             return Ok(());
         }
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let cutoff =
             (chrono::Utc::now() - chrono::Duration::days(retention_days as i64)).to_rfc3339();
         let ids: Vec<i64> = {
@@ -261,6 +307,49 @@ mod tests {
 
     fn cleanup(dir: PathBuf) {
         crate::db::test_util::cleanup(dir)
+    }
+
+    #[test]
+    fn save_window_geometry_only_updates_width_and_height() {
+        let (db, dir) = temp_db();
+        let mut settings = (*db.get_settings().unwrap()).clone();
+        settings.theme = "oled".into();
+        settings.webdav_device_id = "keep-me".into();
+        settings.window_width = 800;
+        settings.window_height = 600;
+        db.save_settings(&settings).unwrap();
+
+        db.save_window_geometry(1024, 768).unwrap();
+
+        let saved = db.get_settings().unwrap();
+        assert_eq!(saved.window_width, 1024);
+        assert_eq!(saved.window_height, 768);
+        assert_eq!(saved.theme, "oled");
+        assert_eq!(saved.webdav_device_id, "keep-me");
+        cleanup(dir);
+    }
+
+    #[test]
+    fn save_sync_metadata_overlays_sync_fields_only() {
+        let (db, dir) = temp_db();
+        let mut settings = (*db.get_settings().unwrap()).clone();
+        settings.theme = "nord".into();
+        settings.webdav_device_id = "dev-1".into();
+        db.save_settings(&settings).unwrap();
+
+        let mut patch = (*db.get_settings().unwrap()).clone();
+        patch.theme = "should-not-stick".into();
+        patch.webdav_last_sync_at = Some("2026-01-01T00:00:00Z".into());
+        patch.webdav_device_name = "Office PC".into();
+        let saved = db.save_sync_metadata(&patch).unwrap();
+        assert_eq!(saved.theme, "nord");
+        assert_eq!(
+            saved.webdav_last_sync_at.as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
+        assert_eq!(saved.webdav_device_name, "Office PC");
+        assert_eq!(saved.webdav_device_id, "dev-1");
+        cleanup(dir);
     }
 
     fn make_record(content: &str, hash: &str, auto_expire_at: Option<&str>) -> ClipboardRecord {
@@ -315,7 +404,7 @@ mod tests {
         // Simulate a row that somehow still carries a past expiry while trashed
         // (e.g. a legacy DB or a future code path that restores it).
         {
-            let conn = db.conn.lock();
+            let conn = db.lock_write();
             conn.execute(
                 "UPDATE records SET auto_expire_at = '2000-01-01T00:00:00Z' WHERE id = ?",
                 [id],
@@ -369,7 +458,7 @@ mod tests {
 
         db.trash_record(id).unwrap();
 
-        let conn = db.conn.lock();
+        let conn = db.lock_write();
         let expiry: Option<String> = conn
             .query_row(
                 "SELECT auto_expire_at FROM records WHERE id = ?",

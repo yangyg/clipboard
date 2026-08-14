@@ -262,12 +262,15 @@ pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
+    // --- Shortcuts / paste ---
     #[serde(rename = "global_shortcut")]
     pub global_shortcut: String,
+    // --- History ---
     #[serde(rename = "max_records")]
     pub max_records: i32,
     #[serde(rename = "retention_days")]
     pub retention_days: i32,
+    // --- Appearance ---
     pub theme: String,
     #[serde(rename = "panel_opacity")]
     pub panel_opacity: i32,

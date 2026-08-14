@@ -9,7 +9,7 @@ const FLAG_ON: i32 = 1;
 
 impl ClipboardDb {
     pub fn toggle_favorite(&self, id: i64) -> SqlResult<bool> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         // Single atomic flip (no read-then-write race), returning the new value.
         let new_val: i32 = conn.query_row(
             "UPDATE records SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
@@ -24,7 +24,7 @@ impl ClipboardDb {
         if ids.is_empty() {
             return Ok(0);
         }
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let placeholders = Self::id_placeholders(ids.len());
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> =
             vec![Box::new(if favorite { FLAG_ON } else { FLAG_OFF })];
@@ -41,7 +41,7 @@ impl ClipboardDb {
     }
 
     pub fn toggle_pin(&self, id: i64) -> SqlResult<bool> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let new_val: i32 = conn.query_row(
             "UPDATE records SET is_pinned = CASE WHEN is_pinned = 1 THEN 0 ELSE 1 END
              WHERE id = ? RETURNING is_pinned",
@@ -59,7 +59,7 @@ impl ClipboardDb {
         if alias.chars().count() > ALIAS_MAX_CHARS {
             alias = alias.chars().take(ALIAS_MAX_CHARS).collect();
         }
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         // UPDATE + FTS refresh in one transaction: a crash between the two
         // would otherwise drop the FTS row permanently (search misses).
         let tx = conn.unchecked_transaction()?;

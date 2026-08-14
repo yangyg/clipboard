@@ -63,11 +63,13 @@ describe("SearchBar display modes", () => {
 
     expect(wrapper.find(".search-trigger").exists()).toBe(false);
     expect(isBoxRevealed(wrapper)).toBe(false);
+    expect(wrapper.find(".search-root").classes()).toContain("dormant");
 
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "/" }));
     await nextTick();
 
     expect(isBoxRevealed(wrapper)).toBe(true);
+    expect(wrapper.find(".search-root").classes()).not.toContain("dormant");
   });
 });
 

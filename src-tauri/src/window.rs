@@ -82,22 +82,12 @@ fn persist_current_window_size(app: &tauri::AppHandle, window: &tauri::WebviewWi
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    let Ok(settings_arc) = state.db.get_settings() else {
-        return;
-    };
-    // Cold path (debounced resize): clone inner Settings for mutation.
-    let mut settings = (*settings_arc).clone();
     let (min_w, min_h, _, _) = mode_size_bounds();
     if (w as f64) < min_w || (h as f64) < min_h {
         return;
     }
 
-    if settings.window_width == w && settings.window_height == h {
-        return;
-    }
-    settings.window_width = w;
-    settings.window_height = h;
-    if let Err(e) = state.db.save_settings(&settings) {
+    if let Err(e) = state.db.save_window_geometry(w, h) {
         warn!("Failed to persist window size: {}", e);
     } else {
         info!("Remembered window size {}x{}", w, h);

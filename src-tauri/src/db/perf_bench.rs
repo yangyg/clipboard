@@ -9,7 +9,7 @@
 
 use std::time::Instant;
 
-use super::{ClipboardDb, ContentType};
+use super::{ClipboardDb, ContentType, PageCursor};
 use crate::media;
 
 const TEXT_ROWS: usize = 50_000;
@@ -95,7 +95,7 @@ fn image_hash(i: usize) -> String {
 
 fn seed_rows(db: &ClipboardDb) {
     let now = chrono::Utc::now().to_rfc3339();
-    let conn = db.conn.lock();
+    let conn = db.lock_write();
     conn.execute_batch("BEGIN").unwrap();
     for i in 0..TEXT_ROWS {
         let (content, ct, sensitive) = text_payload(i);
@@ -230,9 +230,7 @@ fn perf_queries_50k_5k() {
             false,
             None,
             Some("updated_desc"),
-            None,
-            None,
-            None,
+            PageCursor::default(),
             true,
         )
         .unwrap();
@@ -253,9 +251,7 @@ fn perf_queries_50k_5k() {
             None,
             Some("updated_desc"),
             true,
-            None,
-            None,
-            None,
+            PageCursor::default(),
         )
         .unwrap();
         samples.push(start.elapsed().as_micros() as u64);
@@ -275,9 +271,7 @@ fn perf_queries_50k_5k() {
             None,
             Some("updated_desc"),
             true,
-            None,
-            None,
-            None,
+            PageCursor::default(),
         )
         .unwrap();
         samples.push(start.elapsed().as_micros() as u64);
@@ -297,9 +291,7 @@ fn perf_queries_50k_5k() {
             None,
             Some("updated_desc"),
             true,
-            None,
-            None,
-            None,
+            PageCursor::default(),
         )
         .unwrap();
         samples.push(start.elapsed().as_micros() as u64);
@@ -319,9 +311,7 @@ fn perf_queries_50k_5k() {
             None,
             Some("updated_desc"),
             true,
-            None,
-            None,
-            None,
+            PageCursor::default(),
         )
         .unwrap();
         samples.push(start.elapsed().as_micros() as u64);

@@ -11,38 +11,9 @@ use tracing::{error, info, warn};
 use crate::ai;
 use crate::capture::{run_periodic_cleanup, start_capture, CLEANUP_INTERVAL_SECS};
 use crate::clipboard::ClipboardMonitor;
-use crate::commands;
 use crate::db::ClipboardDb;
 use crate::panel::apply_global_shortcut;
 use crate::{tray, window, Settings};
-
-/// Ensure the device identity (sync id + display name) exists before any
-/// capture can stamp records with it. Runs before the capture pipeline starts;
-/// failures are logged and degrade to empty stamps, never fatal at startup.
-fn ensure_device_identity(db: &ClipboardDb) {
-    let Ok(current) = db.get_settings().map(|s| (*s).clone()) else {
-        error!("Failed to load settings while ensuring device identity");
-        return;
-    };
-    let mut next = current;
-    let mut changed = false;
-    if next.webdav_device_id.trim().is_empty() {
-        next.webdav_device_id = uuid::Uuid::new_v4().to_string();
-        changed = true;
-    }
-    if next.webdav_device_name.trim().is_empty() {
-        next.webdav_device_name =
-            std::env::var("COMPUTERNAME").unwrap_or_else(|_| "My Device".to_string());
-        changed = true;
-    }
-    if changed {
-        if let Err(e) = db.save_settings(&next) {
-            error!("Failed to persist device identity: {}", e);
-        } else {
-            info!("Device identity ensured (id={})", next.webdav_device_id);
-        }
-    }
-}
 
 pub(crate) fn setup(
     app: &mut App,
@@ -54,7 +25,9 @@ pub(crate) fn setup(
 
     // Device identity must exist before captures start so every new record can
     // be stamped with its origin.
-    ensure_device_identity(&db);
+    if let Err(e) = db.ensure_device_identity() {
+        error!("Failed to persist device identity: {}", e);
+    }
 
     // One settings snapshot for the whole startup path — `get_settings` is
     // cached (Arc) after the first read, but reading it once here keeps the
@@ -83,7 +56,9 @@ pub(crate) fn setup(
     // ── Non-critical setup (autostart, shortcut, tray, theme, window) ──
 
     // Sync OS autostart with persisted setting; failures are logged, never fatal.
-    if let Err(e) = commands::apply_autostart(&app_handle, startup_settings.auto_start) {
+    if let Err(e) =
+        crate::settings_effects::apply_autostart(&app_handle, startup_settings.auto_start)
+    {
         warn!("Startup autostart sync failed: {}", e);
     }
 

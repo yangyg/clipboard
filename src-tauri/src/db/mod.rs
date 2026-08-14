@@ -30,6 +30,7 @@ mod settings;
 mod stats;
 mod sync_history;
 mod tags;
+mod tags_sync;
 #[cfg(test)]
 mod tags_tests;
 #[cfg(test)]
@@ -39,16 +40,21 @@ mod types;
 
 pub use records_export::ExportCursor;
 pub use records_import::{validate_import_records, ImportSanitize, MAX_IMPORT_TOTAL_BYTES};
-pub use tags::{nearest_palette_color, TagMergeStats, TagSyncRow, TAG_EPOCH_SENTINEL};
+pub use tags::nearest_palette_color;
+pub use tags_sync::{TagMergeStats, TagSyncRow, TAG_EPOCH_SENTINEL};
 // Schema compatibility tests live in `schema_tests.rs` (test-only module) to
 // keep schema.rs under the 800-line cap.
 #[cfg(test)]
 mod schema_tests;
 
+pub use records_query::PageCursor;
 pub use types::{
     clamp_page_limit, ContentType, ImageMeta, ALIAS_MAX_CHARS, MAX_PAGE_SIZE, RECORD_COLS,
     RECORD_COLS_LIST,
 };
+
+#[cfg(test)]
+mod records_query_tests;
 
 /// Precomputed lowercase auto-tag rules: `(tag_name, lower_keywords, content_types)`.
 /// Built once per `Arc<Settings>` identity so the capture hot path never
@@ -233,6 +239,12 @@ impl ClipboardDb {
             stats_cache: Mutex::new(None),
             secrets_cache: Mutex::new(None),
         })
+    }
+
+    /// Single writer lock. Search `lock_write` (not `conn.lock`) for contention.
+    #[inline]
+    pub(super) fn lock_write(&self) -> parking_lot::MutexGuard<'_, Connection> {
+        self.conn.lock()
     }
 
     #[inline]

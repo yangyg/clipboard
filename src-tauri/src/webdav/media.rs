@@ -4,7 +4,7 @@ use std::path::Path;
 
 use super::bundle::ManifestEntry;
 use super::client::WebDavClient;
-use super::sync::join_remote;
+use super::sync_common::join_remote;
 use crate::media;
 
 /// Bounded concurrency for media transfers (pull downloads / push uploads).

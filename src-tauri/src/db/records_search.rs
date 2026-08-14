@@ -1,7 +1,7 @@
 //! Full-text / short-query search over records.
 use rusqlite::Result as SqlResult;
 
-use super::{ClipboardDb, RECORD_COLS_LIST};
+use super::{ClipboardDb, PageCursor, RECORD_COLS_LIST};
 use crate::ClipboardRecord;
 
 /// Upper bound on FTS candidates materialized before the outer sort/keyset
@@ -24,11 +24,7 @@ impl ClipboardDb {
         tag_name: Option<&str>,
         sort: Option<&str>,
         include_tags: bool,
-        // Keyset cursor (preferred over OFFSET for the default sort so page 2+
-        // does not skip/duplicate rows when new clips match the query).
-        before_pinned: Option<i32>,
-        before_updated_at: Option<&str>,
-        before_id: Option<i64>,
+        cursor: PageCursor<'_>,
     ) -> SqlResult<Vec<ClipboardRecord>> {
         let query = query.trim();
         if query.is_empty() {
@@ -81,20 +77,13 @@ impl ClipboardDb {
         }
         Self::push_tag_filter(&mut sql, &mut params, tag_name, include_tags);
 
-        // Keyset for the default newest-first (+ pinned) sort, mirroring
-        // get_records. Avoids OFFSET drift when a new matching clip is captured
-        // while the user scrolls search results.
-        let use_keyset = before_id.is_some()
-            && before_updated_at.is_some()
-            && matches!(sort.unwrap_or("updated_desc"), "updated_desc");
-
+        // Keyset for every whitelist sort, mirroring get_records. Avoids OFFSET
+        // drift when a new matching clip is captured while the user scrolls.
         ClipboardDb::push_pagination_tail(
             &mut sql,
             &mut params,
-            use_keyset,
-            before_pinned,
-            before_updated_at,
-            before_id,
+            cursor.is_ready(sort),
+            cursor,
             limit,
             offset,
             false,

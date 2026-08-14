@@ -5,6 +5,10 @@ mod bundle;
 mod client;
 mod media;
 mod sync;
+mod sync_common;
+mod sync_merge;
+mod sync_pull;
+mod sync_push;
 mod tags;
 
 pub use sync::{webdav_pull, webdav_push, webdav_sync, webdav_test_connection, WebDavSyncResult};

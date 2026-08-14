@@ -344,7 +344,7 @@ fn dedup_recopy_refreshes_fts_source_columns() {
         .unwrap();
     assert!(!is_new2);
 
-    let conn = db.conn.lock();
+    let conn = db.lock_write();
     let (app, win): (String, String) = conn
         .query_row(
             "SELECT source_app, source_window FROM records_fts WHERE rowid = ?",
@@ -410,7 +410,7 @@ fn map_record_row_binds_column_order_for_both_column_lists() {
     db.import_records_with_merge(&[rec], 100, None).unwrap();
     let id = db.get_records_for_export(10, 0).unwrap()[0].id;
 
-    let conn = db.conn.lock();
+    let conn = db.lock_write();
     for cols in [RECORD_COLS, RECORD_COLS_LIST] {
         let mut stmt = conn
             .prepare(&format!("SELECT {cols} FROM records WHERE id = ?"))
@@ -480,7 +480,7 @@ fn startup_drops_legacy_full_unique_hash_index() {
 
     // Startup must drop the stale full-unique index (keeping the partial one).
     let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
-    let conn = db.conn.lock();
+    let conn = db.lock_write();
     let (legacy_gone, partial_kept): (i64, i64) = conn
         .query_row(
             "SELECT
@@ -567,7 +567,7 @@ fn new_succeeds_when_legacy_db_has_no_fts() {
     // Startup must succeed and rebuild FTS before the hash-merge migration runs.
     let db = ClipboardDb::new(&dir.join("test.db"), dir.clone()).unwrap();
     assert_eq!(db.get_records_for_export(10, 0).unwrap().len(), 1);
-    let conn = db.conn.lock();
+    let conn = db.lock_write();
     let fts_rows: i64 = conn
         .query_row("SELECT COUNT(*) FROM records_fts", [], |r| r.get(0))
         .unwrap();

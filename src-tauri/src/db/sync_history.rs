@@ -27,7 +27,7 @@ impl ClipboardDb {
         media_skipped: i32,
         error: Option<&str>,
     ) -> SqlResult<i64> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute(
             "INSERT INTO sync_history (
                 synced_at, action, success, pulled, pushed, merged,
@@ -90,7 +90,7 @@ impl ClipboardDb {
     }
 
     pub fn clear_sync_history(&self) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute("DELETE FROM sync_history", [])?;
         Ok(())
     }

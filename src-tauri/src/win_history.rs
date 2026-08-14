@@ -252,14 +252,7 @@ fn import_text(db: &ClipboardDb, text: &str, s: &Arc<Settings>) -> bool {
         None,
         None,
     ) {
-        Ok((id, is_new, _)) => {
-            if is_new && s.features.tags && s.enable_auto_tag {
-                if let Err(e) = db.apply_auto_tags(id, text, &content_type, s) {
-                    warn!("history item auto-tag failed: {e}");
-                }
-            }
-            is_new
-        }
+        Ok((_id, is_new, _)) => is_new,
         Err(e) => {
             warn!("Failed to insert history text record: {e}");
             false

@@ -437,3 +437,46 @@ describe("clipboardStore — parallel first-screen load", () => {
     expect(store.records.map((r) => r.id)).toEqual([1]);
   });
 });
+
+describe("clipboardStore — keyset loadMore", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it("sends a sort-key cursor for created_desc instead of OFFSET", async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const invokeMock = vi.mocked(invoke);
+    invokeMock.mockImplementation(async (cmd: string) => {
+      if (cmd === "get_records") {
+        return { records: [makeRecord({ id: 11 })], has_more: false };
+      }
+      return undefined;
+    });
+
+    const store = useClipboardStore();
+    store.listSort = "created_desc";
+    store.records = [
+      makeRecord({
+        id: 10,
+        created_at: "2026-02-01T00:00:00Z",
+        updated_at: "2026-02-02T00:00:00Z",
+        copy_count: 3,
+      }),
+    ];
+    store.hasMore = true;
+    await store.loadMore();
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      "get_records",
+      expect.objectContaining({
+        offset: 0,
+        sort: "created_desc",
+        before_id: 10,
+        before_created_at: "2026-02-01T00:00:00Z",
+        before_updated_at: "2026-02-02T00:00:00Z",
+        before_copy_count: 3,
+      }),
+    );
+  });
+});
+

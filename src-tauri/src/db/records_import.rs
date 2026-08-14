@@ -96,7 +96,7 @@ impl ClipboardDb {
         sanitize: Option<ImportSanitize>,
     ) -> SqlResult<(i32, i32, i32)> {
         validate_import_records(records).map_err(validation_error)?;
-        let mut conn = self.conn.lock();
+        let mut conn = self.lock_write();
         let tx = conn.transaction()?;
         let mut imported = 0;
         let mut merged = 0;

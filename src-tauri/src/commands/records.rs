@@ -1,6 +1,7 @@
 //! Record CRUD / search / trash / favorite / pin / alias commands.
 use tauri::State;
 
+use crate::db::PageCursor;
 use crate::security;
 use crate::{AppState, ClipboardRecord, FeatureId, RecordsPage, SearchResult};
 
@@ -19,6 +20,8 @@ pub async fn get_records(
     before_pinned: Option<i32>,
     before_updated_at: Option<String>,
     before_id: Option<i64>,
+    before_created_at: Option<String>,
+    before_copy_count: Option<i32>,
 ) -> Result<RecordsPage, String> {
     let perf_start = std::time::Instant::now();
     // Cleanup runs on the periodic thread — keep list reads off the hot path.
@@ -36,9 +39,13 @@ pub async fn get_records(
             favorites_only.unwrap_or(false),
             tag.as_deref(),
             sort.as_deref(),
-            before_pinned,
-            before_updated_at.as_deref(),
-            before_id,
+            PageCursor {
+                pinned: before_pinned,
+                updated_at: before_updated_at.as_deref(),
+                id: before_id,
+                created_at: before_created_at.as_deref(),
+                copy_count: before_copy_count,
+            },
             include_tags,
         )
         .map_err(|e| e.to_string())
@@ -62,6 +69,8 @@ pub async fn search_records(
     before_pinned: Option<i32>,
     before_updated_at: Option<String>,
     before_id: Option<i64>,
+    before_created_at: Option<String>,
+    before_copy_count: Option<i32>,
 ) -> Result<SearchResult, String> {
     let start = std::time::Instant::now();
     let limit = limit.unwrap_or(60).clamp(1, MAX_IPC_PAGE_SIZE);
@@ -79,9 +88,13 @@ pub async fn search_records(
             tag.as_deref(),
             sort.as_deref(),
             include_tags,
-            before_pinned,
-            before_updated_at.as_deref(),
-            before_id,
+            PageCursor {
+                pinned: before_pinned,
+                updated_at: before_updated_at.as_deref(),
+                id: before_id,
+                created_at: before_created_at.as_deref(),
+                copy_count: before_copy_count,
+            },
         )
         .map_err(|e| e.to_string())
     })

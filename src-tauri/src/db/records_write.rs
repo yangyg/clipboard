@@ -30,11 +30,12 @@ impl ClipboardDb {
         // Stamp the originating device on every fresh capture. The identity is
         // generated at startup; an empty value (settings load failure / tests)
         // degrades to an unknown-origin row rather than failing the insert.
-        let source_device_id = self
-            .get_settings()
+        let settings = self.get_settings().ok();
+        let source_device_id = settings
+            .as_ref()
             .map(|s| s.webdav_device_id.clone())
             .unwrap_or_default();
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         if let Some(id) = Self::find_active_duplicate(&conn, hash)? {
             let record = self.refresh_duplicate_source(
                 &conn,
@@ -46,10 +47,11 @@ impl ClipboardDb {
             )?;
             return Ok((id, false, record));
         }
+        let tx = conn.unchecked_transaction()?;
         let now = chrono::Utc::now().to_rfc3339();
         let auto_expire_at = Self::sensitive_expiry(is_sensitive, sensitive_auto_expire_seconds);
         let id = Self::insert_new_row(
-            &conn,
+            &tx,
             content,
             content_type,
             hash,
@@ -65,9 +67,9 @@ impl ClipboardDb {
         )?;
         // Build the returned list-shape record in memory — every field is
         // already known here, so the fresh-insert path skips the row read-back
-        // (2 extra queries per capture under the write lock). Tags are loaded
-        // separately by the auto-tag flow when enabled.
-        let record = self.build_inserted_record(
+        // (2 extra queries per capture under the write lock). Auto-tag runs in
+        // this same write transaction (hash-dedup updates above skip tagging).
+        let mut record = self.build_inserted_record(
             id,
             content,
             content_type,
@@ -81,12 +83,22 @@ impl ClipboardDb {
             image,
             &now,
         );
-        if !Self::is_over_capacity(&conn, max_records)? {
-            return Ok((id, true, record));
+        if let Some(ref settings) = settings {
+            match self.apply_auto_tags_on(&tx, id, content, content_type, settings) {
+                Ok(tags) => record.tags = tags,
+                Err(e) => tracing::warn!("Failed to apply auto tags: {}", e),
+            }
         }
-        let overflow_media = self.evict_over_limit(&conn, max_records)?;
+        let overflow_media = if Self::is_over_capacity(&tx, max_records)? {
+            self.evict_over_limit(&tx, max_records)?
+        } else {
+            Vec::new()
+        };
+        tx.commit()?;
         drop(conn);
-        self.purge_media_pairs(&overflow_media);
+        if !overflow_media.is_empty() {
+            self.purge_media_pairs(&overflow_media);
+        }
         Ok((id, true, record))
     }
 
@@ -311,7 +323,7 @@ impl ClipboardDb {
     /// only exists in the trash would otherwise slip the probe and make the
     /// subsequent `insert_record` fail with a UNIQUE constraint violation.
     pub fn record_hash_exists(&self, hash: &str) -> SqlResult<bool> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.query_row(
             "SELECT 1 FROM records WHERE hash = ? LIMIT 1",
             [hash],

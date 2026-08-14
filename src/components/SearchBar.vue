@@ -1,5 +1,5 @@
 <template>
-  <div class="search-root" :class="{ compact: compact }">
+  <div class="search-root" :class="{ compact: compact, dormant: mode === 'hidden' && !expanded }">
     <button
       v-if="mode === 'icon' && !expanded"
       type="button"
@@ -344,6 +344,13 @@ onUnmounted(() => {
   min-width: 200px;
   flex-shrink: 1;
   justify-content: center;
+}
+
+.search-root.dormant {
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  overflow: hidden;
 }
 
 /* Icon-only trigger (icon mode, collapsed) */

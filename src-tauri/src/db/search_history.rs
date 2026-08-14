@@ -38,7 +38,7 @@ impl ClipboardDb {
             return Ok(());
         }
         let now = chrono::Utc::now().to_rfc3339();
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute(
             "INSERT INTO search_history (query, search_count, last_searched_at)
              VALUES (?1, 1, ?2)
@@ -60,7 +60,7 @@ impl ClipboardDb {
     }
 
     pub fn remove_search_history(&self, query: &str) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute(
             "DELETE FROM search_history WHERE query = ?",
             rusqlite::params![query],
@@ -69,7 +69,7 @@ impl ClipboardDb {
     }
 
     pub fn clear_search_history(&self) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         conn.execute("DELETE FROM search_history", [])?;
         Ok(())
     }

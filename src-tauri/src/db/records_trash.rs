@@ -7,7 +7,7 @@ use super::{tombstones::ACK_KEY, ClipboardDb};
 
 impl ClipboardDb {
     pub fn trash_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         // Bump `updated_at` so the trash-retention window (measured from
         // `updated_at`) starts at the moment of trashing — otherwise a record
         // copied weeks ago and trashed today is purged immediately.
@@ -37,7 +37,7 @@ impl ClipboardDb {
         if ids.is_empty() {
             return Ok(0);
         }
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let rows = self.fetch_trash_rows(&conn, Some(ids), false)?;
         let now = chrono::Utc::now().to_rfc3339();
         let placeholders = Self::id_placeholders(ids.len());
@@ -95,7 +95,7 @@ impl ClipboardDb {
     }
 
     pub fn restore_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let row: Option<(String, i32)> = conn
             .query_row(
                 "SELECT hash, is_trashed FROM records WHERE id = ?",
@@ -141,7 +141,7 @@ impl ClipboardDb {
         if ids.is_empty() {
             return Ok(0);
         }
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let hashes = self.fetch_trash_rows(&conn, Some(ids), false)?;
         // Drop trashed rows whose hash was reclaimed by a fresh active copy
         // BEFORE the restore UPDATE: otherwise the partial unique index
@@ -177,7 +177,7 @@ impl ClipboardDb {
     }
 
     pub fn permanently_delete_record(&self, id: i64) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let media = self.fetch_media_paths_by_ids(&conn, &[id])?;
         // Only trashed rows can be permanently deleted; keep their tombstone
         // (already written on trash) and fill gaps for legacy pre-tombstone rows.
@@ -209,7 +209,7 @@ impl ClipboardDb {
         if ids.is_empty() {
             return Ok(0);
         }
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let media = self.fetch_media_paths_by_ids(&conn, ids)?;
         let rows = self.fetch_trash_rows(&conn, Some(ids), true)?;
         let placeholders = Self::id_placeholders(ids.len());
@@ -237,7 +237,7 @@ impl ClipboardDb {
     }
 
     pub fn empty_trash(&self) -> SqlResult<usize> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let rows = self.fetch_trash_rows(&conn, None, true)?;
         let ids: Vec<i64> = rows.iter().map(|r| r.0).collect();
         let media = self.fetch_media_paths_by_ids(&conn, &ids)?;
@@ -261,7 +261,7 @@ impl ClipboardDb {
     }
 
     pub fn clear_non_favorite(&self) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         let rows: Vec<(i64, String, bool)> = {
             let mut stmt = conn.prepare(
                 "SELECT id, hash, is_sensitive FROM records
@@ -299,7 +299,7 @@ impl ClipboardDb {
     /// written — a cleared device joins the next WebDAV pull as fresh, so the
     /// wipe must not propagate spurious deletions to peers.
     pub fn clear_all_data(&self) -> SqlResult<()> {
-        let conn = self.conn.lock();
+        let conn = self.lock_write();
         // Collect media references before the rows are gone so purge_media_pairs
         // can delete the files (it quarantines + re-checks, race-safe vs capture).
         let media: Vec<(Option<String>, Option<String>)> = {

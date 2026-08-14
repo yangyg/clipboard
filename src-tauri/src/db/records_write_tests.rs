@@ -66,7 +66,7 @@ fn unique_active_hash_blocks_duplicate_insert() {
     insert(&db, "dup guard");
     // The DB itself must reject a second active row with the same hash —
     // dedup must not rely solely on insert_record's application-level probe.
-    let err = db.conn.lock().execute(
+    let err = db.lock_write().execute(
         "INSERT INTO records (content, content_type, hash, created_at, updated_at)
          VALUES ('dup guard', 'text', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
         [&hash],
@@ -191,5 +191,54 @@ fn bump_copy_count_increments_active_row_only() {
     db.bump_copy_count(id).unwrap();
     // Trashed rows are not paste targets — count stays at the last active bump.
     assert_eq!(db.get_record(id).unwrap().unwrap().copy_count, 1);
+    cleanup(dir);
+}
+
+#[test]
+fn insert_record_applies_auto_tags_on_new_insert() {
+    let (db, dir) = temp_db();
+    let content = "https://example.com/auto-tag";
+    let hash = sha256_hash(&sha256_hash(content));
+    let (id, is_new, rec) = db
+        .insert_record(
+            content,
+            &ContentType::Link,
+            &hash,
+            false,
+            1000,
+            600,
+            "app.exe",
+            "win",
+            "",
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(is_new);
+    assert!(
+        rec.tags.iter().any(|t| t == "链接"),
+        "fresh insert must attach auto-tags in the same write lock: {:?}",
+        rec.tags
+    );
+    assert_eq!(db.get_record_tag_names(id).unwrap(), rec.tags);
+
+    // Hash-dedup refresh must not retag.
+    let (id2, is_new2, _) = db
+        .insert_record(
+            content,
+            &ContentType::Link,
+            &hash,
+            false,
+            1000,
+            600,
+            "other.exe",
+            "win2",
+            "",
+            None,
+            None,
+        )
+        .unwrap();
+    assert!(!is_new2);
+    assert_eq!(id2, id);
     cleanup(dir);
 }

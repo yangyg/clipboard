@@ -16,6 +16,29 @@ pub struct TrayMenuState {
     pub language: String,
 }
 
+/// Side effects the tray-menu action is allowed to take against the main panel.
+///
+/// `OpenSettings` must not activate the home view first: `show_main_panel`
+/// paints the list, and WebView2 keeps that compositor frame until the next
+/// click — so Settings only appears after the user clicks the home page.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TrayMenuIntent {
+    ShowMain,
+    TogglePause,
+    OpenSettings,
+    Quit,
+}
+
+pub(crate) fn tray_menu_intent(action: &str) -> Result<TrayMenuIntent, String> {
+    match action {
+        "show" => Ok(TrayMenuIntent::ShowMain),
+        "pause" => Ok(TrayMenuIntent::TogglePause),
+        "settings" => Ok(TrayMenuIntent::OpenSettings),
+        "quit" => Ok(TrayMenuIntent::Quit),
+        other => Err(format!("unknown tray action: {other}")),
+    }
+}
+
 #[tauri::command]
 pub async fn get_tray_menu_state(state: State<'_, AppState>) -> Result<TrayMenuState, String> {
     let db = state.db.clone();
@@ -45,30 +68,61 @@ pub async fn tray_menu_action(
         }
     };
 
-    match action.as_str() {
-        "show" => {
+    match tray_menu_intent(&action) {
+        Ok(TrayMenuIntent::ShowMain) => {
             crate::show_main_panel(&app);
             hide_tray();
         }
-        "pause" => {
+        Ok(TrayMenuIntent::TogglePause) => {
             hide_tray();
             let next = !*state.capture_paused.read();
             *state.capture_paused.write() = next;
             let _ = app.emit("capture-paused", next);
         }
-        "settings" => {
-            crate::show_main_panel(&app);
-            hide_tray();
+        Ok(TrayMenuIntent::OpenSettings) => {
+            // Emit only. The frontend swaps to SettingsWindow while the main
+            // window is still hidden, then shows/focuses itself. Activating
+            // here would paint the home list first (see TrayMenuIntent).
+            // Do not hide the tray either — hiding first drops FG rights;
+            // the tray-menu window already hides itself on focus loss.
             let _ = app.emit("open-settings", ());
         }
-        "quit" => {
+        Ok(TrayMenuIntent::Quit) => {
             hide_tray();
             app.exit(0);
         }
-        _ => {
+        Err(e) => {
             hide_tray();
-            return Err(format!("unknown tray action: {action}"));
+            return Err(e);
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{tray_menu_intent, TrayMenuIntent};
+
+    #[test]
+    fn settings_does_not_show_main_panel_first() {
+        assert_eq!(
+            tray_menu_intent("settings").unwrap(),
+            TrayMenuIntent::OpenSettings
+        );
+        assert_ne!(
+            tray_menu_intent("settings").unwrap(),
+            TrayMenuIntent::ShowMain
+        );
+    }
+
+    #[test]
+    fn known_actions_map_to_intents() {
+        assert_eq!(tray_menu_intent("show").unwrap(), TrayMenuIntent::ShowMain);
+        assert_eq!(
+            tray_menu_intent("pause").unwrap(),
+            TrayMenuIntent::TogglePause
+        );
+        assert_eq!(tray_menu_intent("quit").unwrap(), TrayMenuIntent::Quit);
+        assert!(tray_menu_intent("nope").is_err());
+    }
 }

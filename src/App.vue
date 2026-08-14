@@ -13,9 +13,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, nextTick } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { revealWindowAfterViewSwap } from "./utils/revealWindow";
 import WindowApp from "./components/WindowApp.vue";
 import SettingsWindow from "./components/SettingsWindow.vue";
 import ToastHost from "./components/ToastHost.vue";
@@ -102,11 +103,15 @@ function completeOnboarding() {
 }
 
 async function openSettings(section?: string) {
-  settingsInitialSection.value = section;
-  panelVisible.value = true;
-  settingsVisible.value = true;
-  await appWindow.show();
-  await appWindow.setFocus();
+  await revealWindowAfterViewSwap(
+    () => {
+      settingsInitialSection.value = section;
+      panelVisible.value = true;
+      settingsVisible.value = true;
+    },
+    appWindow,
+    nextTick,
+  );
 }
 
 // Rust→frontend event wiring (owns its own onMounted/onUnmounted listener

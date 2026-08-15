@@ -110,6 +110,7 @@ export default {
     deviceTooltipName: 'This record is from another device: {name}',
     deviceTooltipOther: 'This record is from another device',
     resizeList: 'Resize list column',
+    resizePreview: 'Resize preview column',
     resizeSidebar: 'Resize sidebar',
   },
   sourceNames: {
@@ -403,6 +404,14 @@ export default {
       searchFull: 'Full box',
       searchIcon: 'Icon only',
       searchHidden: 'Hidden',
+      previewLayout: 'Content layout',
+      previewLayoutTitle: 'Preview',
+      previewLayoutColumns: 'Three columns',
+      previewLayoutOnDemand: 'On demand',
+      previewLayoutDrawer: 'Drawer',
+      previewLayoutColumnsDesc: 'Sidebar, list, and preview stay side by side; preview shows an empty state until a record is selected',
+      previewLayoutOnDemandDesc: 'The list fills the center; preview appears on the right when a record is selected, or as a drawer if the window is tight',
+      previewLayoutDrawerDesc: 'Preview overlays the list as a drawer when a record is selected; the list width never changes',
     },
     history: {
       title: 'History',

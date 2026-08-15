@@ -103,7 +103,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
 const MOCK_SETTINGS: Settings = {
   global_shortcut: "Ctrl+Shift+V", max_records: 1000, retention_days: 30,
   theme: "dark", panel_opacity: 94, panel_radius: 20, enable_blur: false,
-  blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", search_mode: "full", always_on_top: false,
+  blur_strength: 45, enable_animation: true, font_size: 16, font_family: "default", search_mode: "full", preview_layout: "on_demand", always_on_top: false,
   default_paste_mode: "original", auto_close_on_paste: true,
   enable_sensitive_detection: true, sensitive_auto_expire_seconds: 600,
   max_text_bytes: 10 * 1024 * 1024,

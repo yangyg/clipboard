@@ -6,6 +6,7 @@ import { DEFAULT_AUTO_TAG_RULES } from "../types";
 import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
 import { resolveFontStack } from "../utils/fontPresets";
+import { normalizePreviewLayoutPref } from "../utils/previewLayout";
 import { applyTheme as applyThemeClass } from "../utils/themeClass";
 import { isThemeKey } from "../utils/themeRegistry";
 import { i18n } from "../locales";
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: Settings = {
   font_size: 16,
   font_family: "default",
   search_mode: "full",
+  preview_layout: "on_demand",
   always_on_top: false,
   default_paste_mode: "original",
   auto_close_on_paste: true,
@@ -91,6 +93,7 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
       raw?.search_mode === "icon" || raw?.search_mode === "hidden"
         ? raw.search_mode
         : "full",
+    preview_layout: normalizePreviewLayoutPref(raw?.preview_layout),
     auto_tag_rules: (raw?.auto_tag_rules ?? DEFAULT_SETTINGS.auto_tag_rules).map((r) => ({
       ...r,
       keywords: [...r.keywords],

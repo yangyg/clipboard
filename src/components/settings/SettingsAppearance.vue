@@ -49,6 +49,29 @@
     </div>
   </div>
   <div class="settings-section">
+    <div class="settings-section-title">{{ $t('settings.appearance.previewLayout') }}</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">{{ $t('settings.appearance.previewLayoutTitle') }}</div>
+        <div class="setting-desc">{{ $t(previewLayoutDescKey) }}</div>
+      </div>
+      <div class="segmented" role="radiogroup" :aria-label="$t('settings.appearance.previewLayoutTitle')">
+        <button
+          v-for="pl in PREVIEW_LAYOUTS"
+          :key="pl.key"
+          type="button"
+          class="segment-btn"
+          role="radio"
+          :aria-checked="settings.preview_layout === pl.key"
+          :class="{ selected: settings.preview_layout === pl.key }"
+          @click="update('preview_layout', pl.key)"
+        >
+          {{ $t(pl.labelKey) }}
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="settings-section">
     <div class="settings-section-title">{{ $t('settings.appearance.panelAppearance') }}</div>
     <div class="setting-row">
       <div class="setting-label">{{ $t('settings.appearance.cornerRadius') }}</div>
@@ -235,6 +258,19 @@ const SEARCH_MODES = [
   { key: "icon", labelKey: "settings.appearance.searchIcon" },
   { key: "hidden", labelKey: "settings.appearance.searchHidden" },
 ] as const;
+
+/** Preview placement — keep in sync with `settings.preview_layout`. */
+const PREVIEW_LAYOUTS = [
+  { key: "columns", labelKey: "settings.appearance.previewLayoutColumns", descKey: "settings.appearance.previewLayoutColumnsDesc" },
+  { key: "on_demand", labelKey: "settings.appearance.previewLayoutOnDemand", descKey: "settings.appearance.previewLayoutOnDemandDesc" },
+  { key: "drawer", labelKey: "settings.appearance.previewLayoutDrawer", descKey: "settings.appearance.previewLayoutDrawerDesc" },
+] as const;
+
+const previewLayoutDescKey = computed(
+  () =>
+    PREVIEW_LAYOUTS.find((pl) => pl.key === settings.preview_layout)?.descKey
+    ?? "settings.appearance.previewLayoutOnDemandDesc",
+);
 </script>
 
 <style scoped>

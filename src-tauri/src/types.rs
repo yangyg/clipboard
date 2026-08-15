@@ -221,6 +221,12 @@ fn default_search_mode() -> String {
     "full".to_string()
 }
 
+/// Missing `preview_layout` in saved JSON (upgrade) → list-centric on-demand.
+/// Keep in sync with `DEFAULT_SETTINGS.preview_layout` in src/stores/settings.ts.
+fn default_preview_layout() -> String {
+    "on_demand".to_string()
+}
+
 /// L-3: Default auto-tag rules for new installs.
 /// IMPORTANT: Keep in sync with `DEFAULT_AUTO_TAG_RULES` in src/types.ts.
 pub fn default_auto_tag_rules() -> Vec<AutoTagRule> {
@@ -293,6 +299,10 @@ pub struct Settings {
     /// title bar and the list.
     #[serde(default = "default_search_mode", rename = "search_mode")]
     pub search_mode: String,
+    /// How the record preview sits next to the list
+    /// (`columns` | `on_demand` | `drawer`).
+    #[serde(default = "default_preview_layout", rename = "preview_layout")]
+    pub preview_layout: String,
     /// Keep the window on top of other apps (single window mode).
     #[serde(default, rename = "always_on_top")]
     pub always_on_top: bool,
@@ -401,6 +411,7 @@ impl Default for Settings {
             font_size: 16,
             font_family: default_font_family(),
             search_mode: default_search_mode(),
+            preview_layout: default_preview_layout(),
             always_on_top: false,
             default_paste_mode: "original".to_string(),
             auto_close_on_paste: true,
@@ -563,5 +574,6 @@ mod settings_onboarding_tests {
         let s: Settings = serde_json::from_str(json).expect("parse");
         assert!(s.onboarding_completed);
         assert_eq!(s.search_mode, "full");
+        assert_eq!(s.preview_layout, "on_demand");
     }
 }

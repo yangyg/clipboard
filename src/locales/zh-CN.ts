@@ -110,6 +110,7 @@ export default {
     deviceTooltipName: '此记录来自其他设备：{name}',
     deviceTooltipOther: '此记录来自其他设备',
     resizeList: '调整列表宽度',
+    resizePreview: '调整预览宽度',
     resizeSidebar: '调整侧栏宽度',
   },
   sourceNames: {
@@ -403,6 +404,14 @@ export default {
       searchFull: '完整搜索框',
       searchIcon: '仅图标',
       searchHidden: '隐藏',
+      previewLayout: '内容布局',
+      previewLayoutTitle: '预览方式',
+      previewLayoutColumns: '三栏',
+      previewLayoutOnDemand: '按需',
+      previewLayoutDrawer: '抽屉',
+      previewLayoutColumnsDesc: '侧栏、列表、预览始终并排；未选中时预览显示空状态',
+      previewLayoutOnDemandDesc: '列表占满中间；选中后预览从右侧出现，窗口过窄时改为抽屉',
+      previewLayoutDrawerDesc: '选中后预览以抽屉叠在列表上，列表宽度始终不变',
     },
     history: {
       title: '历史记录',

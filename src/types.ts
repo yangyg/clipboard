@@ -94,6 +94,8 @@ export interface Settings {
   font_family: string;
   /** Search bar display mode. */
   search_mode: 'full' | 'icon' | 'hidden';
+  /** How the record preview sits next to the list. */
+  preview_layout: 'columns' | 'on_demand' | 'drawer';
   // Behavior
   always_on_top: boolean;
   default_paste_mode: 'original' | 'plain';

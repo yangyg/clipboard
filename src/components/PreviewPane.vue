@@ -3,7 +3,6 @@
     <template v-if="record">
     <!-- Drawer close when parent hosts preview as overlay -->
     <button
-      v-if="drawer"
       type="button"
       class="preview-drawer-close"
       :aria-label="$t('common.close')"
@@ -90,7 +89,7 @@
     />
     </template>
 
-    <!-- Empty: nothing selected (side-by-side layout keeps this pane mounted) -->
+    <!-- Empty: host mounted without a selection (should not happen; list hides the pane). -->
     <div v-else class="preview-empty">
       <div class="preview-empty-icon"><AppIcon name="clipboard" :size="36" :stroke-width="1.5" /></div>
       <div class="preview-empty-text">{{ $t('preview.empty') }}</div>
@@ -120,14 +119,6 @@ import { usePreviewFormatting } from "../composables/usePreviewFormatting";
 import { usePreviewActions } from "../composables/usePreviewActions";
 
 const tagsEnabled = useFeature("tags");
-
-withDefaults(
-  defineProps<{
-    /** When true, show a close control (parent is hosting as overlay drawer). */
-    drawer?: boolean;
-  }>(),
-  { drawer: false },
-);
 
 const clipboardStore = useClipboardStore();
 const { t } = useI18n();
@@ -280,6 +271,10 @@ const aliasDialogVisible = ref(false);
 .preview-drawer-close:hover {
   background: var(--accent-softer);
   color: var(--accent-text);
+}
+
+.preview-pane:deep(.preview-header) {
+  padding-right: 48px;
 }
 
 /* Sensitive Warning */

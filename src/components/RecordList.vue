@@ -1,14 +1,9 @@
 <template>
   <div ref="wrapperRef" class="record-list-wrapper">
     <div
-      ref="listColRef"
       class="list-column"
-      :class="{ 'list-column--full': usePreviewDrawer }"
-      :style="
-        usePreviewDrawer
-          ? undefined
-          : { width: listColWidth + 'px', minWidth: listColWidth + 'px', maxWidth: 'none', flex: 'none' }
-      "
+      :class="{ 'list-column--full': listIsFull }"
+      :style="listColStyle"
     >
       <!-- Middle-column chrome (window mode): matches design list toolbar -->
       <div class="list-chrome">
@@ -89,17 +84,18 @@
 
     <!-- Preview area: resizer + side-by-side column / drawer overlay -->
     <PreviewHost
-      :visible="previewVisible"
-      :drawer="usePreviewDrawer"
-      :show-host="showPreviewHost"
-      :show-resizer="showPreviewHost && !usePreviewDrawer"
-      :col-width="listColWidth"
-      :col-min="LIST_COL_MIN"
-      :col-max="LIST_COL_MAX"
-      :dragging="listColDragging"
+      :visible="previewChrome.kind !== 'hidden'"
+      :drawer="previewChrome.kind === 'drawer'"
+      :show-host="previewChrome.kind !== 'hidden'"
+      :show-resizer="previewChrome.kind === 'column'"
+      :fixed-column="previewChrome.kind === 'column' && previewChrome.sizing === 'fixed'"
+      :col-width="splitColWidth"
+      :col-min="splitColMin"
+      :col-max="splitColMax"
+      :dragging="splitDragging"
       @close="clipboardStore.clearSelection()"
-      @resize-start="startListColResize"
-      @resize-key="onListColResizeKey"
+      @resize-start="onSplitResizeStart"
+      @resize-key="onSplitResizeKey"
     />
 
     <!-- Context Menu -->
@@ -138,6 +134,18 @@ import { useColumnResize } from "../composables/useColumnResize";
 import { useBatchBarHeight } from "../composables/useBatchBarHeight";
 import { useRecordActions } from "../composables/useRecordActions";
 import { buildSourceOverrides } from "../utils/sourceBadge";
+import {
+  LIST_COL_DEFAULT,
+  LIST_COL_MAX,
+  LIST_COL_MIN,
+  LIST_MIN,
+  PREVIEW_DEFAULT,
+  PREVIEW_MAX,
+  PREVIEW_MIN,
+  clampPreviewWidth,
+  normalizePreviewLayoutPref,
+  resolvePreviewChrome,
+} from "../utils/previewLayout";
 
 const clipboardStore = useClipboardStore();
 const settingsStore = useSettingsStore();
@@ -157,33 +165,81 @@ const sourceOverrides = computed(() =>
 const batchBarRef = ref<HTMLElement | null>(null);
 const { height: batchBarHeight } = useBatchBarHeight(batchBarRef);
 
-// --- List / Preview column resize ---
-/** Column width bounds — shared with PreviewHost's ARIA attributes. */
-const LIST_COL_MIN = 280;
-const LIST_COL_MAX = 720;
-const previewVisible = computed(
-  () => !!clipboardStore.selectedRecord && !clipboardStore.batchMode
+const wrapperRef = ref<HTMLElement | null>(null);
+const wrapperWidth = ref(0);
+let wrapperRo: ResizeObserver | null = null;
+const previewPref = computed(() =>
+  normalizePreviewLayoutPref(settingsStore.settings.preview_layout),
 );
+const previewChrome = computed(() =>
+  resolvePreviewChrome(
+    previewPref.value,
+    !!clipboardStore.selectedRecord,
+    clipboardStore.batchMode,
+    wrapperWidth.value,
+  ),
+);
+const listIsFull = computed(() => previewChrome.value.kind !== "column");
+const listColStyle = computed(() => {
+  if (previewChrome.value.kind !== "column" || previewChrome.value.sizing !== "flex") {
+    return undefined;
+  }
+  return {
+    width: `${listColWidth.value}px`,
+    minWidth: `${listColWidth.value}px`,
+    maxWidth: "none",
+    flex: "none",
+  };
+});
+
 const {
   width: listColWidth,
   isDragging: listColDragging,
-  isDefault: listColIsDefault,
   startResize: startListColResize,
   setWidth: setListColWidth,
 } = useColumnResize({
   storageKey: "clipboard-list-col-width",
-  defaultWidth: 400,
+  defaultWidth: LIST_COL_DEFAULT,
   min: LIST_COL_MIN,
   max: LIST_COL_MAX,
 });
-const listColRef = ref<HTMLElement | null>(null);
+const {
+  width: previewWidth,
+  isDragging: previewDragging,
+  startResize: startPreviewResize,
+  setWidth: setPreviewWidth,
+} = useColumnResize({
+  storageKey: "clipboard-preview-col-width",
+  defaultWidth: PREVIEW_DEFAULT,
+  min: PREVIEW_MIN,
+  max: PREVIEW_MAX,
+  invert: true,
+});
+const previewMaxFit = computed(() =>
+  wrapperWidth.value > 0
+    ? Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, wrapperWidth.value - LIST_MIN))
+    : PREVIEW_MAX,
+);
+const previewColWidth = computed(() =>
+  clampPreviewWidth(previewWidth.value, wrapperWidth.value),
+);
+const splitUsesListWidth = computed(
+  () => previewChrome.value.kind === "column" && previewChrome.value.sizing === "flex",
+);
+const splitColWidth = computed(() =>
+  splitUsesListWidth.value ? listColWidth.value : previewColWidth.value,
+);
+const splitColMin = computed(() =>
+  splitUsesListWidth.value ? LIST_COL_MIN : PREVIEW_MIN,
+);
+const splitColMax = computed(() =>
+  splitUsesListWidth.value ? LIST_COL_MAX : previewMaxFit.value,
+);
+const splitDragging = computed(() =>
+  splitUsesListWidth.value ? listColDragging.value : previewDragging.value,
+);
 
-// On first run (no stored width), capture the list column's natural flex
-// width so the fixed-width mode matches what the user already sees.
 onMounted(() => {
-  if (listColIsDefault.value && listColRef.value) {
-    setListColWidth(listColRef.value.offsetWidth);
-  }
   if (wrapperRef.value) {
     wrapperWidth.value = wrapperRef.value.clientWidth;
     wrapperRo = new ResizeObserver((entries) => {
@@ -255,22 +311,6 @@ const isListReloading = computed(
   () => clipboardStore.isLoading && clipboardStore.records.length > 0
 );
 
-/** Host width too tight for list+preview side-by-side → drawer overlay. */
-const PREVIEW_DRAWER_BREAKPOINT = 560;
-const wrapperRef = ref<HTMLElement | null>(null);
-const wrapperWidth = ref(0);
-let wrapperRo: ResizeObserver | null = null;
-const isNarrowHost = computed(
-  () => wrapperWidth.value > 0 && wrapperWidth.value < PREVIEW_DRAWER_BREAKPOINT
-);
-const usePreviewDrawer = computed(() => previewVisible.value && isNarrowHost.value);
-
-/** Right preview column: persistent in wide layouts (empty-state when nothing
- * is selected), drawer-only on selection in narrow layouts, hidden in batch. */
-const showPreviewHost = computed(
-  () => previewVisible.value || (!clipboardStore.batchMode && !isNarrowHost.value)
-);
-
 const {
   leavingIds,
   isPinned,
@@ -315,6 +355,33 @@ function onListColResizeKey(e: KeyboardEvent) {
     e.preventDefault();
     setListColWidth(LIST_COL_MAX);
   }
+}
+
+function onPreviewResizeKey(e: KeyboardEvent) {
+  const step = e.shiftKey ? 40 : 16;
+  if (e.key === "ArrowLeft") {
+    e.preventDefault();
+    setPreviewWidth(previewColWidth.value + step);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    setPreviewWidth(previewColWidth.value - step);
+  } else if (e.key === "Home") {
+    e.preventDefault();
+    setPreviewWidth(PREVIEW_MIN);
+  } else if (e.key === "End") {
+    e.preventDefault();
+    setPreviewWidth(previewMaxFit.value);
+  }
+}
+
+function onSplitResizeStart(e: PointerEvent) {
+  if (splitUsesListWidth.value) startListColResize(e);
+  else startPreviewResize(e);
+}
+
+function onSplitResizeKey(e: KeyboardEvent) {
+  if (splitUsesListWidth.value) onListColResizeKey(e);
+  else onPreviewResizeKey(e);
 }
 </script>
 
@@ -392,9 +459,8 @@ function onListColResizeKey(e: KeyboardEvent) {
    PreviewHost.vue alongside their markup. */
 
 .list-column {
-  flex: 1.35;
-  min-width: 200px;
-  max-width: 520px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -404,11 +470,11 @@ function onListColResizeKey(e: KeyboardEvent) {
   border-right: 1px solid var(--border-subtle);
 }
 
+.list-column:not(.list-column--full) {
+  min-width: 280px;
+}
+
 .list-column--full {
-  flex: 1;
-  max-width: none;
-  width: auto;
-  min-width: 0;
   border-right: none;
 }
 

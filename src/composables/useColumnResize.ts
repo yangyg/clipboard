@@ -14,6 +14,10 @@ export interface ColumnResizeOptions {
    * the inline width (letting CSS media-query rules take over).
    */
   disabled?: Ref<boolean>;
+  /**
+   * Invert pointer delta (right-edge column: drag right shrinks the column).
+   */
+  invert?: boolean;
 }
 
 /**
@@ -24,7 +28,7 @@ export interface ColumnResizeOptions {
  * on drag end and restored on init.
  */
 export function useColumnResize(options: ColumnResizeOptions) {
-  const { storageKey, defaultWidth, min, max, disabled } = options;
+  const { storageKey, defaultWidth, min, max, disabled, invert = false } = options;
 
   function readStored(): number {
     try {
@@ -67,7 +71,8 @@ export function useColumnResize(options: ColumnResizeOptions) {
     raf = requestAnimationFrame(() => {
       raf = 0;
       const delta = e.clientX - startX;
-      width.value = Math.min(max, Math.max(min, startW + delta));
+      const next = invert ? startW - delta : startW + delta;
+      width.value = Math.min(max, Math.max(min, next));
     });
   }
 

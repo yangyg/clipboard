@@ -19,6 +19,7 @@ describe("settingsStore (smoke)", () => {
     expect(store.settings.font_family).toBe("default");
     expect(store.settings.max_records).toBe(1000);
     expect(store.settings.search_mode).toBe("full");
+    expect(store.settings.preview_layout).toBe("on_demand");
     expect(store.settings.onboarding_completed).toBe(false);
     expect(store.settings.webdav_device_name).toBe("");
     expect(store.settings.webdav_device_names).toEqual({});
@@ -171,5 +172,12 @@ describe("settingsStore colorful preset themes", () => {
     const store = useSettingsStore();
     await store.loadSettings();
     expect(store.settings.language).toBe("system");
+  });
+
+  it("normalizes an unknown preview_layout to on_demand", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ preview_layout: "split" } as unknown as Settings);
+    const store = useSettingsStore();
+    await store.loadSettings();
+    expect(store.settings.preview_layout).toBe("on_demand");
   });
 });

@@ -11,7 +11,8 @@ import type { ClipboardRecord } from "../types";
 
 export type TranslateFn = (key: string, named?: Record<string, unknown>) => string;
 
-const PREVIEW_MAX_LEN = 80;
+/** Enough for two lines in a wide on-demand list; CSS still clamps to 2 lines. */
+const PREVIEW_MAX_LEN = 160;
 
 export function recordAlias(record: ClipboardRecord): string {
   return (record.alias ?? "").trim();

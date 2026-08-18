@@ -10,7 +10,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel superseded PR runs. Cancelling main/tag/manual runs would
+  # abort in-progress Windows package and release builds.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -19,6 +21,7 @@ jobs:
   frontend:
     name: Frontend (lint · type-check · test · build)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
 
@@ -33,9 +36,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Type-check + build
-        run: npm run build
-
       - name: Tests
         run: npm test
 
@@ -45,38 +45,44 @@ jobs:
       - name: IPC contract check
         run: npm run check:ipc-contract
 
+      - name: Type-check + build
+        run: npm run build
+
   backend:
-    name: Rust (clippy · test)
+    name: Rust (clippy · fmt · test)
     # The app targets Windows (clipboard polling, DWM/tray/theme APIs are
     # cfg(windows)); tests must compile on the real target OS.
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
 
-      # Must match the channel in rust-toolchain.toml, otherwise cargo's
-      # override would download a second toolchain on the runner.
-      - uses: dtolnay/rust-toolchain@master
+      # @1.94 is this action's toolchain selector; keep it aligned with
+      # rust-toolchain.toml or rustup will download a second toolchain.
+      - uses: dtolnay/rust-toolchain@1.94
         with:
-          toolchain: "1.94"
           components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
-      - name: Clippy (warnings as errors)
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
+          shared-key: windows-src-tauri
 
       - name: Format check
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
+
+      - name: Clippy (warnings as errors)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --locked -- -D warnings
 
       - name: Tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked
 
   package:
     name: Windows package (manual)
+    needs: [frontend, backend]
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
 
@@ -88,14 +94,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Must match the channel in rust-toolchain.toml (see backend job).
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@1.94
         with:
-          toolchain: "1.94"
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: windows-src-tauri
 
       - name: Build Tauri bundle
         run: npm run tauri build
@@ -109,8 +115,10 @@ jobs:
 
   release:
     name: Windows release (tag → GitHub Release)
+    needs: [frontend, backend]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
+    timeout-minutes: 60
     permissions:
       contents: write
     steps:
@@ -124,14 +132,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # Must match the channel in rust-toolchain.toml (see backend job).
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@1.94
         with:
-          toolchain: "1.94"
+          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          shared-key: windows-src-tauri
 
       - name: Build & publish release (tauri-action)
         uses: tauri-apps/tauri-action@v1
@@ -149,3 +157,5 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: src-tauri/target/release/clipboard.exe
+          draft: true
+          fail_on_unmatched_files: true

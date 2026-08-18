@@ -76,6 +76,10 @@ const expireValueText = computed(() => {
         minutes: d.minutes,
         seconds: d.seconds,
       });
+    default: {
+      const _exhaustive: never = d;
+      return _exhaustive;
+    }
   }
 });
 

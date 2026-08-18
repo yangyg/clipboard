@@ -654,7 +654,10 @@ mod settings_onboarding_tests {
         s.ai_models = vec!["gpt-4o-mini".into()];
         s.ai_model = "deepseek-chat".into();
         s.normalize_ai_models();
-        assert_eq!(s.ai_models, vec!["deepseek-chat".to_string(), "gpt-4o-mini".to_string()]);
+        assert_eq!(
+            s.ai_models,
+            vec!["deepseek-chat".to_string(), "gpt-4o-mini".to_string()]
+        );
         assert_eq!(s.ai_model, "deepseek-chat");
     }
 
@@ -665,7 +668,10 @@ mod settings_onboarding_tests {
         s.ai_model = "  ".into();
         s.normalize_ai_models();
         assert_eq!(s.ai_model, "llama3");
-        assert_eq!(s.ai_models, vec!["llama3".to_string(), "qwen-plus".to_string()]);
+        assert_eq!(
+            s.ai_models,
+            vec!["llama3".to_string(), "qwen-plus".to_string()]
+        );
     }
 
     #[test]

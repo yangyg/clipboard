@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { makeRecord } from "../test/factories";
 import {
+  expireBannerKind,
   isExpired,
+  isExpiryProtected,
   needsExpiryConfirm,
   sensitiveExpireDisplay,
 } from "./sensitiveExpiry";
@@ -21,6 +23,73 @@ describe("isExpired", () => {
 
   it("is false for an unparsable timestamp", () => {
     expect(isExpired(makeRecord({ auto_expire_at: "not-a-date" }))).toBe(false);
+  });
+});
+
+describe("isExpiryProtected", () => {
+  it("is true when pinned or favorited", () => {
+    expect(isExpiryProtected(makeRecord())).toBe(false);
+    expect(isExpiryProtected(makeRecord({ is_pinned: true }))).toBe(true);
+    expect(isExpiryProtected(makeRecord({ is_favorite: true }))).toBe(true);
+  });
+});
+
+describe("expireBannerKind", () => {
+  const now = Date.parse("2026-08-18T10:00:00.000Z");
+
+  it("is null without a parsable auto_expire_at", () => {
+    expect(expireBannerKind(makeRecord({ auto_expire_at: null }), now)).toBeNull();
+    expect(
+      expireBannerKind(makeRecord({ auto_expire_at: "not-a-date" }), now),
+    ).toBeNull();
+  });
+
+  it("is countdown / expired when unprotected", () => {
+    expect(
+      expireBannerKind(
+        makeRecord({ auto_expire_at: "2026-08-18T10:01:00.000Z" }),
+        now,
+      ),
+    ).toBe("countdown");
+    expect(
+      expireBannerKind(makeRecord({ auto_expire_at: past }), now),
+    ).toBe("expired");
+  });
+
+  it("is protected-countdown while pinned or favorited and still in the future", () => {
+    expect(
+      expireBannerKind(
+        makeRecord({
+          auto_expire_at: "2026-08-18T10:01:00.000Z",
+          is_pinned: true,
+        }),
+        now,
+      ),
+    ).toBe("protected-countdown");
+    expect(
+      expireBannerKind(
+        makeRecord({
+          auto_expire_at: "2026-08-18T10:01:00.000Z",
+          is_favorite: true,
+        }),
+        now,
+      ),
+    ).toBe("protected-countdown");
+  });
+
+  it("is protected-expired after the timestamp when pinned or favorited", () => {
+    expect(
+      expireBannerKind(
+        makeRecord({ auto_expire_at: past, is_pinned: true }),
+        now,
+      ),
+    ).toBe("protected-expired");
+    expect(
+      expireBannerKind(
+        makeRecord({ auto_expire_at: past, is_favorite: true }),
+        now,
+      ),
+    ).toBe("protected-expired");
   });
 });
 

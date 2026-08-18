@@ -25,8 +25,8 @@
     <div v-if="record.is_sensitive" class="sensitive-warning" role="alert">
       <AppIcon name="warning" :size="14" />
       <span>{{ $t('preview.sensitiveContent') }}</span>
-      <span class="auto-expire" v-if="record.auto_expire_at">
-        {{ $t('preview.autoExpire', { time: formatExpireTime(record.auto_expire_at) }) }}
+      <span class="auto-expire" v-if="expireText" :title="expireTitle || undefined">
+        {{ expireText }}
       </span>
     </div>
 
@@ -213,7 +213,7 @@ const clipboardColor = computed(() => {
 
 const { recordAlias, typeLabel, tagsByName, getTagBg, getTagColor, formatDateTime } =
   usePreviewFormatting(record, toRef(clipboardStore, "tags"));
-const { formatExpireTime } = useExpireCountdown(record);
+const { expireText, expireTitle } = useExpireCountdown(record);
 const {
   pinnedDisplay,
   tagDialogVisible,
@@ -284,7 +284,9 @@ const aliasDialogVisible = ref(false);
   padding: var(--space-2) var(--space-3);
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-2);
+  row-gap: var(--space-1);
   font-size: var(--text-sm);
   color: var(--danger);
   flex-shrink: 0;

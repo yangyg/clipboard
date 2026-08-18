@@ -7,11 +7,40 @@
  */
 import type { ClipboardRecord } from "../types";
 
+/** True when pin or favorite shields the row from `cleanup_expired`. */
+export function isExpiryProtected(record: ClipboardRecord): boolean {
+  return record.is_pinned || record.is_favorite;
+}
+
 /** True when the record's auto-expiry timestamp is already in the past. */
-export function isExpired(record: ClipboardRecord): boolean {
+export function isExpired(record: ClipboardRecord, now = Date.now()): boolean {
   if (!record.auto_expire_at) return false;
   const at = new Date(record.auto_expire_at).getTime();
-  return !Number.isNaN(at) && at <= Date.now();
+  return !Number.isNaN(at) && at <= now;
+}
+
+/**
+ * Preview warning-bar copy state. `null` when there is no expiry timestamp
+ * (or it is unparsable) — the countdown span stays hidden.
+ */
+export type ExpireBannerKind =
+  | "countdown"
+  | "expired"
+  | "protected-countdown"
+  | "protected-expired";
+
+export function expireBannerKind(
+  record: ClipboardRecord,
+  now = Date.now(),
+): ExpireBannerKind | null {
+  if (!record.auto_expire_at) return null;
+  const at = new Date(record.auto_expire_at).getTime();
+  if (Number.isNaN(at)) return null;
+  const expired = at <= now;
+  if (isExpiryProtected(record)) {
+    return expired ? "protected-expired" : "protected-countdown";
+  }
+  return expired ? "expired" : "countdown";
 }
 
 /**

@@ -640,9 +640,11 @@ mod settings_onboarding_tests {
 
     #[test]
     fn normalize_ai_models_empty_list_uses_current() {
-        let mut s = Settings::default();
-        s.ai_models.clear();
-        s.ai_model = "llama3".into();
+        let mut s = Settings {
+            ai_models: vec![],
+            ai_model: "llama3".into(),
+            ..Default::default()
+        };
         s.normalize_ai_models();
         assert_eq!(s.ai_models, vec!["llama3".to_string()]);
         assert_eq!(s.ai_model, "llama3");
@@ -650,9 +652,11 @@ mod settings_onboarding_tests {
 
     #[test]
     fn normalize_ai_models_prepends_current_when_missing() {
-        let mut s = Settings::default();
-        s.ai_models = vec!["gpt-4o-mini".into()];
-        s.ai_model = "deepseek-chat".into();
+        let mut s = Settings {
+            ai_models: vec!["gpt-4o-mini".into()],
+            ai_model: "deepseek-chat".into(),
+            ..Default::default()
+        };
         s.normalize_ai_models();
         assert_eq!(
             s.ai_models,
@@ -663,9 +667,11 @@ mod settings_onboarding_tests {
 
     #[test]
     fn normalize_ai_models_picks_first_when_current_blank() {
-        let mut s = Settings::default();
-        s.ai_models = vec!["llama3".into(), "qwen-plus".into()];
-        s.ai_model = "  ".into();
+        let mut s = Settings {
+            ai_models: vec!["llama3".into(), "qwen-plus".into()],
+            ai_model: "  ".into(),
+            ..Default::default()
+        };
         s.normalize_ai_models();
         assert_eq!(s.ai_model, "llama3");
         assert_eq!(
@@ -676,15 +682,17 @@ mod settings_onboarding_tests {
 
     #[test]
     fn normalize_ai_models_trims_and_dedupes() {
-        let mut s = Settings::default();
-        s.ai_models = vec![
-            " gpt-4o-mini ".into(),
-            "".into(),
-            "gpt-4o-mini".into(),
-            "GPT-4o-mini".into(),
-            " llama3 ".into(),
-        ];
-        s.ai_model = "llama3".into();
+        let mut s = Settings {
+            ai_models: vec![
+                " gpt-4o-mini ".into(),
+                "".into(),
+                "gpt-4o-mini".into(),
+                "GPT-4o-mini".into(),
+                " llama3 ".into(),
+            ],
+            ai_model: "llama3".into(),
+            ..Default::default()
+        };
         s.normalize_ai_models();
         assert_eq!(
             s.ai_models,

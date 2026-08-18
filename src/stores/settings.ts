@@ -6,6 +6,7 @@ import { DEFAULT_AUTO_TAG_RULES } from "../types";
 import { DEFAULT_FEATURES, mergeFeatures } from "../features/capabilities";
 import { useToast } from "../composables/useToast";
 import { resolveFontStack } from "../utils/fontPresets";
+import { normalizeAiModels } from "../utils/aiModels";
 import { normalizePreviewLayoutPref } from "../utils/previewLayout";
 import { applyTheme as applyThemeClass } from "../utils/themeClass";
 import { isThemeKey } from "../utils/themeRegistry";
@@ -67,6 +68,7 @@ const DEFAULT_SETTINGS: Settings = {
   ai_base_url: "https://api.openai.com/v1",
   ai_api_key: "",
   ai_model: "gpt-4o-mini",
+  ai_models: ["gpt-4o-mini"],
   ai_summary_alias: true,
   ai_auto_tag: true,
   ai_max_chars: 4000,
@@ -76,6 +78,7 @@ const DEFAULT_SETTINGS: Settings = {
 
 function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Settings {
   const rawTheme = raw?.theme as string | undefined;
+  const ai = normalizeAiModels(raw?.ai_models, raw?.ai_model);
   return {
     ...DEFAULT_SETTINGS,
     ...(raw ?? {}),
@@ -103,6 +106,8 @@ function normalizeSettings(raw: Partial<Settings> | Settings | undefined): Setti
       raw?.language === "en-US" || raw?.language === "zh-CN" || raw?.language === "system"
         ? raw.language
         : DEFAULT_SETTINGS.language,
+    ai_models: ai.models,
+    ai_model: ai.current,
   };
 }
 

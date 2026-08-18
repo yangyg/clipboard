@@ -23,6 +23,8 @@ describe("settingsStore (smoke)", () => {
     expect(store.settings.onboarding_completed).toBe(false);
     expect(store.settings.webdav_device_name).toBe("");
     expect(store.settings.webdav_device_names).toEqual({});
+    expect(store.settings.ai_model).toBe("gpt-4o-mini");
+    expect(store.settings.ai_models).toEqual(["gpt-4o-mini"]);
     expect(store.isLoaded).toBe(false);
   });
 

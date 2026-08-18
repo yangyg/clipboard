@@ -119,6 +119,7 @@ impl ClipboardDb {
             }
         }
 
+        settings.normalize_ai_models();
         let arc = Arc::new(settings);
         *self.settings_cache.write() = Some(Arc::clone(&arc));
         Ok(arc)

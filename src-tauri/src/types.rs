@@ -172,6 +172,14 @@ fn default_ai_model() -> String {
     "gpt-4o-mini".to_string()
 }
 
+/// Missing `ai_models` on upgrade JSON → empty, then `normalize_ai_models`
+/// seeds the list from `ai_model` so a custom name is not mixed with the default.
+fn default_ai_models() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) const AI_MODELS_MAX: usize = 20;
+
 /// Cap the snippet sent to the model — deep code / long emails don't need
 /// full round-trips for a summary + tags.
 fn default_ai_max_chars() -> i32 {
@@ -381,6 +389,9 @@ pub struct Settings {
     pub ai_api_key: String,
     #[serde(default = "default_ai_model", rename = "ai_model")]
     pub ai_model: String,
+    /// Saved model-name list; `ai_model` is the currently selected entry.
+    #[serde(default = "default_ai_models", rename = "ai_models")]
+    pub ai_models: Vec<String>,
     #[serde(default = "default_ai_summary_alias", rename = "ai_summary_alias")]
     pub ai_summary_alias: bool,
     #[serde(default = "default_ai_auto_tag", rename = "ai_auto_tag")]
@@ -450,12 +461,57 @@ impl Default for Settings {
             ai_base_url: default_ai_base_url(),
             ai_api_key: String::new(),
             ai_model: default_ai_model(),
+            ai_models: vec![default_ai_model()],
             ai_summary_alias: true,
             ai_auto_tag: true,
             ai_max_chars: default_ai_max_chars(),
             ai_min_chars: default_ai_min_chars(),
             features: FeatureFlags::default(),
         }
+    }
+}
+
+impl Settings {
+    /// Canonicalize `ai_models` + `ai_model` after load.
+    ///
+    /// Upgrade JSON that only has `ai_model` (serde default for `ai_models` is
+    /// empty) is filled from the current name so a custom model is not mixed
+    /// with the default `gpt-4o-mini`.
+    pub fn normalize_ai_models(&mut self) {
+        let current = self.ai_model.trim().to_string();
+        let mut seen = std::collections::HashSet::new();
+        let mut list: Vec<String> = Vec::new();
+        for item in std::mem::take(&mut self.ai_models) {
+            let name = item.trim().to_string();
+            if name.is_empty() || !seen.insert(name.clone()) {
+                continue;
+            }
+            list.push(name);
+        }
+        if !current.is_empty() && !seen.contains(&current) {
+            list.insert(0, current.clone());
+        }
+        if list.is_empty() {
+            list.push(default_ai_model());
+        }
+        let active = if !current.is_empty() && list.iter().any(|m| m == &current) {
+            current
+        } else {
+            list[0].clone()
+        };
+        if list.len() > AI_MODELS_MAX {
+            if list.iter().take(AI_MODELS_MAX).any(|m| m == &active) {
+                list.truncate(AI_MODELS_MAX);
+            } else {
+                let others: Vec<String> = list.into_iter().filter(|m| m != &active).collect();
+                list = std::iter::once(active.clone())
+                    .chain(others)
+                    .take(AI_MODELS_MAX)
+                    .collect();
+            }
+        }
+        self.ai_models = list;
+        self.ai_model = active;
     }
 }
 
@@ -556,16 +612,83 @@ mod settings_onboarding_tests {
         assert_eq!(s.ai_max_chars, 4000);
         assert_eq!(s.ai_min_chars, 32);
         assert!(!s.ai_base_url.is_empty());
+        assert_eq!(s.ai_model, "gpt-4o-mini");
+        assert_eq!(s.ai_models, vec!["gpt-4o-mini".to_string()]);
     }
 
     #[test]
     fn missing_ai_fields_survive_upgrade_json() {
         let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[]}"#;
-        let s: Settings = serde_json::from_str(json).expect("parse");
+        let mut s: Settings = serde_json::from_str(json).expect("parse");
         assert!(!s.enable_ai, "upgrades must keep AI off");
         assert_eq!(s.ai_max_chars, 4000);
         assert_eq!(s.ai_min_chars, 32);
         assert!(s.ai_summary_alias && s.ai_auto_tag);
+        s.normalize_ai_models();
+        assert_eq!(s.ai_model, "gpt-4o-mini");
+        assert_eq!(s.ai_models, vec!["gpt-4o-mini".to_string()]);
+    }
+
+    #[test]
+    fn missing_ai_models_keeps_custom_ai_model() {
+        let json = r#"{"global_shortcut":"Ctrl+Shift+V","max_records":1000,"retention_days":30,"theme":"dark","panel_opacity":94,"panel_radius":20,"enable_blur":false,"enable_animation":true,"font_size":16,"default_paste_mode":"original","auto_close_on_paste":true,"enable_sensitive_detection":true,"sensitive_auto_expire_seconds":600,"auto_start":false,"minimize_to_tray":true,"ignored_apps":[],"ai_model":"deepseek-chat"}"#;
+        let mut s: Settings = serde_json::from_str(json).expect("parse");
+        s.normalize_ai_models();
+        assert_eq!(s.ai_model, "deepseek-chat");
+        assert_eq!(s.ai_models, vec!["deepseek-chat".to_string()]);
+    }
+
+    #[test]
+    fn normalize_ai_models_empty_list_uses_current() {
+        let mut s = Settings::default();
+        s.ai_models.clear();
+        s.ai_model = "llama3".into();
+        s.normalize_ai_models();
+        assert_eq!(s.ai_models, vec!["llama3".to_string()]);
+        assert_eq!(s.ai_model, "llama3");
+    }
+
+    #[test]
+    fn normalize_ai_models_prepends_current_when_missing() {
+        let mut s = Settings::default();
+        s.ai_models = vec!["gpt-4o-mini".into()];
+        s.ai_model = "deepseek-chat".into();
+        s.normalize_ai_models();
+        assert_eq!(s.ai_models, vec!["deepseek-chat".to_string(), "gpt-4o-mini".to_string()]);
+        assert_eq!(s.ai_model, "deepseek-chat");
+    }
+
+    #[test]
+    fn normalize_ai_models_picks_first_when_current_blank() {
+        let mut s = Settings::default();
+        s.ai_models = vec!["llama3".into(), "qwen-plus".into()];
+        s.ai_model = "  ".into();
+        s.normalize_ai_models();
+        assert_eq!(s.ai_model, "llama3");
+        assert_eq!(s.ai_models, vec!["llama3".to_string(), "qwen-plus".to_string()]);
+    }
+
+    #[test]
+    fn normalize_ai_models_trims_and_dedupes() {
+        let mut s = Settings::default();
+        s.ai_models = vec![
+            " gpt-4o-mini ".into(),
+            "".into(),
+            "gpt-4o-mini".into(),
+            "GPT-4o-mini".into(),
+            " llama3 ".into(),
+        ];
+        s.ai_model = "llama3".into();
+        s.normalize_ai_models();
+        assert_eq!(
+            s.ai_models,
+            vec![
+                "gpt-4o-mini".to_string(),
+                "GPT-4o-mini".to_string(),
+                "llama3".to_string()
+            ]
+        );
+        assert_eq!(s.ai_model, "llama3");
     }
 
     #[test]

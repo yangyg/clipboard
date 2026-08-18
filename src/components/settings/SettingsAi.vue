@@ -57,16 +57,68 @@
         />
       </label>
 
-      <label class="ai-field">
+      <div class="ai-field">
         <span class="setting-label">{{ $t('settings.ai.model') }}</span>
-        <TextInput
-          class="auto-tag-input ai-model-input"
-          type="text"
-          :model-value="settings.ai_model"
-          :placeholder="'gpt-4o-mini'"
-          @update:model-value="(v) => update('ai_model', v)"
-        />
-      </label>
+        <p class="setting-desc ai-model-desc">{{ $t('settings.ai.modelDesc') }}</p>
+        <div
+          class="ai-model-list"
+          role="radiogroup"
+          :aria-label="$t('settings.ai.model')"
+        >
+          <div
+            v-for="(name, index) in settings.ai_models"
+            :key="index"
+            class="ai-model-item"
+            :class="{ active: name === settings.ai_model }"
+          >
+            <button
+              type="button"
+              class="ai-model-radio"
+              role="radio"
+              :aria-checked="name === settings.ai_model"
+              :aria-label="$t('settings.ai.modelCurrent')"
+              @click="update('ai_model', name)"
+            />
+            <TextInput
+              class="auto-tag-input ai-model-input"
+              type="text"
+              :model-value="name"
+              :placeholder="'gpt-4o-mini'"
+              :aria-label="$t('settings.ai.model')"
+              @change="renameModel(index, ($event.target as HTMLInputElement).value)"
+            />
+            <button
+              type="button"
+              class="ai-model-remove"
+              :disabled="settings.ai_models.length <= 1"
+              :title="settings.ai_models.length <= 1 ? $t('settings.ai.modelKeepOne') : $t('settings.ai.removeModel', { name })"
+              :aria-label="$t('settings.ai.removeModel', { name })"
+              @click="removeModel(index)"
+            >
+              <AppIcon name="close" :size="12" />
+            </button>
+          </div>
+        </div>
+        <div class="ai-model-add-row">
+          <TextInput
+            ref="addInput"
+            class="auto-tag-input ai-model-input ai-model-add-input"
+            type="text"
+            v-model="newModel"
+            :placeholder="'gpt-4o-mini'"
+            :aria-label="$t('settings.ai.addModel')"
+            @keydown.enter="addModel"
+          />
+          <button
+            type="button"
+            class="btn btn-primary btn-lg ai-model-add-btn"
+            :disabled="addDisabled"
+            @click="addModel"
+          >
+            <AppIcon name="plus" :size="13" /> {{ $t('settings.ai.addModel') }}
+          </button>
+        </div>
+      </div>
 
       <div class="setting-row">
         <div>
@@ -139,10 +191,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from "vue-i18n";
 import { useSettings } from "../../composables/useSettings";
+import { useToast } from "../../composables/useToast";
+import { AI_MODELS_MAX } from "../../utils/aiModels";
 import AppIcon, { type AppIconName } from "../icons/AppIcon.vue";
 import PasswordInput from "../PasswordInput.vue";
 import TextInput from "../TextInput.vue";
@@ -150,10 +204,15 @@ import ToggleSwitch from "../ToggleSwitch.vue";
 
 const { settings, settingsStore, update } = useSettings();
 const { t } = useI18n();
+const { toast } = useToast();
 
 const aiBusy = ref(false);
 const aiStatus = ref("");
 const aiStatusKind = ref<"success" | "error" | "">("");
+const newModel = ref("");
+const addInput = ref<InstanceType<typeof TextInput> | null>(null);
+
+const addDisabled = computed(() => newModel.value.trim() === "");
 
 const PRESETS: {
   key: string;
@@ -201,7 +260,56 @@ const PRESETS: {
 
 function applyPreset(preset: (typeof PRESETS)[number]) {
   update("ai_base_url", preset.baseUrl);
+  if (!settings.ai_models.includes(preset.model)) {
+    if (settings.ai_models.length >= AI_MODELS_MAX) {
+      toast(t("settings.ai.modelMax"), "warning");
+      return;
+    }
+    update("ai_models", [...settings.ai_models, preset.model]);
+  }
   update("ai_model", preset.model);
+}
+
+function addModel() {
+  const name = newModel.value.trim();
+  if (!name) {
+    toast(t("settings.ai.modelEmpty"), "warning");
+    return;
+  }
+  if (settings.ai_models.includes(name)) {
+    toast(t("settings.ai.modelDuplicate"), "warning");
+    return;
+  }
+  if (settings.ai_models.length >= AI_MODELS_MAX) {
+    toast(t("settings.ai.modelMax"), "warning");
+    return;
+  }
+  update("ai_models", [...settings.ai_models, name]);
+  newModel.value = "";
+  addInput.value?.focus();
+}
+
+function renameModel(index: number, nextRaw: string) {
+  const next = nextRaw.trim();
+  const prev = settings.ai_models[index];
+  if (!prev || !next || next === prev) return;
+  if (settings.ai_models.some((m, i) => i !== index && m === next)) {
+    toast(t("settings.ai.modelDuplicate"), "warning");
+    return;
+  }
+  update(
+    "ai_models",
+    settings.ai_models.map((m, i) => (i === index ? next : m)),
+  );
+  if (settings.ai_model === prev) update("ai_model", next);
+}
+
+function removeModel(index: number) {
+  if (settings.ai_models.length <= 1) return;
+  const removed = settings.ai_models[index];
+  const list = settings.ai_models.filter((_, i) => i !== index);
+  update("ai_models", list);
+  if (settings.ai_model === removed) update("ai_model", list[0]);
 }
 
 function updateAiMinChars(value: string) {
@@ -279,9 +387,102 @@ async function aiTest() {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
+.ai-model-desc {
+  margin: 0;
+}
+
+.ai-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.ai-model-item:hover {
+  background: var(--accent-softer);
+}
+
+.ai-model-item.active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.ai-model-radio {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  background: var(--bg-input);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.ai-model-radio[aria-checked="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 4px var(--accent);
+  background: var(--bg-surface);
+}
+
 .ai-model-input {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
+}
+
+.ai-model-item :deep(.input-shell) {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-model-remove {
+  flex-shrink: 0;
+  font-size: var(--text-md);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.ai-model-remove:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ai-model-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ai-model-add-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 4px;
+}
+
+.ai-model-add-row :deep(.input-shell) {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-model-add-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .ai-chars-input {

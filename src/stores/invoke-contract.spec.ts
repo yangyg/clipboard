@@ -116,6 +116,7 @@ const MOCK_SETTINGS: Settings = {
   webdav_device_id: "", webdav_device_name: "", webdav_device_names: {},
   webdav_last_sync_at: null,
   enable_ai: false, ai_base_url: "", ai_api_key: "", ai_model: "",
+  ai_models: [],
   ai_summary_alias: true, ai_auto_tag: true, ai_max_chars: 4000,
   ai_min_chars: 32,
   features: { tags: true, batch: true, sync: true, stats: true, ai: true },

@@ -142,6 +142,8 @@ export interface Settings {
   /** DPAPI-encrypted at rest; kept as-is in the running settings object. */
   ai_api_key: string;
   ai_model: string;
+  /** Saved model names; `ai_model` is the currently selected entry. */
+  ai_models: string[];
   /** Write the AI summary into the record alias (default true). */
   ai_summary_alias: boolean;
   /** Let the AI append auto-tags to records (default true). */

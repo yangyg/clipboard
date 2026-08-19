@@ -18,6 +18,8 @@ export interface RecordActionsCtx {
   recordDetails: Ref<Map<number, ClipboardRecord>>;
   trashCount: Ref<number>;
   listSort: Ref<ListSort>;
+  /** Unfold the pinned group so a newly pinned row stays visible. */
+  setPinnedCollapsed: (collapsed: boolean) => void;
   patchRecord: (id: number, patch: Partial<ClipboardRecord>) => void;
   patchRecordsBatch: (patches: Map<number, Partial<ClipboardRecord>>) => void;
   reloadList: () => void;
@@ -101,6 +103,9 @@ export function createRecordActions(ctx: RecordActionsCtx) {
     try {
       const newVal = await invoke<boolean>("toggle_pin", { id });
       ctx.patchRecord(id, { is_pinned: newVal });
+      // Pinning into a folded group would make the row vanish; unfold so the
+      // list reorder (spec §3.3) is actually visible.
+      if (newVal) ctx.setPinnedCollapsed(false);
       if (ctx.listSort.value === "updated_desc") {
         // Re-sort: pinned first, then by updated_at desc.
         // Use string comparison on ISO timestamps (lexicographic = chronological).

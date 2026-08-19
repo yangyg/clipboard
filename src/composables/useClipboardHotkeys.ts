@@ -8,6 +8,7 @@ import { useExpiryGuard } from "./useExpiryGuard";
 import { useBatchActions } from "./useBatchActions";
 import { toastPasteOutcome } from "../utils/pasteNotify";
 import { humanizeInvokeError } from "../utils/invokeError";
+import { visibleListRecords } from "../utils/pinnedList";
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -134,7 +135,10 @@ export function useClipboardHotkeys() {
 
     if (isTypingTarget(e.target)) return;
 
-    const list = clipboardStore.filteredRecords;
+    const list = visibleListRecords(
+      clipboardStore.filteredRecords,
+      clipboardStore.pinnedCollapsed,
+    );
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();

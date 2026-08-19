@@ -15,6 +15,10 @@ import { useSettingsStore } from "./settings";
 import { useToast } from "../composables/useToast";
 import { i18n } from "../locales";
 import { humanizeInvokeError } from "../utils/invokeError";
+import {
+  persistPinnedCollapsed,
+  readPinnedCollapsed,
+} from "../utils/pinnedList";
 
 export type { FilterTab, ListSort } from "./clipboardList";
 export { LIST_SORT_OPTIONS } from "./clipboardList";
@@ -33,6 +37,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
   const trashFilter = ref(false);
   const trashCount = ref(0);
   const listSort = ref<ListSort>("updated_desc");
+  /** Fold the middle-column pinned group. Persisted in localStorage. */
+  const pinnedCollapsed = ref(readPinnedCollapsed());
   const batchMode = ref(false);
   const selectedIds = ref<Set<number>>(new Set());
   /** Last row clicked in batch mode — Shift+click range starts here. */
@@ -154,6 +160,16 @@ export const useClipboardStore = defineStore("clipboard", () => {
     reorderForUpdate,
   } = list;
 
+  function setPinnedCollapsed(collapsed: boolean) {
+    if (pinnedCollapsed.value === collapsed) return;
+    pinnedCollapsed.value = collapsed;
+    persistPinnedCollapsed(collapsed);
+  }
+
+  function togglePinnedCollapsed() {
+    setPinnedCollapsed(!pinnedCollapsed.value);
+  }
+
   // === Record mutations ===
   const record = createRecordActions({
     records,
@@ -163,6 +179,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     recordDetails,
     trashCount,
     listSort,
+    setPinnedCollapsed,
     patchRecord: list.patchRecord,
     patchRecordsBatch: list.patchRecordsBatch,
     reloadList,
@@ -372,6 +389,7 @@ export const useClipboardStore = defineStore("clipboard", () => {
     trashFilter,
     trashCount,
     listSort,
+    pinnedCollapsed,
     batchMode,
     selectedIds,
     pauseCapture,
@@ -390,6 +408,8 @@ export const useClipboardStore = defineStore("clipboard", () => {
     clearSelection,
     setFilter,
     setListSort,
+    setPinnedCollapsed,
+    togglePinnedCollapsed,
     reloadList,
     pasteRecord,
     deleteRecord,

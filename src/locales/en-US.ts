@@ -73,6 +73,8 @@ export default {
     pin: 'Pin',
     unpin: 'Unpin',
     pinnedSection: 'Pinned',
+    collapsePinned: 'Collapse pinned',
+    expandPinned: 'Expand pinned',
     favorite: 'Favorite',
     unfavorite: 'Unfavorite',
     permanentDelete: 'Delete permanently',

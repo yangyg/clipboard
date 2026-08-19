@@ -10,6 +10,7 @@ import {
 import { useClipboardStore } from "../stores/clipboard";
 import { useSettingsStore } from "../stores/settings";
 import { recordThumbSrc } from "../utils/mediaUrl";
+import { pinnedListSlots } from "../utils/pinnedList";
 import type { ClipboardRecord } from "../types";
 
 export type ListLayout = "list" | "grid";
@@ -309,6 +310,7 @@ export function useVirtualList(
     let h = rowHeight.value * 2654435761;
     h = (h ^ (labelHeight.value * 40503)) >>> 0;
     h = (h ^ (dividerHeight.value * 12347)) >>> 0;
+    h = (h ^ (clipboardStore.pinnedCollapsed ? 0x51ed : 0x7e1)) >>> 0;
     // Mix in record count + id/pin per record.
     h = (h ^ records.length) >>> 0;
     for (const r of records) {
@@ -333,30 +335,23 @@ export function useVirtualList(
     const lh = labelHeight.value;
     const dh = dividerHeight.value;
     const heights = measuredHeights.value;
-    // Single pass to detect pin partition presence (avoids two O(N) .some() scans).
-    let hasPinned = false;
-    let hasUnpinned = false;
-    for (const r of records) {
-      if (r.is_pinned) hasPinned = true;
-      else hasUnpinned = true;
-      if (hasPinned && hasUnpinned) break;
-    }
-    if (hasPinned) {
-      items.push({ key: "pinned-label", type: "label", height: lh, offset });
-      offset += lh;
-    }
-    let dividerInserted = false;
-    for (const r of records) {
-      if (hasPinned && hasUnpinned && !r.is_pinned && !dividerInserted) {
+    for (const slot of pinnedListSlots(records, clipboardStore.pinnedCollapsed)) {
+      if (slot.type === "label") {
+        items.push({ key: "pinned-label", type: "label", height: lh, offset });
+        offset += lh;
+        continue;
+      }
+      if (slot.type === "divider") {
         items.push({ key: "pin-divider", type: "divider", height: dh, offset });
         offset += dh;
-        dividerInserted = true;
+        continue;
       }
-      const h = listLayout.value === "list" ? (heights.get(r.id) ?? rh) : rh;
+      const h =
+        listLayout.value === "list" ? (heights.get(slot.id) ?? rh) : rh;
       items.push({
-        key: `r-${r.id}`,
+        key: `r-${slot.id}`,
         type: "record",
-        id: r.id,
+        id: slot.id,
         height: h,
         offset,
       });
@@ -401,6 +396,13 @@ export function useVirtualList(
     }
     pruneMeasurements();
   });
+
+  watch(
+    () => clipboardStore.pinnedCollapsed,
+    () => {
+      void fillViewportIfNeeded();
+    },
+  );
 
   // Responsive: regroup grid rows whenever the column count changes.
   watch(gridCols, () => {

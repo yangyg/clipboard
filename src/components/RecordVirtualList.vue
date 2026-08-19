@@ -27,7 +27,24 @@
       aria-hidden="true"
     />
     <template v-for="item in displayItems" :key="item.key">
-      <div v-if="item.type === 'label'" class="section-label" aria-hidden="true"><AppIcon name="pin" :size="11" /> {{ $t('record.pinnedSection') }}</div>
+      <button
+        v-if="item.type === 'label'"
+        type="button"
+        class="section-label"
+        :aria-expanded="!clipboardStore.pinnedCollapsed"
+        :aria-label="clipboardStore.pinnedCollapsed ? $t('record.expandPinned') : $t('record.collapsePinned')"
+        :title="clipboardStore.pinnedCollapsed ? $t('record.expandPinned') : $t('record.collapsePinned')"
+        @click.stop="clipboardStore.togglePinnedCollapsed()"
+      >
+        <AppIcon name="pin" :size="11" />
+        <span>{{ $t('record.pinnedSection') }}</span>
+        <span class="section-label-count">{{ pinnedCount }}</span>
+        <span
+          class="section-label-chevron"
+          :class="{ collapsed: clipboardStore.pinnedCollapsed }"
+          aria-hidden="true"
+        />
+      </button>
       <div
         v-else-if="item.type === 'divider'"
         class="pin-section-divider"
@@ -77,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import type { VNodeRef } from "vue";
+import { computed, type VNodeRef } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import AppIcon from "./icons/AppIcon.vue";
 import RecordListItem from "./RecordListItem.vue";
@@ -119,6 +136,10 @@ const emit = defineEmits<{
 }>();
 
 const clipboardStore = useClipboardStore();
+
+const pinnedCount = computed(
+  () => clipboardStore.filteredRecords.filter((r) => r.is_pinned).length,
+);
 </script>
 
 <style scoped>
@@ -202,6 +223,8 @@ const clipboardStore = useClipboardStore();
 }
 
 .section-label {
+  width: 100%;
+  box-sizing: border-box;
   font-size: var(--text-xs, 0.625rem);
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -211,6 +234,52 @@ const clipboardStore = useClipboardStore();
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.section-label:hover {
+  background: var(--bg-hover);
+}
+
+.section-label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.section-label-count {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.75;
+}
+
+.section-label-chevron {
+  margin-left: auto;
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  transition: transform var(--transition-fast);
+}
+
+.section-label-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+:global(body.anim-disabled) .section-label-chevron {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .section-label-chevron {
+    transition: none;
+  }
 }
 
 .pin-section-divider {

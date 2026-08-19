@@ -7,6 +7,7 @@ import type { StatsData } from "@/types";
 
 describe("clipboardStore (smoke)", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -16,7 +17,37 @@ describe("clipboardStore (smoke)", () => {
     expect(store.activeFilter).toBe("all");
     expect(store.trashFilter).toBe(false);
     expect(store.listSort).toBe("updated_desc");
+    expect(store.pinnedCollapsed).toBe(false);
     expect(store.selectedId).toBeNull();
+  });
+
+  it("togglePinnedCollapsed persists across store recreations", () => {
+    const store = useClipboardStore();
+    store.togglePinnedCollapsed();
+    expect(store.pinnedCollapsed).toBe(true);
+    expect(localStorage.getItem("clipvault-pinned-collapsed")).toBe("1");
+
+    setActivePinia(createPinia());
+    const next = useClipboardStore();
+    expect(next.pinnedCollapsed).toBe(true);
+  });
+
+  it("unfolds the pinned section after a successful pin", async () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1 })];
+    store.setPinnedCollapsed(true);
+    vi.mocked(invoke).mockResolvedValueOnce(true);
+    await store.togglePin(1);
+    expect(store.pinnedCollapsed).toBe(false);
+  });
+
+  it("keeps the pinned section folded when unpinning", async () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 1, is_pinned: true })];
+    store.setPinnedCollapsed(true);
+    vi.mocked(invoke).mockResolvedValueOnce(false);
+    await store.togglePin(1);
+    expect(store.pinnedCollapsed).toBe(true);
   });
 
   it("toggles batch mode and clears selection when leaving it", () => {
@@ -87,6 +118,7 @@ describe("clipboardStore (smoke)", () => {
 
 describe("clipboardStore — onNewRecord filtering", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -149,6 +181,7 @@ describe("clipboardStore — onNewRecord filtering", () => {
 
 describe("clipboardStore — removeExpiredFromList", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -185,6 +218,7 @@ describe("clipboardStore — removeExpiredFromList", () => {
 
 describe("clipboardStore — purgeExpiredRecords respects favorite/pinned", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
     vi.mocked(invoke).mockClear();
     vi.mocked(invoke).mockImplementation((cmd: string) => {
@@ -225,6 +259,7 @@ describe("clipboardStore — purgeExpiredRecords respects favorite/pinned", () =
 
 describe("clipboardStore — selectedRecord computed", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -243,6 +278,7 @@ describe("clipboardStore — selectedRecord computed", () => {
 
 describe("clipboardStore — patchRecord & filterByTag", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -274,6 +310,7 @@ describe("clipboardStore — patchRecord & filterByTag", () => {
 
 describe("clipboardStore — setTrashFilter side effects", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -292,6 +329,7 @@ describe("clipboardStore — setTrashFilter side effects", () => {
 
 describe("clipboardStore — reorderForUpdate / reorderForUpdates (tag-edit re-rank)", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -424,6 +462,7 @@ describe("clipboardStore — reorderForUpdate / reorderForUpdates (tag-edit re-r
 
 describe("clipboardStore — parallel first-screen load", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 
@@ -481,6 +520,7 @@ describe("clipboardStore — parallel first-screen load", () => {
 
 describe("clipboardStore — keyset loadMore", () => {
   beforeEach(() => {
+    localStorage.removeItem("clipvault-pinned-collapsed");
     setActivePinia(createPinia());
   });
 

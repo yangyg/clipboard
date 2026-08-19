@@ -73,6 +73,8 @@ export default {
     pin: '置顶',
     unpin: '取消置顶',
     pinnedSection: '置顶',
+    collapsePinned: '折叠置顶',
+    expandPinned: '展开置顶',
     favorite: '收藏',
     unfavorite: '取消收藏',
     permanentDelete: '永久删除',

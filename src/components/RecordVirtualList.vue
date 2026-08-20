@@ -213,13 +213,10 @@ const scrollRoot = ref<HTMLElement | null>(null);
 const pinnedBlockRef = ref<HTMLElement | null>(null);
 let pinObserver: IntersectionObserver | null = null;
 
-function bindScrollEl(
-  el: Element | ComponentPublicInstance | null,
-  refs: Record<string, any>,
-) {
+function bindScrollEl(el: Element | ComponentPublicInstance | null) {
   scrollRoot.value = el instanceof HTMLElement ? el : null;
   const se = props.scrollEl;
-  if (typeof se === "function") se(el, refs);
+  if (typeof se === "function") se(el, {});
 }
 
 function bindPinnedBlock(el: unknown) {

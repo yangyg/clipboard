@@ -38,7 +38,6 @@ interface GridRow {
 
 /** Row estimates scaled with UI font size (settings.font_size → --ui-font-scale). */
 const BASE_ROW_HEIGHT = 84;
-const BASE_LABEL_HEIGHT = 28;
 const BASE_DIVIDER_HEIGHT = 17;
 const OVERSCAN = 6;
 
@@ -71,9 +70,6 @@ export function useVirtualList(
   const rowHeight = computed(() =>
     Math.round(BASE_ROW_HEIGHT * (settingsStore.settings.font_size / 16))
   );
-  const labelHeight = computed(() =>
-    Math.round(BASE_LABEL_HEIGHT * (settingsStore.settings.font_size / 16))
-  );
   const dividerHeight = computed(() =>
     Math.round(BASE_DIVIDER_HEIGHT * (settingsStore.settings.font_size / 16))
   );
@@ -86,7 +82,11 @@ export function useVirtualList(
 
   const scrollTop = ref(0);
   const viewportHeight = ref(480);
+  /** In-flow pinned block height; virtual unpinned offsets start after this. */
+  const pinnedBlockHeight = ref(0);
   let scrollRaf = 0;
+  let pinnedBlockObserved: HTMLElement | null = null;
+  let pinnedBlockRo: ResizeObserver | null = null;
 
   /** Responsive grid column count (derived from container width). */
   const gridCols = ref(2);
@@ -165,8 +165,8 @@ export function useVirtualList(
   /** Group flatItems into grid rows (gridCols records per row; labels/dividers solo). */
   function buildGridRows(items: FlatItem[]): GridRow[] {
     const rows: GridRow[] = [];
+    let offset = pinnedBlockHeight.value;
     const cols = gridCols.value;
-    let offset = 0;
     let i = 0;
     while (i < items.length) {
       const item = items[i];
@@ -308,9 +308,9 @@ export function useVirtualList(
     const heights = measuredHeights.value;
     // Incorporate row heights (change on font-size setting / measurement).
     let h = rowHeight.value * 2654435761;
-    h = (h ^ (labelHeight.value * 40503)) >>> 0;
     h = (h ^ (dividerHeight.value * 12347)) >>> 0;
     h = (h ^ (clipboardStore.pinnedCollapsed ? 0x51ed : 0x7e1)) >>> 0;
+    h = (h ^ (pinnedBlockHeight.value * 2654435761)) >>> 0;
     // Mix in record count + id/pin per record.
     h = (h ^ records.length) >>> 0;
     for (const r of records) {
@@ -330,17 +330,11 @@ export function useVirtualList(
   function buildFlatItems(): FlatItem[] {
     const records = clipboardStore.filteredRecords;
     const items: FlatItem[] = [];
-    let offset = 0;
+    let offset = pinnedBlockHeight.value;
     const rh = rowHeight.value;
-    const lh = labelHeight.value;
     const dh = dividerHeight.value;
     const heights = measuredHeights.value;
     for (const slot of pinnedListSlots(records, clipboardStore.pinnedCollapsed)) {
-      if (slot.type === "label") {
-        items.push({ key: "pinned-label", type: "label", height: lh, offset });
-        offset += lh;
-        continue;
-      }
       if (slot.type === "divider") {
         items.push({ key: "pin-divider", type: "divider", height: dh, offset });
         offset += dh;
@@ -403,6 +397,16 @@ export function useVirtualList(
       void fillViewportIfNeeded();
     },
   );
+
+  watch(pinnedBlockHeight, (next, prev) => {
+    const el = listRef.value;
+    if (!el || prev == null) return;
+    const delta = next - prev;
+    if (delta !== 0 && el.scrollTop > prev) {
+      el.scrollTop += delta;
+      scrollTop.value = el.scrollTop;
+    }
+  });
 
   // Responsive: regroup grid rows whenever the column count changes.
   watch(gridCols, () => {
@@ -527,10 +531,14 @@ export function useVirtualList(
     if (listLayout.value === "grid") {
       const { start } = gridVirtualRange.value;
       const rows = gridRows.value;
-      return start > 0 && rows.length > 0 ? rows[start].offset : 0;
+      return start > 0 && rows.length > 0
+        ? Math.max(0, rows[start].offset - pinnedBlockHeight.value)
+        : 0;
     }
     const { start } = virtualRange.value;
-    return start > 0 ? flatItems.value[start].offset : 0;
+    return start > 0
+      ? Math.max(0, flatItems.value[start].offset - pinnedBlockHeight.value)
+      : 0;
   });
 
   const virtualPadBottom = computed(() => {
@@ -560,6 +568,26 @@ export function useVirtualList(
     if (cols !== gridCols.value) {
       gridCols.value = cols;
     }
+  }
+
+  /** Callback ref for the in-flow pinned block so its height can shift unpinned offsets. */
+  function setPinnedBlockEl(el: unknown) {
+    const node = (el as HTMLElement | null) ?? null;
+    if (pinnedBlockObserved === node) return;
+    if (pinnedBlockRo) pinnedBlockRo.disconnect();
+    pinnedBlockObserved = node;
+    if (!node) {
+      pinnedBlockHeight.value = 0;
+      return;
+    }
+    if (!pinnedBlockRo) {
+      pinnedBlockRo = new ResizeObserver(() => {
+        const h = pinnedBlockObserved?.offsetHeight ?? 0;
+        if (h !== pinnedBlockHeight.value) pinnedBlockHeight.value = h;
+      });
+    }
+    pinnedBlockRo.observe(node);
+    pinnedBlockHeight.value = node.offsetHeight;
   }
 
   let resizeObserver: ResizeObserver | null = null;
@@ -607,6 +635,11 @@ export function useVirtualList(
       rowObserver.disconnect();
       rowObserver = null;
     }
+    if (pinnedBlockRo) {
+      pinnedBlockRo.disconnect();
+      pinnedBlockRo = null;
+    }
+    pinnedBlockObserved = null;
     rowObservedEls.clear();
   });
 
@@ -620,5 +653,6 @@ export function useVirtualList(
     onListScroll,
     fillViewportIfNeeded,
     measureRow,
+    setPinnedBlockEl,
   };
 }

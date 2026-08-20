@@ -1,107 +1,164 @@
 <!-- Windowed record list: renders only rows near the viewport (see
      useVirtualList) plus the load-more footer. Scroll element, ARIA
      activedescendant, and row actions all stay wired to the parent
-     (RecordList) via the forwarded ref / re-emitted events. -->
+     (RecordList) via the forwarded ref / re-emitted events.
+
+     Pinned rows sit in-flow at the top of the scroller. When that block
+     leaves the viewport, a capped overlay (`.pinned-dock`) shows the same
+     block until the in-flow copy intersects again. -->
 <template>
-  <div
-    class="record-list"
-    :class="{
-      'view-grid': layout === 'grid',
-      reloading: reloading,
-      'view-fade-a': fadeArmed && !fadeOn,
-      'view-fade-b': fadeArmed && fadeOn,
-    }"
-    :style="layout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
-    :ref="scrollEl"
-    role="listbox"
-    :aria-label="$t('record.clipboardRecords')"
-    :aria-activedescendant="activeDescendantId"
-    :aria-busy="reloading"
-    tabindex="-1"
-    @scroll="emit('scroll')"
-  >
+  <div class="record-list-host">
     <div
-      class="virtual-spacer"
-      :class="{ 'grid-span': layout === 'grid' }"
-      :style="{ height: `${padTop}px` }"
-      aria-hidden="true"
-    />
-    <template v-for="item in displayItems" :key="item.key">
-      <button
-        v-if="item.type === 'label'"
-        type="button"
-        class="section-label"
-        :aria-expanded="!clipboardStore.pinnedCollapsed"
-        :aria-label="clipboardStore.pinnedCollapsed ? $t('record.expandPinned') : $t('record.collapsePinned')"
-        :title="clipboardStore.pinnedCollapsed ? $t('record.expandPinned') : $t('record.collapsePinned')"
-        @click.stop="clipboardStore.togglePinnedCollapsed()"
-      >
-        <AppIcon name="pin" :size="11" />
-        <span>{{ $t('record.pinnedSection') }}</span>
-        <span class="section-label-count">{{ pinnedCount }}</span>
-        <span
-          class="section-label-chevron"
-          :class="{ collapsed: clipboardStore.pinnedCollapsed }"
-          aria-hidden="true"
-        />
-      </button>
-      <div
-        v-else-if="item.type === 'divider'"
-        class="pin-section-divider"
-        :style="{ height: `${item.height}px` }"
-        aria-hidden="true"
-      />
-      <RecordListItem
-        v-else
-        :record="item.record!"
-        :thumb="item.thumb"
+      v-if="docked"
+      class="pinned-dock"
+    >
+      <PinnedRecordsBlock
+        v-if="pinnedRecords.length > 0"
+        :records="pinnedRecords"
+        :collapsed="clipboardStore.pinnedCollapsed"
+        :layout="layout"
+        :grid-cols="gridCols"
+        :option-id-prefix="DOCK_OPTION_PREFIX"
+        :interactive="docked"
         :batch-mode="clipboardStore.batchMode"
-        :checked="clipboardStore.selectedIds.has(item.record!.id)"
-        :selected="clipboardStore.selectedId === item.record!.id"
-        :tabbable="isOptionTabbable(item.record!.id)"
+        :selected-ids="clipboardStore.selectedIds"
+        :selected-id="clipboardStore.selectedId"
         :trash-filter="clipboardStore.trashFilter"
-        :pinned="isPinned(item.record!)"
-        :is-new="item.record!.id === clipboardStore.lastIncomingId"
-        :is-leaving="leavingIds.has(item.record!.id)"
+        :last-incoming-id="clipboardStore.lastIncomingId"
+        :leaving-ids="leavingIds"
         :search-query="clipboardStore.searchQuery"
         :source-overrides="sourceOverrides"
-        :measure-row="measureRow"
-        @click="(id: number, event?: MouseEvent) => emit('item-click', id, event)"
-        @activate="emit('item-activate', $event)"
-        @context-menu="(e, r) => emit('item-context-menu', e, r)"
-        @paste="emit('item-paste', $event)"
-        @favorite="emit('item-favorite', $event)"
-        @toggle-pin="emit('item-toggle-pin', $event)"
-        @delete="emit('item-delete', $event)"
-        @restore="emit('item-restore', $event)"
+        :is-pinned="isPinned"
+        :is-option-tabbable="isOptionTabbable"
+        @toggle-collapsed="clipboardStore.togglePinnedCollapsed()"
+        @item-click="(id, event) => emit('item-click', id, event)"
+        @item-activate="emit('item-activate', $event)"
+        @item-context-menu="(e, r) => emit('item-context-menu', e, r)"
+        @item-paste="emit('item-paste', $event)"
+        @item-favorite="emit('item-favorite', $event)"
+        @item-toggle-pin="emit('item-toggle-pin', $event)"
+        @item-delete="emit('item-delete', $event)"
+        @item-restore="emit('item-restore', $event)"
       />
-    </template>
+    </div>
     <div
-      class="virtual-spacer"
-      :class="{ 'grid-span': layout === 'grid' }"
-      :style="{ height: `${padBottom}px` }"
-      aria-hidden="true"
-    />
+      class="record-list"
+      :class="{
+        'view-grid': layout === 'grid',
+        reloading: reloading,
+        'view-fade-a': fadeArmed && !fadeOn,
+        'view-fade-b': fadeArmed && fadeOn,
+      }"
+      :style="layout === 'grid' ? { gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))` } : undefined"
+      :ref="bindScrollEl"
+      role="listbox"
+      :aria-label="$t('record.clipboardRecords')"
+      :aria-activedescendant="activeDescendantId"
+      :aria-busy="reloading"
+      tabindex="-1"
+      @scroll="emit('scroll')"
+    >
+      <div
+        v-if="pinnedRecords.length > 0"
+        class="pinned-block"
+        :class="{ 'is-docked': docked }"
+        :inert="docked"
+        :ref="bindPinnedBlock"
+      >
+        <PinnedRecordsBlock
+          :records="pinnedRecords"
+          :collapsed="clipboardStore.pinnedCollapsed"
+          :layout="layout"
+          :grid-cols="gridCols"
+          :option-id-prefix="RECORD_OPTION_PREFIX"
+          :interactive="!docked"
+          :batch-mode="clipboardStore.batchMode"
+          :selected-ids="clipboardStore.selectedIds"
+          :selected-id="clipboardStore.selectedId"
+          :trash-filter="clipboardStore.trashFilter"
+          :last-incoming-id="clipboardStore.lastIncomingId"
+          :leaving-ids="leavingIds"
+          :search-query="clipboardStore.searchQuery"
+          :source-overrides="sourceOverrides"
+          :is-pinned="isPinned"
+          :is-option-tabbable="isOptionTabbable"
+          @toggle-collapsed="clipboardStore.togglePinnedCollapsed()"
+          @item-click="(id, event) => emit('item-click', id, event)"
+          @item-activate="emit('item-activate', $event)"
+          @item-context-menu="(e, r) => emit('item-context-menu', e, r)"
+          @item-paste="emit('item-paste', $event)"
+          @item-favorite="emit('item-favorite', $event)"
+          @item-toggle-pin="emit('item-toggle-pin', $event)"
+          @item-delete="emit('item-delete', $event)"
+          @item-restore="emit('item-restore', $event)"
+        />
+      </div>
+      <div
+        class="virtual-spacer"
+        :class="{ 'grid-span': layout === 'grid' }"
+        :style="{ height: `${padTop}px` }"
+        aria-hidden="true"
+      />
+      <template v-for="item in displayItems" :key="item.key">
+        <div
+          v-if="item.type === 'divider'"
+          class="pin-section-divider"
+          :style="{ height: `${item.height}px` }"
+          aria-hidden="true"
+        />
+        <RecordListItem
+          v-else-if="item.type === 'record'"
+          :record="item.record!"
+          :thumb="item.thumb"
+          :batch-mode="clipboardStore.batchMode"
+          :checked="clipboardStore.selectedIds.has(item.record!.id)"
+          :selected="clipboardStore.selectedId === item.record!.id"
+          :tabbable="isOptionTabbable(item.record!.id)"
+          :trash-filter="clipboardStore.trashFilter"
+          :pinned="isPinned(item.record!)"
+          :is-new="item.record!.id === clipboardStore.lastIncomingId"
+          :is-leaving="leavingIds.has(item.record!.id)"
+          :search-query="clipboardStore.searchQuery"
+          :source-overrides="sourceOverrides"
+          :measure-row="measureRow"
+          @click="(id: number, event?: MouseEvent) => emit('item-click', id, event)"
+          @activate="emit('item-activate', $event)"
+          @context-menu="(e, r) => emit('item-context-menu', e, r)"
+          @paste="emit('item-paste', $event)"
+          @favorite="emit('item-favorite', $event)"
+          @toggle-pin="emit('item-toggle-pin', $event)"
+          @delete="emit('item-delete', $event)"
+          @restore="emit('item-restore', $event)"
+        />
+      </template>
+      <div
+        class="virtual-spacer"
+        :class="{ 'grid-span': layout === 'grid' }"
+        :style="{ height: `${padBottom}px` }"
+        aria-hidden="true"
+      />
 
-    <!-- Footer: load-more status only -->
-    <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
-      <span v-if="clipboardStore.isLoadingMore" class="footer-loading">
-        <span class="loading-spinner small" aria-hidden="true"></span>{{ $t('common.loadMore') }}
-      </span>
-      <span v-else>{{ $t('common.scrollForMore') }}</span>
+      <!-- Footer: load-more status only -->
+      <div v-if="clipboardStore.isLoadingMore || clipboardStore.hasMore" class="list-footer">
+        <span v-if="clipboardStore.isLoadingMore" class="footer-loading">
+          <span class="loading-spinner small" aria-hidden="true"></span>{{ $t('common.loadMore') }}
+        </span>
+        <span v-else>{{ $t('common.scrollForMore') }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, type VNodeRef } from "vue";
+import { computed, onUnmounted, ref, watch, type VNodeRef } from "vue";
 import { useClipboardStore } from "../stores/clipboard";
-import AppIcon from "./icons/AppIcon.vue";
+import PinnedRecordsBlock from "./PinnedRecordsBlock.vue";
 import RecordListItem from "./RecordListItem.vue";
 import type { ListLayout, WindowItem } from "../composables/useVirtualList";
 import type { ClipboardRecord } from "../types";
+import { DOCK_OPTION_PREFIX, RECORD_OPTION_PREFIX } from "../utils/pinnedList";
 
-defineProps<{
+const props = defineProps<{
   layout: ListLayout;
   gridCols: number;
   displayItems: WindowItem[];
@@ -121,6 +178,8 @@ defineProps<{
   isOptionTabbable: (id: number) => boolean;
   /** Reports mounted/unmounted row elements to the virtualizer for measuring. */
   measureRow: (id: number, el: HTMLElement | null) => void;
+  /** Reports the in-flow pinned block so the virtualizer can offset unpinned rows. */
+  setPinnedBlockEl: (el: unknown) => void;
 }>();
 
 const emit = defineEmits<{
@@ -133,16 +192,90 @@ const emit = defineEmits<{
   "item-toggle-pin": [record: ClipboardRecord];
   "item-delete": [record: ClipboardRecord];
   "item-restore": [id: number];
+  docked: [value: boolean];
 }>();
 
 const clipboardStore = useClipboardStore();
 
-const pinnedCount = computed(
-  () => clipboardStore.filteredRecords.filter((r) => r.is_pinned).length,
+const pinnedRecords = computed(() =>
+  clipboardStore.filteredRecords.filter((r) => r.is_pinned),
 );
+
+const docked = ref(false);
+const scrollRoot = ref<HTMLElement | null>(null);
+const pinnedBlockRef = ref<HTMLElement | null>(null);
+let pinObserver: IntersectionObserver | null = null;
+
+function bindScrollEl(el: unknown) {
+  scrollRoot.value = (el as HTMLElement | null) ?? null;
+  const se = props.scrollEl;
+  if (typeof se === "function") se(el);
+}
+
+function bindPinnedBlock(el: unknown) {
+  pinnedBlockRef.value = (el as HTMLElement | null) ?? null;
+  props.setPinnedBlockEl(el);
+}
+
+function setDocked(value: boolean) {
+  if (docked.value === value) return;
+  docked.value = value;
+  emit("docked", value);
+}
+
+function syncPinObserver() {
+  pinObserver?.disconnect();
+  pinObserver = null;
+  const root = scrollRoot.value;
+  const target = pinnedBlockRef.value;
+  if (!root || !target || pinnedRecords.value.length === 0) {
+    setDocked(false);
+    return;
+  }
+  pinObserver = new IntersectionObserver(
+    ([entry]) => {
+      setDocked(pinnedRecords.value.length > 0 && !entry.isIntersecting);
+    },
+    { root, threshold: 0 },
+  );
+  pinObserver.observe(target);
+}
+
+watch(
+  [scrollRoot, pinnedBlockRef, () => pinnedRecords.value.length],
+  () => {
+    syncPinObserver();
+  },
+  { flush: "post" },
+);
+
+onUnmounted(() => {
+  pinObserver?.disconnect();
+  pinObserver = null;
+});
 </script>
 
 <style scoped>
+.record-list-host {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pinned-dock {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  max-height: 40%;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+}
+
 .record-list {
   flex: 1;
   min-height: 0;
@@ -194,9 +327,8 @@ const pinnedCount = computed(
   align-content: start;
 }
 
-.view-grid .section-label {
+.view-grid .pinned-block {
   grid-column: 1 / -1;
-  padding: var(--space-1) 2px 0;
 }
 
 .view-grid .pin-section-divider {
@@ -222,64 +354,9 @@ const pinnedCount = computed(
   grid-column: 1 / -1;
 }
 
-.section-label {
-  width: 100%;
-  box-sizing: border-box;
-  font-size: var(--text-xs, 0.625rem);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--pin);
-  padding: var(--space-3) var(--space-4) var(--space-1);
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  transition: background var(--transition-fast);
-}
-
-.section-label:hover {
-  background: var(--bg-hover);
-}
-
-.section-label:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
-.section-label-count {
-  font-weight: 500;
-  letter-spacing: 0;
-  text-transform: none;
-  opacity: 0.75;
-}
-
-.section-label-chevron {
-  margin-left: auto;
-  width: 0;
-  height: 0;
-  border-left: 3.5px solid transparent;
-  border-right: 3.5px solid transparent;
-  border-top: 4px solid currentColor;
-  transition: transform var(--transition-fast);
-}
-
-.section-label-chevron.collapsed {
-  transform: rotate(-90deg);
-}
-
-:global(body.anim-disabled) .section-label-chevron {
-  transition: none;
-}
-@media (prefers-reduced-motion: reduce) {
-  .section-label-chevron {
-    transition: none;
-  }
+.pinned-block.is-docked {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .pin-section-divider {

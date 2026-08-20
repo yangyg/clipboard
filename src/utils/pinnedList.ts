@@ -17,13 +17,25 @@ export function persistPinnedCollapsed(collapsed: boolean): void {
   }
 }
 
+export const RECORD_OPTION_PREFIX = "record-option-";
+export const DOCK_OPTION_PREFIX = "dock-record-option-";
+
+/** Focus the visible listbox option — prefer the dock copy when that layer is shown. */
+export function focusRecordOption(id: number): void {
+  const dock = document.getElementById(`${DOCK_OPTION_PREFIX}${id}`);
+  if (dock instanceof HTMLElement && dock.offsetParent !== null) {
+    dock.focus({ preventScroll: true });
+    return;
+  }
+  document.getElementById(`${RECORD_OPTION_PREFIX}${id}`)?.focus({ preventScroll: true });
+}
+
 /**
- * Virtual-list slots for the pinned group: a label when any pin exists, a
- * divider between pin and unpinned blocks, then records. Collapsed mode keeps
- * the label (and divider if unpinned rows exist) but omits pinned records.
+ * Virtual-list slots below the in-flow pinned block: unpinned records only.
+ * While the pinned group is expanded and both groups exist, a divider sits
+ * before the first unpinned row.
  */
 export type PinnedListSlot =
-  | { type: "label" }
   | { type: "divider" }
   | { type: "record"; id: number };
 
@@ -39,14 +51,13 @@ export function pinnedListSlots<T extends { id: number; is_pinned: boolean }>(
     if (hasPinned && hasUnpinned) break;
   }
   const slots: PinnedListSlot[] = [];
-  if (hasPinned) slots.push({ type: "label" });
   let dividerInserted = false;
   for (const r of records) {
     if (hasPinned && hasUnpinned && !r.is_pinned && !dividerInserted) {
-      slots.push({ type: "divider" });
+      if (!pinnedCollapsed) slots.push({ type: "divider" });
       dividerInserted = true;
     }
-    if (pinnedCollapsed && r.is_pinned) continue;
+    if (r.is_pinned) continue;
     slots.push({ type: "record", id: r.id });
   }
   return slots;

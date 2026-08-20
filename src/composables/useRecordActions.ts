@@ -14,6 +14,22 @@ import type { ClipboardRecord } from "../types";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import { toastPasteOutcome } from "../utils/pasteNotify";
 import { humanizeInvokeError } from "../utils/invokeError";
+import { DOCK_OPTION_PREFIX, RECORD_OPTION_PREFIX, visibleListRecords } from "../utils/pinnedList";
+
+function visibleRecordEl(list: HTMLElement, id: number): HTMLElement | null {
+  const host = list.closest(".record-list-host");
+  const dock = host?.querySelector(".pinned-dock") as HTMLElement | null;
+  if (dock && dock.offsetParent !== null) {
+    const inDock = dock.querySelector(`[data-record-id="${id}"]`) as HTMLElement | null;
+    if (inDock) return inDock;
+  }
+  const nodes = list.querySelectorAll<HTMLElement>(`[data-record-id="${id}"]`);
+  for (const n of nodes) {
+    if (n.closest(".pinned-block.is-docked")) continue;
+    return n;
+  }
+  return null;
+}
 
 export interface RecordActionsCtx {
   listRef: Ref<HTMLElement | null>;
@@ -26,6 +42,7 @@ export interface RecordActionsCtx {
   }>;
   isEmptyOrLoading: () => boolean;
   selectedId: () => number | null;
+  pinnedDocked: () => boolean;
 }
 
 export function useRecordActions(ctx: RecordActionsCtx) {
@@ -358,15 +375,20 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     el.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   }
 
-  const activeDescendantId = computed(() =>
-    ctx.selectedId() != null ? `record-option-${ctx.selectedId()}` : undefined
-  );
+  const activeDescendantId = computed(() => {
+    const id = ctx.selectedId();
+    if (id == null) return undefined;
+    const rec = clipboardStore.records.find((r) => r.id === id);
+    if (ctx.pinnedDocked() && rec?.is_pinned) return `${DOCK_OPTION_PREFIX}${id}`;
+    return `${RECORD_OPTION_PREFIX}${id}`;
+  });
 
   const firstRecordId = computed(() => {
-    for (const it of ctx.flatItems()) {
-      if (it.type === "record" && it.id != null) return it.id;
-    }
-    return null;
+    const list = visibleListRecords(
+      clipboardStore.filteredRecords,
+      clipboardStore.pinnedCollapsed,
+    );
+    return list[0]?.id ?? null;
   });
 
   function isOptionTabbable(id: number): boolean {
@@ -384,7 +406,7 @@ export function useRecordActions(ctx: RecordActionsCtx) {
       await nextTick();
       const list = ctx.listRef.value;
       if (!list) return;
-      const mounted = list.querySelector(`[data-record-id="${id}"]`) as HTMLElement | null;
+      const mounted = visibleRecordEl(list, id);
       if (mounted) {
         mounted.scrollIntoView({ block: "nearest" });
         return;

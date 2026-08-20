@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   persistPinnedCollapsed,
   PINNED_COLLAPSED_KEY,
   pinnedListSlots,
   readPinnedCollapsed,
   visibleListRecords,
+  focusRecordOption,
+  DOCK_OPTION_PREFIX,
+  RECORD_OPTION_PREFIX,
 } from "./pinnedList";
 
 const rows = [
@@ -15,36 +18,31 @@ const rows = [
 ];
 
 describe("pinnedListSlots", () => {
-  it("emits label + pinned rows + divider + unpinned rows when expanded", () => {
+  it("emits a divider + unpinned rows when expanded (pinned rows are in-flow chrome)", () => {
     expect(pinnedListSlots(rows, false)).toEqual([
-      { type: "label" },
-      { type: "record", id: 1 },
-      { type: "record", id: 2 },
       { type: "divider" },
       { type: "record", id: 3 },
       { type: "record", id: 4 },
     ]);
   });
 
-  it("keeps the label and divider but drops pinned rows when collapsed", () => {
+  it("emits only unpinned rows when collapsed", () => {
     expect(pinnedListSlots(rows, true)).toEqual([
-      { type: "label" },
-      { type: "divider" },
       { type: "record", id: 3 },
       { type: "record", id: 4 },
     ]);
   });
 
-  it("shows only the label when every row is pinned and collapsed", () => {
+  it("emits nothing when every row is pinned", () => {
     expect(
       pinnedListSlots(
         [
           { id: 1, is_pinned: true },
           { id: 2, is_pinned: true },
         ],
-        true,
+        false,
       ),
-    ).toEqual([{ type: "label" }]);
+    ).toEqual([]);
   });
 
   it("omits the label and divider when nothing is pinned", () => {
@@ -81,5 +79,21 @@ describe("pinnedCollapsed persistence", () => {
     persistPinnedCollapsed(false);
     expect(localStorage.getItem(PINNED_COLLAPSED_KEY)).toBe("0");
     expect(readPinnedCollapsed()).toBe(false);
+  });
+});
+
+describe("focusRecordOption", () => {
+  it("prefers a visible dock copy over the in-flow option", () => {
+    const flow = document.createElement("button");
+    flow.id = `${RECORD_OPTION_PREFIX}9`;
+    const dock = document.createElement("button");
+    dock.id = `${DOCK_OPTION_PREFIX}9`;
+    document.body.append(flow, dock);
+    Object.defineProperty(dock, "offsetParent", { value: document.body, configurable: true });
+    const focus = vi.spyOn(dock, "focus");
+    focusRecordOption(9);
+    expect(focus).toHaveBeenCalled();
+    flow.remove();
+    dock.remove();
   });
 });

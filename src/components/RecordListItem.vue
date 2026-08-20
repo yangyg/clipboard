@@ -1,7 +1,7 @@
 <template>
   <div
     ref="rootEl"
-    :id="`record-option-${record.id}`"
+    :id="`${optionIdPrefix}${record.id}`"
     class="record-item"
     role="option"
     :aria-selected="batchMode ? checked : selected"
@@ -76,22 +76,27 @@ import { useSettingsStore } from "../stores/settings";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
 
-const props = defineProps<{
-  record: ClipboardRecord;
-  thumb?: string | null;
-  batchMode: boolean;
-  checked: boolean;
-  selected: boolean;
-  tabbable: boolean;
-  trashFilter: boolean;
-  pinned: boolean;
-  isNew: boolean;
-  isLeaving: boolean;
-  searchQuery: string;
-  sourceOverrides: Record<string, string>;
-  /** Reports this row's element to the virtualizer (list layout measuring). */
-  measureRow?: (id: number, el: HTMLElement | null) => void;
-}>();
+const props = withDefaults(
+  defineProps<{
+    record: ClipboardRecord;
+    thumb?: string | null;
+    batchMode: boolean;
+    checked: boolean;
+    selected: boolean;
+    tabbable: boolean;
+    trashFilter: boolean;
+    pinned: boolean;
+    isNew: boolean;
+    isLeaving: boolean;
+    searchQuery: string;
+    sourceOverrides: Record<string, string>;
+    /** Reports this row's element to the virtualizer (list layout measuring). */
+    measureRow?: (id: number, el: HTMLElement | null) => void;
+    /** Listbox option id prefix. Dock overlay uses a distinct prefix to avoid duplicates. */
+    optionIdPrefix?: string;
+  }>(),
+  { optionIdPrefix: "record-option-" },
+);
 
 const rootEl = ref<HTMLElement | null>(null);
 

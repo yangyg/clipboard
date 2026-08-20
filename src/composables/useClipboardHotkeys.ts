@@ -8,7 +8,7 @@ import { useExpiryGuard } from "./useExpiryGuard";
 import { useBatchActions } from "./useBatchActions";
 import { toastPasteOutcome } from "../utils/pasteNotify";
 import { humanizeInvokeError } from "../utils/invokeError";
-import { visibleListRecords } from "../utils/pinnedList";
+import { focusRecordOption, visibleListRecords } from "../utils/pinnedList";
 
 function isTypingTarget(el: EventTarget | null): boolean {
   if (!(el instanceof HTMLElement)) return false;
@@ -151,9 +151,8 @@ export function useClipboardHotkeys() {
       if (currentIdx === -1) nextIdx = 0;
       const nextId = list[nextIdx].id;
       clipboardStore.selectRecord(nextId);
-      // Move real focus so aria-activedescendant + screen readers stay in sync
       requestAnimationFrame(() => {
-        document.getElementById(`record-option-${nextId}`)?.focus({ preventScroll: true });
+        focusRecordOption(nextId);
       });
       return;
     }

@@ -55,6 +55,7 @@
           :is-pinned="isPinned"
           :is-option-tabbable="isOptionTabbable"
           :measure-row="measureRow"
+          :set-pinned-block-el="setPinnedBlockEl"
           @scroll="onListScroll"
           @item-click="onItemClick"
           @item-activate="onItemActivate"
@@ -64,6 +65,7 @@
           @item-toggle-pin="scheduleTogglePin"
           @item-delete="quickDelete"
           @item-restore="onRowRestore"
+          @docked="pinnedDocked = $event"
         />
       </div>
 
@@ -273,6 +275,7 @@ function readStoredLayout(): ListLayout {
 }
 
 const listLayout = ref<ListLayout>(readStoredLayout());
+const pinnedDocked = ref(false);
 
 const {
   displayItems,
@@ -284,6 +287,7 @@ const {
   onListScroll,
   fillViewportIfNeeded,
   measureRow,
+  setPinnedBlockEl,
 } = useVirtualList(listRef, listLayout);
 
 function setListLayout(mode: ListLayout) {
@@ -338,6 +342,7 @@ const {
   flatItems: () => flatItems.value,
   isEmptyOrLoading: () => isEmptyOrLoading.value,
   selectedId: () => clipboardStore.selectedId,
+  pinnedDocked: () => pinnedDocked.value,
 });
 
 function onListColResizeKey(e: KeyboardEvent) {

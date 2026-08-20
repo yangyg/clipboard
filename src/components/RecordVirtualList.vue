@@ -150,7 +150,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch, type VNodeRef } from "vue";
+import {
+  computed,
+  onUnmounted,
+  ref,
+  watch,
+  type ComponentPublicInstance,
+  type VNodeRef,
+} from "vue";
 import { useClipboardStore } from "../stores/clipboard";
 import PinnedRecordsBlock from "./PinnedRecordsBlock.vue";
 import RecordListItem from "./RecordListItem.vue";
@@ -206,10 +213,13 @@ const scrollRoot = ref<HTMLElement | null>(null);
 const pinnedBlockRef = ref<HTMLElement | null>(null);
 let pinObserver: IntersectionObserver | null = null;
 
-function bindScrollEl(el: unknown) {
-  scrollRoot.value = (el as HTMLElement | null) ?? null;
+function bindScrollEl(
+  el: Element | ComponentPublicInstance | null,
+  refs: Record<string, any>,
+) {
+  scrollRoot.value = el instanceof HTMLElement ? el : null;
   const se = props.scrollEl;
-  if (typeof se === "function") se(el);
+  if (typeof se === "function") se(el, refs);
 }
 
 function bindPinnedBlock(el: unknown) {

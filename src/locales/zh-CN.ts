@@ -187,7 +187,7 @@ export default {
     webdavSync: 'WebDAV 同步',
     syncing: '同步中…',
     help: '帮助',
-    autoTagCreated: '自动打标规则创建',
+    autoTagCreated: '自动创建',
     editTag: '编辑',
     deleteTag: '删除',
     webdavNotConfigured: '请先在设置中配置 WebDAV 同步',

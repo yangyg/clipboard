@@ -163,6 +163,7 @@ pub fn run() {
             commands::remove_tag_from_record,
             commands::set_record_tags,
             commands::ai_test_connection,
+            commands::ai_enrich_record,
         ])
         .setup(move |app| {
             setup::setup(

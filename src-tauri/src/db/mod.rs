@@ -34,7 +34,7 @@ mod tags_sync;
 #[cfg(test)]
 mod tags_tests;
 #[cfg(test)]
-mod test_util;
+pub(crate) mod test_util;
 mod tombstones;
 mod types;
 

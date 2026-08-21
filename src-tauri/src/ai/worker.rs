@@ -26,7 +26,7 @@ pub(crate) fn ai_eligible_type(content_type: &str) -> bool {
 
 /// Snapshot of the AI-related settings at enqueue time. Keeps the worker
 /// isolated from concurrent settings changes mid-flight.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct AiConfig {
     pub summary_enabled: bool,
     pub tags_enabled: bool,
@@ -80,7 +80,7 @@ pub(crate) fn start_ai_worker(app: tauri::AppHandle, db: Arc<ClipboardDb>) -> Ai
 }
 
 /// Keep the queue light and the exfil surface minimal: truncate before enqueue.
-fn capped_content(content: &str, max_chars: usize) -> String {
+pub(crate) fn capped_content(content: &str, max_chars: usize) -> String {
     let n = max_chars.max(64);
     if content.chars().count() <= n {
         content.to_string()

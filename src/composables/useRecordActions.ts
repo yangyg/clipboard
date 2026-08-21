@@ -14,6 +14,7 @@ import type { ClipboardRecord } from "../types";
 import type { ContextMenuItem } from "../components/ContextMenu.vue";
 import { toastPasteOutcome } from "../utils/pasteNotify";
 import { humanizeInvokeError } from "../utils/invokeError";
+import { onDemandAiActions } from "../utils/aiEnrich";
 import { DOCK_OPTION_PREFIX, RECORD_OPTION_PREFIX, visibleListRecords } from "../utils/pinnedList";
 
 function visibleRecordEl(list: HTMLElement, id: number): HTMLElement | null {
@@ -185,6 +186,11 @@ export function useRecordActions(ctx: RecordActionsCtx) {
         label: rec?.alias?.trim() ? t('record.editAlias') : t('record.setAlias'),
         icon: "edit",
       },
+      ...(rec ? onDemandAiActions(rec, settingsStore.settings) : []).map((mode): ContextMenuItem => ({
+        id: `ai-${mode}`,
+        label: t(mode === "summary" ? "record.aiSummary" : "record.aiTags"),
+        icon: mode === "summary" ? "sparkles" : "tag",
+      })),
       { id: "delete", label: t('common.delete'), icon: "trash", shortcut: "Del / ⌫", danger: true, separatorBefore: true },
     ];
   });
@@ -322,6 +328,14 @@ export function useRecordActions(ctx: RecordActionsCtx) {
     }
     if (id === "alias") {
       openAliasDialog(record);
+      return;
+    }
+    if (id === "ai-summary") {
+      await clipboardStore.enrichRecord(record.id, "summary");
+      return;
+    }
+    if (id === "ai-tags") {
+      await clipboardStore.enrichRecord(record.id, "tags");
       return;
     }
     if (id === "restore") {

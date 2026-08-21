@@ -10,6 +10,20 @@
             <AppIcon name="edit" :size="11" />
             <span>{{ recordAlias || $t('preview.setAlias') }}</span>
           </button>
+          <button
+            v-if="aiActions.length"
+            ref="aiMenuAnchorEl"
+            type="button"
+            class="preview-ai-btn"
+            :class="{ 'is-busy': aiBusy }"
+            :disabled="aiBusy"
+            :title="aiBusy ? $t('record.aiBusy') : $t('preview.aiMenu')"
+            :aria-label="$t('preview.aiMenu')"
+            :aria-expanded="aiMenu.visible"
+            @click="toggleAiMenu"
+          >
+            <AppIcon name="sparkles" :size="14" />
+          </button>
         </div>
         <div class="preview-meta-line">
           <div class="preview-meta-row">
@@ -33,6 +47,17 @@
         </div>
       </div>
     </div>
+
+    <ContextMenu
+      :visible="aiMenu.visible"
+      :x="aiMenu.x"
+      :y="aiMenu.y"
+      :width="180"
+      :items="aiMenuItems"
+      :anchor="aiMenuAnchorEl"
+      @close="closeAiMenu"
+      @select="onAiMenuSelect"
+    />
   </div>
 </template>
 
@@ -41,9 +66,11 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { ClipboardRecord } from "../types";
 import { useSettingsStore } from "../stores/settings";
+import { useOnDemandAiMenu } from "../composables/useOnDemandAiMenu";
 import { buildSourceOverrides, resolveDeviceLabel, resolveDeviceTooltip, resolveSourceLabel } from "../utils/sourceBadge";
 import AppIcon from "./icons/AppIcon.vue";
 import TypeIcon from "./icons/TypeIcon.vue";
+import ContextMenu from "./ContextMenu.vue";
 
 const props = defineProps<{
   record: ClipboardRecord;
@@ -54,6 +81,16 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const settingsStore = useSettingsStore();
+const {
+  aiMenuAnchorEl,
+  aiMenu,
+  aiActions,
+  aiBusy,
+  aiMenuItems,
+  toggleAiMenu,
+  closeAiMenu,
+  onAiMenuSelect,
+} = useOnDemandAiMenu(() => props.record);
 
 const sourceLabel = computed(() =>
   resolveSourceLabel(
@@ -100,10 +137,27 @@ const emit = defineEmits<{
 .preview-type-row { display: flex; align-items: center; gap: 10px; }
 .preview-type-icon { width: 40px; height: 40px; border-radius: var(--radius-md, 10px); display: flex; align-items: center; justify-content: center; font-size: var(--text-lg); font-weight: 600; flex-shrink: 0; }
 .preview-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.preview-name { display: flex; align-items: center; min-width: 0; }
-.preview-alias-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 0; border: none; background: none; font-family: inherit; font-size: var(--text-lg); font-weight: 600; color: var(--text-primary); cursor: pointer; text-align: left; }
+.preview-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.preview-alias-btn { display: inline-flex; align-items: center; gap: 6px; flex: 1; min-width: 0; padding: 0; border: none; background: none; font-family: inherit; font-size: var(--text-lg); font-weight: 600; color: var(--text-primary); cursor: pointer; text-align: left; }
 .preview-alias-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .preview-alias-btn:hover { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.preview-ai-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.preview-ai-btn:hover { color: var(--accent-text); background: var(--accent-soft); }
+.preview-ai-btn:disabled { cursor: default; opacity: 0.7; }
+.preview-ai-btn.is-busy { animation: preview-ai-pulse var(--transition-smooth) ease-in-out infinite; }
+@keyframes preview-ai-pulse { 50% { opacity: 0.4; } }
 .preview-meta-line { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-sm); color: var(--text-muted, var(--text-tertiary)); line-height: 1.35; overflow: hidden; }
 .preview-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1px 14px; min-width: 0; }
 .preview-meta-row > span,

@@ -96,6 +96,7 @@ const COMMAND_CONTRACTS: Record<string, { params: string[] }> = {
 
   // ── AI (SettingsAi.vue) ──
   ai_test_connection: { params: [] },
+  ai_enrich_record: { params: ["id", "mode"] },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -314,6 +315,34 @@ describe("Tauri invoke contract — command names & parameter keys", () => {
     const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "set_record_alias");
     expect(call).toBeTruthy();
     expect(call![1]).toEqual({ id: 6, alias: "my-alias" });
+  });
+
+  it("enrichRecord → ai_enrich_record with { id, mode }", async () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 7, alias: "" })];
+    vi.mocked(invoke).mockResolvedValueOnce({ alias: "AI 摘要" });
+    await store.enrichRecord(7, "summary");
+    const call = vi.mocked(invoke).mock.calls.find((c) => c[0] === "ai_enrich_record");
+    expect(call).toBeTruthy();
+    expect(call![1]).toEqual({ id: 7, mode: "summary" });
+    expect(store.records[0].alias).toBe("AI 摘要");
+  });
+
+  it("enrichRecord tags patches the list and ignores a second in-flight call", async () => {
+    const store = useClipboardStore();
+    store.records = [makeRecord({ id: 8, tags: ["旧"] })];
+    let release!: (value: { tags: string[] }) => void;
+    const pending = new Promise<{ tags: string[] }>((resolve) => {
+      release = resolve;
+    });
+    vi.mocked(invoke).mockImplementationOnce(() => pending as Promise<unknown>);
+    const first = store.enrichRecord(8, "tags");
+    expect(store.aiBusyId).toBe(8);
+    await expect(store.enrichRecord(8, "summary")).resolves.toBe(false);
+    release({ tags: ["旧", "新"] });
+    await expect(first).resolves.toBe(true);
+    expect(store.records[0].tags).toEqual(["旧", "新"]);
+    expect(store.aiBusyId).toBeNull();
   });
 
   it("purgeExpiredRecords → cleanup_expired with no params", async () => {

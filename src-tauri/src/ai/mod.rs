@@ -11,7 +11,9 @@
 //! small job and a full queue simply drops it (mirroring the image worker).
 
 pub(crate) mod client;
+pub(crate) mod on_demand;
 pub(crate) mod worker;
 
 pub(crate) use client::AiClient;
+pub(crate) use on_demand::{apply_on_demand, prepare_on_demand, AiEnrichMode, AiEnrichOutcome};
 pub(crate) use worker::{ai_eligible_type, start_ai_worker, AiConfig, AiEnrichJob, AiJobSender};

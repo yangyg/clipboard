@@ -4,9 +4,13 @@
  * API is unchanged — methods are spread back into the store return.
  */
 import { invoke } from "@tauri-apps/api/core";
-import type { Ref } from "vue";
+import { ref, type Ref } from "vue";
 import type { ClipboardRecord } from "../types";
 import { setPasteFocusLock } from "../composables/pasteFocusLock";
+import { useToast } from "../composables/useToast";
+import { i18n } from "../locales";
+import { humanizeInvokeError } from "../utils/invokeError";
+import type { AiEnrichMode, AiEnrichOutcome } from "../utils/aiEnrich";
 import type { ListSort } from "./clipboardList";
 import { detailRemove, detailUpsert } from "./clipboardList";
 
@@ -27,9 +31,13 @@ export interface RecordActionsCtx {
   loadTrashCount: () => Promise<void>;
   invalidateLoads: () => void;
   reorderForUpdates: (ids: number[]) => void;
+  scheduleLoadTags: () => void;
 }
 
 export function createRecordActions(ctx: RecordActionsCtx) {
+  const { toast } = useToast();
+  const aiBusyId = ref<number | null>(null);
+
   /** Returns whether Ctrl+V was sent (`false` = clipboard written, keys skipped). */
   async function pasteRecord(id: number, mode: "original" | "plain" = "original"): Promise<boolean> {
     setPasteFocusLock(true);
@@ -142,6 +150,37 @@ export function createRecordActions(ctx: RecordActionsCtx) {
     }
   }
 
+  async function enrichRecord(id: number, mode: AiEnrichMode): Promise<boolean> {
+    if (aiBusyId.value != null) return false;
+    aiBusyId.value = id;
+    try {
+      const result = await invoke<AiEnrichOutcome>("ai_enrich_record", { id, mode });
+      if (mode === "summary" && result.alias != null) {
+        ctx.patchRecord(id, { alias: result.alias });
+        detailUpsert(ctx.recordDetails, id, { alias: result.alias });
+        ctx.reorderForUpdates([id]);
+      }
+      if (mode === "tags" && result.tags) {
+        ctx.patchRecord(id, { tags: [...result.tags] });
+        detailUpsert(ctx.recordDetails, id, { tags: [...result.tags] });
+        ctx.reorderForUpdates([id]);
+        ctx.scheduleLoadTags();
+      }
+      return true;
+    } catch (e) {
+      console.error("AI enrich failed:", e);
+      const raw = e instanceof Error ? e.message : String(e);
+      if (/feature disabled/i.test(raw)) {
+        toast(humanizeInvokeError(e, i18n.global.t), "error");
+      } else {
+        toast(raw || i18n.global.t("record.aiFailed"), "error");
+      }
+      return false;
+    } finally {
+      aiBusyId.value = null;
+    }
+  }
+
   async function deleteBatch(ids: number[]) {
     try {
       await invoke("delete_records_batch", { ids });
@@ -241,12 +280,14 @@ export function createRecordActions(ctx: RecordActionsCtx) {
   }
 
   return {
+    aiBusyId,
     pasteRecord,
     batchFavorite,
     deleteRecord,
     toggleFavorite,
     togglePin,
     setAlias,
+    enrichRecord,
     deleteBatch,
     restoreRecord,
     restoreRecordsBatch,
